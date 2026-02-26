@@ -416,3 +416,14 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# --- Custom Ignores for StoryRAG ---
+
+# Ignore Backend configuration files to protect MasterKey & DB Password
+**/appsettings.json
+**/appsettings.*.json
+
+# Ignore Frontend environment variables
+**/Frontend/.env
+**/Frontend/.env.*
+**/Frontend/.env.*.local

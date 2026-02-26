@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-app: #fdfbf7;
+    /* Pale yellow/cream background */
+    --bg-sidebar: #fffdfa;
+    /* Slightly lighter warm surface */
+    --bg-surface: #fffdfa;
+    --bg-topbar: #fffdfa;
+    --text-primary: #1e293b;
+    /* Slate 800 for high contrast */
+    --text-secondary: #64748b;
+    /* Slate 500 for secondary text */
+    --border-color: rgba(200, 180, 140, 0.2);
+    /* Warm, subtle border */
+    --input-bg: #f8f6f0;
+    /* Warm input background */
+  }
+
+  .dark {
+    --bg-app: #111827;
+    --bg-sidebar: #0d1117;
+    --bg-surface: #0d1117;
+    --bg-topbar: #0d1117;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --border-color: rgba(255, 255, 255, 0.06);
+    --input-bg: #0d1117;
+  }
+
+  body {
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    @apply font-sans antialiased overflow-x-hidden transition-colors duration-300;
+  }
+}
+
+/* Custom Gradient utility classes for that AI/Future vibe */
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600;
+  }
+
+  .bg-gradient-glass {
+    @apply bg-[var(--bg-surface)] backdrop-blur-md border border-[var(--border-color)];
+  }
+
+  /* Animations */
+  .animate-fade-in {
+    animation: fadeIn 0.8s ease-out forwards;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.8s ease-out forwards;
+    opacity: 0;
+  }
+
+  .delay-100 {
+    animation-delay: 100ms;
+  }
+
+  .delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .delay-300 {
+    animation-delay: 300ms;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-pulse-slow {
+    animation: pulseSlow 8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulseSlow {
+
+    0%,
+    100% {
+      opacity: 0.5;
+      transform: scale(1);
+    }
+
+    50% {
+      opacity: 0.8;
+      transform: scale(1.05);
+    }
+  }
+}
