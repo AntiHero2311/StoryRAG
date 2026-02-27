@@ -8,6 +8,10 @@ import AdminDashboardPage from './pages/AdminDashboardPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProjectsPage from './pages/ProjectsPage';
 import SettingsPage from './pages/SettingsPage';
+import WorkspacePage from './pages/WorkspacePage';
+import SubscriptionPage from './pages/SubscriptionPage';
+import PlansPage from './pages/PlansPage';
+import AdminSubscriptionPage from './pages/AdminSubscriptionPage';
 
 function App() {
   return (
@@ -22,6 +26,10 @@ function App() {
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/workspace/:projectId" element={<WorkspacePage />} />
+        <Route path="/subscription" element={<SubscriptionPage />} />
+        <Route path="/plans" element={<PlansPage />} />
+        <Route path="/admin/subscription" element={<AdminSubscriptionPage />} />
       </Routes>
     </Router>
   );

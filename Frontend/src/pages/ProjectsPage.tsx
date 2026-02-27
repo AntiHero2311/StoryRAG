@@ -1,9 +1,7 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
-    LayoutDashboard, FolderOpen, BarChart2, User, Settings,
-    LogOut, Users, ShieldCheck, Bell, ChevronDown, Menu, X,
-    Plus, Pencil, Trash2, BookOpen, AlertTriangle, Loader2,
+    Plus, Pencil, Trash2, AlertTriangle, Loader2, MoreHorizontal, X, FolderOpen, Info
 } from 'lucide-react';
 import {
     projectService,
@@ -11,169 +9,7 @@ import {
     CreateProjectRequest,
     UpdateProjectRequest,
 } from '../services/projectService';
-import { getUserInfo } from '../utils/jwtHelper';
-
-// ── Role-based nav ────────────────────────────────────────────────────────────
-const NAV_AUTHOR = [
-    { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/home' },
-    { key: 'projects', label: 'Dự án', icon: FolderOpen, path: '/projects' },
-    { key: 'analysis', label: 'Phân tích', icon: BarChart2, path: '/analysis' },
-    { key: 'profile', label: 'Hồ sơ', icon: User, path: '/profile' },
-    { key: 'settings', label: 'Cài đặt', icon: Settings, path: '/settings' },
-];
-const NAV_STAFF = [
-    { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/home' },
-    { key: 'projects', label: 'Dự án', icon: FolderOpen, path: '/projects' },
-    { key: 'analysis', label: 'Phân tích', icon: BarChart2, path: '/analysis' },
-    { key: 'users', label: 'Người dùng', icon: Users, path: '/admin' },
-    { key: 'profile', label: 'Hồ sơ', icon: User, path: '/profile' },
-    { key: 'settings', label: 'Cài đặt', icon: Settings, path: '/settings' },
-];
-const NAV_ADMIN = [
-    { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/home' },
-    { key: 'projects', label: 'Dự án', icon: FolderOpen, path: '/projects' },
-    { key: 'analysis', label: 'Phân tích', icon: BarChart2, path: '/analysis' },
-    { key: 'users', label: 'Người dùng', icon: Users, path: '/admin' },
-    { key: 'admin', label: 'Quản trị', icon: ShieldCheck, path: '/admin' },
-    { key: 'profile', label: 'Hồ sơ', icon: User, path: '/profile' },
-    { key: 'settings', label: 'Cài đặt', icon: Settings, path: '/settings' },
-];
-
-function getNav(role: string) {
-    if (role === 'Admin') return NAV_ADMIN;
-    if (role === 'Staff') return NAV_STAFF;
-    return NAV_AUTHOR;
-}
-
-function getRoleBadge(role: string) {
-    if (role === 'Admin') return { label: 'Admin', bg: 'bg-rose-500/20', text: 'text-rose-400', border: 'border-rose-500/30' };
-    if (role === 'Staff') return { label: 'Staff', bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' };
-    return { label: 'Author', bg: 'bg-indigo-500/20', text: 'text-indigo-400', border: 'border-indigo-500/30' };
-}
-
-// ── Sidebar ───────────────────────────────────────────────────────────────────
-function Sidebar({ role, collapsed, onCollapse, onNavigate }: {
-    role: string; collapsed: boolean; onCollapse: () => void; onNavigate: (path: string) => void;
-}) {
-    const nav = getNav(role);
-    const location = useLocation();
-
-    return (
-        <aside
-            className="flex flex-col h-full transition-all duration-300 overflow-hidden"
-            style={{ width: collapsed ? '68px' : '200px', background: 'var(--bg-sidebar)', borderRight: '1px solid var(--border-color)', flexShrink: 0 }}
-        >
-            <div className="flex items-center gap-3 px-4 py-5 border-b border-[var(--border-color)] min-h-[68px]">
-                <img src="/logo.png" alt="Logo" className="h-8 w-8 shrink-0 object-contain" />
-                {!collapsed && (
-                    <div className="overflow-hidden">
-                        <span className="text-[var(--text-primary)] font-bold text-sm truncate">StoryNest</span>
-                        <p className="text-white/30 text-[10px] truncate">Analysis System</p>
-                    </div>
-                )}
-            </div>
-
-            <div className="flex-1 overflow-y-auto py-4">
-                {!collapsed && (
-                    <p className="text-white/25 text-[10px] font-semibold uppercase tracking-widest px-4 mb-2">Menu</p>
-                )}
-                <nav className="space-y-0.5 px-2">
-                    {nav.map(item => {
-                        const Icon = item.icon;
-                        const active = location.pathname === item.path;
-                        return (
-                            <button
-                                key={item.key}
-                                onClick={() => onNavigate(item.path)}
-                                title={collapsed ? item.label : undefined}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${active
-                                    ? 'text-[#f5a623] bg-[#f5a623]/10'
-                                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5'
-                                    }`}
-                            >
-                                <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-[#f5a623]' : ''}`} />
-                                {!collapsed && <span className="truncate">{item.label}</span>}
-                                {!collapsed && active && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#f5a623]" />}
-                            </button>
-                        );
-                    })}
-                </nav>
-            </div>
-
-            {!collapsed && (
-                <div className="px-3 pb-3">
-                    <div className="bg-white/4 border border-white/8 rounded-2xl p-4">
-                        <p className="text-white text-xs font-semibold mb-0.5">Need Help?</p>
-                        <p className="text-white/30 text-[10px] mb-3">Contact us for assistance.</p>
-                        <button className="w-full py-2 rounded-xl bg-white/8 hover:bg-white/12 text-white text-xs font-medium transition-colors">
-                            Support Center
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            <div className="px-3 pb-4">
-                <button
-                    onClick={onCollapse}
-                    className="w-full flex items-center justify-center py-2.5 rounded-xl text-white/30 hover:text-white hover:bg-white/5 transition-all text-sm"
-                >
-                    {collapsed ? <Menu className="w-4 h-4" /> : <X className="w-4 h-4" />}
-                </button>
-            </div>
-        </aside>
-    );
-}
-
-// ── Topbar ────────────────────────────────────────────────────────────────────
-function Topbar({ fullName, role, onLogout }: { fullName: string; role: string; onLogout: () => void }) {
-    const [userOpen, setUserOpen] = useState(false);
-    const initials = fullName.split(' ').map(w => w[0]).slice(-2).join('').toUpperCase();
-    const badge = getRoleBadge(role);
-
-    return (
-        <header className="h-[68px] flex items-center justify-between px-6 border-b border-[var(--border-color)] bg-[var(--bg-topbar)]">
-            <h1 className="text-[var(--text-primary)] font-bold text-lg">Dự án của tôi</h1>
-            <div className="flex-1" />
-
-            <button className="relative w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors text-white/60 hover:text-white">
-                <Bell className="w-4 h-4" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#f5a623] rounded-full" />
-            </button>
-
-            <button className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors text-white/60 hover:text-white">
-                <Settings className="w-4 h-4" />
-            </button>
-
-            <div className="relative">
-                <button onClick={() => setUserOpen(o => !o)}
-                    className="flex items-center gap-2.5 pl-3 pr-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                        style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)' }}>
-                        {initials}
-                    </div>
-                    <span className="text-white text-sm font-medium max-w-[120px] truncate hidden sm:block">{fullName}</span>
-                    <ChevronDown className={`w-3.5 h-3.5 text-white/40 transition-transform ${userOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {userOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-48 rounded-2xl overflow-hidden shadow-2xl"
-                        style={{ background: '#161b27', border: '1px solid rgba(255,255,255,0.08)' }}>
-                        <div className="px-4 py-3 border-b border-white/6">
-                            <p className="text-white text-sm font-semibold truncate">{fullName}</p>
-                            <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full border font-medium ${badge.bg} ${badge.text} ${badge.border}`}>
-                                {badge.label}
-                            </span>
-                        </div>
-                        <button onClick={onLogout}
-                            className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors">
-                            <LogOut className="w-4 h-4" /> Đăng xuất
-                        </button>
-                    </div>
-                )}
-            </div>
-        </header>
-    );
-}
+import MainLayout from '../layouts/MainLayout';
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
@@ -354,58 +190,221 @@ function DeleteConfirmModal({ projectTitle, onConfirm, onClose, loading }: {
     );
 }
 
-// ── Project Card ──────────────────────────────────────────────────────────────
-function ProjectCard({ project, onEdit, onDelete }: {
-    project: ProjectResponse;
-    onEdit: (p: ProjectResponse) => void;
-    onDelete: (p: ProjectResponse) => void;
-}) {
+// ── Info modal ──────────────────────────────────────────────────────────────
+function ProjectInfoModal({ project, onClose }: { project: ProjectResponse; onClose: () => void }) {
     const createdDate = new Date(project.createdAt).toLocaleDateString('vi-VN', {
         day: '2-digit', month: '2-digit', year: 'numeric',
     });
+    const updatedDate = project.updatedAt
+        ? new Date(project.updatedAt).toLocaleDateString('vi-VN', {
+            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        })
+        : '--';
 
     return (
-        <div className="group relative flex flex-col bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-5 transition-all duration-200 hover:scale-[1.02] shadow-sm hover:shadow-md">
-            {/* Status + actions */}
-            <div className="flex items-center justify-between mb-3">
-                <StatusBadge status={project.status} />
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                        onClick={() => onEdit(project)}
-                        title="Chỉnh sửa"
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
-                        <Pencil className="w-3.5 h-3.5" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-3xl p-6 shadow-2xl">
+                <div className="flex items-center justify-between mb-5">
+                    <h2 className="text-[var(--text-primary)] font-bold text-lg">Thông tin dự án</h2>
+                    <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
+                        <X className="w-4 h-4" />
                     </button>
-                    <button
-                        onClick={() => onDelete(project)}
-                        title="Xóa"
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-white/40 hover:text-rose-400 hover:bg-rose-500/10 transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
+                </div>
+
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">Tên dự án</label>
+                        <p className="text-[var(--text-primary)] font-medium bg-[var(--input-bg)] px-4 py-2.5 rounded-xl border border-[var(--border-color)]">{project.title}</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">Trạng thái</label>
+                        <div className="bg-[var(--input-bg)] px-4 py-2.5 rounded-xl border border-[var(--border-color)]">
+                            <StatusBadge status={project.status} />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">Tóm tắt</label>
+                        <div className="bg-[var(--input-bg)] px-4 py-2.5 rounded-xl border border-[var(--border-color)] min-h-[4rem]">
+                            {project.summary ? (
+                                <p className="text-[var(--text-primary)] text-sm">{project.summary}</p>
+                            ) : (
+                                <p className="text-[var(--text-secondary)] text-sm italic">Không có tóm tắt</p>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">Ngày tạo</label>
+                            <p className="text-[var(--text-primary)] text-sm">{createdDate}</p>
+                        </div>
+                        <div>
+                            <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">Cập nhật lần cuối</label>
+                            <p className="text-[var(--text-primary)] text-sm">{updatedDate}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mt-6">
+                    <button onClick={onClose} className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 flex items-center justify-center"
+                        style={{ background: 'var(--text-secondary)' }}>
+                        Đóng
                     </button>
                 </div>
             </div>
+        </div>
+    );
+}
 
-            {/* Icon */}
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 shrink-0"
-                style={{ background: 'rgba(99,102,241,0.15)' }}>
-                <BookOpen className="w-5 h-5 text-indigo-400" />
-            </div>
+// ── Book Color Palette ────────────────────────────────────────────────────────
+const BOOK_COLORS = [
+    { spine: '#1e293b', cover: '#334155', accent: '#f5a623', texture: 'opacity-10' }, // Slate - Professional
+    { spine: '#1e1b4b', cover: '#312e81', accent: '#818cf8', texture: 'opacity-20' }, // Indigo - Academic
+    { spine: '#064e3b', cover: '#065f46', accent: '#34d399', texture: 'opacity-15' }, // Emerald - Fantasy
+    { spine: '#451a03', cover: '#78350f', accent: '#f59e0b', texture: 'opacity-25' }, // Amber - Historical
+    { spine: '#4c1d95', cover: '#5b21b6', accent: '#a78bfa', texture: 'opacity-20' }, // Violet - Creative
+    { spine: '#701a75', cover: '#86198f', accent: '#f0abfc', texture: 'opacity-15' }, // Fuchsia - Romance
+    { spine: '#7f1d1d', cover: '#991b1b', accent: '#f87171', texture: 'opacity-20' }, // Red - Thriller
+    { spine: '#0c4a6e', cover: '#075985', accent: '#38bdf8', texture: 'opacity-15' }, // Sky - Sci-Fi
+];
 
-            {/* Title */}
-            <h3 className="text-[var(--text-primary)] font-semibold text-sm leading-snug mb-2 line-clamp-2">
-                {project.title}
-            </h3>
+function hashColor(id: string) {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
+    return BOOK_COLORS[Math.abs(hash) % BOOK_COLORS.length];
+}
 
-            {/* Summary */}
-            {project.summary && (
-                <p className="text-[var(--text-secondary)] text-xs leading-relaxed mb-3 line-clamp-3 flex-1 opacity-70">
-                    {project.summary}
-                </p>
-            )}
+// ── Project Card (Book Style) ─────────────────────────────────────────────────
+function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
+    project: ProjectResponse;
+    onEdit: (p: ProjectResponse) => void;
+    onDelete: (p: ProjectResponse) => void;
+    onInfo: (p: ProjectResponse) => void;
+    onClick: (p: ProjectResponse) => void;
+}) {
+    const color = hashColor(project.id);
+    const createdDate = new Date(project.createdAt).toLocaleDateString('vi-VN', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+    });
+    const [menuOpen, setMenuOpen] = useState(false);
 
-            <div className="mt-auto pt-3 border-t border-[var(--border-color)] flex items-center justify-between">
-                <span className="text-[var(--text-secondary)] opacity-50 text-[10px]">{createdDate}</span>
-                <span className="text-[var(--text-secondary)] opacity-50 text-[10px]">0 chương</span>
+    // Book dimensions
+    const BOOK_W = '170px';
+    const BOOK_H = '290px';
+
+    return (
+        <div
+            className="group relative cursor-pointer flex justify-center overflow-hidden"
+            onClick={() => onClick(project)}
+            style={{ perspective: '1200px' }}
+        >
+            {/* Book container */}
+            <div className="relative transition-all duration-300 ease-out transform-gpu group-hover:scale-[1.02] overflow-hidden"
+                style={{
+                    transformStyle: 'preserve-3d',
+                    width: BOOK_W,
+                    height: BOOK_H
+                }}>
+
+                {/* Main Book Body */}
+                <div className="relative flex rounded-r-[2rem] overflow-hidden shadow-[15px_15px_30px_rgba(0,0,0,0.4)] group-hover:shadow-[30px_30px_60px_rgba(0,0,0,0.5)] transition-all duration-500"
+                    style={{ height: BOOK_H, width: BOOK_W }}>
+
+                    {/* Spine */}
+                    <div
+                        className="w-8 shrink-0 flex items-center justify-center relative z-20"
+                        style={{
+                            background: `linear-gradient(90deg, ${color.spine} 0%, ${color.spine} 20%, ${color.cover} 100%)`,
+                            boxShadow: 'inset -2px 0 5px rgba(0,0,0,0.3)',
+                            borderRadius: '8px 0 0 8px'
+                        }}
+                    >
+                        <div className="absolute inset-x-0 top-6 h-px bg-white/10" />
+                        <div className="absolute inset-x-0 bottom-6 h-px bg-white/10" />
+                        <span
+                            className="text-white font-bold rotate-180 whitespace-nowrap opacity-40 uppercase tracking-[0.2em]"
+                            style={{ writingMode: 'vertical-rl', fontSize: '11px' }}
+                        >
+                            StoryNest
+                        </span>
+                    </div>
+
+                    {/* Book Cover */}
+                    <div
+                        className="flex-1 flex flex-col p-5 relative overflow-hidden z-10"
+                        style={{ background: color.cover }}
+                    >
+                        {/* Hinge detail */}
+                        <div className="absolute left-0 top-0 bottom-0 w-2 bg-black/20 blur-[1px] z-20" />
+
+                        {/* Texture Overlay */}
+                        <div className={`absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/leather.png')] ${color.texture} pointer-events-none mix-blend-overlay`} />
+
+                        {/* Top section - Status only */}
+                        <div className="flex items-center justify-between mb-4 relative z-30">
+                            <StatusBadge status={project.status} />
+                        </div>
+
+                        {/* Title Section */}
+                        <div className="flex-1 flex flex-col justify-center relative z-30">
+                            <h3 className="font-bold text-xl leading-tight text-white line-clamp-4 text-center break-words [hyphens:auto]"
+                                style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)', fontFamily: "'Playfair Display', serif" }}>
+                                {project.title}
+                            </h3>
+                        </div>
+
+                        {/* Footer - Date and Actions */}
+                        <div className="flex items-center justify-between pt-3 border-t border-white/10 relative z-30">
+                            <span className="text-white/40 text-[10px] font-medium tracking-wider">{createdDate}</span>
+
+                            <div className="relative" onClick={e => e.stopPropagation()}>
+                                <button
+                                    onClick={() => setMenuOpen(!menuOpen)}
+                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 text-white/70 hover:text-white hover:bg-white/20 transition-all shadow-sm"
+                                >
+                                    <MoreHorizontal className="w-4 h-4" />
+                                </button>
+                                {menuOpen && (
+                                    <>
+                                        <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                                        <div className="absolute right-0 bottom-full mb-2 w-32 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-2xl overflow-hidden z-50">
+                                            <button
+                                                onClick={() => { onInfo(project); setMenuOpen(false); }}
+                                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors"
+                                            >
+                                                <Info className="w-3.5 h-3.5" /> Thông tin
+                                            </button>
+                                            <button
+                                                onClick={() => { onEdit(project); setMenuOpen(false); }}
+                                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors"
+                                            >
+                                                <Pencil className="w-3.5 h-3.5" /> Chỉnh sửa
+                                            </button>
+                                            <button
+                                                onClick={() => { onDelete(project); setMenuOpen(false); }}
+                                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-400 hover:bg-rose-500/10 transition-colors"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" /> Xóa dự án
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Paper Edges (Visual Stack) - subtle */}
+                    <div className="absolute right-0 top-0 bottom-0 w-[5px] z-0 overflow-hidden" style={{ background: 'linear-gradient(to right, rgba(250,248,244,0.6), rgba(220,215,205,0.4))' }}>
+                        {[...Array(15)].map((_, i) => (
+                            <div key={i} className="h-[2px] w-full bg-black/5" style={{ marginTop: i === 0 ? 0 : '3px' }} />
+                        ))}
+                    </div>
+                </div>
+
+
             </div>
         </div>
     );
@@ -414,8 +413,23 @@ function ProjectCard({ project, onEdit, onDelete }: {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function ProjectsPage() {
     const navigate = useNavigate();
-    const [collapsed, setCollapsed] = useState(false);
-    const [userInfo, setUserInfo] = useState({ fullName: 'Người dùng', role: 'Author' });
+
+    return (
+        <MainLayout pageTitle="Dự án của tôi">
+            {() => (
+                <ProjectsContent
+                    onNavigate={navigate}
+                />
+            )}
+        </MainLayout>
+    );
+}
+
+function ProjectsContent({ onNavigate }: { onNavigate: (path: string) => void }) {
+    const handleOpenWorkspace = (project: ProjectResponse) => {
+        sessionStorage.setItem(`project_${project.id}`, JSON.stringify({ title: project.title }));
+        onNavigate(`/workspace/${project.id}`);
+    };
 
     const [projects, setProjects] = useState<ProjectResponse[]>([]);
     const [loading, setLoading] = useState(true);
@@ -425,14 +439,12 @@ export default function ProjectsPage() {
     const [showCreate, setShowCreate] = useState(false);
     const [editTarget, setEditTarget] = useState<ProjectResponse | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<ProjectResponse | null>(null);
+    const [infoTarget, setInfoTarget] = useState<ProjectResponse | null>(null);
     const [modalLoading, setModalLoading] = useState(false);
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) { navigate('/login'); return; }
-        setUserInfo(getUserInfo(token));
         fetchProjects();
-    }, [navigate]);
+    }, []);
 
     const fetchProjects = async () => {
         try {
@@ -492,90 +504,79 @@ export default function ProjectsPage() {
         }
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        navigate('/login');
-    };
-
     return (
-        <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
-            <Sidebar role={userInfo.role} collapsed={collapsed} onCollapse={() => setCollapsed(c => !c)} onNavigate={navigate} />
-
-            <div className="flex flex-col flex-1 min-w-0">
-                <Topbar fullName={userInfo.fullName} role={userInfo.role} onLogout={handleLogout} />
-
-                <div className="flex-1 overflow-y-auto p-6">
-                    {/* Header row */}
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h2 className="text-[var(--text-primary)] font-bold text-xl">Dự án của tôi</h2>
-                            <p className="text-[var(--text-secondary)] text-sm mt-0.5">
-                                {projects.length} dự án
-                            </p>
-                        </div>
-                        <button
-                            onClick={() => setShowCreate(true)}
-                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white transition-all hover:scale-105 active:scale-95"
-                            style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}>
-                            <Plus className="w-4 h-4" />
-                            Tạo dự án mới
-                        </button>
-                    </div>
-
-                    {/* Loading */}
-                    {loading && (
-                        <div className="flex items-center justify-center py-20">
-                            <Loader2 className="w-8 h-8 text-[#f5a623] animate-spin" />
-                        </div>
-                    )}
-
-                    {/* Error */}
-                    {!loading && error && (
-                        <div className="rounded-2xl p-5 flex items-center gap-3"
-                            style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
-                            <p className="text-rose-400 text-sm">{error}</p>
-                            <button onClick={fetchProjects} className="ml-auto text-xs text-rose-400 hover:text-white underline">
-                                Thử lại
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Empty state */}
-                    {!loading && !error && projects.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-20 gap-4">
-                            <div className="w-16 h-16 rounded-3xl bg-[var(--text-primary)]/5 flex items-center justify-center">
-                                <FolderOpen className="w-8 h-8 text-[var(--text-secondary)] opacity-20" />
-                            </div>
-                            <div className="text-center">
-                                <p className="text-[var(--text-secondary)] font-medium mb-1">Chưa có dự án nào</p>
-                                <p className="text-[var(--text-secondary)] opacity-50 text-sm">Tạo dự án đầu tiên để bắt đầu sáng tác!</p>
-                            </div>
-                            <button
-                                onClick={() => setShowCreate(true)}
-                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white transition-all hover:scale-105"
-                                style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}>
-                                <Plus className="w-4 h-4" />
-                                Tạo dự án đầu tiên
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Project grid */}
-                    {!loading && !error && projects.length > 0 && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                            {projects.map(project => (
-                                <ProjectCard
-                                    key={project.id}
-                                    project={project}
-                                    onEdit={setEditTarget}
-                                    onDelete={setDeleteTarget}
-                                />
-                            ))}
-                        </div>
-                    )}
+        <div className="flex-1 overflow-y-auto p-6">
+            {/* Header row */}
+            <div className="flex items-center justify-between mb-6">
+                <div>
+                    <h2 className="text-[var(--text-primary)] font-bold text-xl">Dự án của tôi</h2>
+                    <p className="text-[var(--text-secondary)] text-sm mt-0.5">
+                        {projects.length} dự án
+                    </p>
                 </div>
+                <button
+                    onClick={() => setShowCreate(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white transition-all hover:scale-105 active:scale-95"
+                    style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}>
+                    <Plus className="w-4 h-4" />
+                    Tạo dự án mới
+                </button>
             </div>
+
+            {/* Loading */}
+            {loading && (
+                <div className="flex items-center justify-center py-20">
+                    <Loader2 className="w-8 h-8 text-[#f5a623] animate-spin" />
+                </div>
+            )}
+
+            {/* Error */}
+            {!loading && error && (
+                <div className="rounded-2xl p-5 flex items-center gap-3"
+                    style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                    <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+                    <p className="text-rose-400 text-sm">{error}</p>
+                    <button onClick={fetchProjects} className="ml-auto text-xs text-rose-400 hover:text-white underline">
+                        Thử lại
+                    </button>
+                </div>
+            )}
+
+            {/* Empty state */}
+            {!loading && !error && projects.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-20 gap-4">
+                    <div className="w-16 h-16 rounded-3xl bg-[var(--text-primary)]/5 flex items-center justify-center">
+                        <FolderOpen className="w-8 h-8 text-[var(--text-secondary)] opacity-20" />
+                    </div>
+                    <div className="text-center">
+                        <p className="text-[var(--text-secondary)] font-medium mb-1">Chưa có dự án nào</p>
+                        <p className="text-[var(--text-secondary)] opacity-50 text-sm">Tạo dự án đầu tiên để bắt đầu sáng tác!</p>
+                    </div>
+                    <button
+                        onClick={() => setShowCreate(true)}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white transition-all hover:scale-105"
+                        style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}>
+                        <Plus className="w-4 h-4" />
+                        Tạo dự án đầu tiên
+                    </button>
+                </div>
+            )}
+
+            {/* Project grid */}
+            {!loading && !error && projects.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+                    {projects.map(project => (
+                        <ProjectCard
+                            key={project.id}
+                            project={project}
+                            onEdit={setEditTarget}
+                            onDelete={setDeleteTarget}
+                            onInfo={setInfoTarget}
+                            onClick={handleOpenWorkspace}
+                        />
+                    ))}
+                </div>
+            )}
 
             {/* Create modal */}
             {showCreate && (
@@ -605,6 +606,14 @@ export default function ProjectsPage() {
                     onConfirm={handleDelete}
                     onClose={() => setDeleteTarget(null)}
                     loading={modalLoading}
+                />
+            )}
+
+            {/* Info modal */}
+            {infoTarget && (
+                <ProjectInfoModal
+                    project={infoTarget}
+                    onClose={() => setInfoTarget(null)}
                 />
             )}
         </div>

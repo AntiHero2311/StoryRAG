@@ -6,10 +6,14 @@ export function decodeJwt(token: string): Record<string, any> | null {
     try {
         const payload = token.split('.')[1];
         if (!payload) return null;
-        // Standard JWT payload decode with base64url handling
-        return JSON.parse(
-            atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
-        );
+        // Pad base64url to proper base64 length
+        const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = base64 + '=='.slice(0, (4 - base64.length % 4) % 4);
+        // Use TextDecoder to correctly handle UTF-8 characters (e.g., Vietnamese)
+        const binary = atob(padded);
+        const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+        const json = new TextDecoder('utf-8').decode(bytes);
+        return JSON.parse(json);
     } catch {
         return null;
     }

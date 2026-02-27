@@ -69,6 +69,9 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+builder.Services.AddSingleton<IChunkingService, ChunkingService>();
+builder.Services.AddScoped<IChapterService, ChapterService>();
 
 // Add Authentication Configuration
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

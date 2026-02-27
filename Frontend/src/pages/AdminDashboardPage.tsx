@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Users, UserCheck, UserX, Shield, BookOpen, Briefcase,
-    ArrowLeft, RefreshCw, Search, ChevronUp, ChevronDown
+    RefreshCw, Search, ChevronUp, ChevronDown
 } from 'lucide-react';
 import { adminService, UserSummary, UserStatsResponse } from '../services/adminService';
+import MainLayout from '../layouts/MainLayout';
 
 type SortKey = 'fullName' | 'email' | 'role' | 'createdAt';
 type SortDir = 'asc' | 'desc';
@@ -45,6 +46,16 @@ const roleLabel = (role: string) => {
 };
 
 export default function AdminDashboardPage() {
+    return (
+        <MainLayout pageTitle="Admin Dashboard">
+            {() => (
+                <AdminDashboardContent />
+            )}
+        </MainLayout>
+    );
+}
+
+function AdminDashboardContent() {
     const navigate = useNavigate();
     const token = localStorage.getItem('token');
 
@@ -100,7 +111,7 @@ export default function AdminDashboardPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-[var(--bg-app)] flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
                     <div className="w-12 h-12 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                     <p className="text-[var(--text-secondary)] text-sm">Đang tải dữ liệu...</p>
@@ -110,42 +121,28 @@ export default function AdminDashboardPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[var(--bg-app)] text-[var(--text-primary)]">
+        <div className="flex-1 overflow-y-auto">
             {/* Ambient */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
                 <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-indigo-600/15 blur-[140px] rounded-full" />
                 <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-600/10 blur-[120px] rounded-full" />
             </div>
 
-            {/* Header */}
-            <header className="border-b border-[var(--border-color)] bg-[var(--bg-topbar)] backdrop-blur-xl px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <button
-                        onClick={() => navigate('/home')}
-                        className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group"
-                    >
-                        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                    </button>
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-rose-500/20 flex items-center justify-center">
-                            <Shield className="w-4 h-4 text-rose-400" />
-                        </div>
-                        <div>
-                            <h1 className="text-base font-bold leading-none">Admin Dashboard</h1>
-                            <p className="text-xs text-[var(--text-secondary)] mt-0.5">Quản lý người dùng</p>
-                        </div>
-                    </div>
-                </div>
-                <button
-                    onClick={fetchStats}
-                    className="flex items-center gap-2 px-4 py-2 bg-[var(--text-primary)]/5 hover:bg-[var(--text-primary)]/10 border border-[var(--border-color)] rounded-xl text-sm text-[var(--text-secondary)] transition-colors"
-                >
-                    <RefreshCw className="w-4 h-4" />
-                    Làm mới
-                </button>
-            </header>
-
             <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="text-xl font-bold">Thống kê hệ thống</h2>
+                        <p className="text-sm text-[var(--text-secondary)]">Cập nhật nhanh tình trạng người dùng</p>
+                    </div>
+                    <button
+                        onClick={fetchStats}
+                        className="flex items-center gap-2 px-4 py-2 bg-[var(--text-primary)]/5 hover:bg-[var(--text-primary)]/10 border border-[var(--border-color)] rounded-xl text-sm text-[var(--text-secondary)] transition-colors"
+                    >
+                        <RefreshCw className="w-4 h-4" />
+                        Làm mới
+                    </button>
+                </div>
+
                 {error && (
                     <div className="px-5 py-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-400 text-sm">
                         ⚠️ {error}

@@ -146,12 +146,18 @@ export default function RegisterPage() {
         setErrorMsg('');
         try {
             const data: RegisterData = { fullName, email, password };
-            await authService.register(data);
+            const res = await authService.register(data);
+            // Auto-login: lưu token ngay sau khi đăng ký thành công
+            if (res.accessToken) {
+                localStorage.setItem('token', res.accessToken);
+            }
             setSuccess(true);
-            setTimeout(() => navigate('/login'), 1800);
-        } catch (error: any) {
+            // Redirect vào /plans để user chọn gói ngay
+            setTimeout(() => navigate('/plans'), 1800);
+        } catch (error: unknown) {
             setLoading(false);
-            setErrorMsg(error.response?.data?.message || 'Đăng ký thất bại. Vui lòng kiểm tra lại.');
+            const err = error as { response?: { data?: { message?: string } } };
+            setErrorMsg(err.response?.data?.message || 'Đăng ký thất bại. Vui lòng kiểm tra lại.');
         }
     };
 
@@ -183,6 +189,10 @@ export default function RegisterPage() {
                 .slide-up   { animation: slide-up 0.55s cubic-bezier(.22,.68,0,1.2) both; }
                 .check-pop  { animation: check-pop 0.4s cubic-bezier(.22,.68,0,1.4) both; }
                 .shake2     { animation: shake2 0.4s ease both; }
+                /* Hide browser native password reveal button */
+                input[type='password']::-ms-reveal,
+                input[type='password']::-ms-clear,
+                input::-webkit-credentials-auto-fill-button { display: none !important; }
             `}</style>
 
             <div className="min-h-screen grid lg:grid-cols-2 bg-[var(--bg-app)]">
@@ -207,7 +217,7 @@ export default function RegisterPage() {
                                     <CheckCircle2 className="w-8 h-8 text-emerald-400" />
                                 </div>
                                 <h2 className="text-2xl font-bold text-[var(--text-primary)]">Đăng ký thành công!</h2>
-                                <p className="text-[var(--text-secondary)] text-sm">Đang chuyển đến trang đăng nhập...</p>
+                                <p className="text-[var(--text-secondary)] text-sm">Đang chuyển đến trang chọn gói dịch vụ...</p>
                                 <div className="w-32 h-1 rounded-full overflow-hidden bg-white/10 mt-2">
                                     <div className="h-full bg-emerald-500 rounded-full" style={{ animation: 'slide-up 1.8s linear forwards', width: '100%' }} />
                                 </div>
@@ -268,6 +278,7 @@ export default function RegisterPage() {
                                                 value={password}
                                                 onChange={e => { setPassword(e.target.value); setErrorMsg(''); }}
                                                 placeholder="••••••••"
+                                                style={{ WebkitAppearance: 'none' } as React.CSSProperties}
                                                 className="w-full bg-[var(--input-bg)] border border-[var(--border-color)] hover:border-[var(--text-primary)]/20 focus:border-violet-500/60 focus:bg-violet-950/20 rounded-xl py-3 pl-11 pr-11 text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all duration-200"
                                             />
                                             <button type="button" onClick={() => setShowPass(p => !p)}
@@ -303,6 +314,7 @@ export default function RegisterPage() {
                                                 value={confirmPassword}
                                                 onChange={e => { setConfirmPassword(e.target.value); setErrorMsg(''); }}
                                                 placeholder="••••••••"
+                                                style={{ WebkitAppearance: 'none' } as React.CSSProperties}
                                                 className={`w-full bg-[var(--input-bg)] border hover:border-[var(--text-primary)]/20 rounded-xl py-3 pl-11 pr-11 text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50 text-sm focus:outline-none focus:ring-2 transition-all duration-200 ${confirmPassword.length > 0 && confirmPassword !== password
                                                     ? 'border-rose-500/50 focus:border-rose-500/60 focus:ring-rose-500/20 bg-rose-950/10'
                                                     : 'border-[var(--border-color)] focus:border-violet-500/60 focus:bg-violet-950/20 focus:ring-violet-500/20'
