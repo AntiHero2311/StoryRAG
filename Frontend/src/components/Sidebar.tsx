@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
     LayoutDashboard, FolderOpen, BarChart2, User, Settings,
-    Users, ShieldCheck, CreditCard, ChevronLeft, ChevronRight,
+    Users, CreditCard, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 
 const NAV_AUTHOR = [
@@ -29,7 +29,6 @@ const NAV_ADMIN = [
     { key: 'projects', label: 'Dự án', icon: FolderOpen, path: '/projects' },
     { key: 'analysis', label: 'Phân tích', icon: BarChart2, path: '/analysis' },
     { key: 'users', label: 'Người dùng', icon: Users, path: '/admin' },
-    { key: 'admin', label: 'Quản trị', icon: ShieldCheck, path: '/admin' },
     { key: 'sub-admin', label: 'Quản lý Plans', icon: CreditCard, path: '/admin/subscription' },
     { key: 'profile', label: 'Hồ sơ', icon: User, path: '/profile' },
     { key: 'settings', label: 'Cài đặt', icon: Settings, path: '/settings' },
@@ -53,29 +52,76 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
 
     return (
         <aside
-            className="relative flex flex-col h-full transition-all duration-300 overflow-hidden shrink-0"
+            className="relative flex flex-col h-full transition-all duration-300 shrink-0"
             style={{
                 width: collapsed ? '64px' : '200px',
                 background: 'var(--bg-sidebar)',
                 borderRight: '1px solid var(--border-color)',
             }}
         >
-            {/* Brand */}
-            <button
-                onClick={() => onNavigate('/home')}
-                title="Về trang chủ"
-                className="flex items-center gap-3 px-4 py-5 border-b border-[var(--border-color)] min-h-[68px] overflow-hidden w-full text-left hover:bg-[var(--text-primary)]/5 transition-colors"
-            >
-                <img src="/logo.png" alt="Logo" className="h-8 w-8 shrink-0 object-contain" />
+            {/* Inner wrapper clips content during collapse animation */}
+            <div className="relative flex flex-col h-full overflow-hidden">
+                {/* Brand */}
+                <button
+                    onClick={() => onNavigate('/home')}
+                    title="Về trang chủ"
+                    className="flex items-center gap-3 px-4 py-5 border-b border-[var(--border-color)] min-h-[68px] overflow-hidden w-full text-left hover:bg-[var(--text-primary)]/5 transition-colors"
+                >
+                    <img src="/logo.png" alt="Logo" className="h-8 w-8 shrink-0 object-contain" />
+                    {!collapsed && (
+                        <div className="overflow-hidden flex-1">
+                            <span className="text-[var(--text-primary)] font-bold text-sm truncate block">StoryNest</span>
+                            <p className="text-[var(--text-secondary)] text-[10px] truncate opacity-50">Analysis System</p>
+                        </div>
+                    )}
+                </button>
+
+                <div className="flex-1 overflow-y-auto py-2">
+                    {!collapsed && (
+                        <p className="text-[var(--text-secondary)] opacity-40 text-[10px] font-semibold uppercase tracking-widest px-4 mb-2">Menu</p>
+                    )}
+                    <nav className="space-y-0.5 px-2">
+                        {nav.map(item => {
+                            const Icon = item.icon;
+                            const active = location.pathname === item.path;
+                            return (
+                                <button
+                                    key={item.key}
+                                    onClick={() => onNavigate(item.path)}
+                                    title={collapsed ? item.label : undefined}
+                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${active
+                                        ? 'text-[#f5a623] bg-[#f5a623]/10'
+                                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5'
+                                        }`}
+                                >
+                                    <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-[#f5a623]' : ''}`} />
+                                    {!collapsed && (
+                                        <>
+                                            <span className="truncate">{item.label}</span>
+                                            {active && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#f5a623]" />}
+                                        </>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </nav>
+                </div>
+
+                {/* Support section - hidden when collapsed */}
                 {!collapsed && (
-                    <div className="overflow-hidden flex-1">
-                        <span className="text-[var(--text-primary)] font-bold text-sm truncate block">StoryNest</span>
-                        <p className="text-[var(--text-secondary)] text-[10px] truncate opacity-50">Analysis System</p>
+                    <div className="px-3 pb-5">
+                        <div className="bg-[#f5a623]/5 border border-[#f5a623]/15 rounded-2xl p-3.5">
+                            <p className="text-[var(--text-primary)] text-xs font-semibold mb-0.5">Cần hỗ trợ?</p>
+                            <p className="text-[var(--text-secondary)] text-[10px] mb-3 opacity-70">Liên hệ với chúng tôi.</p>
+                            <button className="w-full py-1.5 rounded-xl bg-[#f5a623]/10 hover:bg-[#f5a623]/20 text-[#f5a623] text-xs font-medium transition-colors border border-[#f5a623]/20">
+                                Trung tâm hỗ trợ
+                            </button>
+                        </div>
                     </div>
                 )}
-            </button>
+            </div>
 
-            {/* Collapse toggle button */}
+            {/* Collapse toggle button — outside overflow-hidden wrapper so it's never clipped */}
             <button
                 onClick={() => setCollapsed(c => !c)}
                 title={collapsed ? 'Mở rộng' : 'Thu nhỏ'}
@@ -83,50 +129,6 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
             >
                 {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
             </button>
-
-            <div className="flex-1 overflow-y-auto py-2">
-                {!collapsed && (
-                    <p className="text-[var(--text-secondary)] opacity-40 text-[10px] font-semibold uppercase tracking-widest px-4 mb-2">Menu</p>
-                )}
-                <nav className="space-y-0.5 px-2">
-                    {nav.map(item => {
-                        const Icon = item.icon;
-                        const active = location.pathname === item.path;
-                        return (
-                            <button
-                                key={item.key}
-                                onClick={() => onNavigate(item.path)}
-                                title={collapsed ? item.label : undefined}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${active
-                                    ? 'text-[#f5a623] bg-[#f5a623]/10'
-                                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5'
-                                    }`}
-                            >
-                                <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-[#f5a623]' : ''}`} />
-                                {!collapsed && (
-                                    <>
-                                        <span className="truncate">{item.label}</span>
-                                        {active && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#f5a623]" />}
-                                    </>
-                                )}
-                            </button>
-                        );
-                    })}
-                </nav>
-            </div>
-
-            {/* Support section - hidden when collapsed */}
-            {!collapsed && (
-                <div className="px-3 pb-6">
-                    <div className="bg-[var(--text-primary)]/5 border border-[var(--border-color)] rounded-2xl p-4">
-                        <p className="text-[var(--text-primary)] text-xs font-semibold mb-0.5">Need Help?</p>
-                        <p className="text-[var(--text-secondary)] text-[10px] mb-3">Contact us for assistance.</p>
-                        <button className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-medium transition-colors border border-white/5">
-                            Support Center
-                        </button>
-                    </div>
-                </div>
-            )}
         </aside>
     );
 }

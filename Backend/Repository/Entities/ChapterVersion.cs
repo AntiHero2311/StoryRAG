@@ -10,6 +10,9 @@ namespace Repository.Entities
         /// <summary>Số thứ tự phiên bản (1, 2, 3...) tăng dần</summary>
         public int VersionNumber { get; set; }
 
+        /// <summary>Tên phiên bản do người dùng đặt (VD: "Bản nháp 1", "Hướng đi mới")</summary>
+        public string? Title { get; set; }
+
         /// <summary>AES-256 encrypted content (nội dung chương)</summary>
         public string Content { get; set; } = string.Empty;
 
@@ -32,6 +35,9 @@ namespace Repository.Entities
         public bool IsEmbedded { get; set; } = false;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        /// <summary>Cập nhật lần cuối (khi lưu in-place)</summary>
+        public DateTime? UpdatedAt { get; set; }
 
         // Navigation
         public Chapter Chapter { get; set; } = null!;

@@ -78,9 +78,9 @@ function DashboardContent({ fullName, role, onNavigate }: { fullName: string; ro
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
                     { label: 'Tổng Dự án', value: projects.length.toString(), icon: FolderOpen, color: '#6366f1' },
-                    { label: 'Tổng Chương', value: '0', icon: BookOpen, color: '#8b5cf6' },
-                    { label: 'Phân tích', value: '0', icon: TrendingUp, color: '#06b6d4' },
-                    { label: 'AI Queries', value: '0', icon: MessageSquare, color: '#f5a623' },
+                    { label: 'Tổng Chương', value: '—', icon: BookOpen, color: '#8b5cf6' },
+                    { label: 'Phân tích', value: 'Phase 2', icon: TrendingUp, color: '#06b6d4' },
+                    { label: 'AI Queries', value: 'Phase 2', icon: MessageSquare, color: '#f5a623' },
                 ].map(s => {
                     const Icon = s.icon;
                     return (

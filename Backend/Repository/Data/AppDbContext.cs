@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Pgvector.EntityFrameworkCore;
 using Repository.Entities;
 
 namespace Repository.Data
@@ -12,6 +13,8 @@ namespace Repository.Data
 
         public DbSet<User> Users { get; set; }
         public DbSet<Project> Projects { get; set; }
+        public DbSet<Genre> Genres { get; set; }
+        public DbSet<ProjectGenre> ProjectGenres { get; set; }
         public DbSet<SubscriptionPlan> SubscriptionPlans { get; set; }
         public DbSet<UserSubscription> UserSubscriptions { get; set; }
 
@@ -24,6 +27,7 @@ namespace Repository.Data
         {
             base.OnModelCreating(modelBuilder);
             modelBuilder.HasPostgresExtension("uuid-ossp");
+            modelBuilder.HasPostgresExtension("vector");
 
             // ── User ─────────────────────────────────────────────────────────────
             modelBuilder.Entity<User>(entity =>
@@ -134,6 +138,7 @@ namespace Repository.Data
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.Content).IsRequired();
+                entity.Property(e => e.Title).HasMaxLength(255);
                 entity.Property(e => e.WordCount).HasDefaultValue(0);
                 entity.Property(e => e.TokenCount).HasDefaultValue(0);
                 entity.Property(e => e.IsChunked).HasDefaultValue(false);
@@ -169,6 +174,9 @@ namespace Repository.Data
                 entity.HasIndex(e => e.VersionId);
                 entity.HasIndex(e => e.ProjectId);
 
+                // Embedding vector(768) — nomic-embed-text (LM Studio default)
+                entity.Property(e => e.Embedding).HasColumnType("vector(768)");
+
                 // FK → ChapterVersions
                 entity.HasOne(ch => ch.Version)
                       .WithMany(v => v.Chunks)
@@ -179,6 +187,52 @@ namespace Repository.Data
                 entity.HasOne(ch => ch.Project)
                       .WithMany()
                       .HasForeignKey(ch => ch.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── Genre ─────────────────────────────────────────────────────────────
+            modelBuilder.Entity<Genre>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).UseIdentityColumn();
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.Slug).IsRequired().HasMaxLength(100);
+                entity.HasIndex(e => e.Slug).IsUnique();
+                entity.Property(e => e.Color).IsRequired().HasMaxLength(20).HasDefaultValue("#6366f1");
+                entity.Property(e => e.Description).HasMaxLength(500);
+
+                // Seed 14 thể loại
+                entity.HasData(
+                    new Genre { Id = 1,  Name = "Tiểu thuyết",           Slug = "tieu-thuyet",      Color = "#6366f1", Description = "Tác phẩm văn xuôi dài" },
+                    new Genre { Id = 2,  Name = "Ngắn truyện",           Slug = "ngan-truyen",      Color = "#8b5cf6", Description = "Truyện ngắn, truyện vừa" },
+                    new Genre { Id = 3,  Name = "Kiếm hiệp",             Slug = "kiem-hiep",        Color = "#ef4444", Description = "Võ hiệp, kiếm khách" },
+                    new Genre { Id = 4,  Name = "Tiên hiệp",             Slug = "tien-hiep",        Color = "#f59e0b", Description = "Tu tiên, luyện khí" },
+                    new Genre { Id = 5,  Name = "Huyền huyễn",           Slug = "huyen-huyen",      Color = "#10b981", Description = "Fantasy, thế giới ảo" },
+                    new Genre { Id = 6,  Name = "Khoa học viễn tưởng",   Slug = "khoa-hoc-vien-tuong", Color = "#3b82f6", Description = "Sci-Fi, tương lai" },
+                    new Genre { Id = 7,  Name = "Lãng mạn",              Slug = "lang-man",         Color = "#ec4899", Description = "Tình cảm, lãng mạn" },
+                    new Genre { Id = 8,  Name = "Trinh thám",            Slug = "trinh-tham",       Color = "#64748b", Description = "Điều tra, phá án" },
+                    new Genre { Id = 9,  Name = "Kinh dị",               Slug = "kinh-di",          Color = "#dc2626", Description = "Horror, ma quái" },
+                    new Genre { Id = 10, Name = "Lịch sử",               Slug = "lich-su",          Color = "#92400e", Description = "Bối cảnh lịch sử" },
+                    new Genre { Id = 11, Name = "Đô thị",                Slug = "do-thi",           Color = "#0891b2", Description = "Cuộc sống hiện đại" },
+                    new Genre { Id = 12, Name = "Xuyên không",           Slug = "xuyen-khong",      Color = "#7c3aed", Description = "Isekai, xuyên thời gian" },
+                    new Genre { Id = 13, Name = "Hệ thống",              Slug = "he-thong",         Color = "#059669", Description = "LitRPG, hệ thống cấp bậc" },
+                    new Genre { Id = 14, Name = "Gia đình",              Slug = "gia-dinh",         Color = "#d97706", Description = "Tình cảm gia đình" }
+                );
+            });
+
+            // ── ProjectGenre (join) ───────────────────────────────────────────────
+            modelBuilder.Entity<ProjectGenre>(entity =>
+            {
+                entity.HasKey(pg => new { pg.ProjectId, pg.GenreId });
+
+                entity.HasOne(pg => pg.Project)
+                      .WithMany(p => p.ProjectGenres)
+                      .HasForeignKey(pg => pg.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(pg => pg.Genre)
+                      .WithMany(g => g.ProjectGenres)
+                      .HasForeignKey(pg => pg.GenreId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
         }

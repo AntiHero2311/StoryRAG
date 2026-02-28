@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -12,9 +13,11 @@ using Repository.Data;
 namespace Repository.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260227091028_Phase2_EmbeddingVector768")]
+    partial class Phase2_EmbeddingVector768
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -47,12 +50,6 @@ namespace Repository.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
-
-                    b.Property<string>("DraftContent")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("DraftSavedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -171,17 +168,10 @@ namespace Repository.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
-                    b.Property<string>("Title")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
                     b.Property<int>("TokenCount")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("VersionNumber")
                         .HasColumnType("integer");
@@ -199,157 +189,6 @@ namespace Repository.Migrations
                         .IsUnique();
 
                     b.ToTable("ChapterVersions");
-                });
-
-            modelBuilder.Entity("Repository.Entities.Genre", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Color")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("#6366f1");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("Slug")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Slug")
-                        .IsUnique();
-
-                    b.ToTable("Genres");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            Color = "#6366f1",
-                            Description = "Tác phẩm văn xuôi dài",
-                            Name = "Tiểu thuyết",
-                            Slug = "tieu-thuyet"
-                        },
-                        new
-                        {
-                            Id = 2,
-                            Color = "#8b5cf6",
-                            Description = "Truyện ngắn, truyện vừa",
-                            Name = "Ngắn truyện",
-                            Slug = "ngan-truyen"
-                        },
-                        new
-                        {
-                            Id = 3,
-                            Color = "#ef4444",
-                            Description = "Võ hiệp, kiếm khách",
-                            Name = "Kiếm hiệp",
-                            Slug = "kiem-hiep"
-                        },
-                        new
-                        {
-                            Id = 4,
-                            Color = "#f59e0b",
-                            Description = "Tu tiên, luyện khí",
-                            Name = "Tiên hiệp",
-                            Slug = "tien-hiep"
-                        },
-                        new
-                        {
-                            Id = 5,
-                            Color = "#10b981",
-                            Description = "Fantasy, thế giới ảo",
-                            Name = "Huyền huyễn",
-                            Slug = "huyen-huyen"
-                        },
-                        new
-                        {
-                            Id = 6,
-                            Color = "#3b82f6",
-                            Description = "Sci-Fi, tương lai",
-                            Name = "Khoa học viễn tưởng",
-                            Slug = "khoa-hoc-vien-tuong"
-                        },
-                        new
-                        {
-                            Id = 7,
-                            Color = "#ec4899",
-                            Description = "Tình cảm, lãng mạn",
-                            Name = "Lãng mạn",
-                            Slug = "lang-man"
-                        },
-                        new
-                        {
-                            Id = 8,
-                            Color = "#64748b",
-                            Description = "Điều tra, phá án",
-                            Name = "Trinh thám",
-                            Slug = "trinh-tham"
-                        },
-                        new
-                        {
-                            Id = 9,
-                            Color = "#dc2626",
-                            Description = "Horror, ma quái",
-                            Name = "Kinh dị",
-                            Slug = "kinh-di"
-                        },
-                        new
-                        {
-                            Id = 10,
-                            Color = "#92400e",
-                            Description = "Bối cảnh lịch sử",
-                            Name = "Lịch sử",
-                            Slug = "lich-su"
-                        },
-                        new
-                        {
-                            Id = 11,
-                            Color = "#0891b2",
-                            Description = "Cuộc sống hiện đại",
-                            Name = "Đô thị",
-                            Slug = "do-thi"
-                        },
-                        new
-                        {
-                            Id = 12,
-                            Color = "#7c3aed",
-                            Description = "Isekai, xuyên thời gian",
-                            Name = "Xuyên không",
-                            Slug = "xuyen-khong"
-                        },
-                        new
-                        {
-                            Id = 13,
-                            Color = "#059669",
-                            Description = "LitRPG, hệ thống cấp bậc",
-                            Name = "Hệ thống",
-                            Slug = "he-thong"
-                        },
-                        new
-                        {
-                            Id = 14,
-                            Color = "#d97706",
-                            Description = "Tình cảm gia đình",
-                            Name = "Gia đình",
-                            Slug = "gia-dinh"
-                        });
                 });
 
             modelBuilder.Entity("Repository.Entities.Project", b =>
@@ -401,21 +240,6 @@ namespace Repository.Migrations
                         {
                             t.HasCheckConstraint("CK_Projects_Status", "\"Status\" IN ('Draft','Published','Archived')");
                         });
-                });
-
-            modelBuilder.Entity("Repository.Entities.ProjectGenre", b =>
-                {
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("GenreId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("ProjectId", "GenreId");
-
-                    b.HasIndex("GenreId");
-
-                    b.ToTable("ProjectGenres");
                 });
 
             modelBuilder.Entity("Repository.Entities.SubscriptionPlan", b =>
@@ -693,25 +517,6 @@ namespace Repository.Migrations
                     b.Navigation("Author");
                 });
 
-            modelBuilder.Entity("Repository.Entities.ProjectGenre", b =>
-                {
-                    b.HasOne("Repository.Entities.Genre", "Genre")
-                        .WithMany("ProjectGenres")
-                        .HasForeignKey("GenreId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Repository.Entities.Project", "Project")
-                        .WithMany("ProjectGenres")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Genre");
-
-                    b.Navigation("Project");
-                });
-
             modelBuilder.Entity("Repository.Entities.UserSubscription", b =>
                 {
                     b.HasOne("Repository.Entities.SubscriptionPlan", "Plan")
@@ -739,16 +544,6 @@ namespace Repository.Migrations
             modelBuilder.Entity("Repository.Entities.ChapterVersion", b =>
                 {
                     b.Navigation("Chunks");
-                });
-
-            modelBuilder.Entity("Repository.Entities.Genre", b =>
-                {
-                    b.Navigation("ProjectGenres");
-                });
-
-            modelBuilder.Entity("Repository.Entities.Project", b =>
-                {
-                    b.Navigation("ProjectGenres");
                 });
 
             modelBuilder.Entity("Repository.Entities.SubscriptionPlan", b =>

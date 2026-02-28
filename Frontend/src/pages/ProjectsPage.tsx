@@ -1,14 +1,17 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
-    Plus, Pencil, Trash2, AlertTriangle, Loader2, MoreHorizontal, X, FolderOpen, Info
+    Plus, Pencil, Trash2, AlertTriangle, Loader2, MoreHorizontal, X, FolderOpen, Info, Search, ChevronDown, Check
 } from 'lucide-react';
 import {
     projectService,
-    ProjectResponse,
-    CreateProjectRequest,
-    UpdateProjectRequest,
+    type ProjectResponse,
+    type CreateProjectRequest,
+    type UpdateProjectRequest,
+    type GenreResponse,
 } from '../services/projectService';
+import { genreService } from '../services/genreService';
 import MainLayout from '../layouts/MainLayout';
 
 // ── Status badge ──────────────────────────────────────────────────────────────
@@ -32,20 +35,45 @@ function StatusBadge({ status }: { status: string }) {
 
 // ── Project form modal ────────────────────────────────────────────────────────
 interface ProjectFormProps {
-    initial?: { title: string; summary: string; status: string };
-    onSubmit: (data: { title: string; summary: string; status: string }) => Promise<void>;
+    initial?: { title: string; summary: string; status: string; genreIds: number[] };
+    onSubmit: (data: { title: string; summary: string; status: string; genreIds: number[] }) => Promise<void>;
     onClose: () => void;
     loading: boolean;
     title: string;
+    genres: GenreResponse[];
 }
 
-function ProjectFormModal({ initial, onSubmit, onClose, loading, title }: ProjectFormProps) {
+function ProjectFormModal({ initial, onSubmit, onClose, loading, title, genres }: ProjectFormProps) {
     const [form, setForm] = useState({
         title: initial?.title ?? '',
         summary: initial?.summary ?? '',
         status: initial?.status ?? 'Draft',
+        genreIds: initial?.genreIds ?? [] as number[],
     });
     const [error, setError] = useState('');
+
+    const [genreSearch, setGenreSearch] = useState('');
+    const [isGenreOpen, setIsGenreOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setIsGenreOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const toggleGenre = (id: number) => {
+        setForm(f => ({
+            ...f,
+            genreIds: f.genreIds.includes(id)
+                ? f.genreIds.filter(g => g !== id)
+                : [...f.genreIds, id],
+        }));
+    };
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
@@ -82,6 +110,98 @@ function ProjectFormModal({ initial, onSubmit, onClose, loading, title }: Projec
                             className="w-full px-4 py-2.5 bg-[var(--input-bg)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] text-sm placeholder-[var(--text-secondary)]/50 outline-none focus:ring-2 focus:ring-[#f5a623]/50"
                         />
                     </div>
+
+                    {genres.length > 0 && (
+                        <div className="relative z-20" ref={dropdownRef}>
+                            <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">
+                                Thể loại
+                            </label>
+
+                            <div
+                                onClick={() => setIsGenreOpen(!isGenreOpen)}
+                                className="w-full min-h-[44px] px-4 py-2 bg-[var(--input-bg)] border border-[var(--border-color)] rounded-xl flex items-center justify-between cursor-pointer transition-all hover:border-[var(--text-secondary)]/50 focus-within:ring-2 focus-within:ring-[#f5a623]/50 focus-within:border-[#f5a623]/50"
+                            >
+                                <div className="flex flex-wrap gap-1.5 flex-1 items-center">
+                                    {form.genreIds.length === 0 ? (
+                                        <span className="text-[var(--text-secondary)]/50 text-sm py-0.5">Chọn thể loại...</span>
+                                    ) : (
+                                        form.genreIds.map(id => {
+                                            const g = genres.find(x => x.id === id);
+                                            if (!g) return null;
+                                            return (
+                                                <span
+                                                    key={g.id}
+                                                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold transition-all hover:brightness-110"
+                                                    style={{
+                                                        background: g.color + '20',
+                                                        color: g.color,
+                                                        border: `1px solid ${g.color}40`,
+                                                    }}
+                                                    onClick={(e) => { e.stopPropagation(); toggleGenre(g.id); }}
+                                                >
+                                                    {g.name}
+                                                    <X className="w-3 h-3 hover:scale-110 transition-transform cursor-pointer" />
+                                                </span>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                                <ChevronDown className={`w-4 h-4 text-[var(--text-secondary)] transition-transform duration-200 ml-2 shrink-0 ${isGenreOpen ? 'rotate-180' : ''}`} />
+                            </div>
+
+                            {isGenreOpen && (
+                                <div className="absolute z-10 top-full left-0 right-0 mt-2 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.4)] overflow-hidden flex flex-col max-h-[200px]">
+                                    <div className="p-2 border-b border-[var(--border-color)] shrink-0">
+                                        <div className="relative">
+                                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
+                                            <input
+                                                type="text"
+                                                placeholder="Tìm kiếm thể loại..."
+                                                value={genreSearch}
+                                                onChange={e => setGenreSearch(e.target.value)}
+                                                className="w-full pl-9 pr-3 py-2 bg-[var(--input-bg)] bg-opacity-50 border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] outline-none focus:border-[#f5a623]/50 focus:ring-1 focus:ring-[#f5a623]/50 transition-all placeholder-[var(--text-secondary)]/50"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="overflow-y-auto scrollbar-thin p-1.5 flex flex-col gap-0.5">
+                                        {genres.filter(g => g.name.toLowerCase().includes(genreSearch.toLowerCase())).length === 0 ? (
+                                            <div className="text-center py-6 text-sm text-[var(--text-secondary)]">Không tìm thấy thể loại phù hợp</div>
+                                        ) : (
+                                            genres.filter(g => g.name.toLowerCase().includes(genreSearch.toLowerCase())).map(g => {
+                                                const selected = form.genreIds.includes(g.id);
+                                                return (
+                                                    <div
+                                                        key={g.id}
+                                                        onClick={() => {
+                                                            toggleGenre(g.id);
+                                                        }}
+                                                        className="flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all hover:bg-[var(--text-primary)]/5"
+                                                        style={{
+                                                            background: selected ? g.color + '0d' : 'transparent',
+                                                        }}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div
+                                                                className="w-3 h-3 rounded-full flex-shrink-0"
+                                                                style={{
+                                                                    background: g.color,
+                                                                    boxShadow: `0 0 8px ${g.color}66`
+                                                                }}
+                                                            />
+                                                            <span className="text-sm font-medium" style={{ color: selected ? g.color : 'var(--text-primary)' }}>
+                                                                {g.name}
+                                                            </span>
+                                                        </div>
+                                                        {selected && <Check className="w-4 h-4" style={{ color: g.color }} />}
+                                                    </div>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     <div>
                         <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">
@@ -290,121 +410,245 @@ function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
         day: '2-digit', month: '2-digit', year: 'numeric',
     });
     const [menuOpen, setMenuOpen] = useState(false);
+    const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+    const menuBtnRef = useRef<HTMLButtonElement>(null);
+    const [isHovered, setIsHovered] = useState(false);
 
-    // Book dimensions
-    const BOOK_W = '170px';
-    const BOOK_H = '290px';
+    const BOOK_W = 195;
+    const BOOK_H = 290;
+    const SPINE_W = 38;
 
     return (
         <div
-            className="group relative cursor-pointer flex justify-center overflow-hidden"
+            className="relative cursor-pointer flex justify-center"
             onClick={() => onClick(project)}
-            style={{ perspective: '1200px' }}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            style={{
+                perspective: '700px',
+                perspectiveOrigin: '50% 50%',
+                padding: '16px 8px 24px',
+            }}
         >
-            {/* Book container */}
-            <div className="relative transition-all duration-300 ease-out transform-gpu group-hover:scale-[1.02] overflow-hidden"
+            {/* 3D Book wrapper */}
+            <div
                 style={{
+                    position: 'relative',
+                    width: `${BOOK_W}px`,
+                    height: `${BOOK_H}px`,
                     transformStyle: 'preserve-3d',
-                    width: BOOK_W,
-                    height: BOOK_H
+                    transform: isHovered
+                        ? 'rotateY(-6deg) translateY(-8px)'
+                        : 'rotateY(-28deg)',
+                    transition: 'transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                    filter: isHovered
+                        ? 'drop-shadow(16px 22px 32px rgba(0,0,0,0.55))'
+                        : 'drop-shadow(6px 14px 22px rgba(0,0,0,0.5))',
+                }}
+            >
+                {/* Main book body: spine + cover */}
+                <div style={{
+                    display: 'flex',
+                    height: `${BOOK_H}px`,
+                    width: `${BOOK_W}px`,
+                    borderRadius: '3px 12px 12px 3px',
+                    overflow: 'hidden',
+                    position: 'relative',
                 }}>
-
-                {/* Main Book Body */}
-                <div className="relative flex rounded-r-[2rem] overflow-hidden shadow-[15px_15px_30px_rgba(0,0,0,0.4)] group-hover:shadow-[30px_30px_60px_rgba(0,0,0,0.5)] transition-all duration-500"
-                    style={{ height: BOOK_H, width: BOOK_W }}>
-
-                    {/* Spine */}
-                    <div
-                        className="w-8 shrink-0 flex items-center justify-center relative z-20"
-                        style={{
-                            background: `linear-gradient(90deg, ${color.spine} 0%, ${color.spine} 20%, ${color.cover} 100%)`,
-                            boxShadow: 'inset -2px 0 5px rgba(0,0,0,0.3)',
-                            borderRadius: '8px 0 0 8px'
-                        }}
-                    >
-                        <div className="absolute inset-x-0 top-6 h-px bg-white/10" />
-                        <div className="absolute inset-x-0 bottom-6 h-px bg-white/10" />
-                        <span
-                            className="text-white font-bold rotate-180 whitespace-nowrap opacity-40 uppercase tracking-[0.2em]"
-                            style={{ writingMode: 'vertical-rl', fontSize: '11px' }}
-                        >
+                    {/* ── SPINE ── */}
+                    <div style={{
+                        width: `${SPINE_W}px`,
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative',
+                        background: `linear-gradient(90deg, ${color.spine} 0%, ${color.cover} 100%)`,
+                        boxShadow: 'inset -4px 0 8px rgba(0,0,0,0.4)',
+                        borderRadius: '3px 0 0 3px',
+                    }}>
+                        {/* Spine decorative bands */}
+                        <div style={{ position: 'absolute', top: '22px', left: '4px', right: '4px', height: '1px', background: 'rgba(255,255,255,0.15)' }} />
+                        <div style={{ position: 'absolute', top: '26px', left: '4px', right: '4px', height: '1px', background: 'rgba(255,255,255,0.06)' }} />
+                        <div style={{ position: 'absolute', bottom: '22px', left: '4px', right: '4px', height: '1px', background: 'rgba(255,255,255,0.15)' }} />
+                        <div style={{ position: 'absolute', bottom: '26px', left: '4px', right: '4px', height: '1px', background: 'rgba(255,255,255,0.06)' }} />
+                        {/* Spine title — StoryNest branding, vertical */}
+                        <span style={{
+                            writingMode: 'vertical-rl',
+                            transform: 'rotate(180deg)',
+                            fontSize: '10px',
+                            fontWeight: '800',
+                            color: 'rgba(255,255,255,0.5)',
+                            letterSpacing: '0.25em',
+                            textTransform: 'uppercase',
+                            fontFamily: 'sans-serif',
+                            whiteSpace: 'nowrap',
+                        }}>
                             StoryNest
                         </span>
                     </div>
 
-                    {/* Book Cover */}
-                    <div
-                        className="flex-1 flex flex-col p-5 relative overflow-hidden z-10"
-                        style={{ background: color.cover }}
-                    >
-                        {/* Hinge detail */}
-                        <div className="absolute left-0 top-0 bottom-0 w-2 bg-black/20 blur-[1px] z-20" />
+                    {/* ── COVER ── */}
+                    <div style={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        padding: '14px 14px 12px',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        background: color.cover,
+                    }}>
+                        {/* Hinge shadow */}
+                        <div style={{
+                            position: 'absolute', left: 0, top: 0, bottom: 0,
+                            width: '10px',
+                            background: 'linear-gradient(to right, rgba(0,0,0,0.4), transparent)',
+                            zIndex: 20,
+                        }} />
 
-                        {/* Texture Overlay */}
-                        <div className={`absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/leather.png')] ${color.texture} pointer-events-none mix-blend-overlay`} />
+                        {/* Light reflection (diagonal top-left) */}
+                        <div style={{
+                            position: 'absolute', inset: 0,
+                            background: 'linear-gradient(145deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.05) 35%, transparent 65%)',
+                            pointerEvents: 'none', zIndex: 2,
+                        }} />
 
-                        {/* Top section - Status only */}
-                        <div className="flex items-center justify-between mb-4 relative z-30">
-                            <StatusBadge status={project.status} />
-                        </div>
+                        {/* Subtle noise texture via SVG */}
+                        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.08, pointerEvents: 'none', zIndex: 1 }}>
+                            <filter id={`noise-${project.id}`}>
+                                <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
+                                <feColorMatrix type="saturate" values="0" />
+                            </filter>
+                            <rect width="100%" height="100%" filter={`url(#noise-${project.id})`} />
+                        </svg>
 
-                        {/* Title Section */}
-                        <div className="flex-1 flex flex-col justify-center relative z-30">
-                            <h3 className="font-bold text-xl leading-tight text-white line-clamp-4 text-center break-words [hyphens:auto]"
-                                style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)', fontFamily: "'Playfair Display', serif" }}>
+                        {/* Title */}
+                        <div style={{
+                            flex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            position: 'relative', zIndex: 30,
+                        }}>
+                            <h3 style={{
+                                fontFamily: "'Playfair Display', serif",
+                                fontSize: '19px',
+                                fontWeight: '700',
+                                color: 'white',
+                                lineHeight: '1.4',
+                                textShadow: '1px 2px 8px rgba(0,0,0,0.65)',
+                                textAlign: 'center',
+                                display: '-webkit-box',
+                                WebkitLineClamp: 4,
+                                WebkitBoxOrient: 'vertical' as const,
+                                overflow: 'hidden',
+                                wordBreak: 'break-word',
+                            }}>
                                 {project.title}
                             </h3>
                         </div>
 
-                        {/* Footer - Date and Actions */}
-                        <div className="flex items-center justify-between pt-3 border-t border-white/10 relative z-30">
-                            <span className="text-white/40 text-[10px] font-medium tracking-wider">{createdDate}</span>
+                        {/* Genre tags */}
+                        {project.genres && project.genres.length > 0 && (
+                            <div style={{
+                                display: 'flex', flexWrap: 'wrap', gap: '4px',
+                                position: 'relative', zIndex: 30,
+                                marginBottom: '8px',
+                                justifyContent: 'center',
+                            }}>
+                                {project.genres.slice(0, 2).map(g => (
+                                    <span key={g.id} style={{
+                                        fontSize: '8px',
+                                        fontWeight: '700',
+                                        letterSpacing: '0.06em',
+                                        textTransform: 'uppercase',
+                                        color: g.color,
+                                        background: g.color + '22',
+                                        border: `1px solid ${g.color}55`,
+                                        borderRadius: '4px',
+                                        padding: '2px 5px',
+                                    }}>
+                                        {g.name}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
 
+                        {/* Footer: date + menu */}
+                        <div style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            borderTop: '1px solid rgba(255,255,255,0.12)',
+                            paddingTop: '10px',
+                            position: 'relative', zIndex: 30,
+                            marginTop: '8px',
+                        }}>
+                            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.38)', fontWeight: '500', letterSpacing: '0.04em' }}>
+                                {createdDate}
+                            </span>
                             <div className="relative" onClick={e => e.stopPropagation()}>
                                 <button
-                                    onClick={() => setMenuOpen(!menuOpen)}
-                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 text-white/70 hover:text-white hover:bg-white/20 transition-all shadow-sm"
+                                    ref={menuBtnRef}
+                                    onClick={() => {
+                                        if (!menuOpen && menuBtnRef.current) {
+                                            const rect = menuBtnRef.current.getBoundingClientRect();
+                                            setMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+                                        }
+                                        setMenuOpen(v => !v);
+                                    }}
+                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 text-white/70 hover:text-white hover:bg-white/20 transition-all"
                                 >
                                     <MoreHorizontal className="w-4 h-4" />
                                 </button>
-                                {menuOpen && (
+                                {menuOpen && createPortal(
                                     <>
-                                        <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                                        <div className="absolute right-0 bottom-full mb-2 w-32 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-2xl overflow-hidden z-50">
-                                            <button
-                                                onClick={() => { onInfo(project); setMenuOpen(false); }}
-                                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors"
-                                            >
+                                        <div className="fixed inset-0 z-[200]" onClick={() => setMenuOpen(false)} />
+                                        <div
+                                            className="fixed w-36 rounded-xl shadow-2xl overflow-hidden z-[201]"
+                                            style={{
+                                                top: menuPos.top,
+                                                right: menuPos.right,
+                                                background: 'var(--bg-surface)',
+                                                border: '1px solid var(--border-color)',
+                                            }}
+                                        >
+                                            <button onClick={() => { onInfo(project); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
                                                 <Info className="w-3.5 h-3.5" /> Thông tin
                                             </button>
-                                            <button
-                                                onClick={() => { onEdit(project); setMenuOpen(false); }}
-                                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors"
-                                            >
+                                            <button onClick={() => { onEdit(project); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
                                                 <Pencil className="w-3.5 h-3.5" /> Chỉnh sửa
                                             </button>
-                                            <button
-                                                onClick={() => { onDelete(project); setMenuOpen(false); }}
-                                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-400 hover:bg-rose-500/10 transition-colors"
-                                            >
+                                            <button onClick={() => { onDelete(project); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-rose-400 hover:bg-rose-500/10 transition-colors">
                                                 <Trash2 className="w-3.5 h-3.5" /> Xóa dự án
                                             </button>
                                         </div>
-                                    </>
+                                    </>,
+                                    document.body
                                 )}
                             </div>
                         </div>
                     </div>
 
-                    {/* Paper Edges (Visual Stack) - subtle */}
-                    <div className="absolute right-0 top-0 bottom-0 w-[5px] z-0 overflow-hidden" style={{ background: 'linear-gradient(to right, rgba(250,248,244,0.6), rgba(220,215,205,0.4))' }}>
-                        {[...Array(15)].map((_, i) => (
-                            <div key={i} className="h-[2px] w-full bg-black/5" style={{ marginTop: i === 0 ? 0 : '3px' }} />
+                    {/* ── PAGE EDGES (right side) ── */}
+                    <div style={{
+                        position: 'absolute', right: '-5px', top: '2px', bottom: '2px',
+                        width: '7px', zIndex: 0,
+                        display: 'flex', flexDirection: 'column',
+                        borderRadius: '0 2px 2px 0',
+                        overflow: 'hidden',
+                    }}>
+                        {[...Array(28)].map((_, i) => (
+                            <div key={i} style={{
+                                flex: 1,
+                                background: i % 4 === 0
+                                    ? 'rgba(248,244,236,0.9)'
+                                    : i % 4 === 2
+                                        ? 'rgba(235,230,220,0.75)'
+                                        : 'rgba(242,238,230,0.82)',
+                                borderBottom: i % 2 === 0 ? '0.5px solid rgba(180,170,155,0.2)' : 'none',
+                            }} />
                         ))}
                     </div>
                 </div>
-
-
             </div>
         </div>
     );
@@ -434,6 +678,7 @@ function ProjectsContent({ onNavigate }: { onNavigate: (path: string) => void })
     const [projects, setProjects] = useState<ProjectResponse[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [genres, setGenres] = useState<GenreResponse[]>([]);
 
     // Modal states
     const [showCreate, setShowCreate] = useState(false);
@@ -444,6 +689,7 @@ function ProjectsContent({ onNavigate }: { onNavigate: (path: string) => void })
 
     useEffect(() => {
         fetchProjects();
+        genreService.getGenres().then(setGenres).catch(() => { });
     }, []);
 
     const fetchProjects = async () => {
@@ -459,13 +705,14 @@ function ProjectsContent({ onNavigate }: { onNavigate: (path: string) => void })
         }
     };
 
-    const handleCreate = async (form: { title: string; summary: string; status: string }) => {
+    const handleCreate = async (form: { title: string; summary: string; status: string; genreIds: number[] }) => {
         setModalLoading(true);
         try {
             const req: CreateProjectRequest = {
                 title: form.title,
                 summary: form.summary || undefined,
                 status: form.status,
+                genreIds: form.genreIds,
             };
             const created = await projectService.createProject(req);
             setProjects(prev => [created, ...prev]);
@@ -475,7 +722,7 @@ function ProjectsContent({ onNavigate }: { onNavigate: (path: string) => void })
         }
     };
 
-    const handleEdit = async (form: { title: string; summary: string; status: string }) => {
+    const handleEdit = async (form: { title: string; summary: string; status: string; genreIds: number[] }) => {
         if (!editTarget) return;
         setModalLoading(true);
         try {
@@ -483,6 +730,7 @@ function ProjectsContent({ onNavigate }: { onNavigate: (path: string) => void })
                 title: form.title,
                 summary: form.summary || undefined,
                 status: form.status,
+                genreIds: form.genreIds,
             };
             const updated = await projectService.updateProject(editTarget.id, req);
             setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
@@ -564,7 +812,7 @@ function ProjectsContent({ onNavigate }: { onNavigate: (path: string) => void })
 
             {/* Project grid */}
             {!loading && !error && projects.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
                     {projects.map(project => (
                         <ProjectCard
                             key={project.id}
@@ -585,6 +833,7 @@ function ProjectsContent({ onNavigate }: { onNavigate: (path: string) => void })
                     onSubmit={handleCreate}
                     onClose={() => setShowCreate(false)}
                     loading={modalLoading}
+                    genres={genres}
                 />
             )}
 
@@ -592,10 +841,16 @@ function ProjectsContent({ onNavigate }: { onNavigate: (path: string) => void })
             {editTarget && (
                 <ProjectFormModal
                     title="Chỉnh sửa dự án"
-                    initial={{ title: editTarget.title, summary: editTarget.summary ?? '', status: editTarget.status }}
+                    initial={{
+                        title: editTarget.title,
+                        summary: editTarget.summary ?? '',
+                        status: editTarget.status,
+                        genreIds: editTarget.genres?.map(g => g.id) ?? [],
+                    }}
                     onSubmit={handleEdit}
                     onClose={() => setEditTarget(null)}
                     loading={modalLoading}
+                    genres={genres}
                 />
             )}
 

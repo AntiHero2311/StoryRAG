@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations.Schema;
+using Pgvector;
 
 namespace Repository.Entities
 {
@@ -23,11 +23,9 @@ namespace Repository.Entities
 
         /// <summary>
         /// Vector embedding (1536 dims cho OpenAI text-embedding-3-small).
-        /// [NotMapped] — column tồn tại trong DB qua SQL migration.
-        /// Phase 2 sẽ dùng Pgvector.EntityFrameworkCore + value converter.
+        /// Mapped sang column vector(1536) trong PostgreSQL qua Pgvector.EntityFrameworkCore.
         /// </summary>
-        [NotMapped]
-        public float[]? Embedding { get; set; }
+        public Vector? Embedding { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

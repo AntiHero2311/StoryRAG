@@ -13,29 +13,33 @@ namespace Service.DTOs
         [MaxLength(255)]
         public string? Title { get; set; }
 
-        [Required(ErrorMessage = "Nội dung chương không được để trống.")]
+        [Required(AllowEmptyStrings = true)]
         public string Content { get; set; } = string.Empty;
-
-        public string? ChangeNote { get; set; }
     }
 
+    /// <summary>Cập nhật chapter title + lưu in-place content vào version đang active.</summary>
     public class UpdateChapterRequest
     {
         [MaxLength(255)]
         public string? Title { get; set; }
 
-        [Required(ErrorMessage = "Nội dung chương không được để trống.")]
+        [Required(AllowEmptyStrings = true)]
         public string Content { get; set; } = string.Empty;
-
-        public string? ChangeNote { get; set; }
     }
 
-    public class SaveNewVersionRequest
+    /// <summary>Tạo version mới (trống hoàn toàn) theo ý muốn của người dùng.</summary>
+    public class CreateVersionRequest
     {
-        [Required(ErrorMessage = "Nội dung chương không được để trống.")]
-        public string Content { get; set; } = string.Empty;
+        [MaxLength(255)]
+        public string? Title { get; set; }
+    }
 
-        public string? ChangeNote { get; set; }
+    /// <summary>Đổi tên version.</summary>
+    public class UpdateVersionTitleRequest
+    {
+        [Required]
+        [MaxLength(255)]
+        public string Title { get; set; } = string.Empty;
     }
 
     // ── Chapter Responses ──────────────────────────────────────────────────────
@@ -56,7 +60,7 @@ namespace Service.DTOs
 
     public class ChapterDetailResponse : ChapterResponse
     {
-        /// <summary>Nội dung đã decrypt của version hiện tại</summary>
+        /// <summary>Nội dung đã decrypt của version đang active</summary>
         public string? Content { get; set; }
         public List<ChapterVersionSummary> Versions { get; set; } = new();
     }
@@ -67,12 +71,13 @@ namespace Service.DTOs
     {
         public Guid Id { get; set; }
         public int VersionNumber { get; set; }
-        public string? ChangeNote { get; set; }
+        public string? Title { get; set; }
         public int WordCount { get; set; }
         public int TokenCount { get; set; }
         public bool IsChunked { get; set; }
         public bool IsEmbedded { get; set; }
         public DateTime CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
         public string CreatedByName { get; set; } = string.Empty;
     }
 

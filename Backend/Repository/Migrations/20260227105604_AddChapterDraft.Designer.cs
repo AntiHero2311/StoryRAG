@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -12,9 +13,11 @@ using Repository.Data;
 namespace Repository.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260227105604_AddChapterDraft")]
+    partial class AddChapterDraft
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -171,17 +174,10 @@ namespace Repository.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
-                    b.Property<string>("Title")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
                     b.Property<int>("TokenCount")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("VersionNumber")
                         .HasColumnType("integer");

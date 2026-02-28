@@ -27,6 +27,12 @@ namespace Repository.Entities
 
         public bool IsDeleted { get; set; } = false;
 
+        /// <summary>Nội dung draft (auto-save, encrypted). Không tạo version mới.</summary>
+        public string? DraftContent { get; set; }
+
+        /// <summary>Thời điểm draft cuối cùng được lưu.</summary>
+        public DateTime? DraftSavedAt { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }

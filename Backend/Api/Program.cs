@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Pgvector.EntityFrameworkCore;
 using Repository.Data;
 using Service.Implementations;
 using Service.Interfaces;
@@ -11,10 +12,14 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
-        npgsqlOptions => npgsqlOptions.EnableRetryOnFailure(
-            maxRetryCount: 3,
-            maxRetryDelay: TimeSpan.FromSeconds(5),
-            errorCodesToAdd: null)));
+        npgsqlOptions =>
+        {
+            npgsqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null);
+            npgsqlOptions.UseVector();
+        }));
 
 // Removed default OpenApi in favor of Swashbuckle
 builder.Services.AddControllers();
@@ -69,9 +74,12 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddScoped<IGenreService, GenreService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddSingleton<IChunkingService, ChunkingService>();
 builder.Services.AddScoped<IChapterService, ChapterService>();
+builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
+builder.Services.AddScoped<IAiChatService, AiChatService>();
 
 // Add Authentication Configuration
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

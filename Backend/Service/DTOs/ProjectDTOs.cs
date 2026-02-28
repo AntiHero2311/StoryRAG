@@ -11,6 +11,8 @@ namespace Service.DTOs
         public string? Summary { get; set; }
 
         public string Status { get; set; } = "Draft";
+
+        public List<int> GenreIds { get; set; } = new();
     }
 
     public class UpdateProjectRequest
@@ -24,6 +26,8 @@ namespace Service.DTOs
         public string? CoverImageURL { get; set; }
 
         public string Status { get; set; } = "Draft";
+
+        public List<int> GenreIds { get; set; } = new();
     }
 
     public class ProjectResponse
@@ -35,5 +39,7 @@ namespace Service.DTOs
         public string Status { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
+        public List<GenreResponse> Genres { get; set; } = new();
     }
 }
+

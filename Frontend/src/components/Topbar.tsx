@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Settings, Bell, ChevronDown, LogOut, User, Sparkles, X,
-    BookOpen, CheckCircle, AlertCircle, Info, Check
 } from 'lucide-react';
 import { getInitials } from '../utils/jwtHelper';
 
@@ -13,30 +12,6 @@ interface TopbarProps {
     onLogout: () => void;
     onSettings?: () => void;
 }
-
-// ── Sample notifications ───────────────────────────────────────────────────────
-interface Notif {
-    id: number;
-    type: 'info' | 'success' | 'warning';
-    title: string;
-    desc: string;
-    time: string;
-    read: boolean;
-}
-
-const SAMPLE_NOTIFS: Notif[] = [
-    { id: 1, type: 'success', title: 'Phân tích hoàn tất', desc: 'Dự án "Kiếm khách" đã được phân tích xong.', time: '5 phút trước', read: false },
-    { id: 2, type: 'info', title: 'Dự án mới được thêm', desc: 'Bạn vừa tạo dự án "Truyện ngắn 2025".', time: '1 giờ trước', read: false },
-    { id: 3, type: 'warning', title: 'Hạn mức sắp đạt', desc: 'Bạn đã dùng 80% dung lượng lưu trữ.', time: '3 giờ trước', read: false },
-    { id: 4, type: 'info', title: 'Cập nhật hệ thống', desc: 'StoryNest v2.1 đã được triển khai thành công.', time: 'Hôm qua', read: true },
-    { id: 5, type: 'success', title: 'Xuất file thành công', desc: 'Báo cáo phân tích đã được xuất ra PDF.', time: 'Hôm qua', read: true },
-];
-
-const NOTIF_ICON = {
-    info: { Icon: Info, bg: 'bg-blue-500/15', color: 'text-blue-400' },
-    success: { Icon: CheckCircle, bg: 'bg-emerald-500/15', color: 'text-emerald-400' },
-    warning: { Icon: AlertCircle, bg: 'bg-amber-500/15', color: 'text-amber-400' },
-};
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function getRoleBadge(role: string) {
@@ -57,14 +32,8 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
     const navigate = useNavigate();
     const [userOpen, setUserOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
-    const [notifs, setNotifs] = useState<Notif[]>(SAMPLE_NOTIFS);
     const [showWelcome, setShowWelcome] = useState(false);
     const badge = getRoleBadge(role);
-
-    const unreadCount = notifs.filter(n => !n.read).length;
-
-    const markAllRead = () => setNotifs(prev => prev.map(n => ({ ...n, read: true })));
-    const markRead = (id: number) => setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
 
     // Welcome toast — once per session
     useEffect(() => {
@@ -133,18 +102,13 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                             className="relative w-9 h-9 flex items-center justify-center rounded-xl bg-[var(--text-primary)]/5 hover:bg-[var(--text-primary)]/10 transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                         >
                             <Bell className="w-4 h-4" />
-                            {unreadCount > 0 && (
-                                <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-[#f5a623] text-white text-[9px] font-bold leading-none">
-                                    {unreadCount}
-                                </span>
-                            )}
                         </button>
 
                         {notifOpen && (
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
                                 <div
-                                    className="absolute right-0 top-full mt-2 w-80 rounded-2xl shadow-2xl z-50 overflow-hidden"
+                                    className="absolute right-0 top-full mt-2 w-72 rounded-2xl shadow-2xl z-50 overflow-hidden"
                                     style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
                                 >
                                     {/* Header */}
@@ -152,60 +116,23 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                                         <div className="flex items-center gap-2">
                                             <Bell className="w-4 h-4 text-[#f5a623]" />
                                             <span className="text-[var(--text-primary)] text-sm font-semibold">Thông báo</span>
-                                            {unreadCount > 0 && (
-                                                <span className="px-1.5 py-0.5 rounded-full bg-[#f5a623]/15 text-[#f5a623] text-[10px] font-bold">
-                                                    {unreadCount} mới
-                                                </span>
-                                            )}
                                         </div>
-                                        {unreadCount > 0 && (
-                                            <button
-                                                onClick={markAllRead}
-                                                className="flex items-center gap-1 text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-                                            >
-                                                <Check className="w-3 h-3" /> Đánh dấu tất cả đã đọc
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* Notification list */}
-                                    <div className="max-h-[340px] overflow-y-auto scrollbar-thin">
-                                        {notifs.map(n => {
-                                            const { Icon, bg, color } = NOTIF_ICON[n.type];
-                                            return (
-                                                <button
-                                                    key={n.id}
-                                                    onClick={() => markRead(n.id)}
-                                                    className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--text-primary)]/5 ${!n.read ? 'bg-[var(--text-primary)]/[0.03]' : ''}`}
-                                                >
-                                                    {/* Icon */}
-                                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${bg}`}>
-                                                        <Icon className={`w-4 h-4 ${color}`} />
-                                                    </div>
-
-                                                    {/* Content */}
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-start justify-between gap-2">
-                                                            <p className={`text-xs font-semibold leading-snug ${n.read ? 'text-[var(--text-secondary)]' : 'text-[var(--text-primary)]'}`}>
-                                                                {n.title}
-                                                            </p>
-                                                            {!n.read && (
-                                                                <span className="w-2 h-2 rounded-full bg-[#f5a623] shrink-0 mt-1" />
-                                                            )}
-                                                        </div>
-                                                        <p className="text-[var(--text-secondary)] text-[11px] mt-0.5 leading-snug">{n.desc}</p>
-                                                        <p className="text-[var(--text-secondary)] text-[10px] mt-1 opacity-50">{n.time}</p>
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-
-                                    {/* Footer */}
-                                    <div className="px-4 py-2.5 border-t border-[var(--border-color)]">
-                                        <button className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
-                                            <BookOpen className="w-3.5 h-3.5" /> Xem tất cả thông báo
+                                        <button onClick={() => setNotifOpen(false)}
+                                            className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[var(--text-primary)]/5 text-[var(--text-secondary)] transition-colors">
+                                            <X className="w-3.5 h-3.5" />
                                         </button>
+                                    </div>
+
+                                    {/* Empty state */}
+                                    <div className="flex flex-col items-center justify-center py-10 px-4 gap-3 text-center">
+                                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
+                                            style={{ background: 'var(--input-bg)' }}>
+                                            <Bell className="w-6 h-6 text-[var(--text-secondary)] opacity-30" />
+                                        </div>
+                                        <p className="text-[var(--text-primary)] text-sm font-semibold">Chưa có thông báo</p>
+                                        <p className="text-[var(--text-secondary)] text-xs leading-relaxed max-w-[180px]">
+                                            Thông báo về phân tích AI và hoạt động dự án sẽ xuất hiện ở đây.
+                                        </p>
                                     </div>
                                 </div>
                             </>

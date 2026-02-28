@@ -2,23 +2,22 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     ArrowLeft, Plus, Sparkles, History, Bold,
-    Italic, Underline, List, Heading, AlignJustify, Send,
+    Italic, Underline, List, Heading, AlignJustify,
     ChevronsLeft, ChevronsRight, Trash2, FileText, X,
     Undo2, Redo2, Save, Check, Loader2, Scissors,
-    RotateCcw, ChevronDown, Clock, Layers,
+    Clock, Send, Cpu,
 } from 'lucide-react';
 import { getUserInfo } from '../utils/jwtHelper';
 import {
     chapterService,
     type ChapterDetailResponse,
-    type ChapterVersionSummary,
 } from '../services/chapterService';
+import { aiService } from '../services/aiService';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
 type ActiveTab = 'chat' | 'history';
-type HistoryView = 'list' | 'detail';
 
 // ── WorkspacePage ─────────────────────────────────────────────────────────
 
@@ -44,24 +43,24 @@ export default function WorkspacePage() {
     // ── Save/chunk state ───────────────────────────────────────────────────
     const [savedState, setSavedState] = useState<SavedState>('idle');
     const [isChunking, setIsChunking] = useState(false);
-    const [saveNote, setSaveNote] = useState('');
-    const [showSaveNote, setShowSaveNote] = useState(false);
+    const [wordCount, setWordCount] = useState(0);
 
-    // ── Version history state ──────────────────────────────────────────────
-    const [historyView, setHistoryView] = useState<HistoryView>('list');
-    const [selectedVersion, setSelectedVersion] = useState<ChapterVersionSummary | null>(null);
-    const [versionContent, setVersionContent] = useState('');
-    const [isLoadingVersion, setIsLoadingVersion] = useState(false);
-    const [isRestoring, setIsRestoring] = useState(false);
+    // ── Version state ──────────────────────────────────────────────────────
+    const [isCreatingVersion, setIsCreatingVersion] = useState(false);
+    const [renamingVersionNum, setRenamingVersionNum] = useState<number | null>(null);
+    const [renameValue, setRenameValue] = useState('');
 
     // ── Chat state ─────────────────────────────────────────────────────────
+    type ChatMsg = { role: 'user' | 'assistant'; content: string; tokens?: number };
+    const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
     const [chatInput, setChatInput] = useState('');
-    const [messages, setMessages] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
-    const [isSending, setIsSending] = useState(false);
+    const [isChatLoading, setIsChatLoading] = useState(false);
+    const [isEmbedding, setIsEmbedding] = useState(false);
+    const chatBottomRef = useRef<HTMLDivElement>(null);
 
     // ── Refs ───────────────────────────────────────────────────────────────
     const editorRef = useRef<HTMLDivElement>(null);
-    const chatBottomRef = useRef<HTMLDivElement>(null);
+    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // ── Init ───────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -72,10 +71,6 @@ export default function WorkspacePage() {
         if (cached) setProjectTitle(JSON.parse(cached).title);
         if (projectId) loadChapters();
     }, [projectId]);
-
-    useEffect(() => {
-        chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, isSending]);
 
     // ── Load chapters ──────────────────────────────────────────────────────
     const loadChapters = async () => {
@@ -91,7 +86,9 @@ export default function WorkspacePage() {
                 setChapters(all);
                 setActiveChapter(detail);
                 setChapterTitle(detail.title ?? `Chương ${detail.chapterNumber}`);
-                if (editorRef.current) editorRef.current.innerText = detail.content ?? '';
+                if (editorRef.current) {
+                    editorRef.current.innerText = detail.content ?? '';
+                }
             } else {
                 setChapters([]);
                 setActiveChapter(null);
@@ -128,8 +125,9 @@ export default function WorkspacePage() {
     // ── Select chapter ─────────────────────────────────────────────────────
     const selectChapter = async (ch: ChapterDetailResponse) => {
         if (!projectId) return;
-        // Auto-save current before switching
+        // Save current before switching
         if (activeChapter && editorRef.current && activeChapter.id !== ch.id) {
+            if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
             await doSave(false);
         }
         // Load full detail if not already loaded
@@ -140,10 +138,12 @@ export default function WorkspacePage() {
         }
         setActiveChapter(detail);
         setChapterTitle(detail.title ?? `Chương ${detail.chapterNumber}`);
-        if (editorRef.current) editorRef.current.innerText = detail.content ?? '';
-        // Reset history view
-        setHistoryView('list');
-        setSelectedVersion(null);
+        if (editorRef.current) {
+            editorRef.current.innerText = detail.content ?? '';
+            setWordCount((detail.content ?? '').trim().split(/\s+/).filter(Boolean).length);
+        }
+        // Reset version rename state
+        setRenamingVersionNum(null);
     };
 
     // ── Delete chapter ─────────────────────────────────────────────────────
@@ -168,29 +168,33 @@ export default function WorkspacePage() {
         }
     };
 
-    // ── Save ───────────────────────────────────────────────────────────────
+    // ── Save in-place (updates active version content) ────────────────────
     const doSave = useCallback(async (showFeedback = true) => {
         if (!projectId || !activeChapter || !editorRef.current) return;
+        if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
         const content = editorRef.current.innerText ?? '';
         if (showFeedback) setSavedState('saving');
         try {
             const updated = await chapterService.updateChapter(projectId, activeChapter.id, {
                 title: chapterTitle || `Chương ${activeChapter.chapterNumber}`,
                 content,
-                changeNote: saveNote || undefined,
             });
-            setSaveNote('');
-            setShowSaveNote(false);
             setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
             setActiveChapter(updated);
             if (showFeedback) {
                 setSavedState('saved');
-                setTimeout(() => setSavedState('idle'), 2500);
+                setTimeout(() => setSavedState('idle'), 2000);
             }
         } catch {
             if (showFeedback) setSavedState('error');
         }
-    }, [projectId, activeChapter, chapterTitle, saveNote]);
+    }, [projectId, activeChapter, chapterTitle]);
+
+    // ── Debounced auto-save (in-place) ─────────────────────────────────────
+    const scheduleAutoSave = useCallback(() => {
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(() => { doSave(false); }, 4000);
+    }, [doSave]);
 
     // ── Ctrl+S shortcut ────────────────────────────────────────────────────
     useEffect(() => {
@@ -224,54 +228,115 @@ export default function WorkspacePage() {
         }
     };
 
-    // ── Version restore ────────────────────────────────────────────────────
-    const doRestore = async (versionNumber: number) => {
-        if (!projectId || !activeChapter) return;
-        if (!confirm(`Phục hồi về phiên bản ${versionNumber}? Thao tác này sẽ tạo một version mới với nội dung cũ.`)) return;
-        setIsRestoring(true);
+    // ── Embed ──────────────────────────────────────────────────────────────
+    const doEmbed = async () => {
+        if (!activeChapter) return;
+        setIsEmbedding(true);
         try {
-            const updated = await chapterService.restoreVersion(projectId, activeChapter.id, versionNumber);
+            await aiService.embedChapter(activeChapter.id);
+            const updated = await chapterService.getChapterDetail(projectId!, activeChapter.id);
+            setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
+            setActiveChapter(updated);
+            setChatMessages(prev => [...prev, {
+                role: 'assistant',
+                content: '✅ Embedding hoàn tất! Bây giờ bạn có thể hỏi AI về nội dung chương này.',
+            }]);
+        } catch (e: any) {
+            alert(e?.response?.data?.message ?? 'Embedding thất bại. Vui lòng kiểm tra OpenAI API Key.');
+        } finally {
+            setIsEmbedding(false);
+        }
+    };
+
+    // ── AI Chat ────────────────────────────────────────────────────────────
+    const doChat = async () => {
+        if (!projectId || !chatInput.trim() || isChatLoading) return;
+        const question = chatInput.trim();
+        setChatInput('');
+        setChatMessages(prev => [...prev, { role: 'user', content: question }]);
+        setIsChatLoading(true);
+        setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+        try {
+            const result = await aiService.chat(projectId, question);
+            setChatMessages(prev => [...prev, {
+                role: 'assistant',
+                content: result.answer,
+                tokens: result.totalTokens,
+            }]);
+        } catch (e: any) {
+            const msg = e?.response?.data?.message ?? 'AI Chat thất bại. Vui lòng thử lại.';
+            setChatMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${msg}` }]);
+        } finally {
+            setIsChatLoading(false);
+            setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+        }
+    };
+
+    // ── Create new version ─────────────────────────────────────────────────
+    const doCreateVersion = async () => {
+        if (!projectId || !activeChapter) return;
+        // Save current first
+        await doSave(false);
+        setIsCreatingVersion(true);
+        try {
+            const updated = await chapterService.createNewVersion(projectId, activeChapter.id, {});
+            setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
+            setActiveChapter(updated);
+            if (editorRef.current) editorRef.current.innerText = '';
+        } catch (e: any) {
+            alert(e?.response?.data?.message ?? 'Không thể tạo phiên bản mới.');
+        } finally {
+            setIsCreatingVersion(false);
+        }
+    };
+
+    // ── Switch to a different version ──────────────────────────────────────
+    const doSwitchVersion = async (versionNumber: number) => {
+        if (!projectId || !activeChapter) return;
+        if (activeChapter.currentVersionNum === versionNumber) return;
+        // Save current first
+        await doSave(false);
+        try {
+            const updated = await chapterService.setActiveVersion(projectId, activeChapter.id, versionNumber);
             setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
             setActiveChapter(updated);
             if (editorRef.current) editorRef.current.innerText = updated.content ?? '';
-            setHistoryView('list');
-            setSelectedVersion(null);
+            setWordCount((updated.content ?? '').trim().split(/\s+/).filter(Boolean).length);
         } catch (e: any) {
-            alert(e?.response?.data?.message ?? 'Phục hồi thất bại.');
-        } finally {
-            setIsRestoring(false);
+            alert(e?.response?.data?.message ?? 'Không thể chuyển phiên bản.');
         }
     };
 
-    // ── View version detail ────────────────────────────────────────────────
-    const viewVersion = async (v: ChapterVersionSummary) => {
+    // ── Delete version ─────────────────────────────────────────────────────
+    const doDeleteVersion = async (versionNumber: number) => {
         if (!projectId || !activeChapter) return;
-        setSelectedVersion(v);
-        setIsLoadingVersion(true);
-        setHistoryView('detail');
+        if (!confirm(`Xóa phiên bản ${versionNumber}?`)) return;
         try {
-            const detail = await chapterService.getVersionDetail(projectId, activeChapter.id, v.versionNumber);
-            setVersionContent(detail.content);
-        } catch {
-            setVersionContent('Không thể tải nội dung.');
-        } finally {
-            setIsLoadingVersion(false);
+            await chapterService.deleteVersion(projectId, activeChapter.id, versionNumber);
+            const updated = await chapterService.getChapterDetail(projectId, activeChapter.id);
+            setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
+            setActiveChapter(updated);
+            if (editorRef.current) editorRef.current.innerText = updated.content ?? '';
+        } catch (e: any) {
+            alert(e?.response?.data?.message ?? 'Không thể xóa phiên bản.');
         }
     };
 
-    // ── Chat ───────────────────────────────────────────────────────────────
-    const handleSendChat = async () => {
-        if (!chatInput.trim()) return;
-        const userMsg = chatInput.trim();
-        setChatInput('');
-        setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-        setIsSending(true);
-        await new Promise(r => setTimeout(r, 1000));
-        setMessages(prev => [...prev, {
-            role: 'ai',
-            text: `Đây là phản hồi mô phỏng từ AI về: "${userMsg}". Tính năng AI đang được phát triển!`
-        }]);
-        setIsSending(false);
+    // ── Rename version ─────────────────────────────────────────────────────
+    const doRenameVersion = async (versionNumber: number) => {
+        if (!projectId || !activeChapter || !renameValue.trim()) {
+            setRenamingVersionNum(null);
+            return;
+        }
+        try {
+            const updatedVersion = await chapterService.updateVersionTitle(projectId, activeChapter.id, versionNumber, renameValue.trim());
+            setActiveChapter(prev => prev ? {
+                ...prev,
+                versions: prev.versions.map(v => v.versionNumber === versionNumber ? { ...v, title: updatedVersion.title } : v)
+            } : prev);
+        } catch { /* silent */ } finally {
+            setRenamingVersionNum(null);
+        }
     };
 
     const execFormat = (command: string, value?: string) => {
@@ -282,12 +347,16 @@ export default function WorkspacePage() {
     const getWordCount = () =>
         (editorRef.current?.innerText ?? '').trim().split(/\s+/).filter(Boolean).length;
 
+    const updateWordCount = () => {
+        setWordCount(getWordCount());
+    };
+
     // ── Render ─────────────────────────────────────────────────────────────
     return (
         <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
 
             {/* ── Top Nav ── */}
-            <nav className="flex items-center gap-4 px-5 py-3 shrink-0" style={{ height: '52px' }}>
+            <nav className="flex items-center gap-4 px-5 shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-topbar)]" style={{ height: '52px' }}>
                 <button
                     onClick={() => navigate('/projects')}
                     className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors text-sm font-medium group shrink-0"
@@ -321,44 +390,12 @@ export default function WorkspacePage() {
                     {savedState === 'saved' && <><Check className="w-3.5 h-3.5 text-emerald-400" /><span className="text-emerald-400">Đã lưu</span></>}
                     {savedState === 'error' && <span className="text-rose-400">Lưu thất bại</span>}
                     {savedState === 'idle' && activeChapter && (
-                        <div className="relative">
-                            <div className="flex">
-                                <button
-                                    onClick={() => doSave(true)}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-l-lg bg-[var(--text-primary)]/5 hover:bg-[var(--text-primary)]/10 transition-colors border-r border-[var(--border-color)]"
-                                >
-                                    <Save className="w-3.5 h-3.5" /> Lưu
-                                </button>
-                                <button
-                                    onClick={() => setShowSaveNote(o => !o)}
-                                    className="px-2 py-1.5 rounded-r-lg bg-[var(--text-primary)]/5 hover:bg-[var(--text-primary)]/10 transition-colors"
-                                    title="Thêm ghi chú version"
-                                >
-                                    <ChevronDown className="w-3 h-3" />
-                                </button>
-                            </div>
-                            {showSaveNote && (
-                                <div className="absolute right-0 top-full mt-1 z-50 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-lg p-3 w-60">
-                                    <p className="text-[10px] text-[var(--text-secondary)] mb-1.5">Ghi chú cho version này (tuỳ chọn)</p>
-                                    <input
-                                        type="text"
-                                        value={saveNote}
-                                        onChange={e => setSaveNote(e.target.value)}
-                                        placeholder="VD: Thêm cảnh hội thoại..."
-                                        className="w-full px-2.5 py-1.5 text-xs bg-[var(--bg-app)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#f5a623]/40"
-                                        autoFocus
-                                        onKeyDown={e => { if (e.key === 'Enter') doSave(true); }}
-                                    />
-                                    <button
-                                        onClick={() => doSave(true)}
-                                        className="mt-2 w-full py-1.5 rounded-lg text-xs font-semibold text-white"
-                                        style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}
-                                    >
-                                        Lưu
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                        <button
+                            onClick={() => doSave(true)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--text-primary)]/5 hover:bg-[var(--text-primary)]/10 transition-colors"
+                        >
+                            <Save className="w-3.5 h-3.5" /> Lưu
+                        </button>
                     )}
                 </div>
             </nav>
@@ -399,7 +436,7 @@ export default function WorkspacePage() {
                         </button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
+                    <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5 scrollbar-thin">
                         {isLoadingChapters ? (
                             <div className="flex justify-center py-6">
                                 <Loader2 className="w-5 h-5 animate-spin text-[var(--text-secondary)]" />
@@ -411,9 +448,9 @@ export default function WorkspacePage() {
                                 <div
                                     key={ch.id}
                                     onClick={() => selectChapter(ch)}
-                                    className={`group w-full flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer transition-all ${activeChapter?.id === ch.id
-                                        ? 'bg-[#f5a623]/10 text-[#f5a623]'
-                                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5'
+                                    className={`group w-full flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer transition-all border-l-2 ${activeChapter?.id === ch.id
+                                        ? 'bg-[#f5a623]/10 text-[#f5a623] border-[#f5a623]'
+                                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 border-transparent'
                                         }`}
                                 >
                                     <FileText className="w-3.5 h-3.5 shrink-0" />
@@ -461,7 +498,7 @@ export default function WorkspacePage() {
                         <ToolbarBtn icon={<Heading className="w-4 h-4" />} title="Tiêu đề" onClick={() => execFormat('formatBlock', '<h2>')} />
                         <ToolbarBtn icon={<AlignJustify className="w-4 h-4" />} title="Căn đều" onClick={() => execFormat('justifyFull')} />
                         <div className="flex-1" />
-                        <span className="text-[var(--text-secondary)] text-xs mr-2" id="wc-display">0 từ</span>
+                        <span className="text-[var(--text-secondary)] text-xs mr-2">{wordCount} từ</span>
                         <button
                             onClick={() => setRightPanelOpen(o => !o)}
                             className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ml-1 ${rightPanelOpen ? 'bg-[#f5a623]/10 text-[#f5a623]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5'}`}
@@ -472,7 +509,7 @@ export default function WorkspacePage() {
                     </div>
 
                     {/* Writing area */}
-                    <div className="flex-1 overflow-y-auto flex justify-center p-6 lg:p-12">
+                    <div className="flex-1 overflow-y-auto flex justify-center p-6 lg:p-12 scrollbar-thin">
                         <div className="w-full max-w-3xl">
                             {activeChapter ? (
                                 <>
@@ -481,36 +518,30 @@ export default function WorkspacePage() {
                                         type="text"
                                         value={chapterTitle}
                                         onChange={e => setChapterTitle(e.target.value)}
-                                        className="w-full text-3xl font-bold text-[var(--text-primary)] bg-transparent outline-none mb-8 placeholder-[var(--text-secondary)]/30 border-none"
+                                        className="w-full text-3xl font-bold text-[var(--text-primary)] bg-transparent outline-none mb-6 placeholder-[var(--text-secondary)]/30 border-none"
+                                        style={{ fontFamily: "'Be Vietnam Pro', sans-serif", letterSpacing: '-0.01em' }}
                                         placeholder="Tên chương..."
                                     />
                                     {/* Version badge */}
                                     <div className="flex items-center gap-2 mb-6">
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#f5a623]/10 text-[#f5a623]">
-                                            <Layers className="w-2.5 h-2.5" />
                                             Version {activeChapter.currentVersionNum}
                                         </span>
-                                        {activeChapter.currentVersionNum > 1 && (
-                                            <button
-                                                onClick={() => { setActiveTab('history'); setRightPanelOpen(true); }}
-                                                className="text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] underline transition-colors"
-                                            >
-                                                Xem lịch sử ({activeChapter.currentVersionNum} phiên bản)
-                                            </button>
-                                        )}
+                                        <button
+                                            onClick={() => { setActiveTab('history'); setRightPanelOpen(true); }}
+                                            className="text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] underline transition-colors"
+                                        >
+                                            {(activeChapter.versions ?? []).length} phiên bản
+                                        </button>
                                     </div>
                                     {/* Editor */}
                                     <div
                                         ref={editorRef}
                                         contentEditable
                                         suppressContentEditableWarning
-                                        onInput={() => {
-                                            const wc = getWordCount();
-                                            const el = document.getElementById('wc-display');
-                                            if (el) el.textContent = `${wc} từ`;
-                                        }}
-                                        className="w-full min-h-[60vh] text-[var(--text-primary)] bg-transparent outline-none text-base leading-8 focus:outline-none"
-                                        style={{ fontFamily: "'Be Vietnam Pro', sans-serif" }}
+                                        onInput={() => { updateWordCount(); scheduleAutoSave(); }}
+                                        className="w-full min-h-[60vh] text-[var(--text-primary)] bg-transparent outline-none text-[17px] leading-[1.9] focus:outline-none"
+                                        style={{ fontFamily: "'Be Vietnam Pro', sans-serif", letterSpacing: '0.01em' }}
                                         data-placeholder="Bắt đầu viết tác phẩm của bạn tại đây..."
                                     />
                                 </>
@@ -539,12 +570,12 @@ export default function WorkspacePage() {
                 {rightPanelOpen && (
                     <div
                         className="flex flex-col h-full shrink-0 transition-all duration-300 rounded-2xl overflow-hidden"
-                        style={{ width: '300px', background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
+                        style={{ width: '320px', background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
                     >
                         {/* Panel header tab switcher */}
                         <div className="flex items-center gap-2 px-4 py-3.5 border-b border-[var(--border-color)] shrink-0">
                             <div className="flex bg-[var(--bg-app)] rounded-xl p-0.5 gap-0.5 flex-1">
-                                <TabBtn active={activeTab === 'history'} onClick={() => { setActiveTab('history'); setHistoryView('list'); }}>
+                                <TabBtn active={activeTab === 'history'} onClick={() => { setActiveTab('history'); }}>
                                     <History className="w-3 h-3" /> Lịch sử
                                 </TabBtn>
                                 <TabBtn active={activeTab === 'chat'} onClick={() => setActiveTab('chat')}>
@@ -559,182 +590,201 @@ export default function WorkspacePage() {
                         {/* ── History Tab ── */}
                         {activeTab === 'history' && (
                             <div className="flex-1 flex flex-col overflow-hidden">
-                                {/* Back button when in detail view */}
-                                {historyView === 'detail' && (
-                                    <div className="px-4 pt-3 shrink-0">
-                                        <button
-                                            onClick={() => { setHistoryView('list'); setSelectedVersion(null); }}
-                                            className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-                                        >
-                                            <ArrowLeft className="w-3 h-3" /> Quay lại danh sách
-                                        </button>
-                                    </div>
-                                )}
+                                {/* Create version button */}
+                                <div className="px-3 pt-3 pb-2 shrink-0">
+                                    <button
+                                        onClick={doCreateVersion}
+                                        disabled={isCreatingVersion || !activeChapter}
+                                        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50"
+                                        style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}
+                                    >
+                                        {isCreatingVersion
+                                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            : <Plus className="w-3.5 h-3.5" />}
+                                        Version mới
+                                    </button>
+                                </div>
 
-                                {historyView === 'list' ? (
-                                    <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                                        {!activeChapter ? (
-                                            <p className="text-center text-[var(--text-secondary)] text-xs py-8 opacity-50">Chọn một chương để xem lịch sử.</p>
-                                        ) : (activeChapter.versions ?? []).length === 0 ? (
-                                            <div className="flex flex-col items-center justify-center gap-3 text-center py-10">
-                                                <div className="w-12 h-12 rounded-2xl bg-[var(--bg-app)] flex items-center justify-center">
-                                                    <History className="w-6 h-6 text-[var(--text-secondary)] opacity-30" />
-                                                </div>
-                                                <p className="text-[var(--text-secondary)] text-sm">Chưa có lịch sử</p>
-                                                <p className="text-[var(--text-secondary)] text-xs opacity-50">Lưu chương để tạo phiên bản đầu tiên.</p>
-                                            </div>
-                                        ) : (
-                                            [...(activeChapter.versions ?? [])].sort((a, b) => b.versionNumber - a.versionNumber).map(v => (
+                                <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2 scrollbar-thin">
+                                    {!activeChapter ? (
+                                        <p className="text-center text-[var(--text-secondary)] text-xs py-8 opacity-50">Chọn một chương để xem phiên bản.</p>
+                                    ) : (activeChapter.versions ?? []).length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center gap-3 text-center py-10">
+                                            <History className="w-8 h-8 text-[var(--text-secondary)] opacity-20" />
+                                            <p className="text-[var(--text-secondary)] text-sm">Chưa có phiên bản nào</p>
+                                            <p className="text-[var(--text-secondary)] text-xs opacity-50">Lưu chương để tạo phiên bản đầu tiên.</p>
+                                        </div>
+                                    ) : (
+                                        [...(activeChapter.versions ?? [])].sort((a, b) => a.versionNumber - b.versionNumber).map(v => {
+                                            const isActive = v.versionNumber === activeChapter.currentVersionNum;
+                                            const isRenaming = renamingVersionNum === v.versionNumber;
+                                            return (
                                                 <div
                                                     key={v.id}
-                                                    className="border border-[var(--border-color)] rounded-xl p-3 hover:border-[#f5a623]/30 transition-colors cursor-pointer group"
-                                                    onClick={() => viewVersion(v)}
+                                                    onClick={() => !isActive && doSwitchVersion(v.versionNumber)}
+                                                    className={`border rounded-xl p-3 transition-all group ${isActive
+                                                        ? 'border-[#f5a623]/60 bg-[#f5a623]/5 cursor-default'
+                                                        : 'border-[var(--border-color)] hover:border-[#f5a623]/30 cursor-pointer'
+                                                    }`}
                                                 >
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${v.versionNumber === activeChapter.currentVersionNum ? 'bg-[#f5a623]/20 text-[#f5a623]' : 'bg-[var(--bg-app)] text-[var(--text-secondary)]'}`}>
-                                                                v{v.versionNumber}
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                            <span className={`shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-bold ${isActive ? 'bg-[#f5a623]/20 text-[#f5a623]' : 'bg-[var(--bg-app)] text-[var(--text-secondary)]'}`}>
+                                                                V{v.versionNumber}
                                                             </span>
-                                                            {v.versionNumber === activeChapter.currentVersionNum && (
-                                                                <span className="text-[9px] text-[#f5a623] font-semibold">HIỆN TẠI</span>
+                                                            {isRenaming ? (
+                                                                <input
+                                                                    autoFocus
+                                                                    value={renameValue}
+                                                                    onChange={e => setRenameValue(e.target.value)}
+                                                                    onBlur={() => doRenameVersion(v.versionNumber)}
+                                                                    onKeyDown={e => {
+                                                                        if (e.key === 'Enter') doRenameVersion(v.versionNumber);
+                                                                        if (e.key === 'Escape') setRenamingVersionNum(null);
+                                                                    }}
+                                                                    onClick={e => e.stopPropagation()}
+                                                                    className="flex-1 min-w-0 text-xs bg-[var(--bg-app)] border border-[#f5a623]/40 rounded-md px-1.5 py-0.5 text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#f5a623]/40"
+                                                                />
+                                                            ) : (
+                                                                <span
+                                                                    className="text-xs text-[var(--text-primary)] truncate cursor-text"
+                                                                    onDoubleClick={e => {
+                                                                        e.stopPropagation();
+                                                                        setRenamingVersionNum(v.versionNumber);
+                                                                        setRenameValue(v.title || `Version ${v.versionNumber}`);
+                                                                    }}
+                                                                    title="Double-click để đổi tên"
+                                                                >
+                                                                    {v.title || `Version ${v.versionNumber}`}
+                                                                </span>
                                                             )}
                                                         </div>
-                                                        {v.versionNumber !== activeChapter.currentVersionNum && (
-                                                            <button
-                                                                onClick={e => { e.stopPropagation(); doRestore(v.versionNumber); }}
-                                                                disabled={isRestoring}
-                                                                className="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-semibold text-[var(--text-secondary)] hover:text-[#f5a623] border border-[var(--border-color)] hover:border-[#f5a623]/40 transition-all"
-                                                                title="Phục hồi về version này"
-                                                            >
-                                                                <RotateCcw className="w-2.5 h-2.5" /> Phục hồi
-                                                            </button>
-                                                        )}
+                                                        <div className="flex items-center gap-1 shrink-0">
+                                                            {(activeChapter.versions ?? []).length > 1 && (
+                                                                <button
+                                                                    onClick={e => { e.stopPropagation(); doDeleteVersion(v.versionNumber); }}
+                                                                    className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-md text-[var(--text-secondary)] hover:text-rose-400 hover:bg-rose-400/10 transition-all"
+                                                                    title="Xóa phiên bản"
+                                                                >
+                                                                    <Trash2 className="w-3 h-3" />
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    {v.changeNote && (
-                                                        <p className="text-xs text-[var(--text-primary)] mt-1.5 font-medium">{v.changeNote}</p>
-                                                    )}
-                                                    <div className="flex items-center gap-3 mt-1.5">
+                                                    <div className="flex items-center gap-3 mt-2">
                                                         <span className="text-[10px] text-[var(--text-secondary)] flex items-center gap-1">
                                                             <Clock className="w-2.5 h-2.5" />
-                                                            {new Date(v.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                                            {new Date(v.updatedAt ?? v.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                                                         </span>
                                                         <span className="text-[10px] text-[var(--text-secondary)]">{v.wordCount} từ</span>
-                                                        {v.isChunked && (
-                                                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold">Chunked</span>
-                                                        )}
                                                     </div>
+                                                    {isActive && (
+                                                        <div className="mt-2">
+                                                            <span className="text-[9px] font-semibold text-[#f5a623] uppercase tracking-wider">Đang chỉnh sửa</span>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            ))
-                                        )}
-                                    </div>
-                                ) : (
-                                    /* Version detail view */
-                                    <div className="flex-1 flex flex-col overflow-hidden">
-                                        <div className="px-4 py-2 border-b border-[var(--border-color)] shrink-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-[var(--bg-app)] text-[var(--text-secondary)]">
-                                                    v{selectedVersion?.versionNumber}
-                                                </span>
-                                                <span className="text-xs text-[var(--text-secondary)]">{selectedVersion?.wordCount} từ</span>
-                                                {selectedVersion?.versionNumber !== activeChapter?.currentVersionNum && (
-                                                    <button
-                                                        onClick={() => doRestore(selectedVersion!.versionNumber)}
-                                                        disabled={isRestoring}
-                                                        className="ml-auto flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-white"
-                                                        style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}
-                                                    >
-                                                        {isRestoring ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
-                                                        Phục hồi
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="flex-1 overflow-y-auto p-4">
-                                            {isLoadingVersion ? (
-                                                <div className="flex justify-center py-8">
-                                                    <Loader2 className="w-5 h-5 animate-spin text-[var(--text-secondary)]" />
-                                                </div>
-                                            ) : (
-                                                <p className="text-xs text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap">{versionContent}</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
+                                            );
+                                        })
+                                    )}
+                                </div>
                             </div>
                         )}
 
                         {/* ── Chat Tab ── */}
                         {activeTab === 'chat' && (
-                            <>
-                                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                                    {messages.length === 0 && (
-                                        <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-10">
-                                            <div className="w-14 h-14 rounded-2xl bg-[#f5a623]/10 flex items-center justify-center">
-                                                <Sparkles className="w-7 h-7 text-[#f5a623]" />
+                            <div className="flex-1 flex flex-col min-h-0">
+                                {/* Header + Embed button */}
+                                <div className="px-4 pt-3 pb-2 flex items-center justify-between shrink-0">
+                                    <div className="flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-indigo-400" />
+                                        <span className="text-xs font-semibold text-[var(--text-primary)]">AI Chat</span>
+                                        {activeChapter?.versions?.[0]?.isEmbedded && (
+                                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-semibold">Embedded</span>
+                                        )}
+                                    </div>
+                                    {activeChapter && activeChapter.versions?.[0]?.isChunked && !activeChapter.versions?.[0]?.isEmbedded && (
+                                        <button
+                                            onClick={doEmbed}
+                                            disabled={isEmbedding}
+                                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-colors"
+                                            style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}
+                                        >
+                                            {isEmbedding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Cpu className="w-3 h-3" />}
+                                            {isEmbedding ? 'Đang embed...' : 'Embed'}
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Messages */}
+                                <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-2 min-h-0 scrollbar-thin">
+                                    {chatMessages.length === 0 && (
+                                        <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 py-6">
+                                            <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                                                style={{ background: 'rgba(99,102,241,0.1)' }}>
+                                                <Sparkles className="w-5 h-5 text-indigo-400" />
                                             </div>
-                                            <p className="text-[var(--text-primary)] font-semibold text-sm">Bắt đầu cuộc trò chuyện</p>
-                                            <p className="text-[var(--text-secondary)] text-xs leading-relaxed">Hỏi AI về cốt truyện, nhân vật, hoặc gợi ý diễn biến.</p>
-                                            <div className="w-full space-y-2 mt-2">
-                                                {['Gợi ý diễn biến tiếp theo', 'Phân tích nhân vật chính', 'Kiểm tra plot hole'].map(s => (
-                                                    <button
-                                                        key={s}
-                                                        onClick={() => setChatInput(s)}
-                                                        className="w-full text-left px-3 py-2.5 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-color)] hover:border-[#f5a623]/30 bg-[var(--bg-app)] hover:bg-[#f5a623]/5 transition-all"
-                                                    >
-                                                        {s} →
-                                                    </button>
-                                                ))}
+                                            <div>
+                                                <p className="text-[var(--text-primary)] text-xs font-semibold mb-1">Hỏi về nội dung truyện</p>
+                                                <p className="text-[var(--text-secondary)] text-[10px] leading-relaxed max-w-[190px]">
+                                                    {activeChapter?.versions?.[0]?.isEmbedded
+                                                        ? 'Nhập câu hỏi về nhân vật, cốt truyện, bối cảnh...'
+                                                        : 'Chunk và Embed chương trước để bật AI Chat.'}
+                                                </p>
                                             </div>
                                         </div>
                                     )}
-                                    {messages.map((msg, i) => (
+                                    {chatMessages.map((msg, i) => (
                                         <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                            {msg.role === 'ai' && (
-                                                <div className="w-6 h-6 rounded-lg bg-[#f5a623]/10 flex items-center justify-center shrink-0 mr-2 mt-0.5">
-                                                    <Sparkles className="w-3.5 h-3.5 text-[#f5a623]" />
-                                                </div>
-                                            )}
-                                            <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${msg.role === 'user' ? 'bg-[#f5a623] text-white rounded-br-sm' : 'bg-[var(--bg-app)] text-[var(--text-primary)] border border-[var(--border-color)] rounded-bl-sm'}`}>
-                                                {msg.text}
+                                            <div
+                                                className="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed"
+                                                style={msg.role === 'user'
+                                                    ? { background: 'rgba(245,166,35,0.15)', color: 'var(--text-primary)', border: '1px solid rgba(245,166,35,0.25)' }
+                                                    : { background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }
+                                                }
+                                            >
+                                                {msg.content}
+                                                {msg.tokens && (
+                                                    <div className="mt-1 text-[9px] opacity-50">{msg.tokens} tokens</div>
+                                                )}
                                             </div>
                                         </div>
                                     ))}
-                                    {isSending && (
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-lg bg-[#f5a623]/10 flex items-center justify-center shrink-0">
-                                                <Sparkles className="w-3.5 h-3.5 text-[#f5a623] animate-pulse" />
-                                            </div>
-                                            <div className="flex gap-1 px-3 py-2 rounded-2xl bg-[var(--bg-app)] border border-[var(--border-color)]">
-                                                {[0, 150, 300].map(d => (
-                                                    <span key={d} className="w-1.5 h-1.5 rounded-full bg-[var(--text-secondary)] animate-bounce" style={{ animationDelay: `${d}ms` }} />
-                                                ))}
+                                    {isChatLoading && (
+                                        <div className="flex justify-start">
+                                            <div className="px-3 py-2 rounded-xl text-xs" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
+                                                <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />
                                             </div>
                                         </div>
                                     )}
                                     <div ref={chatBottomRef} />
                                 </div>
-                                <div className="p-3 border-t border-[var(--border-color)] shrink-0">
-                                    <div className="relative">
+
+                                {/* Input */}
+                                <div className="px-3 pb-3 shrink-0">
+                                    <div className="flex gap-2 items-end rounded-xl p-2"
+                                        style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
                                         <textarea
                                             value={chatInput}
                                             onChange={e => setChatInput(e.target.value)}
-                                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
-                                            rows={2}
-                                            placeholder="Hỏi AI về tác phẩm..."
-                                            className="w-full px-3 py-2.5 pr-10 bg-[var(--bg-app)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] text-xs placeholder-[var(--text-secondary)]/50 outline-none focus:ring-2 focus:ring-[#f5a623]/40 resize-none"
+                                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doChat(); } }}
+                                            placeholder={activeChapter?.versions?.[0]?.isEmbedded ? 'Nhập câu hỏi...' : 'Embed chương để dùng AI Chat'}
+                                            disabled={!activeChapter?.versions?.[0]?.isEmbedded || isChatLoading}
+                                            rows={1}
+                                            className="flex-1 bg-transparent resize-none text-xs text-[var(--text-primary)] placeholder-[var(--text-secondary)] outline-none"
+                                            style={{ maxHeight: '80px' }}
                                         />
                                         <button
-                                            onClick={handleSendChat}
-                                            disabled={!chatInput.trim() || isSending}
-                                            className="absolute bottom-2.5 right-2.5 w-7 h-7 flex items-center justify-center rounded-lg text-white transition-all disabled:opacity-30"
-                                            style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}
+                                            onClick={doChat}
+                                            disabled={!chatInput.trim() || !activeChapter?.versions?.[0]?.isEmbedded || isChatLoading}
+                                            className="w-7 h-7 flex items-center justify-center rounded-lg shrink-0 transition-colors disabled:opacity-30"
+                                            style={{ background: 'rgba(99,102,241,0.2)', color: '#818cf8' }}
                                         >
-                                            <Send className="w-3.5 h-3.5" />
+                                            <Send className="w-3 h-3" />
                                         </button>
                                     </div>
-                                    <p className="text-[var(--text-secondary)] text-[10px] mt-1.5 opacity-50">Enter để gửi · Shift+Enter để xuống dòng</p>
                                 </div>
-                            </>
+                            </div>
                         )}
                     </div>
                 )}

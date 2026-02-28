@@ -1,5 +1,13 @@
 import { api } from './api';
 
+export interface GenreResponse {
+    id: number;
+    name: string;
+    slug: string;
+    color: string;
+    description: string | null;
+}
+
 export interface ProjectResponse {
     id: string;
     title: string;
@@ -8,12 +16,14 @@ export interface ProjectResponse {
     status: 'Draft' | 'Published' | 'Archived';
     createdAt: string;
     updatedAt: string | null;
+    genres: GenreResponse[];
 }
 
 export interface CreateProjectRequest {
     title: string;
     summary?: string;
     status?: string;
+    genreIds?: number[];
 }
 
 export interface UpdateProjectRequest {
@@ -21,6 +31,7 @@ export interface UpdateProjectRequest {
     summary?: string;
     coverImageURL?: string;
     status?: string;
+    genreIds?: number[];
 }
 
 export const projectService = {

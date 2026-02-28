@@ -98,6 +98,7 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [showPass, setShowPass] = useState(false);
     const [mounted, setMounted] = useState(false);
+    const [forgotHint, setForgotHint] = useState(false);
     const emailRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -195,7 +196,13 @@ export default function LoginPage() {
                             <div className="space-y-1.5">
                                 <div className="flex justify-between items-center">
                                     <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest">Mật khẩu</label>
-                                    <a href="#" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Quên mật khẩu?</a>
+                                    <button type="button" onClick={() => setForgotHint(true)}
+                                        className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+                                        Quên mật khẩu?
+                                    </button>
+                                    {forgotHint && (
+                                        <span className="text-xs text-amber-400 ml-1">Tính năng đang phát triển</span>
+                                    )}
                                 </div>
                                 <div className="relative">
                                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />

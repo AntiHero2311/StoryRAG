@@ -12,6 +12,8 @@ import WorkspacePage from './pages/WorkspacePage';
 import SubscriptionPage from './pages/SubscriptionPage';
 import PlansPage from './pages/PlansPage';
 import AdminSubscriptionPage from './pages/AdminSubscriptionPage';
+import AnalysisPage from './pages/AnalysisPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
   return (
@@ -30,6 +32,8 @@ function App() {
         <Route path="/subscription" element={<SubscriptionPage />} />
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/admin/subscription" element={<AdminSubscriptionPage />} />
+        <Route path="/analysis" element={<AnalysisPage />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Router>
   );

@@ -27,5 +27,6 @@ namespace Repository.Entities
 
         // Navigation
         public User Author { get; set; } = null!;
+        public ICollection<ProjectGenre> ProjectGenres { get; set; } = new List<ProjectGenre>();
     }
 }
