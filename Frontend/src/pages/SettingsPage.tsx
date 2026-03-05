@@ -7,6 +7,21 @@ import { authService } from '../services/authService';
 import { getInitials, UserInfo } from '../utils/jwtHelper';
 import MainLayout from '../layouts/MainLayout';
 
+// ── Password strength ────────────────────────────────────────────────────────
+function getStrength(pw: string): { score: number; label: string; color: string } {
+    if (pw.length === 0) return { score: 0, label: '', color: '' };
+    let s = 0;
+    if (pw.length >= 6) s++;
+    if (pw.length >= 10) s++;
+    if (/[A-Z]/.test(pw)) s++;
+    if (/[0-9]/.test(pw)) s++;
+    if (/[^A-Za-z0-9]/.test(pw)) s++;
+    if (s <= 1) return { score: s, label: 'Yếu', color: '#f43f5e' };
+    if (s <= 2) return { score: s, label: 'Trung bình', color: '#f59e0b' };
+    if (s <= 3) return { score: s, label: 'Khá', color: '#3b82f6' };
+    return { score: s, label: 'Mạnh', color: '#22c55e' };
+}
+
 // ── Modals ───────────────────────────────────────────────────────────────────
 function PasswordModal({ onClose }: { onClose: () => void }) {
     const [passData, setPassData] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
@@ -15,6 +30,10 @@ function PasswordModal({ onClose }: { onClose: () => void }) {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (passData.newPassword.length < 6) {
+            setMsg({ type: 'error', text: 'Mật khẩu mới phải có ít nhất 6 ký tự.' });
+            return;
+        }
         if (passData.newPassword !== passData.confirmPassword) {
             setMsg({ type: 'error', text: 'Mật khẩu xác nhận không khớp.' });
             return;
@@ -55,13 +74,30 @@ function PasswordModal({ onClose }: { onClose: () => void }) {
                     </div>
                     <div className="space-y-1.5">
                         <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest ml-1">Mật khẩu mới</label>
-                        <input type="password" required value={passData.newPassword} onChange={e => setPassData({ ...passData, newPassword: e.target.value })}
+                        <input type="password" required minLength={6} value={passData.newPassword} onChange={e => { setPassData({ ...passData, newPassword: e.target.value }); setMsg({ type: '', text: '' }); }}
                             className="w-full bg-[var(--input-bg)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] text-sm focus:outline-none focus:border-[#f5a623]/50 transition-all" />
+                        {passData.newPassword.length > 0 && (() => {
+                            const st = getStrength(passData.newPassword);
+                            return (
+                                <div className="mt-1.5 space-y-1">
+                                    <div className="flex gap-1">
+                                        {[1, 2, 3, 4, 5].map(n => (
+                                            <div key={n} className="h-1 flex-1 rounded-full transition-all duration-300"
+                                                style={{ backgroundColor: n <= st.score ? st.color : 'rgba(255,255,255,0.08)' }} />
+                                        ))}
+                                    </div>
+                                    <p className="text-xs" style={{ color: st.color }}>{st.label}</p>
+                                </div>
+                            );
+                        })()}
                     </div>
                     <div className="space-y-1.5">
                         <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest ml-1">Xác nhận mật khẩu</label>
-                        <input type="password" required value={passData.confirmPassword} onChange={e => setPassData({ ...passData, confirmPassword: e.target.value })}
+                        <input type="password" required minLength={6} value={passData.confirmPassword} onChange={e => { setPassData({ ...passData, confirmPassword: e.target.value }); setMsg({ type: '', text: '' }); }}
                             className="w-full bg-[var(--input-bg)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] text-sm focus:outline-none focus:border-[#f5a623]/50 transition-all" />
+                        {passData.confirmPassword.length > 0 && passData.confirmPassword !== passData.newPassword && (
+                            <p className="text-xs text-rose-400 mt-1 ml-1">Mật khẩu không khớp.</p>
+                        )}
                     </div>
                     <div className="pt-4 flex gap-3">
                         <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl border border-[var(--border-color)] text-[var(--text-primary)] font-bold text-sm hover:bg-[var(--text-primary)]/5 transition-all">

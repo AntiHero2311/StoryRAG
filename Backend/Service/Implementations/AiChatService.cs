@@ -17,6 +17,7 @@ namespace Service.Implementations
         private readonly IConfiguration _config;
         private readonly IEmbeddingService _embeddingService;
         private readonly ChatClient _chatClient;
+        private readonly ChatClient? _fallbackChatClient;
 
         // Số chunk context tối đa lấy cho mỗi câu hỏi
         private const int TopK = 5;
@@ -33,6 +34,33 @@ namespace Service.Implementations
 
             var options = new OpenAIClientOptions { Endpoint = new Uri(baseUrl) };
             _chatClient = new ChatClient(model, new ApiKeyCredential(apiKey), options);
+
+            var fallbackApiKey = config["AI:Fallback:ApiKey"];
+            if (!string.IsNullOrWhiteSpace(fallbackApiKey))
+            {
+                var fbUrl = config["AI:Fallback:BaseUrl"] ?? "https://generativelanguage.googleapis.com/v1beta/openai/";
+                var fbModel = config["AI:Fallback:ChatModel"] ?? "gemini-2.0-flash";
+                var fbOptions = new OpenAIClientOptions { Endpoint = new Uri(fbUrl) };
+                _fallbackChatClient = new ChatClient(fbModel, new ApiKeyCredential(fallbackApiKey), fbOptions);
+            }
+        }
+
+        private static bool IsConnectionError(Exception ex) =>
+            ex is HttpRequestException or System.Net.Sockets.SocketException ||
+            ex.InnerException is HttpRequestException or System.Net.Sockets.SocketException;
+
+        private async Task<OpenAI.Chat.ChatCompletion> CompleteChatWithFallbackAsync(IEnumerable<ChatMessage> messages)
+        {
+            try
+            {
+                var result = await _chatClient.CompleteChatAsync(messages);
+                return result.Value;
+            }
+            catch (Exception ex) when (_fallbackChatClient != null && IsConnectionError(ex))
+            {
+                var result = await _fallbackChatClient.CompleteChatAsync(messages);
+                return result.Value;
+            }
         }
 
         public async Task<AiChatResult> ChatAsync(Guid projectId, string question, Guid userId)
@@ -88,8 +116,8 @@ namespace Service.Implementations
                 ChatMessage.CreateUserMessage(question),
             };
 
-            var response = await _chatClient.CompleteChatAsync(messages);
-            var completion = response.Value;
+            var response = await CompleteChatWithFallbackAsync(messages);
+            var completion = response;
 
             var answer = completion.Content[0].Text;
             var inputTokens = completion.Usage.InputTokenCount;

@@ -94,10 +94,7 @@ namespace Service.Implementations
         {
             // Gọi OpenAI batch embedding (tối đa 2048 inputs/request)
             var results = await _embeddingClient.GenerateEmbeddingsAsync(texts);
-            return results.Value
-                .OrderBy(e => e.Index)
-                .Select(e => e.ToFloats().ToArray())
-                .ToList();
+            return results.Value.OrderBy(e => e.Index).Select(e => e.ToFloats().ToArray()).ToList();
         }
     }
 }

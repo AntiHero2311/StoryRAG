@@ -80,6 +80,8 @@ builder.Services.AddSingleton<IChunkingService, ChunkingService>();
 builder.Services.AddScoped<IChapterService, ChapterService>();
 builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
 builder.Services.AddScoped<IAiChatService, AiChatService>();
+builder.Services.AddScoped<IProjectReportService, ProjectReportService>();
+builder.Services.AddScoped<IUserSettingsService, UserSettingsService>();
 
 // Add Authentication Configuration
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

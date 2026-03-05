@@ -13,11 +13,13 @@ namespace Api.Controllers
     {
         private readonly IEmbeddingService _embeddingService;
         private readonly IAiChatService _aiChatService;
+        private readonly IProjectReportService _reportService;
 
-        public AiController(IEmbeddingService embeddingService, IAiChatService aiChatService)
+        public AiController(IEmbeddingService embeddingService, IAiChatService aiChatService, IProjectReportService reportService)
         {
             _embeddingService = embeddingService;
             _aiChatService = aiChatService;
+            _reportService = reportService;
         }
 
         /// <summary>Embed tất cả chunks của current version của một chương.</summary>
@@ -61,6 +63,59 @@ namespace Api.Controllers
             var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                      ?? User.FindFirst("sub")?.Value;
             return Guid.TryParse(claim, out var id) ? id : null;
+        }
+
+        // ── Project Report endpoints ───────────────────────────────────────────────
+
+        /// <summary>Phân tích bộ truyện theo rubric 100 điểm và lưu kết quả.</summary>
+        [HttpPost("{projectId:guid}/analyze")]
+        public async Task<IActionResult> Analyze(Guid projectId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var result = await _reportService.AnalyzeAsync(projectId, userId.Value);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
+            catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
+        /// <summary>Lấy report phân tích mới nhất của dự án.</summary>
+        [HttpGet("{projectId:guid}/reports/latest")]
+        public async Task<IActionResult> GetLatestReport(Guid projectId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var result = await _reportService.GetLatestAsync(projectId, userId.Value);
+                if (result == null) return NotFound(new { Message = "Chưa có báo cáo nào cho dự án này." });
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
+        /// <summary>Lấy lịch sử tất cả report của dự án.</summary>
+        [HttpGet("{projectId:guid}/reports")]
+        public async Task<IActionResult> GetReports(Guid projectId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var result = await _reportService.GetAllAsync(projectId, userId.Value);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
     }
 

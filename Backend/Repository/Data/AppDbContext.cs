@@ -23,6 +23,12 @@ namespace Repository.Data
         public DbSet<ChapterVersion> ChapterVersions { get; set; }
         public DbSet<ChapterChunk> ChapterChunks { get; set; }
 
+        // AI Reports
+        public DbSet<ProjectReport> ProjectReports { get; set; }
+
+        // User Settings
+        public DbSet<UserSettings> UserSettings { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -233,6 +239,40 @@ namespace Repository.Data
                 entity.HasOne(pg => pg.Genre)
                       .WithMany(g => g.ProjectGenres)
                       .HasForeignKey(pg => pg.GenreId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+            // ── ProjectReport ─────────────────────────────────────────────────────
+            modelBuilder.Entity<ProjectReport>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue("Pending");
+                entity.ToTable(t => t.HasCheckConstraint("CK_ProjectReports_Status", "\"Status\" IN ('Pending','Completed','Failed','MockData')"));
+                entity.Property(e => e.TotalScore).HasPrecision(5, 2).HasDefaultValue(0m);
+                entity.Property(e => e.CriteriaJson).HasColumnType("jsonb").HasDefaultValue("[]");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(r => r.Project)
+                      .WithMany()
+                      .HasForeignKey(r => r.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(r => r.User)
+                      .WithMany()
+                      .HasForeignKey(r => r.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── UserSettings ──────────────────────────────────────────────────────
+            modelBuilder.Entity<UserSettings>(entity =>
+            {
+                entity.HasKey(e => e.UserId);
+                entity.Property(e => e.EditorFont).IsRequired().HasMaxLength(100).HasDefaultValue("Be Vietnam Pro");
+                entity.Property(e => e.EditorFontSize).HasDefaultValue(17);
+
+                entity.HasOne(s => s.User)
+                      .WithOne()
+                      .HasForeignKey<UserSettings>(s => s.UserId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
         }
