@@ -1,12 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using OpenAI;
-using OpenAI.Embeddings;
 using Pgvector;
 using Repository.Data;
 using Service.Helpers;
 using Service.Interfaces;
-using System.ClientModel;
+using System.Text.Json;
+using System.Net.Http.Json;
 
 namespace Service.Implementations
 {
@@ -14,19 +13,22 @@ namespace Service.Implementations
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
-        private readonly EmbeddingClient _embeddingClient;
+        private readonly HttpClient _httpClient;
+        private readonly string _baseUrl;
+        private readonly string _apiKey;
+        private readonly string _model;
 
         public EmbeddingService(AppDbContext context, IConfiguration config)
         {
             _context = context;
             _config = config;
 
-            var baseUrl = config["AI:BaseUrl"] ?? "http://localhost:1234/v1";
-            var apiKey = config["AI:ApiKey"] ?? "lm-studio";
-            var model = config["AI:EmbeddingModel"] ?? "nomic-embed-text";
+            _baseUrl = config["AI:BaseUrl"] ?? "http://localhost:1234/v1";
+            _apiKey = config["AI:ApiKey"] ?? "lm-studio";
+            _model = config["AI:EmbeddingModel"] ?? "nomic-embed-text";
 
-            var options = new OpenAIClientOptions { Endpoint = new Uri(baseUrl) };
-            _embeddingClient = new EmbeddingClient(model, new ApiKeyCredential(apiKey), options);
+            _httpClient = new HttpClient();
+            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
         }
 
         public async Task EmbedChapterAsync(Guid chapterId, Guid userId)
@@ -65,9 +67,9 @@ namespace Service.Implementations
             var masterKey = _config["Security:MasterKey"]!;
             var rawDek = EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey ?? string.Empty, masterKey);
 
-            // Decrypt content của từng chunk, gọi OpenAI để lấy embedding
+            // Decrypt content của từng chunk, thêm search_document: prefix cho nomic-embed-text-v1.5
             var plainTexts = chunks
-                .Select(c => EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek))
+                .Select(c => "search_document: " + EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek))
                 .ToList();
 
             var embeddings = await GetEmbeddingsForTextsAsync(plainTexts);
@@ -86,15 +88,28 @@ namespace Service.Implementations
 
         public async Task<float[]> GetEmbeddingAsync(string text)
         {
-            var result = await _embeddingClient.GenerateEmbeddingAsync(text);
-            return result.Value.ToFloats().ToArray();
+            // Thêm search_query: prefix cho nomic-embed-text-v1.5 (asymmetric retrieval)
+            var res = await GetEmbeddingsForTextsAsync(new List<string> { "search_query: " + text });
+            return res.First();
         }
 
         private async Task<List<float[]>> GetEmbeddingsForTextsAsync(List<string> texts)
         {
-            // Gọi OpenAI batch embedding (tối đa 2048 inputs/request)
-            var results = await _embeddingClient.GenerateEmbeddingsAsync(texts);
-            return results.Value.OrderBy(e => e.Index).Select(e => e.ToFloats().ToArray()).ToList();
+            var requestBody = new { model = _model, input = texts };
+            var response = await _httpClient.PostAsJsonAsync($"{_baseUrl}/embeddings", requestBody);
+            response.EnsureSuccessStatusCode();
+
+            var jsonResult = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var dataArray = jsonResult.GetProperty("data").EnumerateArray().ToList();
+            var embeddings = new List<float[]>();
+
+            foreach (var item in dataArray)
+            {
+                var vectorArray = item.GetProperty("embedding").EnumerateArray().Select(x => x.GetSingle()).ToArray();
+                embeddings.Add(vectorArray);
+            }
+
+            return embeddings;
         }
     }
 }

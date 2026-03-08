@@ -63,7 +63,7 @@ User nhập câu hỏi
   → Decrypt chunks bằng DEK
   → BuildSystemPrompt(projectTitle, chunks)
   → ChatMessage[System] + ChatMessage[User = câu hỏi]
-  → LLM (llama-3.2-3b-instruct) → Answer
+  → LLM (qwen/qwen3.5-9b) → Answer
 ```
 
 ---
@@ -181,7 +181,7 @@ Chỉ trả về JSON array, không có markdown, không có giải thích thêm
 
 | Tham số | Giá trị mặc định | Config key |
 |---------|-----------------|-----------|
-| Chat model | `llama-3.2-3b-instruct` | `AI:ChatModel` |
+| Chat model | `qwen/qwen3.5-9b` | `AI:ChatModel` |
 | Embedding model | `nomic-embed-text` | `AI:EmbeddingModel` |
 | Base URL | `http://localhost:1234/v1` | `AI:BaseUrl` |
 | API Key | `lm-studio` | `AI:ApiKey` |
@@ -208,7 +208,7 @@ Vector Search (cosine distance)
 [Context text]
     │
     ▼ BuildSystemPrompt / EvaluatePrompt
-[LLM Call] → llama-3.2-3b-instruct
+[LLM Call] → qwen/qwen3.5-9b
     │
     ▼
 [Answer / JSON Score]

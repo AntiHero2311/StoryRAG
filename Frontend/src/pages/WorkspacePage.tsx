@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     ArrowLeft, Plus, Sparkles, History, Bold,
     Italic, Underline, List, Heading, AlignJustify,
     ChevronsLeft, ChevronsRight, Trash2, FileText, X,
     Undo2, Redo2, Save, Check, Loader2, Scissors,
-    Clock, Send, Cpu, Pencil, GitBranch, Zap, Type,
+    Clock, Send, Cpu, Pencil, GitBranch, Zap, Type, Bot,
 } from 'lucide-react';
 import { getUserInfo } from '../utils/jwtHelper';
 import {
@@ -20,7 +20,64 @@ import { useEditorSettings, AVAILABLE_FONTS, AVAILABLE_SIZES } from '../hooks/us
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
 type ActiveTab = 'chat' | 'history';
 
-// ── WorkspacePage ─────────────────────────────────────────────────────────
+// ── Markdown renderer for AI chat bubbles ─────────────────────────────────
+function renderMd(text: string): ReactNode {
+    const lines = text.split('\n');
+    const nodes: React.ReactNode[] = [];
+    let key = 0;
+
+    // Parse inline: **bold**, __underline__, *italic*, _italic_
+    const parseInline = (line: string): ReactNode[] => {
+        const parts: React.ReactNode[] = [];
+        // Combined regex: **bold**, __underline__, *italic*, _italic_
+        const re = /(\*\*[^*]+\*\*|__[^_]+__|(?<!\*)\*(?!\*)[^*]+(?<!\*)\*(?!\*)|(?<!_)_(?!_)[^_]+(?<!_)_(?!_))/g;
+        let last = 0, m: RegExpExecArray | null;
+        while ((m = re.exec(line)) !== null) {
+            if (m.index > last) parts.push(line.slice(last, m.index));
+            const raw = m[0];
+            if (raw.startsWith('**')) {
+                parts.push(<strong key={key++} className="font-semibold">{raw.slice(2, -2)}</strong>);
+            } else if (raw.startsWith('__')) {
+                parts.push(<u key={key++}>{raw.slice(2, -2)}</u>);
+            } else {
+                parts.push(<em key={key++}>{raw.slice(1, -1)}</em>);
+            }
+            last = m.index + raw.length;
+        }
+        if (last < line.length) parts.push(line.slice(last));
+        return parts;
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        if (!trimmed) {
+            // Empty line → small spacing
+            nodes.push(<div key={key++} className="h-1.5" />);
+            continue;
+        }
+
+        // Bullet: lines starting with –, -, •, *
+        const bulletMatch = trimmed.match(/^([–\-•]|\*(?!\*))\s+(.*)/s);
+        if (bulletMatch) {
+            nodes.push(
+                <div key={key++} className="flex gap-1.5 items-start my-0.5">
+                    <span className="text-amber-400 font-bold shrink-0 mt-px">•</span>
+                    <span>{parseInline(bulletMatch[2])}</span>
+                </div>
+            );
+            continue;
+        }
+
+        // Normal line
+        nodes.push(<div key={key++} className="leading-relaxed">{parseInline(trimmed)}</div>);
+    }
+
+    return <div className="flex flex-col gap-0.5">{nodes}</div>;
+}
+
+
 
 export default function WorkspacePage() {
     const navigate = useNavigate();
@@ -834,66 +891,136 @@ export default function WorkspacePage() {
                         {/* ── Chat Tab ── */}
                         {activeTab === 'chat' && (
                             <div className="flex-1 flex flex-col min-h-0">
-                                {/* Header + Embed button */}
+                                {/* Header */}
                                 <div className="px-4 pt-3 pb-2 flex items-center justify-between shrink-0">
                                     <div className="flex items-center gap-2">
-                                        <Sparkles className="w-4 h-4 text-indigo-400" />
+                                        <div className="w-5 h-5 rounded-md flex items-center justify-center"
+                                            style={{ background: 'rgba(245,166,35,0.15)' }}>
+                                            <Sparkles className="w-3 h-3 text-amber-400" />
+                                        </div>
                                         <span className="text-xs font-semibold text-[var(--text-primary)]">AI Chat</span>
                                         {activeChapter?.versions?.[0]?.isEmbedded && (
-                                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-semibold">Embedded</span>
+                                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold"
+                                                style={{ background: 'rgba(245,166,35,0.12)', color: '#f5a623' }}>
+                                                ● Sẵn sàng
+                                            </span>
                                         )}
                                     </div>
-                                    {activeChapter && activeChapter.versions?.[0]?.isChunked && !activeChapter.versions?.[0]?.isEmbedded && (
-                                        <button
-                                            onClick={doEmbed}
-                                            disabled={isEmbedding}
-                                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-colors"
-                                            style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}
-                                        >
-                                            {isEmbedding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Cpu className="w-3 h-3" />}
-                                            {isEmbedding ? 'Đang embed...' : 'Embed'}
-                                        </button>
-                                    )}
+                                    <div className="flex items-center gap-1">
+                                        {/* Clear chat */}
+                                        {chatMessages.length > 0 && (
+                                            <button
+                                                onClick={() => setChatMessages([])}
+                                                title="Xóa lịch sử chat"
+                                                className="w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                                            >
+                                                <Trash2 className="w-3 h-3" />
+                                            </button>
+                                        )}
+                                        {/* Embed button */}
+                                        {activeChapter && activeChapter.versions?.[0]?.isChunked && !activeChapter.versions?.[0]?.isEmbedded && (
+                                            <button
+                                                onClick={doEmbed}
+                                                disabled={isEmbedding}
+                                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all"
+                                                style={{ background: 'rgba(245,166,35,0.15)', color: '#f5a623' }}
+                                            >
+                                                {isEmbedding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Cpu className="w-3 h-3" />}
+                                                {isEmbedding ? 'Đang embed...' : 'Embed'}
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Messages */}
-                                <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-2 min-h-0 scrollbar-thin">
+                                <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-2.5 min-h-0 scrollbar-thin">
                                     {chatMessages.length === 0 && (
-                                        <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 py-6">
-                                            <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                                                style={{ background: 'rgba(99,102,241,0.1)' }}>
-                                                <Sparkles className="w-5 h-5 text-indigo-400" />
+                                        <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 py-6">
+                                            <div className="w-11 h-11 rounded-2xl flex items-center justify-center"
+                                                style={{ background: 'rgba(245,166,35,0.1)', border: '1px solid rgba(245,166,35,0.2)' }}>
+                                                <Bot className="w-5 h-5 text-amber-400" />
                                             </div>
                                             <div>
                                                 <p className="text-[var(--text-primary)] text-xs font-semibold mb-1">Hỏi về nội dung truyện</p>
-                                                <p className="text-[var(--text-secondary)] text-[10px] leading-relaxed max-w-[190px]">
+                                                <p className="text-[var(--text-secondary)] text-[10px] leading-relaxed max-w-[180px]">
                                                     {activeChapter?.versions?.[0]?.isEmbedded
-                                                        ? 'Nhập câu hỏi về nhân vật, cốt truyện, bối cảnh...'
+                                                        ? 'Hỏi bất cứ điều gì về nhân vật, cốt truyện, bối cảnh...'
                                                         : 'Chunk và Embed chương trước để bật AI Chat.'}
                                                 </p>
                                             </div>
+                                            {/* Suggestion chips */}
+                                            {activeChapter?.versions?.[0]?.isEmbedded && (
+                                                <div className="flex flex-col gap-1.5 w-full px-1">
+                                                    {[
+                                                        'Nhân vật chính là ai?',
+                                                        'Tóm tắt cốt truyện chương này',
+                                                        'Bối cảnh câu chuyện ở đâu?',
+                                                    ].map(q => (
+                                                        <button
+                                                            key={q}
+                                                            onClick={() => setChatInput(q)}
+                                                            className="text-left text-[10px] px-2.5 py-1.5 rounded-lg transition-all"
+                                                            style={{
+                                                                background: 'var(--bg-app)',
+                                                                border: '1px solid var(--border-color)',
+                                                                color: 'var(--text-secondary)',
+                                                            }}
+                                                            onMouseEnter={e => {
+                                                                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(245,166,35,0.4)';
+                                                                (e.currentTarget as HTMLElement).style.color = '#f5a623';
+                                                            }}
+                                                            onMouseLeave={e => {
+                                                                (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-color)';
+                                                                (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)';
+                                                            }}
+                                                        >
+                                                            💬 {q}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
+
                                     {chatMessages.map((msg, i) => (
-                                        <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                        <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                            {/* AI avatar */}
+                                            {msg.role === 'assistant' && (
+                                                <div className="w-5 h-5 rounded-md shrink-0 mt-0.5 flex items-center justify-center"
+                                                    style={{ background: 'rgba(245,166,35,0.12)', border: '1px solid rgba(245,166,35,0.2)' }}>
+                                                    <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                                                </div>
+                                            )}
                                             <div
-                                                className="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed"
+                                                className="max-w-[82%] rounded-2xl px-3 py-2 text-xs leading-relaxed"
                                                 style={msg.role === 'user'
-                                                    ? { background: 'rgba(245,166,35,0.15)', color: 'var(--text-primary)', border: '1px solid rgba(245,166,35,0.25)' }
+                                                    ? { background: 'rgba(245,166,35,0.13)', color: 'var(--text-primary)', border: '1px solid rgba(245,166,35,0.25)' }
                                                     : { background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }
                                                 }
                                             >
-                                                {msg.content}
+                                                {msg.role === 'assistant' ? renderMd(msg.content) : msg.content}
                                                 {msg.tokens && (
-                                                    <div className="mt-1 text-[9px] opacity-50">{msg.tokens} tokens</div>
+                                                    <div className="mt-1 text-[9px] opacity-40">{msg.tokens.toLocaleString()} tokens</div>
                                                 )}
                                             </div>
                                         </div>
                                     ))}
+
+                                    {/* Loading dots */}
                                     {isChatLoading && (
-                                        <div className="flex justify-start">
-                                            <div className="px-3 py-2 rounded-xl text-xs" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
-                                                <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />
+                                        <div className="flex gap-2 justify-start">
+                                            <div className="w-5 h-5 rounded-md shrink-0 mt-0.5 flex items-center justify-center"
+                                                style={{ background: 'rgba(245,166,35,0.12)', border: '1px solid rgba(245,166,35,0.2)' }}>
+                                                <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                                            </div>
+                                            <div className="px-3 py-2.5 rounded-2xl flex items-center gap-2.5"
+                                                style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
+                                                <div className="flex gap-1 items-center">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                                                </div>
+                                                <span className="text-[10px] text-[var(--text-secondary)]">Đang phân tích...</span>
                                             </div>
                                         </div>
                                     )}
@@ -902,26 +1029,40 @@ export default function WorkspacePage() {
 
                                 {/* Input */}
                                 <div className="px-3 pb-3 shrink-0">
-                                    <div className="flex gap-2 items-end rounded-xl p-2"
-                                        style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
+                                    <div className="rounded-xl overflow-hidden transition-all"
+                                        style={{
+                                            background: 'var(--bg-app)',
+                                            border: '1px solid var(--border-color)',
+                                            boxShadow: chatInput ? '0 0 0 2px rgba(245,166,35,0.15)' : 'none',
+                                        }}>
                                         <textarea
                                             value={chatInput}
                                             onChange={e => setChatInput(e.target.value)}
                                             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doChat(); } }}
-                                            placeholder={activeChapter?.versions?.[0]?.isEmbedded ? 'Nhập câu hỏi...' : 'Embed chương để dùng AI Chat'}
+                                            placeholder={activeChapter?.versions?.[0]?.isEmbedded ? 'Nhập câu hỏi... (Enter để gửi)' : 'Embed chương để dùng AI Chat'}
                                             disabled={!activeChapter?.versions?.[0]?.isEmbedded || isChatLoading}
                                             rows={1}
-                                            className="flex-1 bg-transparent resize-none text-xs text-[var(--text-primary)] placeholder-[var(--text-secondary)] outline-none"
-                                            style={{ maxHeight: '80px' }}
+                                            className="w-full bg-transparent resize-none text-xs text-[var(--text-primary)] placeholder-[var(--text-secondary)] outline-none px-3 pt-2.5 pb-1"
+                                            style={{ maxHeight: '96px' }}
                                         />
-                                        <button
-                                            onClick={doChat}
-                                            disabled={!chatInput.trim() || !activeChapter?.versions?.[0]?.isEmbedded || isChatLoading}
-                                            className="w-7 h-7 flex items-center justify-center rounded-lg shrink-0 transition-colors disabled:opacity-30"
-                                            style={{ background: 'rgba(99,102,241,0.2)', color: '#818cf8' }}
-                                        >
-                                            <Send className="w-3 h-3" />
-                                        </button>
+                                        <div className="flex items-center justify-between px-2 pb-2">
+                                            <span className="text-[9px] text-[var(--text-secondary)] opacity-50">
+                                                {chatInput.length > 0 ? `${chatInput.length} ký tự` : 'Shift+Enter xuống dòng'}
+                                            </span>
+                                            <button
+                                                onClick={doChat}
+                                                disabled={!chatInput.trim() || !activeChapter?.versions?.[0]?.isEmbedded || isChatLoading}
+                                                className="w-6 h-6 flex items-center justify-center rounded-lg shrink-0 transition-all disabled:opacity-25"
+                                                style={{
+                                                    background: chatInput.trim() && activeChapter?.versions?.[0]?.isEmbedded
+                                                        ? 'rgba(245,166,35,0.9)'
+                                                        : 'rgba(245,166,35,0.15)',
+                                                    color: chatInput.trim() ? '#fff' : '#f5a623',
+                                                }}
+                                            >
+                                                <Send className="w-3 h-3" />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

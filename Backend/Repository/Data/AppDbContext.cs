@@ -180,7 +180,7 @@ namespace Repository.Data
                 entity.HasIndex(e => e.VersionId);
                 entity.HasIndex(e => e.ProjectId);
 
-                // Embedding vector(768) — nomic-embed-text (LM Studio default)
+                // Embedding vector(768) — nomic-embed-text-v1.5 (LM Studio)
                 entity.Property(e => e.Embedding).HasColumnType("vector(768)");
 
                 // FK → ChapterVersions

@@ -15,5 +15,8 @@ namespace Service.Interfaces
 
         /// <summary>Lấy toàn bộ lịch sử report của dự án.</summary>
         Task<List<ProjectReportSummary>> GetAllAsync(Guid projectId, Guid userId);
+
+        /// <summary>Lấy report theo ID.</summary>
+        Task<ProjectReportResponse?> GetByIdAsync(Guid reportId, Guid projectId, Guid userId);
     }
 }

@@ -1,22 +1,24 @@
 import { useState, useEffect, useRef } from 'react';
-import { BarChart2, BrainCircuit, ChevronDown, Loader2, AlertCircle, CheckCircle2, Sparkles, Clock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { BarChart2, BrainCircuit, ChevronDown, Loader2, AlertCircle, CheckCircle2, Sparkles, Clock, CreditCard } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { UserInfo } from '../utils/jwtHelper';
 import { projectService, ProjectResponse } from '../services/projectService';
 import { reportService, ProjectReportResponse, ProjectReportSummary } from '../services/reportService';
+import { subscriptionService, UserSubscription } from '../services/subscriptionService';
 
 // ─── Score helpers ────────────────────────────────────────────────────────────
 function classifyColor(cls: string) {
     switch (cls) {
-        case 'Xuất sắc':  return { text: '#10b981', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.3)', gradient: ['#10b981', '#34d399'] };
-        case 'Khá':        return { text: '#6366f1', bg: 'rgba(99,102,241,0.12)', border: 'rgba(99,102,241,0.3)', gradient: ['#6366f1', '#8b5cf6'] };
+        case 'Xuất sắc': return { text: '#10b981', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.3)', gradient: ['#10b981', '#34d399'] };
+        case 'Khá': return { text: '#0ea5e9', bg: 'rgba(14,165,233,0.12)', border: 'rgba(14,165,233,0.3)', gradient: ['#0ea5e9', '#38bdf8'] };
         case 'Trung bình': return { text: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.3)', gradient: ['#f59e0b', '#fbbf24'] };
-        default:           return { text: '#ef4444', bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.3)',  gradient: ['#ef4444', '#f87171'] };
+        default: return { text: '#ef4444', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.3)', gradient: ['#ef4444', '#f87171'] };
     }
 }
 
 function groupColor(idx: number) {
-    const palette = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
+    const palette = ['#f5a623', '#10b981', '#0ea5e9', '#ec4899', '#8b5cf6'];
     return palette[idx % palette.length];
 }
 
@@ -62,18 +64,15 @@ function DonutChart({ score, classification }: { score: number; classification: 
                 />
             </svg>
             {/* Center label — overlaid */}
-            <div style={{ marginTop: -size - 12 + 4 }} className="flex flex-col items-center pointer-events-none"
-                 /* offset = -(svgHeight) then nudge */ >
-            </div>
-            {/* Reposition center text with absolute trick */}
             <div className="relative" style={{ marginTop: -(size + 8) }}>
-                <div className="flex flex-col items-center justify-center" style={{ width: size, height: size }}>
+                <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ width: size, height: size }}>
                     <span className="text-3xl font-black text-[var(--text-primary)] leading-none">{score.toFixed(0)}</span>
                     <span className="text-[var(--text-secondary)] text-xs mt-0.5">/ 100 điểm</span>
                 </div>
+                <div style={{ width: size, height: size }} />
             </div>
             {/* Badge */}
-            <div className="px-4 py-1 rounded-full text-xs font-bold mt-1"
+            <div className="px-4 py-1 rounded-full text-xs font-bold"
                 style={{ background: clr.bg, border: `1px solid ${clr.border}`, color: clr.text }}>
                 {classification}
             </div>
@@ -143,8 +142,8 @@ function RadarChart({ groups }: { groups: ProjectReportResponse['groups'] }) {
                 <polygon points={bgPoints} fill="var(--bg-hover)" stroke="var(--border-color)" strokeWidth="1" opacity="0.4" />
                 {/* Score polygon */}
                 <polygon points={scorePoints}
-                    fill="rgba(99,102,241,0.18)"
-                    stroke="#6366f1"
+                    fill="rgba(245,166,35,0.18)"
+                    stroke="#f5a623"
                     strokeWidth="2"
                     strokeLinejoin="round"
                     style={{ transition: 'all 0.9s cubic-bezier(0.4,0,0.2,1)' }}
@@ -276,20 +275,20 @@ function GroupCard({ group, idx, expanded, onToggle }: {
 
 // ─── Mock data generator ──────────────────────────────────────────────────────
 const RUBRIC = [
-    { key: '1.1', group: 'Cốt truyện & Mạch lạc',  name: 'Tính nhất quán nội bộ',        max: 10 },
-    { key: '1.2', group: 'Cốt truyện & Mạch lạc',  name: 'Liên kết nhân quả & Sự kiện',  max: 10 },
-    { key: '1.3', group: 'Cốt truyện & Mạch lạc',  name: 'Nút thắt & Giải quyết',         max: 5  },
-    { key: '2.1', group: 'Xây dựng Nhân vật',       name: 'Động cơ & Hành động',           max: 10 },
-    { key: '2.2', group: 'Xây dựng Nhân vật',       name: 'Chiều sâu nhân vật',            max: 10 },
-    { key: '2.3', group: 'Xây dựng Nhân vật',       name: 'Tương tác & Đối thoại',          max: 5  },
-    { key: '3.1', group: 'Ngôn từ & Văn phong',     name: 'Ngữ pháp & Sự rõ ràng',         max: 10 },
-    { key: '3.2', group: 'Ngôn từ & Văn phong',     name: 'Đa dạng cấu trúc câu',          max: 5  },
-    { key: '3.3', group: 'Ngôn từ & Văn phong',     name: 'Tránh sáo ngữ',                 max: 5  },
-    { key: '4.1', group: 'Sáng tạo & Thể loại',     name: 'Độ sáng tạo & Tránh lối mòn',  max: 10 },
-    { key: '4.2', group: 'Sáng tạo & Thể loại',     name: 'Đặc trưng thể loại',            max: 5  },
-    { key: '4.3', group: 'Sáng tạo & Thể loại',     name: 'Sức cuốn hút',                  max: 5  },
-    { key: '5.1', group: 'Tuân thủ & Hoàn thiện',   name: 'Mức độ hoàn thiện bản thảo',    max: 5  },
-    { key: '5.2', group: 'Tuân thủ & Hoàn thiện',   name: 'Tuân thủ định dạng',            max: 5  },
+    { key: '1.1', group: 'Cốt truyện & Mạch lạc', name: 'Tính nhất quán nội bộ', max: 10 },
+    { key: '1.2', group: 'Cốt truyện & Mạch lạc', name: 'Liên kết nhân quả & Sự kiện', max: 10 },
+    { key: '1.3', group: 'Cốt truyện & Mạch lạc', name: 'Nút thắt & Giải quyết', max: 5 },
+    { key: '2.1', group: 'Xây dựng Nhân vật', name: 'Động cơ & Hành động', max: 10 },
+    { key: '2.2', group: 'Xây dựng Nhân vật', name: 'Chiều sâu nhân vật', max: 10 },
+    { key: '2.3', group: 'Xây dựng Nhân vật', name: 'Tương tác & Đối thoại', max: 5 },
+    { key: '3.1', group: 'Ngôn từ & Văn phong', name: 'Ngữ pháp & Sự rõ ràng', max: 10 },
+    { key: '3.2', group: 'Ngôn từ & Văn phong', name: 'Đa dạng cấu trúc câu', max: 5 },
+    { key: '3.3', group: 'Ngôn từ & Văn phong', name: 'Tránh sáo ngữ', max: 5 },
+    { key: '4.1', group: 'Sáng tạo & Thể loại', name: 'Độ sáng tạo & Tránh lối mòn', max: 10 },
+    { key: '4.2', group: 'Sáng tạo & Thể loại', name: 'Đặc trưng thể loại', max: 5 },
+    { key: '4.3', group: 'Sáng tạo & Thể loại', name: 'Sức cuốn hút', max: 5 },
+    { key: '5.1', group: 'Tuân thủ & Hoàn thiện', name: 'Mức độ hoàn thiện bản thảo', max: 5 },
+    { key: '5.2', group: 'Tuân thủ & Hoàn thiện', name: 'Tuân thủ định dạng', max: 5 },
 ];
 
 const MOCK_FEEDBACKS: Record<string, string> = {
@@ -361,15 +360,21 @@ function AnalysisContent() {
     const [loadingProjects, setLoadingProjects] = useState(true);
     const [analyzing, setAnalyzing] = useState(false);
     const [loadingReport, setLoadingReport] = useState(false);
+    const [loadingHistoryReport, setLoadingHistoryReport] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({});
+    const [elapsed, setElapsed] = useState(0);
+    const [subscription, setSubscription] = useState<UserSubscription | null>(null);
+    const [activeReportId, setActiveReportId] = useState<string | null>(null);
+    const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    // Load projects
+    // Load projects + subscription
     useEffect(() => {
         projectService.getProjects()
             .then(data => { setProjects(data); if (data.length > 0) setSelectedId(data[0].id); })
             .catch(() => setError('Không thể tải danh sách dự án.'))
             .finally(() => setLoadingProjects(false));
+        subscriptionService.getMySubscription().then(setSubscription).catch(() => {});
     }, []);
 
     // Load latest report + history when project changes
@@ -378,12 +383,14 @@ function AnalysisContent() {
         setReport(null);
         setHistory([]);
         setError(null);
+        setActiveReportId(null);
         setLoadingReport(true);
         Promise.all([
             reportService.getLatest(selectedId).catch(() => null),
             reportService.getAll(selectedId).catch(() => []),
         ]).then(([latest, all]) => {
             setReport(latest);
+            setActiveReportId(latest?.id ?? null);
             setHistory(all);
         }).finally(() => setLoadingReport(false));
     }, [selectedId]);
@@ -391,18 +398,42 @@ function AnalysisContent() {
     const handleAnalyze = async () => {
         if (!selectedId) return;
         setAnalyzing(true);
+        setElapsed(0);
         setError(null);
+        elapsedRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
         try {
             const result = await reportService.analyze(selectedId);
             setReport(result);
-            // Refresh history
+            setActiveReportId(result.id);
             const all = await reportService.getAll(selectedId).catch(() => []);
             setHistory(all);
             setExpandedGroups({});
+            // Refresh subscription usage
+            subscriptionService.getMySubscription().then(setSubscription).catch(() => {});
         } catch (e: any) {
             setError(e?.response?.data?.message || 'Phân tích thất bại. Vui lòng thử lại.');
         } finally {
             setAnalyzing(false);
+            if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null; }
+        }
+    };
+
+    const handleLoadHistory = async (h: ProjectReportSummary) => {
+        if (h.id === activeReportId || loadingHistoryReport) return;
+        setLoadingHistoryReport(h.id);
+        setError(null);
+        try {
+            const full = await reportService.getById(selectedId, h.id);
+            if (full) {
+                setReport(full);
+                setActiveReportId(full.id);
+                setExpandedGroups({});
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        } catch {
+            setError('Không thể tải báo cáo này.');
+        } finally {
+            setLoadingHistoryReport(null);
         }
     };
 
@@ -425,7 +456,7 @@ function AnalysisContent() {
                 {/* Header */}
                 <div className="flex items-center gap-4 mb-8">
                     <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg shrink-0"
-                        style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+                        style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}>
                         <BarChart2 className="w-6 h-6 text-white" />
                     </div>
                     <div>
@@ -435,44 +466,71 @@ function AnalysisContent() {
                 </div>
 
                 {/* Project selector + Analyze button */}
-                <div className="rounded-2xl p-5 mb-6 flex flex-col sm:flex-row gap-4 items-end"
+                <div className="rounded-2xl p-5 mb-6 flex flex-col gap-4"
                     style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-                    <div className="flex-1 w-full">
-                        <label className="block text-[var(--text-secondary)] text-xs font-semibold mb-1.5 uppercase tracking-wider">
-                            Chọn dự án
-                        </label>
-                        {loadingProjects ? (
-                            <div className="h-10 rounded-xl animate-pulse" style={{ background: 'var(--bg-hover)' }} />
-                        ) : (
-                            <select
-                                value={selectedId}
-                                onChange={e => setSelectedId(e.target.value)}
-                                className="w-full h-10 px-3 rounded-xl text-sm text-[var(--text-primary)] outline-none"
-                                style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
-                                {projects.length === 0 && <option value="">— Chưa có dự án —</option>}
-                                {projects.map(p => (
-                                    <option key={p.id} value={p.id}>{p.title}</option>
-                                ))}
-                            </select>
-                        )}
+                    <div className="flex flex-col sm:flex-row gap-4 items-end">
+                        <div className="flex-1 w-full">
+                            <label className="block text-[var(--text-secondary)] text-xs font-semibold mb-1.5 uppercase tracking-wider">
+                                Chọn dự án
+                            </label>
+                            {loadingProjects ? (
+                                <div className="h-10 rounded-xl animate-pulse" style={{ background: 'var(--bg-hover)' }} />
+                            ) : (
+                                <select
+                                    value={selectedId}
+                                    onChange={e => setSelectedId(e.target.value)}
+                                    className="w-full h-10 px-3 rounded-xl text-sm text-[var(--text-primary)] outline-none"
+                                    style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
+                                    {projects.length === 0 && <option value="">— Chưa có dự án —</option>}
+                                    {projects.map(p => (
+                                        <option key={p.id} value={p.id}>{p.title}</option>
+                                    ))}
+                                </select>
+                            )}
+                        </div>
+                        <button
+                            onClick={handleDemo}
+                            className="h-10 px-5 rounded-xl font-semibold text-sm flex items-center gap-2 shrink-0 transition-opacity"
+                            style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                            <Sparkles className="w-4 h-4" /> Demo UI
+                        </button>
+                        <button
+                            onClick={handleAnalyze}
+                            disabled={!selectedId || analyzing || loadingProjects}
+                            className="h-10 px-6 rounded-xl font-semibold text-sm text-white flex items-center gap-2 shrink-0 transition-opacity disabled:opacity-50"
+                            style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}>
+                            {analyzing ? (
+                                <><Loader2 className="w-4 h-4 animate-spin" /> Đang phân tích...</>
+                            ) : (
+                                <><Sparkles className="w-4 h-4" /> Phân tích ngay</>
+                            )}
+                        </button>
                     </div>
-                    <button
-                        onClick={handleDemo}
-                        className="h-10 px-5 rounded-xl font-semibold text-sm flex items-center gap-2 shrink-0 transition-opacity"
-                        style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
-                        <Sparkles className="w-4 h-4" /> Demo UI
-                    </button>
-                    <button
-                        onClick={handleAnalyze}
-                        disabled={!selectedId || analyzing || loadingProjects}
-                        className="h-10 px-6 rounded-xl font-semibold text-sm text-white flex items-center gap-2 shrink-0 transition-opacity disabled:opacity-50"
-                        style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
-                        {analyzing ? (
-                            <><Loader2 className="w-4 h-4 animate-spin" /> Đang phân tích...</>
-                        ) : (
-                            <><Sparkles className="w-4 h-4" /> Phân tích ngay</>
-                        )}
-                    </button>
+                    {/* Subscription usage bar */}
+                    {subscription && (
+                        <div className="pt-2" style={{ borderTop: '1px solid var(--border-color)' }}>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                                    <CreditCard className="w-3.5 h-3.5" />
+                                    <span>{subscription.planName}</span>
+                                </div>
+                                <span className="text-xs font-semibold" style={{
+                                    color: subscription.usedAnalysisCount >= subscription.maxAnalysisCount ? '#ef4444' : '#f5a623'
+                                }}>
+                                    {subscription.usedAnalysisCount} / {subscription.maxAnalysisCount} lần phân tích
+                                </span>
+                            </div>
+                            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-hover)' }}>
+                                <div className="h-full rounded-full transition-all duration-500"
+                                    style={{
+                                        width: `${Math.min((subscription.usedAnalysisCount / subscription.maxAnalysisCount) * 100, 100)}%`,
+                                        background: subscription.usedAnalysisCount >= subscription.maxAnalysisCount
+                                            ? 'linear-gradient(90deg,#ef4444,#f87171)'
+                                            : 'linear-gradient(90deg,#f5a623,#f97316)',
+                                    }} />
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Error */}
@@ -481,6 +539,31 @@ function AnalysisContent() {
                         style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}>
                         <AlertCircle className="w-4 h-4 shrink-0" />
                         {error}
+                    </div>
+                )}
+
+                {/* Analyzing progress */}
+                {analyzing && (
+                    <div className="rounded-2xl p-5 mb-5 overflow-hidden"
+                        style={{ background: 'var(--bg-surface)', border: '1px solid rgba(245,166,35,0.3)' }}>
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                                style={{ background: 'rgba(245,166,35,0.12)' }}>
+                                <BrainCircuit className="w-4 h-4 text-amber-400" />
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-[var(--text-primary)] font-semibold text-sm">AI đang phân tích toàn bộ dự án...</p>
+                                <p className="text-[var(--text-secondary)] text-xs mt-0.5">
+                                    Có thể mất 60–120 giây · Đã chờ: <span className="text-amber-400 font-semibold">{elapsed}s</span>
+                                </p>
+                            </div>
+                        </div>
+                        {/* Indeterminate progress bar */}
+                        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-hover)' }}>
+                            <div className="h-full rounded-full animate-[analyzing_1.8s_ease-in-out_infinite]"
+                                style={{ background: 'linear-gradient(90deg,transparent,#f5a623,transparent)', width: '40%' }} />
+                        </div>
+                        <style>{`@keyframes analyzing{0%{transform:translateX(-120%)}100%{transform:translateX(350%)}}`}</style>
                     </div>
                 )}
 
@@ -566,11 +649,21 @@ function AnalysisContent() {
                         <div className="divide-y divide-[var(--border-color)]">
                             {history.map(h => {
                                 const c = classifyColor(h.classification);
+                                const isActive = h.id === activeReportId;
+                                const isLoading = loadingHistoryReport === h.id;
                                 return (
-                                    <div key={h.id} className="px-5 py-3.5 flex items-center gap-3">
+                                    <button key={h.id} onClick={() => handleLoadHistory(h)}
+                                        className="w-full px-5 py-3.5 flex items-center gap-3 text-left transition-colors"
+                                        style={{
+                                            background: isActive ? 'rgba(245,166,35,0.06)' : undefined,
+                                            borderLeft: isActive ? '3px solid #f5a623' : '3px solid transparent',
+                                            cursor: isActive ? 'default' : 'pointer',
+                                        }}>
                                         <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm"
                                             style={{ background: c.bg, color: c.text }}>
-                                            {h.totalScore.toFixed(0)}
+                                            {isLoading
+                                                ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                : h.totalScore.toFixed(0)}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
@@ -587,12 +680,18 @@ function AnalysisContent() {
                                                         Mẫu
                                                     </span>
                                                 )}
+                                                {isActive && (
+                                                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                                                        style={{ background: 'rgba(245,166,35,0.15)', color: '#f5a623' }}>
+                                                        Đang xem
+                                                    </span>
+                                                )}
                                             </div>
                                             <p className="text-[var(--text-secondary)] text-xs mt-0.5">
                                                 {new Date(h.createdAt).toLocaleString('vi-VN')}
                                             </p>
                                         </div>
-                                    </div>
+                                    </button>
                                 );
                             })}
                         </div>
@@ -604,8 +703,8 @@ function AnalysisContent() {
                     <div className="rounded-2xl p-10 text-center"
                         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
                         <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
-                            style={{ background: 'rgba(99,102,241,0.08)' }}>
-                            <BrainCircuit className="w-8 h-8" style={{ color: '#6366f1' }} />
+                            style={{ background: 'rgba(245,166,35,0.08)' }}>
+                            <BrainCircuit className="w-8 h-8" style={{ color: '#f5a623' }} />
                         </div>
                         <p className="text-[var(--text-primary)] font-semibold mb-2">Chưa có báo cáo</p>
                         <p className="text-[var(--text-secondary)] text-sm mb-5">
@@ -622,9 +721,18 @@ function AnalysisContent() {
 }
 
 export default function AnalysisPage() {
+    const navigate = useNavigate();
     return (
         <MainLayout pageTitle="Phân tích AI">
-            {(_userInfo: UserInfo) => <AnalysisContent />}
+            {(userInfo: UserInfo) => {
+                if (userInfo.role === 'Admin') {
+                    setTimeout(() => navigate('/home'), 0);
+                    return null;
+                }
+                return <AnalysisContent />;
+            }}
         </MainLayout>
     );
 }
+
+

@@ -117,6 +117,23 @@ namespace Api.Controllers
             catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
+
+        /// <summary>Lấy report theo ID.</summary>
+        [HttpGet("{projectId:guid}/reports/{reportId:guid}")]
+        public async Task<IActionResult> GetReportById(Guid projectId, Guid reportId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var result = await _reportService.GetByIdAsync(reportId, projectId, userId.Value);
+                if (result == null) return NotFound(new { Message = "Không tìm thấy báo cáo." });
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
     }
 
     public class ChatRequest

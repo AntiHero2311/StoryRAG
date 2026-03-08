@@ -63,6 +63,9 @@ namespace Service.Implementations
                 if (!string.IsNullOrWhiteSpace(chunk))
                     chunks.Add(chunk);
 
+                // Dừng sau chunk cuối — tránh tạo overlap tail (150 chunk rác kích thước giảm dần)
+                if (end >= length) break;
+
                 // Di chuyển start, trừ đi overlap
                 start = Math.Max(start + 1, end - overlap);
             }

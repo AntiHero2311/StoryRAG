@@ -17,7 +17,6 @@ namespace Service.Implementations
         private readonly IConfiguration _config;
         private readonly IEmbeddingService _embeddingService;
         private readonly ChatClient _chatClient;
-        private readonly ChatClient? _fallbackChatClient;
 
         // Số chunk context tối đa lấy cho mỗi câu hỏi
         private const int TopK = 5;
@@ -30,37 +29,17 @@ namespace Service.Implementations
 
             var baseUrl = config["AI:BaseUrl"] ?? "http://localhost:1234/v1";
             var apiKey = config["AI:ApiKey"] ?? "lm-studio";
-            var model = config["AI:ChatModel"] ?? "llama-3.2-3b-instruct";
+            var model = config["AI:ChatModel"] ?? "qwen/qwen3.5-9b";
 
             var options = new OpenAIClientOptions { Endpoint = new Uri(baseUrl) };
-            _chatClient = new ChatClient(model, new ApiKeyCredential(apiKey), options);
-
-            var fallbackApiKey = config["AI:Fallback:ApiKey"];
-            if (!string.IsNullOrWhiteSpace(fallbackApiKey))
-            {
-                var fbUrl = config["AI:Fallback:BaseUrl"] ?? "https://generativelanguage.googleapis.com/v1beta/openai/";
-                var fbModel = config["AI:Fallback:ChatModel"] ?? "gemini-2.0-flash";
-                var fbOptions = new OpenAIClientOptions { Endpoint = new Uri(fbUrl) };
-                _fallbackChatClient = new ChatClient(fbModel, new ApiKeyCredential(fallbackApiKey), fbOptions);
-            }
+            var openAiClient = new OpenAIClient(new ApiKeyCredential(apiKey), options);
+            _chatClient = openAiClient.GetChatClient(model);
         }
-
-        private static bool IsConnectionError(Exception ex) =>
-            ex is HttpRequestException or System.Net.Sockets.SocketException ||
-            ex.InnerException is HttpRequestException or System.Net.Sockets.SocketException;
 
         private async Task<OpenAI.Chat.ChatCompletion> CompleteChatWithFallbackAsync(IEnumerable<ChatMessage> messages)
         {
-            try
-            {
-                var result = await _chatClient.CompleteChatAsync(messages);
-                return result.Value;
-            }
-            catch (Exception ex) when (_fallbackChatClient != null && IsConnectionError(ex))
-            {
-                var result = await _fallbackChatClient.CompleteChatAsync(messages);
-                return result.Value;
-            }
+            var result = await _chatClient.CompleteChatAsync(messages);
+            return result.Value;
         }
 
         public async Task<AiChatResult> ChatAsync(Guid projectId, string question, Guid userId)
@@ -113,7 +92,8 @@ namespace Service.Implementations
             var messages = new List<ChatMessage>
             {
                 ChatMessage.CreateSystemMessage(systemPrompt),
-                ChatMessage.CreateUserMessage(question),
+                // Append /no_think to disable Qwen3 thinking mode (avoids 30-120s reasoning overhead)
+                ChatMessage.CreateUserMessage(question + " /no_think"),
             };
 
             var response = await CompleteChatWithFallbackAsync(messages);
@@ -154,10 +134,11 @@ namespace Service.Implementations
                 {context}
                 
                 Hướng dẫn:
-                - Chỉ trả lời dựa trên nội dung truyện được cung cấp ở trên.
-                - Nếu không tìm thấy thông tin trong context, hãy nói rõ "Tôi không tìm thấy thông tin này trong nội dung truyện."
+                - Trả lời dựa trên nội dung truyện được cung cấp ở trên.
+                - Được phép suy luận và tổng hợp thông tin từ các đoạn để đưa ra câu trả lời hợp lý.
+                - Nếu thực sự không có thông tin liên quan trong context, hãy nói rõ "Nội dung được cung cấp chưa đề cập đến thông tin này."
                 - Trả lời bằng tiếng Việt, súc tích và chính xác.
-                - Không bịa đặt thông tin không có trong context.
+                - Không bịa đặt thông tin không có căn cứ trong context.
                 """;
         }
     }

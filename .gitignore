@@ -419,6 +419,11 @@ FodyWeavers.xsd
 
 # --- Custom Ignores for StoryRAG ---
 
+# Copilot CLI local plan log (không commit)
+planCopilotCliPlan.md
+
+
+
 # Ignore Backend configuration files to protect MasterKey & DB Password
 **/appsettings.json
 **/appsettings.*.json

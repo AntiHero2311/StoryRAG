@@ -46,4 +46,7 @@ export const reportService = {
 
     getAll: (projectId: string) =>
         api.get<ProjectReportSummary[]>(`/ai/${projectId}/reports`).then(r => r.data),
+
+    getById: (projectId: string, reportId: string) =>
+        api.get<ProjectReportResponse>(`/ai/${projectId}/reports/${reportId}`).then(r => r.data),
 };

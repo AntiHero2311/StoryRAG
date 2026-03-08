@@ -660,11 +660,13 @@ export default function ProjectsPage() {
 
     return (
         <MainLayout pageTitle="Dự án của tôi">
-            {() => (
-                <ProjectsContent
-                    onNavigate={navigate}
-                />
-            )}
+            {(userInfo) => {
+                if (userInfo.role === 'Admin') {
+                    setTimeout(() => navigate('/home'), 0);
+                    return null;
+                }
+                return <ProjectsContent onNavigate={navigate} />;
+            }}
         </MainLayout>
     );
 }

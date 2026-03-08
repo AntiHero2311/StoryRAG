@@ -20,10 +20,9 @@ namespace Service.Implementations
         private readonly IConfiguration _config;
         private readonly IEmbeddingService _embeddingService;
         private readonly ChatClient _chatClient;
-        private readonly ChatClient? _fallbackChatClient;
-        private const int TopK = 10;
+        private const int TopK = 20;
 
-        // ── Rubric definition ─────────────────────────────────────────────────────
+        // ── Rubric definition─────────────────────────────────────────────────────
         private static readonly List<(string Key, string Group, string Name, decimal Max)> Rubric = new()
         {
             ("1.1", "Cốt truyện & Mạch lạc",      "Tính nhất quán nội bộ",          10),
@@ -50,36 +49,16 @@ namespace Service.Implementations
 
             var baseUrl = config["AI:BaseUrl"] ?? "http://localhost:1234/v1";
             var apiKey = config["AI:ApiKey"] ?? "lm-studio";
-            var model = config["AI:ChatModel"] ?? "llama-3.2-3b-instruct";
+            var model = config["AI:ChatModel"] ?? "qwen/qwen3.5-9b";
             var options = new OpenAIClientOptions { Endpoint = new Uri(baseUrl) };
-            _chatClient = new ChatClient(model, new ApiKeyCredential(apiKey), options);
-
-            var fallbackApiKey = config["AI:Fallback:ApiKey"];
-            if (!string.IsNullOrWhiteSpace(fallbackApiKey))
-            {
-                var fbUrl = config["AI:Fallback:BaseUrl"] ?? "https://generativelanguage.googleapis.com/v1beta/openai/";
-                var fbModel = config["AI:Fallback:ChatModel"] ?? "gemini-2.0-flash";
-                var fbOptions = new OpenAIClientOptions { Endpoint = new Uri(fbUrl) };
-                _fallbackChatClient = new ChatClient(fbModel, new ApiKeyCredential(fallbackApiKey), fbOptions);
-            }
+            var openAiClient = new OpenAIClient(new ApiKeyCredential(apiKey), options);
+            _chatClient = openAiClient.GetChatClient(model);
         }
-
-        private static bool IsConnectionError(Exception ex) =>
-            ex is HttpRequestException or System.Net.Sockets.SocketException ||
-            ex.InnerException is HttpRequestException or System.Net.Sockets.SocketException;
 
         private async Task<OpenAI.Chat.ChatCompletion> CompleteChatWithFallbackAsync(IEnumerable<ChatMessage> messages)
         {
-            try
-            {
-                var result = await _chatClient.CompleteChatAsync(messages);
-                return result.Value;
-            }
-            catch (Exception ex) when (_fallbackChatClient != null && IsConnectionError(ex))
-            {
-                var result = await _fallbackChatClient.CompleteChatAsync(messages);
-                return result.Value;
-            }
+            var result = await _chatClient.CompleteChatAsync(messages);
+            return result.Value;
         }
 
         public async Task<ProjectReportResponse> AnalyzeAsync(Guid projectId, Guid userId)
@@ -199,6 +178,24 @@ namespace Service.Implementations
                 .ToListAsync();
         }
 
+        public async Task<ProjectReportResponse?> GetByIdAsync(Guid reportId, Guid projectId, Guid userId)
+        {
+            await VerifyOwnershipAsync(projectId, userId);
+
+            var report = await _context.ProjectReports
+                .Include(r => r.Project)
+                .FirstOrDefaultAsync(r => r.Id == reportId && r.ProjectId == projectId && r.UserId == userId);
+
+            if (report == null) return null;
+
+            var user = await _context.Users.FindAsync(userId)!;
+            var rawDek = EncryptionHelper.DecryptWithMasterKey(user!.DataEncryptionKey!, _config["Security:MasterKey"]!);
+            var projectTitle = EncryptionHelper.DecryptWithMasterKey(report.Project.Title, rawDek);
+
+            var criteria = JsonSerializer.Deserialize<List<CriterionResult>>(report.CriteriaJson) ?? new();
+            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, criteria, report.CreatedAt);
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────────
 
         private async Task VerifyOwnershipAsync(Guid projectId, Guid userId)
@@ -211,9 +208,9 @@ namespace Service.Implementations
 
         private async Task<List<CriterionResult>> EvaluateWithAiAsync(string projectTitle, List<string> decryptedChunks)
         {
-            // Use first 20 chunks as context (avoid token limit)
+            // Use first TopK chunks as context (avoid token limit)
             var contextText = string.Join("\n\n---\n\n",
-                decryptedChunks.Take(20).Select((c, i) => $"[Đoạn {i + 1}]\n{c}"));
+                decryptedChunks.Take(TopK).Select((c, i) => $"[Đoạn {i + 1}]\n{c}"));
 
             var jsonTemplate = @"[
   {""key"":""1.1"",""score"":<số>,""maxScore"":10,""feedback"":""<nhận xét tiếng Việt>""},

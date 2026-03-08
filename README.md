@@ -63,7 +63,7 @@ Viết chương → Chunking → Embedding (vector) → Lưu pgvector
 1. **Chunking** — `ChunkingService` cắt text thành chunks (mặc định 1500 ký tự, overlap 150), ưu tiên cắt tại ranh giới đoạn văn → câu → khoảng trắng.
 2. **Embedding** — `EmbeddingService` gọi model embedding (mặc định `nomic-embed-text`) tạo vector cho từng chunk.
 3. **Vector Search** — pgvector tìm `TopK = 5` chunks gần nhất theo cosine distance.
-4. **AI Chat** — `AiChatService` gọi LLM (mặc định `llama-3.2-3b-instruct`) với RAG context → trả lời câu hỏi về nội dung truyện bằng tiếng Việt.
+4. **AI Chat** — `AiChatService` gọi LLM (mặc định `qwen/qwen3.5-9b`) với RAG context → trả lời câu hỏi về nội dung truyện bằng tiếng Việt.
 5. **AI Scoring** — `ProjectReportService` đánh giá bản thảo theo **rubric 100 điểm** (14 tiêu chí, 5 nhóm). Tự động fallback sang dữ liệu mẫu nếu LLM chưa sẵn sàng.
 
 ### Bảo mật nội dung
@@ -112,7 +112,7 @@ SubscriptionPlans
     "BaseUrl": "http://localhost:1234/v1",
     "ApiKey": "lm-studio",
     "EmbeddingModel": "nomic-embed-text",
-    "ChatModel": "llama-3.2-3b-instruct"
+    "ChatModel": "qwen/qwen3.5-9b"
   },
   "Security": {
     "MasterKey": "..."
@@ -210,7 +210,7 @@ Tính năng **Phân tích AI** đánh giá bản thảo theo 5 nhóm tiêu chí:
 
 ## 🚀 Khởi chạy toàn bộ
 
-1. Cài đặt [LM Studio](https://lmstudio.ai), tải model embedding (`nomic-embed-text`) và chat (`llama-3.2-3b-instruct`), bật local server tại `http://localhost:1234`.
+1. Cài đặt [LM Studio](https://lmstudio.ai), tải model embedding (`nomic-embed-text`) và chat (`qwen/qwen3.5-9b`), bật local server tại `http://localhost:1234`.
 2. Tạo database PostgreSQL, bật extension `vector`.
 3. Cấu hình `Backend/Api/appsettings.Development.json`.
 4. Chạy migration: `dotnet ef database update --project Repository --startup-project Api`

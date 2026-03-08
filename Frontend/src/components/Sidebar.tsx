@@ -16,8 +16,6 @@ const NAV_AUTHOR = [
 
 const NAV_STAFF = [
     { key: 'dashboard', label: 'Trang chủ', icon: LayoutDashboard, path: '/home' },
-    { key: 'projects', label: 'Dự án', icon: FolderOpen, path: '/projects' },
-    { key: 'analysis', label: 'Phân tích', icon: BarChart2, path: '/analysis' },
     { key: 'subscription', label: 'Gói dịch vụ', icon: CreditCard, path: '/subscription' },
     { key: 'users', label: 'Người dùng', icon: Users, path: '/admin' },
     { key: 'profile', label: 'Hồ sơ', icon: User, path: '/profile' },
@@ -26,8 +24,6 @@ const NAV_STAFF = [
 
 const NAV_ADMIN = [
     { key: 'dashboard', label: 'Trang chủ', icon: LayoutDashboard, path: '/home' },
-    { key: 'projects', label: 'Dự án', icon: FolderOpen, path: '/projects' },
-    { key: 'analysis', label: 'Phân tích', icon: BarChart2, path: '/analysis' },
     { key: 'users', label: 'Người dùng', icon: Users, path: '/admin' },
     { key: 'sub-admin', label: 'Quản lý Plans', icon: CreditCard, path: '/admin/subscription' },
     { key: 'profile', label: 'Hồ sơ', icon: User, path: '/profile' },
