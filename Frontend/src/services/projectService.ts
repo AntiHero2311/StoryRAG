@@ -49,4 +49,7 @@ export const projectService = {
 
     deleteProject: (id: string) =>
         api.delete(`/project/${id}`).then(r => r.data),
+
+    getStats: () =>
+        api.get<{ totalChapters: number; totalAnalysesUsed: number; totalChatMessages: number }>('/project/stats').then(r => r.data),
 };

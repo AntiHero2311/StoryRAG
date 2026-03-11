@@ -69,6 +69,8 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // Add Service Registration
+builder.Services.AddRequestTimeouts(options =>
+    options.AddPolicy("LongRunning", TimeSpan.FromMinutes(10)));
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
@@ -82,6 +84,9 @@ builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
 builder.Services.AddScoped<IAiChatService, AiChatService>();
 builder.Services.AddScoped<IProjectReportService, ProjectReportService>();
 builder.Services.AddScoped<IUserSettingsService, UserSettingsService>();
+builder.Services.AddScoped<IWorldbuildingService, WorldbuildingService>();
+builder.Services.AddScoped<ICharacterService, CharacterService>();
+builder.Services.AddScoped<IAiRewriteService, AiRewriteService>();
 
 // Add Authentication Configuration
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -110,6 +115,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseRequestTimeouts();
 
 app.UseCors("AllowFrontend");
 

@@ -8,7 +8,7 @@ export const api = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 120000,
+    timeout: 600000,
 });
 
 // Interceptor: Tự động đính kèm Token vào Header nếu có

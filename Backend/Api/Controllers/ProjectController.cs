@@ -122,6 +122,26 @@ namespace Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Thống kê tổng hợp của người dùng (số chương, phân tích, chat).
+        /// </summary>
+        [HttpGet("stats")]
+        public async Task<IActionResult> GetUserStats()
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var stats = await _projectService.GetUserStatsAsync(userId.Value);
+                return Ok(stats);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
         // ── Helper ───────────────────────────────────────────────────────────────
 
         private Guid? GetUserId()

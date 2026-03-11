@@ -82,10 +82,11 @@ function DonutChart({ score, classification }: { score: number; classification: 
 
 // ─── SVG Radar Chart ──────────────────────────────────────────────────────────
 function RadarChart({ groups }: { groups: ProjectReportResponse['groups'] }) {
-    const size = 200;
+    const size = 220;
     const cx = size / 2;
     const cy = size / 2;
-    const maxR = 72;
+    const maxR = 80;
+    const labelR = maxR + 26;
     const n = groups.length;
     const [animated, setAnimated] = useState(false);
 
@@ -96,7 +97,6 @@ function RadarChart({ groups }: { groups: ProjectReportResponse['groups'] }) {
 
     const angleOf = (i: number) => (2 * Math.PI * i) / n - Math.PI / 2;
 
-    // Compute polygon points
     const bgPoints = Array.from({ length: n }, (_, i) => {
         const a = angleOf(i);
         return `${cx + maxR * Math.cos(a)},${cy + maxR * Math.sin(a)}`;
@@ -109,12 +109,14 @@ function RadarChart({ groups }: { groups: ProjectReportResponse['groups'] }) {
         return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`;
     }).join(' ');
 
-    // Axis tick rings
     const ticks = [0.25, 0.5, 0.75, 1];
+    const vbPad = 28;
+    const vbW = size + vbPad * 2;
+    const vbH = size + vbPad * 2;
 
     return (
         <div className="flex flex-col items-center gap-2">
-            <svg width={size} height={size + 10} viewBox={`0 0 ${size} ${size + 10}`}>
+            <svg width={vbW} height={vbH} viewBox={`${-vbPad} ${-vbPad} ${vbW} ${vbH}`}>
                 {/* Tick rings */}
                 {ticks.map(t => (
                     <polygon key={t}
@@ -164,18 +166,15 @@ function RadarChart({ groups }: { groups: ProjectReportResponse['groups'] }) {
                 {/* Labels */}
                 {groups.map((g, i) => {
                     const a = angleOf(i);
-                    const labelR = maxR + 18;
                     const lx = cx + labelR * Math.cos(a);
                     const ly = cy + labelR * Math.sin(a);
-                    const anchor = lx < cx - 4 ? 'end' : lx > cx + 4 ? 'start' : 'middle';
-                    // Shorten label
-                    const short = g.name.split(' ')[0];
+                    const anchor = lx < cx - 5 ? 'end' : lx > cx + 5 ? 'start' : 'middle';
+                    const words = g.name.split(' ').slice(0, 2);
                     return (
-                        <text key={i} x={lx} y={ly + 4}
-                            textAnchor={anchor}
-                            fontSize="9" fontWeight="600"
-                            fill="var(--text-secondary)">
-                            {short}
+                        <text key={i} textAnchor={anchor} fontSize="9.5" fontWeight="600" fill="var(--text-secondary)">
+                            {words.map((w, wi) => (
+                                <tspan key={wi} x={lx} dy={wi === 0 ? ly + 4 : '1.2em'}>{w}</tspan>
+                            ))}
                         </text>
                     );
                 })}
@@ -238,117 +237,78 @@ function GroupCard({ group, idx, expanded, onToggle }: {
             </button>
 
             {expanded && (
-                <div className="px-5 pb-5 flex flex-col gap-3" style={{ borderTop: '1px solid var(--border-color)' }}>
-                    {group.criteria.map((c, ci) => {
-                        const cpct = Math.round((c.score / c.maxScore) * 100);
-                        return (
-                            <div key={c.key} className="pt-3">
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-                                            style={{ background: `${color}18`, color }}>
-                                            {c.key}
-                                        </span>
-                                        <span className="text-[var(--text-primary)] text-sm font-medium">{c.criterionName}</span>
+                    <div className="px-5 pb-5 flex flex-col gap-4" style={{ borderTop: '1px solid var(--border-color)' }}>
+                        {group.criteria.map((c, ci) => {
+                            const cpct = Math.round((c.score / c.maxScore) * 100);
+                            const hasErrors = c.errors && c.errors.length > 0;
+                            const hasSuggestions = c.suggestions && c.suggestions.length > 0;
+                            return (
+                                <div key={c.key} className="pt-4" style={{ borderTop: ci > 0 ? '1px solid var(--border-color)' : undefined }}>
+                                    {/* Header: key + name + score */}
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+                                                style={{ background: `${color}18`, color }}>
+                                                {c.key}
+                                            </span>
+                                            <span className="text-[var(--text-primary)] text-sm font-semibold">{c.criterionName}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                            <span className="text-xs font-semibold" style={{ color: `${color}99` }}>{cpct}%</span>
+                                            <span className="text-sm font-bold" style={{ color }}>
+                                                {c.score.toFixed(1)}<span className="text-[var(--text-secondary)] font-normal text-xs">/{c.maxScore}</span>
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                                        <span className="text-xs font-semibold" style={{ color: `${color}99` }}>{cpct}%</span>
-                                        <span className="text-sm font-bold" style={{ color }}>
-                                            {c.score.toFixed(1)}<span className="text-[var(--text-secondary)] font-normal text-xs">/{c.maxScore}</span>
-                                        </span>
-                                    </div>
+
+                                    {/* Score bar */}
+                                    <ScoreBar score={c.score} max={c.maxScore} color={color} delay={ci * 50} />
+
+                                    {/* Feedback — general assessment */}
+                                    {c.feedback && (
+                                        <p className="text-[var(--text-secondary)] text-xs leading-relaxed mt-2.5 pl-0.5">
+                                            {c.feedback}
+                                        </p>
+                                    )}
+
+                                    {/* Errors */}
+                                    {hasErrors && (
+                                        <div className="mt-3 rounded-xl p-3 flex flex-col gap-1.5"
+                                            style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)' }}>
+                                            <p className="text-xs font-bold mb-0.5 flex items-center gap-1.5" style={{ color: '#ef4444' }}>
+                                                <span>⚠</span> Vấn đề phát hiện
+                                            </p>
+                                            {c.errors.map((err, ei) => (
+                                                <div key={ei} className="flex items-start gap-2">
+                                                    <span className="text-xs mt-0.5 shrink-0" style={{ color: '#f87171' }}>•</span>
+                                                    <p className="text-xs leading-relaxed" style={{ color: '#fca5a5' }}>{err}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Suggestions */}
+                                    {hasSuggestions && (
+                                        <div className="mt-2 rounded-xl p-3 flex flex-col gap-1.5"
+                                            style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }}>
+                                            <p className="text-xs font-bold mb-0.5 flex items-center gap-1.5" style={{ color: '#10b981' }}>
+                                                <span>✓</span> Gợi ý cải thiện
+                                            </p>
+                                            {c.suggestions.map((sug, si) => (
+                                                <div key={si} className="flex items-start gap-2">
+                                                    <span className="text-xs mt-0.5 shrink-0" style={{ color: '#34d399' }}>•</span>
+                                                    <p className="text-xs leading-relaxed" style={{ color: '#6ee7b7' }}>{sug}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-                                <ScoreBar score={c.score} max={c.maxScore} color={color} delay={ci * 50} />
-                                {c.feedback && (
-                                    <p className="text-[var(--text-secondary)] text-xs leading-relaxed mt-2 pl-1">
-                                        {c.feedback}
-                                    </p>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
+                            );
+                        })}
+                    </div>
+                )}
         </div>
     );
-}
-
-// ─── Mock data generator ──────────────────────────────────────────────────────
-const RUBRIC = [
-    { key: '1.1', group: 'Cốt truyện & Mạch lạc', name: 'Tính nhất quán nội bộ', max: 10 },
-    { key: '1.2', group: 'Cốt truyện & Mạch lạc', name: 'Liên kết nhân quả & Sự kiện', max: 10 },
-    { key: '1.3', group: 'Cốt truyện & Mạch lạc', name: 'Nút thắt & Giải quyết', max: 5 },
-    { key: '2.1', group: 'Xây dựng Nhân vật', name: 'Động cơ & Hành động', max: 10 },
-    { key: '2.2', group: 'Xây dựng Nhân vật', name: 'Chiều sâu nhân vật', max: 10 },
-    { key: '2.3', group: 'Xây dựng Nhân vật', name: 'Tương tác & Đối thoại', max: 5 },
-    { key: '3.1', group: 'Ngôn từ & Văn phong', name: 'Ngữ pháp & Sự rõ ràng', max: 10 },
-    { key: '3.2', group: 'Ngôn từ & Văn phong', name: 'Đa dạng cấu trúc câu', max: 5 },
-    { key: '3.3', group: 'Ngôn từ & Văn phong', name: 'Tránh sáo ngữ', max: 5 },
-    { key: '4.1', group: 'Sáng tạo & Thể loại', name: 'Độ sáng tạo & Tránh lối mòn', max: 10 },
-    { key: '4.2', group: 'Sáng tạo & Thể loại', name: 'Đặc trưng thể loại', max: 5 },
-    { key: '4.3', group: 'Sáng tạo & Thể loại', name: 'Sức cuốn hút', max: 5 },
-    { key: '5.1', group: 'Tuân thủ & Hoàn thiện', name: 'Mức độ hoàn thiện bản thảo', max: 5 },
-    { key: '5.2', group: 'Tuân thủ & Hoàn thiện', name: 'Tuân thủ định dạng', max: 5 },
-];
-
-const MOCK_FEEDBACKS: Record<string, string> = {
-    '1.1': 'Bối cảnh và thời gian câu chuyện nhất quán tốt, tuy nhiên một số chi tiết nhỏ cần kiểm tra lại.',
-    '1.2': 'Các sự kiện liên kết logic, nhưng một số chuyển cảnh có thể mượt mà hơn.',
-    '1.3': 'Nút thắt câu chuyện rõ ràng, cách giải quyết cần thêm chiều sâu cảm xúc.',
-    '2.1': 'Động cơ nhân vật chính cần được thể hiện rõ hơn qua hành động cụ thể.',
-    '2.2': 'Nhân vật có tiềm năng phát triển đa chiều, cần khai thác thêm nội tâm.',
-    '2.3': 'Đối thoại tự nhiên, phản ánh được tính cách nhân vật khá tốt.',
-    '3.1': 'Ngữ pháp và chính tả tốt, cần chú ý một số lỗi dấu câu.',
-    '3.2': 'Cấu trúc câu còn khá đơn điệu, nên đa dạng hóa nhịp điệu văn xuôi.',
-    '3.3': 'Còn xuất hiện một số cụm từ sáo rỗng, cần thay thế bằng cách diễn đạt sáng tạo hơn.',
-    '4.1': 'Ý tưởng có điểm mới lạ, nhưng cốt truyện vẫn theo một số mô-típ quen thuộc.',
-    '4.2': 'Tác phẩm bám sát đặc trưng thể loại khá tốt.',
-    '4.3': 'Nhịp độ truyện ổn định, có thể tạo thêm điểm căng thẳng để duy trì hứng thú.',
-    '5.1': 'Bản thảo cần được phân chương rõ ràng hơn trước khi gửi biên tập.',
-    '5.2': 'Định dạng tổng thể ổn, cần kiểm tra lại thống nhất font và khoảng cách đoạn.',
-};
-
-function rand(min: number, max: number) { return Math.round((min + Math.random() * (max - min)) * 10) / 10; }
-
-function classify(score: number): ProjectReportResponse['classification'] {
-    if (score > 85) return 'Xuất sắc';
-    if (score > 70) return 'Khá';
-    if (score > 50) return 'Trung bình';
-    return 'Cần sửa lớn';
-}
-
-function generateMockReport(title: string): ProjectReportResponse {
-    const criteria = RUBRIC.map(r => ({
-        key: r.key,
-        groupName: r.group,
-        criterionName: r.name,
-        score: rand(r.max * 0.45, r.max * 0.95),
-        maxScore: r.max,
-        feedback: MOCK_FEEDBACKS[r.key] ?? '',
-    }));
-
-    const groupNames = [...new Set(RUBRIC.map(r => r.group))];
-    const groups = groupNames.map(name => {
-        const gc = criteria.filter(c => c.groupName === name);
-        return {
-            name,
-            score: Math.round(gc.reduce((s, c) => s + c.score, 0) * 10) / 10,
-            maxScore: gc.reduce((s, c) => s + c.maxScore, 0),
-            criteria: gc,
-        };
-    });
-
-    const total = Math.round(groups.reduce((s, g) => s + g.score, 0) * 10) / 10;
-    return {
-        id: crypto.randomUUID(),
-        projectId: 'demo',
-        projectTitle: title || 'Demo Project',
-        status: 'MockData',
-        totalScore: total,
-        classification: classify(total),
-        groups,
-        createdAt: new Date().toISOString(),
-    };
 }
 
 // ─── Main content ─────────────────────────────────────────────────────────────
@@ -437,13 +397,6 @@ function AnalysisContent() {
         }
     };
 
-    const handleDemo = () => {
-        const title = projects.find(p => p.id === selectedId)?.title ?? 'Demo Project';
-        setReport(generateMockReport(title));
-        setError(null);
-        setExpandedGroups({});
-    };
-
     const toggleGroup = (idx: number) =>
         setExpandedGroups(prev => ({ ...prev, [idx]: !prev[idx] }));
 
@@ -451,7 +404,7 @@ function AnalysisContent() {
 
     return (
         <div className="flex-1 overflow-y-auto p-6 md:p-10">
-            <div className="max-w-3xl mx-auto">
+            <div className="max-w-7xl mx-auto">
 
                 {/* Header */}
                 <div className="flex items-center gap-4 mb-8">
@@ -488,12 +441,6 @@ function AnalysisContent() {
                                 </select>
                             )}
                         </div>
-                        <button
-                            onClick={handleDemo}
-                            className="h-10 px-5 rounded-xl font-semibold text-sm flex items-center gap-2 shrink-0 transition-opacity"
-                            style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
-                            <Sparkles className="w-4 h-4" /> Demo UI
-                        </button>
                         <button
                             onClick={handleAnalyze}
                             disabled={!selectedId || analyzing || loadingProjects}
@@ -533,188 +480,192 @@ function AnalysisContent() {
                     )}
                 </div>
 
-                {/* Error */}
-                {error && (
-                    <div className="flex items-center gap-3 p-4 rounded-2xl mb-5 text-sm"
-                        style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}>
-                        <AlertCircle className="w-4 h-4 shrink-0" />
-                        {error}
-                    </div>
-                )}
+                {/* Two-column layout: main content + history sidebar */}
+                <div className="flex flex-col xl:flex-row gap-6 items-start">
 
-                {/* Analyzing progress */}
-                {analyzing && (
-                    <div className="rounded-2xl p-5 mb-5 overflow-hidden"
-                        style={{ background: 'var(--bg-surface)', border: '1px solid rgba(245,166,35,0.3)' }}>
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-                                style={{ background: 'rgba(245,166,35,0.12)' }}>
-                                <BrainCircuit className="w-4 h-4 text-amber-400" />
+                    {/* ── Left: main report area ── */}
+                    <div className="flex-1 min-w-0">
+
+                        {/* Error */}
+                        {error && (
+                            <div className="flex items-center gap-3 p-4 rounded-2xl mb-5 text-sm"
+                                style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}>
+                                <AlertCircle className="w-4 h-4 shrink-0" />
+                                {error}
                             </div>
-                            <div className="flex-1">
-                                <p className="text-[var(--text-primary)] font-semibold text-sm">AI đang phân tích toàn bộ dự án...</p>
-                                <p className="text-[var(--text-secondary)] text-xs mt-0.5">
-                                    Có thể mất 60–120 giây · Đã chờ: <span className="text-amber-400 font-semibold">{elapsed}s</span>
-                                </p>
-                            </div>
-                        </div>
-                        {/* Indeterminate progress bar */}
-                        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-hover)' }}>
-                            <div className="h-full rounded-full animate-[analyzing_1.8s_ease-in-out_infinite]"
-                                style={{ background: 'linear-gradient(90deg,transparent,#f5a623,transparent)', width: '40%' }} />
-                        </div>
-                        <style>{`@keyframes analyzing{0%{transform:translateX(-120%)}100%{transform:translateX(350%)}}`}</style>
-                    </div>
-                )}
+                        )}
 
-                {/* Loading skeleton */}
-                {loadingReport && !report && (
-                    <div className="space-y-3">
-                        {[...Array(3)].map((_, i) => (
-                            <div key={i} className="h-20 rounded-2xl animate-pulse" style={{ background: 'var(--bg-surface)' }} />
-                        ))}
-                    </div>
-                )}
-
-                {/* Report result */}
-                {report && (
-                    <>
-                        {/* Project title + MockData warning */}
-                        <div className="flex items-center gap-2 mb-4">
-                            <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: classColors!.text }} />
-                            <span className="text-[var(--text-primary)] font-bold text-base truncate">{report.projectTitle}</span>
-                            {report.status === 'MockData' && (
-                                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ml-auto shrink-0"
-                                    style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>
-                                    <AlertCircle className="w-3 h-3" /> Dữ liệu mẫu
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Score Hero — 2 columns */}
-                        <div className="rounded-2xl mb-5 overflow-hidden"
-                            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-color)]">
-                                {/* Left: Donut */}
-                                <div className="flex flex-col items-center justify-center p-6 gap-1">
-                                    <p className="text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-3">
-                                        Tổng điểm
-                                    </p>
-                                    <DonutChart score={report.totalScore} classification={report.classification} />
-                                </div>
-                                {/* Right: Radar */}
-                                <div className="flex flex-col items-center justify-center p-6">
-                                    <p className="text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-2">
-                                        Phân bố điểm
-                                    </p>
-                                    <RadarChart groups={report.groups} />
-                                    {/* Mini legend */}
-                                    <div className="flex flex-col gap-1.5 w-full max-w-[180px] mt-2">
-                                        {report.groups.map((g, i) => (
-                                            <div key={g.name} className="flex items-center gap-2">
-                                                <div className="w-2 h-2 rounded-full shrink-0" style={{ background: groupColor(i) }} />
-                                                <span className="text-[var(--text-secondary)] text-xs truncate flex-1">{g.name}</span>
-                                                <span className="text-[var(--text-primary)] text-xs font-bold shrink-0">
-                                                    {g.score.toFixed(0)}<span className="text-[var(--text-secondary)] font-normal">/{g.maxScore}</span>
-                                                </span>
-                                            </div>
-                                        ))}
+                        {/* Analyzing progress */}
+                        {analyzing && (
+                            <div className="rounded-2xl p-5 mb-5 overflow-hidden"
+                                style={{ background: 'var(--bg-surface)', border: '1px solid rgba(245,166,35,0.3)' }}>
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                                        style={{ background: 'rgba(245,166,35,0.12)' }}>
+                                        <BrainCircuit className="w-4 h-4 text-amber-400" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-[var(--text-primary)] font-semibold text-sm">AI đang phân tích toàn bộ dự án...</p>
+                                        <p className="text-[var(--text-secondary)] text-xs mt-0.5">
+                                            Có thể mất vài phút · Đã chờ: <span className="text-amber-400 font-semibold">{elapsed}s</span>
+                                        </p>
                                     </div>
                                 </div>
+                                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-hover)' }}>
+                                    <div className="h-full rounded-full animate-[analyzing_1.8s_ease-in-out_infinite]"
+                                        style={{ background: 'linear-gradient(90deg,transparent,#f5a623,transparent)', width: '40%' }} />
+                                </div>
+                                <style>{`@keyframes analyzing{0%{transform:translateX(-120%)}100%{transform:translateX(350%)}}`}</style>
+                            </div>
+                        )}
+
+                        {/* Loading skeleton */}
+                        {loadingReport && !report && (
+                            <div className="space-y-3">
+                                {[...Array(3)].map((_, i) => (
+                                    <div key={i} className="h-20 rounded-2xl animate-pulse" style={{ background: 'var(--bg-surface)' }} />
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Report result */}
+                        {report && (
+                            <>
+                                {/* Project title + MockData warning */}
+                                <div className="flex items-center gap-2 mb-4">
+                                    <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: classColors!.text }} />
+                                    <span className="text-[var(--text-primary)] font-bold text-base truncate">{report.projectTitle}</span>
+                                    {report.status === 'MockData' && (
+                                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ml-auto shrink-0"
+                                            style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>
+                                            <AlertCircle className="w-3 h-3" /> Dữ liệu mẫu
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Score Hero — 2 columns */}
+                                <div className="rounded-2xl mb-5 overflow-hidden"
+                                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-color)]">
+                                        {/* Left: Donut */}
+                                        <div className="flex flex-col items-center justify-center p-8 gap-1">
+                                            <p className="text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-3">
+                                                Tổng điểm
+                                            </p>
+                                            <DonutChart score={report.totalScore} classification={report.classification} />
+                                        </div>
+                                        {/* Right: Radar */}
+                                        <div className="flex flex-col items-center justify-center p-6">
+                                            <p className="text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-2">
+                                                Phân bố điểm
+                                            </p>
+                                            <RadarChart groups={report.groups} />
+                                            {/* Mini legend */}
+                                            <div className="flex flex-col gap-1.5 w-full max-w-[200px] mt-2">
+                                                {report.groups.map((g, i) => (
+                                                    <div key={g.name} className="flex items-center gap-2">
+                                                        <div className="w-2 h-2 rounded-full shrink-0" style={{ background: groupColor(i) }} />
+                                                        <span className="text-[var(--text-secondary)] text-xs truncate flex-1">{g.name}</span>
+                                                        <span className="text-[var(--text-primary)] text-xs font-bold shrink-0">
+                                                            {g.score.toFixed(0)}<span className="text-[var(--text-secondary)] font-normal">/{g.maxScore}</span>
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Group breakdown */}
+                                <div className="space-y-3">
+                                    {report.groups.map((g, i) => (
+                                        <GroupCard key={g.name} group={g} idx={i}
+                                            expanded={!!expandedGroups[i]}
+                                            onToggle={() => toggleGroup(i)} />
+                                    ))}
+                                </div>
+                            </>
+                        )}
+
+                        {/* Empty state */}
+                        {!loadingReport && !report && !error && selectedId && (
+                            <div className="rounded-2xl p-10 text-center"
+                                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                                <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+                                    style={{ background: 'rgba(245,166,35,0.08)' }}>
+                                    <BrainCircuit className="w-8 h-8" style={{ color: '#f5a623' }} />
+                                </div>
+                                <p className="text-[var(--text-primary)] font-semibold mb-2">Chưa có báo cáo</p>
+                                <p className="text-[var(--text-secondary)] text-sm mb-5">
+                                    Nhấn <strong>Phân tích ngay</strong> để AI đánh giá bản thảo theo rubric 100 điểm.
+                                </p>
+                                <p className="text-[var(--text-secondary)] text-xs">
+                                    💡 Hãy chunk và embed các chương trong Workspace trước để kết quả chính xác hơn.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ── Right: history sidebar ── */}
+                    {history.length > 0 && (
+                        <div className="w-full xl:w-72 xl:sticky xl:top-6 shrink-0">
+                            <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                                <div className="px-5 py-4 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                    <Clock className="w-4 h-4 text-[var(--text-secondary)]" />
+                                    <span className="text-[var(--text-primary)] font-semibold text-sm">Lịch sử phân tích</span>
+                                    <span className="ml-auto px-2 py-0.5 rounded-full text-xs font-bold"
+                                        style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>
+                                        {history.length}
+                                    </span>
+                                </div>
+                                <div className="divide-y divide-[var(--border-color)] max-h-[600px] overflow-y-auto">
+                                    {history.map(h => {
+                                        const c = classifyColor(h.classification);
+                                        const isActive = h.id === activeReportId;
+                                        const isLoading = loadingHistoryReport === h.id;
+                                        return (
+                                            <button key={h.id} onClick={() => handleLoadHistory(h)}
+                                                className="w-full px-5 py-3.5 flex items-center gap-3 text-left transition-colors"
+                                                style={{
+                                                    background: isActive ? 'rgba(245,166,35,0.06)' : undefined,
+                                                    borderLeft: isActive ? '3px solid #f5a623' : '3px solid transparent',
+                                                    cursor: isActive ? 'default' : 'pointer',
+                                                }}>
+                                                <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm"
+                                                    style={{ background: c.bg, color: c.text }}>
+                                                    {isLoading
+                                                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                        : h.totalScore.toFixed(0)}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="text-[var(--text-primary)] font-medium text-sm">
+                                                            {h.totalScore.toFixed(1)} điểm
+                                                        </span>
+                                                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                                                            style={{ background: c.bg, color: c.text }}>
+                                                            {h.classification}
+                                                        </span>
+                                                        {isActive && (
+                                                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                                                                style={{ background: 'rgba(245,166,35,0.15)', color: '#f5a623' }}>
+                                                                Đang xem
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[var(--text-secondary)] text-xs mt-0.5">
+                                                        {new Date(h.createdAt).toLocaleString('vi-VN')}
+                                                    </p>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
+                    )}
 
-                        {/* Group breakdown */}
-                        <div className="space-y-3 mb-6">
-                            {report.groups.map((g, i) => (
-                                <GroupCard key={g.name} group={g} idx={i}
-                                    expanded={!!expandedGroups[i]}
-                                    onToggle={() => toggleGroup(i)} />
-                            ))}
-                        </div>
-                    </>
-                )}
-
-                {/* History */}
-                {history.length > 0 && (
-                    <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-                        <div className="px-5 py-4 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border-color)' }}>
-                            <Clock className="w-4 h-4 text-[var(--text-secondary)]" />
-                            <span className="text-[var(--text-primary)] font-semibold text-sm">Lịch sử phân tích</span>
-                            <span className="ml-auto px-2 py-0.5 rounded-full text-xs font-bold"
-                                style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>
-                                {history.length}
-                            </span>
-                        </div>
-                        <div className="divide-y divide-[var(--border-color)]">
-                            {history.map(h => {
-                                const c = classifyColor(h.classification);
-                                const isActive = h.id === activeReportId;
-                                const isLoading = loadingHistoryReport === h.id;
-                                return (
-                                    <button key={h.id} onClick={() => handleLoadHistory(h)}
-                                        className="w-full px-5 py-3.5 flex items-center gap-3 text-left transition-colors"
-                                        style={{
-                                            background: isActive ? 'rgba(245,166,35,0.06)' : undefined,
-                                            borderLeft: isActive ? '3px solid #f5a623' : '3px solid transparent',
-                                            cursor: isActive ? 'default' : 'pointer',
-                                        }}>
-                                        <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm"
-                                            style={{ background: c.bg, color: c.text }}>
-                                            {isLoading
-                                                ? <Loader2 className="w-4 h-4 animate-spin" />
-                                                : h.totalScore.toFixed(0)}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[var(--text-primary)] font-medium text-sm">
-                                                    {h.totalScore.toFixed(1)} điểm
-                                                </span>
-                                                <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
-                                                    style={{ background: c.bg, color: c.text }}>
-                                                    {h.classification}
-                                                </span>
-                                                {h.status === 'MockData' && (
-                                                    <span className="px-2 py-0.5 rounded-full text-xs"
-                                                        style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
-                                                        Mẫu
-                                                    </span>
-                                                )}
-                                                {isActive && (
-                                                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
-                                                        style={{ background: 'rgba(245,166,35,0.15)', color: '#f5a623' }}>
-                                                        Đang xem
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <p className="text-[var(--text-secondary)] text-xs mt-0.5">
-                                                {new Date(h.createdAt).toLocaleString('vi-VN')}
-                                            </p>
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
-
-                {/* Empty state */}
-                {!loadingReport && !report && !error && selectedId && (
-                    <div className="rounded-2xl p-10 text-center"
-                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-                        <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
-                            style={{ background: 'rgba(245,166,35,0.08)' }}>
-                            <BrainCircuit className="w-8 h-8" style={{ color: '#f5a623' }} />
-                        </div>
-                        <p className="text-[var(--text-primary)] font-semibold mb-2">Chưa có báo cáo</p>
-                        <p className="text-[var(--text-secondary)] text-sm mb-5">
-                            Nhấn <strong>Phân tích ngay</strong> để AI đánh giá bản thảo theo rubric 100 điểm.
-                        </p>
-                        <p className="text-[var(--text-secondary)] text-xs">
-                            💡 Hãy chunk và embed các chương trong Workspace trước để kết quả chính xác hơn.
-                        </p>
-                    </div>
-                )}
+                </div>
             </div>
         </div>
     );

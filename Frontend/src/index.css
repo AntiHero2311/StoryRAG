@@ -3,39 +3,64 @@
 
 @layer base {
   :root {
-    --bg-app: #f2efe9;
-    /* Warm linen — softer than pure white */
-    --bg-sidebar: #eae6e0;
-    /* Slightly deeper warm stone for sidebar */
-    --bg-surface: #edeae4;
-    /* Card/surface — subtle separation from bg-app */
-    --bg-topbar: #eae6e0;
-    --text-primary: #1c1917;
-    /* Stone-900 — warm near-black */
-    --text-secondary: #57534e;
-    /* Stone-600 for secondary text */
-    --border-color: rgba(120, 113, 108, 0.18);
-    /* Warm stone border */
-    --input-bg: #e5e1da;
-    /* Slightly darker warm tone for inputs */
+    /* --- LIGHT MODE: Clean White (Notion style) --- */
+    --bg-app: #ffffff;
+    --bg-sidebar: #f7f7f5;
+    --bg-surface: #f1f1ef;
+    --bg-topbar: #ffffff;
+    --bg-editor: #ffffff;
+    --text-primary: #1a1a1a;
+    --text-secondary: #737373;
+    --text-tertiary: #a3a3a3;
+    --border-color: rgba(0, 0, 0, 0.08);
+    --border-strong: rgba(0, 0, 0, 0.15);
+    --input-bg: #f7f7f5;
+    --bg-panel: #1a1a1a;
+    --accent: #7c3aed;
+    --accent-hover: #6d28d9;
+    --accent-subtle: rgba(124, 58, 237, 0.08);
+    --accent-text: #7c3aed;
+    --success: #16a34a;
+    --error: #dc2626;
+    --warning: #d97706;
+    --info: #2563eb;
+    --hover-bg: rgba(0, 0, 0, 0.04);
+    --active-bg: rgba(124, 58, 237, 0.08);
+    --bg-hover: rgba(0, 0, 0, 0.04);
   }
 
   .dark {
-    --bg-app: #111827;
-    --bg-sidebar: #0d1117;
-    --bg-surface: #0d1117;
-    --bg-topbar: #0d1117;
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
-    --border-color: rgba(255, 255, 255, 0.06);
-    --input-bg: #0d1117;
+    /* --- DARK MODE: Neutral Dark (Linear/Notion style) --- */
+    --bg-app: #111111;
+    --bg-sidebar: #0f0f0f;
+    --bg-surface: #1a1a1a;
+    --bg-topbar: #111111;
+    --bg-editor: #111111;
+    --text-primary: #e2e2e2;
+    --text-secondary: #737373;
+    --text-tertiary: #525252;
+    --border-color: rgba(255, 255, 255, 0.07);
+    --border-strong: rgba(255, 255, 255, 0.12);
+    --input-bg: #1a1a1a;
+    --bg-panel: #0f0f0f;
+    --accent: #8b5cf6;
+    --accent-hover: #7c3aed;
+    --accent-subtle: rgba(139, 92, 246, 0.10);
+    --accent-text: #a78bfa;
+    --success: #22c55e;
+    --error: #f87171;
+    --warning: #fbbf24;
+    --info: #60a5fa;
+    --hover-bg: rgba(255, 255, 255, 0.04);
+    --active-bg: rgba(139, 92, 246, 0.10);
+    --bg-hover: rgba(255, 255, 255, 0.04);
   }
 
   body {
     background-color: var(--bg-app);
     color: var(--text-primary);
     font-family: 'Be Vietnam Pro', system-ui, sans-serif;
-    @apply antialiased overflow-x-hidden transition-colors duration-300;
+    @apply antialiased overflow-x-hidden transition-colors duration-200;
   }
 
   /* Contenteditable placeholder */
@@ -47,10 +72,10 @@
   }
 }
 
-/* Custom Gradient utility classes for that AI/Future vibe */
+/* Custom Gradient utility classes */
 @layer utilities {
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-violet-400 via-purple-500 to-indigo-500;
   }
 
   .bg-gradient-glass {
@@ -67,38 +92,18 @@
     opacity: 0;
   }
 
-  .delay-100 {
-    animation-delay: 100ms;
-  }
-
-  .delay-200 {
-    animation-delay: 200ms;
-  }
-
-  .delay-300 {
-    animation-delay: 300ms;
-  }
+  .delay-100 { animation-delay: 100ms; }
+  .delay-200 { animation-delay: 200ms; }
+  .delay-300 { animation-delay: 300ms; }
 
   @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-
-    to {
-      opacity: 1;
-    }
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   @keyframes slideUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   .animate-pulse-slow {
@@ -106,39 +111,24 @@
   }
 
   @keyframes pulseSlow {
-
-    0%,
-    100% {
-      opacity: 0.5;
-      transform: scale(1);
-    }
-
-    50% {
-      opacity: 0.8;
-      transform: scale(1.05);
-    }
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.05); }
   }
+
   /* -- Thin custom scrollbar -- */
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: rgba(245, 166, 35, 0.35) transparent;
+    scrollbar-color: rgba(139, 92, 246, 0.25) transparent;
   }
 
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 4px;
-  }
-
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
+  .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: rgba(245, 166, 35, 0.35);
+    background: rgba(139, 92, 246, 0.25);
     border-radius: 999px;
   }
-
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: rgba(245, 166, 35, 0.6);
+    background: rgba(139, 92, 246, 0.5);
   }
 
   /* ── NotFound page animations ── */
@@ -177,6 +167,20 @@
     to { opacity: 1; transform: translateY(0); }
   }
 
+  /* Toast animations */
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(100%) scale(0.95); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+  }
+
+  @keyframes toastOut {
+    from { opacity: 1; transform: translateX(0) scale(1); }
+    to { opacity: 0; transform: translateX(100%) scale(0.95); }
+  }
+
+  .animate-toast-in { animation: toastIn 0.25s ease-out forwards; }
+  .animate-toast-out { animation: toastOut 0.2s ease-in forwards; }
+
   .animate-twinkle { animation: twinkle var(--duration, 3s) ease-in-out infinite; }
   .animate-glitch { animation: glitch 3s ease-in-out infinite; }
   .animate-orb-float { animation: orb-float var(--duration, 6s) ease-in-out infinite; }
@@ -190,14 +194,9 @@
     100% { transform: translateX(-50%); }
   }
 
-  .animate-marquee {
-    animation: marquee 30s linear infinite;
-  }
-  
-  .animate-marquee:hover {
-    animation-play-state: paused;
-  }
-  
+  .animate-marquee { animation: marquee 30s linear infinite; }
+  .animate-marquee:hover { animation-play-state: paused; }
+
   .glass-card {
     @apply bg-[var(--bg-surface)] backdrop-blur-xl border border-[var(--border-color)] shadow-sm;
   }

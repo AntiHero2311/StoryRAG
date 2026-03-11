@@ -26,8 +26,18 @@ namespace Repository.Data
         // AI Reports
         public DbSet<ProjectReport> ProjectReports { get; set; }
 
+        // Chat History
+        public DbSet<AiChatMessage> ChatMessages { get; set; }
+
+        // Rewrite History
+        public DbSet<RewriteHistory> RewriteHistories { get; set; }
+
         // User Settings
         public DbSet<UserSettings> UserSettings { get; set; }
+
+        // Worldbuilding & Characters
+        public DbSet<WorldbuildingEntry> WorldbuildingEntries { get; set; }
+        public DbSet<CharacterEntry> CharacterEntries { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -273,6 +283,96 @@ namespace Repository.Data
                 entity.HasOne(s => s.User)
                       .WithOne()
                       .HasForeignKey<UserSettings>(s => s.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── WorldbuildingEntry ────────────────────────────────────────────────
+            modelBuilder.Entity<WorldbuildingEntry>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Title).IsRequired();
+                entity.Property(e => e.Content).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.Category).IsRequired().HasMaxLength(50).HasDefaultValue("Other");
+                entity.Property(e => e.Embedding).HasColumnType("vector(768)");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(w => w.Project)
+                      .WithMany()
+                      .HasForeignKey(w => w.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── ChatMessage ───────────────────────────────────────────────────────
+            modelBuilder.Entity<AiChatMessage>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Question).IsRequired();
+                entity.Property(e => e.Answer).IsRequired();
+                entity.Property(e => e.InputTokens).HasDefaultValue(0);
+                entity.Property(e => e.OutputTokens).HasDefaultValue(0);
+                entity.Property(e => e.TotalTokens).HasDefaultValue(0);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasIndex(e => new { e.ProjectId, e.UserId });
+
+                entity.HasOne(m => m.Project)
+                      .WithMany()
+                      .HasForeignKey(m => m.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(m => m.User)
+                      .WithMany()
+                      .HasForeignKey(m => m.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── CharacterEntry ────────────────────────────────────────────────────
+            modelBuilder.Entity<CharacterEntry>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Name).IsRequired();
+                entity.Property(e => e.Role).IsRequired().HasMaxLength(50).HasDefaultValue("Supporting");
+                entity.Property(e => e.Description).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.Embedding).HasColumnType("vector(768)");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(c => c.Project)
+                      .WithMany()
+                      .HasForeignKey(c => c.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── RewriteHistory ─────────────────────────────────────────────────────
+            modelBuilder.Entity<RewriteHistory>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.OriginalText).IsRequired();
+                entity.Property(e => e.RewrittenText).IsRequired();
+                entity.Property(e => e.Instruction).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.TotalTokens).HasDefaultValue(0);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasIndex(e => new { e.ProjectId, e.UserId });
+                entity.HasIndex(e => e.ChapterId);
+
+                entity.HasOne(r => r.Project)
+                      .WithMany()
+                      .HasForeignKey(r => r.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(r => r.Chapter)
+                      .WithMany()
+                      .HasForeignKey(r => r.ChapterId)
+                      .OnDelete(DeleteBehavior.SetNull)
+                      .IsRequired(false);
+
+                entity.HasOne(r => r.User)
+                      .WithMany()
+                      .HasForeignKey(r => r.UserId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
         }

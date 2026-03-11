@@ -37,13 +37,18 @@ function MiniProjectCard({ project, onClick }: { project: ProjectResponse; onCli
 function DashboardContent({ fullName, role, onNavigate }: { fullName: string; role: string; onNavigate: (path: string) => void }) {
     const [projects, setProjects] = useState<ProjectResponse[]>([]);
     const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({ totalChapters: 0, totalAnalysesUsed: 0, totalChatMessages: 0 });
 
     useEffect(() => {
         projectService.getProjects().then(data => {
             setProjects(data);
             setLoading(false);
         }).catch(() => setLoading(false));
-    }, []);
+
+        if (role !== 'Admin') {
+            projectService.getStats().then(setStats).catch(() => {});
+        }
+    }, [role]);
 
     const recentProjects = [...projects].sort((a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -79,9 +84,9 @@ function DashboardContent({ fullName, role, onNavigate }: { fullName: string; ro
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     {[
                         { label: 'Tổng Dự án', value: projects.length.toString(), icon: FolderOpen, color: '#6366f1' },
-                        { label: 'Tổng Chương', value: '—', icon: BookOpen, color: '#8b5cf6' },
-                        { label: 'Phân tích', value: 'Phase 2', icon: TrendingUp, color: '#06b6d4' },
-                        { label: 'AI Queries', value: 'Phase 2', icon: MessageSquare, color: '#f5a623' },
+                        { label: 'Tổng Chương', value: stats.totalChapters.toString(), icon: BookOpen, color: '#8b5cf6' },
+                        { label: 'Phân tích', value: stats.totalAnalysesUsed.toString(), icon: TrendingUp, color: '#06b6d4' },
+                        { label: 'AI Queries', value: stats.totalChatMessages.toString(), icon: MessageSquare, color: '#f5a623' },
                     ].map(s => {
                         const Icon = s.icon;
                         return (

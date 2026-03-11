@@ -1,24 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import {
     BrainCircuit,
     Search,
     Zap,
-    Database,
-    Code2,
-    Cpu,
-    Github,
     PenTool,
     Sparkles,
     ArrowRight,
     CheckCircle2,
-    MessageSquare,
-    BookOpen
+    BookOpen,
+    Moon,
+    Sun,
 } from 'lucide-react';
 
 const LandingPage = () => {
     const [scrolled, setScrolled] = useState(false);
+    const [darkMode, setDarkMode] = useState(false);
     const { scrollY } = useScroll();
     
     // Parallax effect cho background elements
@@ -26,12 +24,30 @@ const LandingPage = () => {
     const y2 = useTransform(scrollY, [0, 1000], [0, -150]);
 
     useEffect(() => {
-        const handleScroll = () => {
-            setScrolled(window.scrollY > 50);
-        };
+        // Init theme from localStorage
+        const saved = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const isDark = saved === 'dark' || (!saved && prefersDark);
+        document.documentElement.classList.toggle('dark', isDark);
+        setDarkMode(isDark);
+
+        const handleScroll = () => setScrolled(window.scrollY > 50);
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
+
+    const toggleDarkMode = () => {
+        const html = document.documentElement;
+        if (html.classList.contains('dark')) {
+            html.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
+            setDarkMode(false);
+        } else {
+            html.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
+            setDarkMode(true);
+        }
+    };
 
     const containerVariants = {
         hidden: { opacity: 0 },
@@ -48,7 +64,7 @@ const LandingPage = () => {
         visible: {
             y: 0,
             opacity: 1,
-            transition: { duration: 0.5, ease: "easeOut" }
+            transition: { duration: 0.5, ease: 'easeOut' as const }
         }
     };
 
@@ -86,6 +102,13 @@ const LandingPage = () => {
                         animate={{ opacity: 1, x: 0 }}
                         className="flex gap-4 items-center"
                     >
+                        <button
+                            onClick={toggleDarkMode}
+                            className="p-2.5 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] border border-[var(--border-color)] transition-all"
+                            aria-label="Toggle dark mode"
+                        >
+                            {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                        </button>
                         <Link to="/login" className="px-5 py-2.5 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors hidden sm:block">
                             Đăng nhập
                         </Link>
@@ -273,6 +296,9 @@ const LandingPage = () => {
                                     </div>
                                     <p className="text-[var(--text-primary)] font-medium mb-6 italic">"{t.text}"</p>
                                     <div className="mt-auto flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                                            {t.name.charAt(0)}
+                                        </div>
                                         <div className="flex-1">
                                             <p className="font-bold text-sm text-[var(--text-primary)]">{t.name}</p>
                                             <p className="text-xs text-[var(--text-secondary)]">{t.role}</p>

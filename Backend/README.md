@@ -1,4 +1,322 @@
-# StoryRAG — API Reference
+# StoryRAG — Backend API Reference
+
+**Base URL (local):** `http://localhost:5105/api`  
+**Swagger UI:** `http://localhost:5105/swagger`
+
+---
+
+## 🔑 Authentication
+
+Các endpoint có 🔒 phải gửi kèm header:
+```
+Authorization: Bearer <access_token>
+```
+
+**Icon legend:**
+- 🔒 Yêu cầu Bearer Token (mọi role)
+- 👑 Chỉ **Admin**
+- ✍️ Chỉ **Author**
+
+---
+
+## Roles
+
+| Role | Mô tả |
+|------|-------|
+| `Author` | Tài khoản mặc định khi đăng ký |
+| `Staff` | Nhân viên, được tạo bởi Admin |
+| `Admin` | Quản trị viên, toàn quyền |
+
+---
+
+## 🔐 Auth — `/api/auth`
+
+### `POST /auth/register`
+Đăng ký tài khoản mới (role mặc định: **Author**). Không cần token.
+
+**Body**
+```json
+{ "fullName": "Nguyễn Văn A", "email": "user@example.com", "password": "123456" }
+```
+
+**Response `200`**
+```json
+{
+  "userId": "guid", "fullName": "Nguyễn Văn A", "email": "user@example.com",
+  "role": "Author", "accessToken": "jwt...", "refreshToken": "..."
+}
+```
+
+### `POST /auth/login`
+**Body** `{ "email": "...", "password": "..." }` → **Response `200`** giống Register.
+
+### `PUT /auth/change-password` 🔒
+**Body** `{ "oldPassword": "...", "newPassword": "..." }` → `{ "message": "Đổi mật khẩu thành công." }`
+
+---
+
+## 👤 User — `/api/user`
+
+| Method | Route | Mô tả |
+|--------|-------|-------|
+| `GET` | `/user/profile` 🔒 | Lấy thông tin profile |
+| `PUT` | `/user/profile` 🔒 | Cập nhật FullName / AvatarURL |
+| `GET` | `/user/settings` 🔒 | Lấy cài đặt editor |
+| `PUT` | `/user/settings` 🔒 | Cập nhật cài đặt editor |
+
+---
+
+## 🗂️ Project — `/api/project`
+
+> Tất cả endpoint yêu cầu 🔒 ✍️
+
+| Method | Route | Mô tả |
+|--------|-------|-------|
+| `GET` | `/project` | Danh sách dự án của user |
+| `GET` | `/project/{id}` | Chi tiết dự án |
+| `POST` | `/project` | Tạo dự án mới |
+| `PUT` | `/project/{id}` | Cập nhật dự án |
+| `DELETE` | `/project/{id}` | Xóa mềm dự án |
+| `GET` | `/project/stats` | Thống kê dashboard: `{ totalChapters, totalAnalysesUsed, totalChatMessages }` |
+
+---
+
+## 📖 Chapter — `/api/project/{projectId}/chapters`
+
+> Tất cả endpoint yêu cầu 🔒 ✍️
+
+| Method | Route | Mô tả |
+|--------|-------|-------|
+| `GET` | `/chapters` | Danh sách chương |
+| `GET` | `/chapters/{chapterId}` | Chi tiết chương + versions + chunks |
+| `POST` | `/chapters` | Tạo chương mới |
+| `PUT` | `/chapters/{chapterId}` | Cập nhật tiêu đề / nội dung |
+| `DELETE` | `/chapters/{chapterId}` | Xóa chương |
+| `POST` | `/chapters/{chapterId}/chunk` | Chunk chương hiện tại |
+| `GET` | `/chapters/{chapterId}/versions` | Danh sách versions |
+| `POST` | `/chapters/{chapterId}/versions` | Tạo version mới |
+| `PUT` | `/chapters/{chapterId}/versions/{num}` | Đổi tên version |
+| `DELETE` | `/chapters/{chapterId}/versions/{num}` | Xóa version |
+| `POST` | `/chapters/{chapterId}/versions/{num}/switch` | Chuyển sang version |
+
+**Response `GET /chapters/{chapterId}`**
+```json
+{
+  "id": "guid", "chapterNumber": 1, "title": "Chương 1", "wordCount": 850,
+  "currentVersionNum": 1,
+  "versions": [
+    {
+      "versionNumber": 1, "title": "Version 1", "content": "...",
+      "isChunked": true, "isEmbedded": true, "tokenCount": 1200,
+      "chunks": [{ "id": "guid", "chunkIndex": 0, "content": "..." }]
+    }
+  ]
+}
+```
+
+---
+
+## 🤖 AI — `/api/ai`
+
+> Tất cả endpoint yêu cầu 🔒 ✍️
+
+### Embedding
+
+| Method | Route | Mô tả |
+|--------|-------|-------|
+| `POST` | `/ai/chapters/{chapterId}/embed` | Embed tất cả chunks của version hiện tại |
+
+**Flow embed:** Chunks → `batchEmbedContents` (tối đa 100/batch, delay 2s giữa các batch) → vector(768) → pgvector
+
+**Response `200`**
+```json
+{ "message": "Đã embed 24 chunks thành công." }
+```
+
+**Errors**
+```json
+{ "message": "Version chưa được chunk. Hãy chunk trước khi embed." }
+{ "message": "AI đang quá tải, vui lòng thử lại sau khoảng 1 phút." }
+```
+
+---
+
+### AI Chat (RAG)
+
+| Method | Route | Mô tả |
+|--------|-------|-------|
+| `POST` | `/ai/{projectId}/chat` | Hỏi AI về nội dung truyện |
+| `GET` | `/ai/{projectId}/chat/history` | Lấy lịch sử chat (phân trang) |
+
+**Body `POST /chat`**
+```json
+{ "question": "Nhân vật chính tên gì?" }
+```
+
+**Response `200`**
+```json
+{
+  "answer": "Nhân vật chính là Phan...",
+  "contextChunksUsed": 3,
+  "inputTokens": 850, "outputTokens": 120, "totalTokens": 970
+}
+```
+
+**Query `GET /chat/history`**
+```
+?page=1&pageSize=20
+```
+
+**Response `200`**
+```json
+{
+  "items": [
+    { "id": "guid", "question": "...", "answer": "...", "createdAt": "...", "totalTokens": 970 }
+  ],
+  "totalCount": 42, "page": 1, "pageSize": 20
+}
+```
+
+**Lưu ý 429:** Backend tự động retry với backoff [10s → 30s → 65s]. Nếu vẫn 429 sau 3 lần → trả `400` với message thân thiện thay vì fallback LM Studio.
+
+---
+
+### AI Rewrite
+
+| Method | Route | Mô tả |
+|--------|-------|-------|
+| `POST` | `/ai/{projectId}/rewrite` | Viết lại đoạn văn được chọn |
+| `GET` | `/ai/{projectId}/rewrite/history` | Lịch sử các lần rewrite |
+
+**Body `POST /rewrite`**
+```json
+{
+  "chapterId": "guid",
+  "selectedText": "Đoạn văn gốc...",
+  "instruction": "Viết lại theo phong cách bi kịch hơn"
+}
+```
+
+**Response `200`**
+```json
+{ "rewritten": "Đoạn văn đã được viết lại...", "historyId": "guid" }
+```
+
+---
+
+### AI Phân tích
+
+| Method | Route | Mô tả |
+|--------|-------|-------|
+| `POST` | `/ai/{projectId}/analyze` | Phân tích toàn bộ dự án (trừ quota) |
+| `GET` | `/ai/{projectId}/reports` | Danh sách các báo cáo phân tích |
+| `GET` | `/ai/{projectId}/reports/{reportId}` | Chi tiết một báo cáo |
+
+**Response `POST /analyze` (`200`)**
+```json
+{
+  "totalScore": 78,
+  "grade": "Khá",
+  "groups": [
+    {
+      "groupName": "Cốt truyện & Mạch lạc",
+      "maxScore": 25, "score": 20,
+      "criteria": [
+        { "name": "Tính nhất quán nội bộ", "maxScore": 9, "score": 8, "feedback": "..." }
+      ]
+    }
+  ],
+  "overallFeedback": "..."
+}
+```
+
+---
+
+## 🌍 Worldbuilding & Characters — `/api/project/{projectId}`
+
+> Tất cả endpoint yêu cầu 🔒 ✍️
+
+| Method | Route | Mô tả |
+|--------|-------|-------|
+| `GET/POST` | `/worldbuilding` | Danh sách / Tạo mục worldbuilding |
+| `PUT/DELETE` | `/worldbuilding/{id}` | Cập nhật / Xóa |
+| `POST` | `/worldbuilding/{id}/embed` | Embed mục worldbuilding |
+| `GET/POST` | `/characters` | Danh sách / Tạo nhân vật |
+| `PUT/DELETE` | `/characters/{id}` | Cập nhật / Xóa |
+| `POST` | `/characters/{id}/embed` | Embed nhân vật |
+
+---
+
+## 💳 Subscription — `/api/subscription`
+
+| Method | Route | Auth | Mô tả |
+|--------|-------|------|-------|
+| `GET` | `/subscription/plans` | 🔒 | Danh sách plan đang active |
+| `GET` | `/subscription/plans/{id}` | 🔒 | Chi tiết plan |
+| `POST` | `/subscription/plans` | 🔒 👑 | Tạo plan mới |
+| `PUT` | `/subscription/plans/{id}` | 🔒 👑 | Cập nhật plan |
+| `DELETE` | `/subscription/plans/{id}` | 🔒 👑 | Deactivate plan |
+| `GET` | `/subscription/my` | 🔒 | Subscription hiện tại của user |
+
+#### Gói mặc định (seed)
+
+| ID | Tên | Giá/tháng | Phân tích | Token AI |
+|----|-----|-----------|-----------|----------|
+| 1 | Free | 0đ | 3 lần | 20,000 |
+| 2 | Basic | 99,000đ | 20 lần | 150,000 |
+| 3 | Pro | 249,000đ | 100 lần | 500,000 |
+| 4 | Enterprise | 699,000đ | 9,999 lần | 2,000,000 |
+
+---
+
+## 👑 Admin — `/api/admin`
+
+> Chỉ role **Admin**. Role khác nhận `403 Forbidden`.
+
+| Method | Route | Mô tả |
+|--------|-------|-------|
+| `GET` | `/admin/users/stats` | Thống kê + danh sách toàn bộ user |
+| `POST` | `/admin/users/{id}/toggle-active` | Bật/tắt tài khoản |
+| `POST` | `/admin/users/{id}/change-role` | Đổi role user |
+| `POST` | `/admin/subscriptions` | Cấp subscription thủ công cho user |
+
+---
+
+## 📊 Database Schema
+
+```
+Users          — uuid PK, Role ∈ {Admin, Author, Staff}, DataEncryptionKey (encrypted)
+Projects       — uuid PK, FK→Users(AuthorId), Title/Summary (encrypted)
+Chapters       — uuid PK, FK→Projects
+ChapterVersions — uuid PK, FK→Chapters, Content (encrypted), IsChunked, IsEmbedded
+ChapterChunks  — uuid PK, FK→ChapterVersions, Content (encrypted), Embedding vector(768)
+
+WorldbuildingEntries — uuid PK, FK→Projects, Content (encrypted), Embedding vector(768)
+CharacterEntries     — uuid PK, FK→Projects, Content (encrypted), Embedding vector(768)
+
+AiChatMessages — uuid PK, FK→Projects, FK→Users, Question/Answer (encrypted)
+RewriteHistories — uuid PK, FK→Projects, FK→Users, OriginalText/RewrittenText (encrypted)
+ProjectReports — uuid PK, FK→Projects, JSON result
+
+SubscriptionPlans   — int PK
+UserSubscriptions   — int PK, FK→Users, FK→SubscriptionPlans, UsedAnalysisCount
+UserSettings        — uuid PK, FK→Users, EditorFont, EditorFontSize, Theme
+```
+
+---
+
+## ⚙️ Services quan trọng
+
+| Service | Mô tả |
+|---------|-------|
+| `EmbeddingService` | `batchEmbedContents` (max 100/batch, delay 2s), vector(768), Gemini primary |
+| `AiChatService` | Gemini → LM Studio fallback (chỉ lỗi non-429), lưu lịch sử encrypted |
+| `AiRewriteService` | Gemini → LM Studio fallback, lưu lịch sử encrypted |
+| `ChunkingService` | 1500 ký tự, overlap 150, ưu tiên cắt tại `\n\n` → `.` → khoảng trắng |
+| `ProjectReportService` | Rubric 100 điểm, 14 tiêu chí, MockData nếu chưa embed |
+| `GeminiRetryHelper` | Backoff [10s, 30s, 65s] cho 429; throw lỗi thân thiện sau 3 lần |
+| `EncryptionHelper` | AES encrypt/decrypt với user DEK + Master Key |
+
 
 **Base URL (local):** `http://localhost:5105/api`
 **Swagger UI:** `http://localhost:5105/swagger`

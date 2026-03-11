@@ -9,5 +9,13 @@ namespace Service.Interfaces
         Task<ProjectResponse> CreateProjectAsync(Guid userId, CreateProjectRequest request);
         Task<ProjectResponse> UpdateProjectAsync(Guid projectId, Guid userId, UpdateProjectRequest request);
         Task DeleteProjectAsync(Guid projectId, Guid userId);
+        Task<AuthorDashboardStats> GetUserStatsAsync(Guid userId);
+    }
+
+    public class AuthorDashboardStats
+    {
+        public int TotalChapters { get; set; }
+        public int TotalAnalysesUsed { get; set; }
+        public int TotalChatMessages { get; set; }
     }
 }

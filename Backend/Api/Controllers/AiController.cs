@@ -14,12 +14,14 @@ namespace Api.Controllers
         private readonly IEmbeddingService _embeddingService;
         private readonly IAiChatService _aiChatService;
         private readonly IProjectReportService _reportService;
+        private readonly IAiRewriteService _rewriteService;
 
-        public AiController(IEmbeddingService embeddingService, IAiChatService aiChatService, IProjectReportService reportService)
+        public AiController(IEmbeddingService embeddingService, IAiChatService aiChatService, IProjectReportService reportService, IAiRewriteService rewriteService)
         {
             _embeddingService = embeddingService;
             _aiChatService = aiChatService;
             _reportService = reportService;
+            _rewriteService = rewriteService;
         }
 
         /// <summary>Embed tất cả chunks của current version của một chương.</summary>
@@ -58,6 +60,23 @@ namespace Api.Controllers
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
 
+        /// <summary>Lấy lịch sử chat của user trong một dự án.</summary>
+        [HttpGet("{projectId:guid}/chat/history")]
+        public async Task<IActionResult> GetChatHistory(Guid projectId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                pageSize = Math.Clamp(pageSize, 1, 100);
+                var result = await _aiChatService.GetChatHistoryAsync(projectId, userId.Value, page, pageSize);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
         private Guid? GetUserId()
         {
             var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
@@ -69,6 +88,7 @@ namespace Api.Controllers
 
         /// <summary>Phân tích bộ truyện theo rubric 100 điểm và lưu kết quả.</summary>
         [HttpPost("{projectId:guid}/analyze")]
+        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
         public async Task<IActionResult> Analyze(Guid projectId)
         {
             try
@@ -134,6 +154,48 @@ namespace Api.Controllers
             catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
+
+        // ── Rewrite endpoints ─────────────────────────────────────────────────────
+
+        /// <summary>Viết lại một đoạn văn bằng AI, lưu lịch sử.</summary>
+        [HttpPost("{projectId:guid}/rewrite")]
+        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
+        public async Task<IActionResult> Rewrite(Guid projectId, [FromBody] RewriteRequest request)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var result = await _rewriteService.RewriteAsync(
+                    projectId, request.ChapterId, request.OriginalText, request.Instruction ?? string.Empty, userId.Value);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
+        /// <summary>Lấy lịch sử viết lại của user trong một dự án.</summary>
+        [HttpGet("{projectId:guid}/rewrite/history")]
+        public async Task<IActionResult> GetRewriteHistory(
+            Guid projectId,
+            [FromQuery] Guid? chapterId,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                pageSize = Math.Clamp(pageSize, 1, 100);
+                var result = await _rewriteService.GetHistoryAsync(projectId, userId.Value, chapterId, page, pageSize);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
     }
 
     public class ChatRequest
@@ -141,5 +203,16 @@ namespace Api.Controllers
         [Required]
         [MinLength(1)]
         public string Question { get; set; } = string.Empty;
+    }
+
+    public class RewriteRequest
+    {
+        [Required]
+        [MinLength(1)]
+        public string OriginalText { get; set; } = string.Empty;
+
+        public string? Instruction { get; set; }
+
+        public Guid? ChapterId { get; set; }
     }
 }

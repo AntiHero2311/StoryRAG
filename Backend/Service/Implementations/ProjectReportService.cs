@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using OpenAI;
 using OpenAI.Chat;
 using Pgvector;
@@ -19,8 +20,10 @@ namespace Service.Implementations
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
         private readonly IEmbeddingService _embeddingService;
-        private readonly ChatClient _chatClient;
-        private const int TopK = 20;
+        private readonly ILogger<ProjectReportService> _logger;
+        private readonly ChatClient _chatClient;        // LM Studio (fallback)
+        private readonly ChatClient? _geminiChatClient; // Gemini (primary)
+        private const int TopK = 8;
 
         // ── Rubric definition─────────────────────────────────────────────────────
         private static readonly List<(string Key, string Group, string Name, decimal Max)> Rubric = new()
@@ -41,23 +44,59 @@ namespace Service.Implementations
             ("5.2", "Tuân thủ & Hoàn thiện",       "Tuân thủ định dạng",               5),
         };
 
-        public ProjectReportService(AppDbContext context, IConfiguration config, IEmbeddingService embeddingService)
+        public ProjectReportService(AppDbContext context, IConfiguration config, IEmbeddingService embeddingService, ILogger<ProjectReportService> logger)
         {
             _context = context;
             _config = config;
             _embeddingService = embeddingService;
+            _logger = logger;
 
+            // LM Studio (fallback)
             var baseUrl = config["AI:BaseUrl"] ?? "http://localhost:1234/v1";
             var apiKey = config["AI:ApiKey"] ?? "lm-studio";
             var model = config["AI:ChatModel"] ?? "qwen/qwen3.5-9b";
-            var options = new OpenAIClientOptions { Endpoint = new Uri(baseUrl) };
-            var openAiClient = new OpenAIClient(new ApiKeyCredential(apiKey), options);
-            _chatClient = openAiClient.GetChatClient(model);
+            var lmOptions = new OpenAIClientOptions
+            {
+                Endpoint = new Uri(baseUrl),
+                NetworkTimeout = TimeSpan.FromMinutes(10),
+            };
+            _chatClient = new OpenAIClient(new ApiKeyCredential(apiKey), lmOptions).GetChatClient(model);
+
+            // Gemini (primary)
+            var geminiKey = config["Gemini:ChatApiKey"] ?? string.Empty;
+            if (!string.IsNullOrEmpty(geminiKey))
+            {
+                var geminiModel = config["Gemini:ChatModel"] ?? "gemini-2.0-flash";
+                var geminiOptions = new OpenAIClientOptions
+                {
+                    Endpoint = new Uri("https://generativelanguage.googleapis.com/v1beta/openai/"),
+                    NetworkTimeout = TimeSpan.FromMinutes(5),
+                };
+                _geminiChatClient = new OpenAIClient(new ApiKeyCredential(geminiKey), geminiOptions).GetChatClient(geminiModel);
+            }
         }
 
-        private async Task<OpenAI.Chat.ChatCompletion> CompleteChatWithFallbackAsync(IEnumerable<ChatMessage> messages)
+        private async Task<OpenAI.Chat.ChatCompletion> CompleteChatWithFallbackAsync(
+            IEnumerable<ChatMessage> messages, int maxTokens = 2500)
         {
-            var result = await _chatClient.CompleteChatAsync(messages);
+            var options = new ChatCompletionOptions { MaxOutputTokenCount = maxTokens };
+
+            if (_geminiChatClient != null)
+            {
+                try
+                {
+                    var geminiResult = await GeminiRetryHelper.ExecuteAsync(
+                        () => _geminiChatClient.CompleteChatAsync(messages, options),
+                        _logger, "Gemini Report");
+                    return geminiResult.Value;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Gemini chat thất bại, fallback về LM Studio.");
+                }
+            }
+
+            var result = await _chatClient.CompleteChatAsync(messages, options);
             return result.Value;
         }
 
@@ -90,32 +129,59 @@ namespace Service.Implementations
                 .Where(c => c.ProjectId == projectId && c.Embedding != null)
                 .ToListAsync();
 
-            List<CriterionResult> criteria;
-            string reportStatus;
-
             if (chunks.Count == 0)
-            {
-                // No embedded content → return mock
-                criteria = GenerateMockCriteria();
-                reportStatus = "MockData";
-            }
-            else
-            {
-                var decryptedChunks = chunks
-                    .Select(c => EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek))
-                    .ToList();
+                throw new InvalidOperationException("Dự án chưa có nội dung được nhúng (embed). Vui lòng chunk và embed các chương trong Workspace trước khi phân tích.");
 
-                try
+            var decryptedChunks = chunks
+                .Select(c => EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek))
+                .ToList();
+
+            // 5. Fetch Story Bible context (genres, summary, characters, worldbuilding)
+            var projectFull = await _context.Projects
+                .Include(p => p.ProjectGenres).ThenInclude(pg => pg.Genre)
+                .FirstOrDefaultAsync(p => p.Id == projectId);
+
+            var genres = projectFull?.ProjectGenres.Select(pg => pg.Genre.Name).ToList() ?? new();
+            var summary = !string.IsNullOrEmpty(project.Summary)
+                ? EncryptionHelper.DecryptWithMasterKey(project.Summary, rawDek)
+                : null;
+
+            var characterEntries = await _context.CharacterEntries
+                .Where(c => c.ProjectId == projectId)
+                .Take(5).ToListAsync();
+            var worldEntries = await _context.WorldbuildingEntries
+                .Where(w => w.ProjectId == projectId)
+                .Take(3).ToListAsync();
+
+            var bibleBuilder = new System.Text.StringBuilder();
+            if (genres.Count > 0)
+                bibleBuilder.AppendLine($"Thể loại: {string.Join(", ", genres)}");
+            if (!string.IsNullOrWhiteSpace(summary))
+                bibleBuilder.AppendLine($"Tóm tắt: {summary[..Math.Min(300, summary.Length)]}");
+            if (characterEntries.Count > 0)
+            {
+                bibleBuilder.AppendLine("Nhân vật:");
+                foreach (var ch in characterEntries)
                 {
-                    criteria = await EvaluateWithAiAsync(projectTitle, decryptedChunks);
-                    reportStatus = "Completed";
-                }
-                catch
-                {
-                    criteria = GenerateMockCriteria();
-                    reportStatus = "MockData";
+                    var chName = EncryptionHelper.DecryptWithMasterKey(ch.Name, rawDek);
+                    var chDesc = EncryptionHelper.DecryptWithMasterKey(ch.Description, rawDek);
+                    bibleBuilder.AppendLine($"- {chName} ({ch.Role}): {chDesc[..Math.Min(120, chDesc.Length)]}");
                 }
             }
+            if (worldEntries.Count > 0)
+            {
+                bibleBuilder.AppendLine("Thế giới:");
+                foreach (var w in worldEntries)
+                {
+                    var wTitle = EncryptionHelper.DecryptWithMasterKey(w.Title, rawDek);
+                    var wContent = EncryptionHelper.DecryptWithMasterKey(w.Content, rawDek);
+                    bibleBuilder.AppendLine($"- [{w.Category}] {wTitle}: {wContent[..Math.Min(120, wContent.Length)]}");
+                }
+            }
+            var storyBibleText = bibleBuilder.ToString().Trim();
+
+            var criteria = await EvaluateWithAiAsync(projectTitle, decryptedChunks, storyBibleText);
+            var reportStatus = "Completed";
 
             // 5. Calculate total
             var total = criteria.Sum(c => c.Score);
@@ -206,54 +272,68 @@ namespace Service.Implementations
                 throw new KeyNotFoundException("Dự án không tồn tại hoặc bạn không có quyền truy cập.");
         }
 
-        private async Task<List<CriterionResult>> EvaluateWithAiAsync(string projectTitle, List<string> decryptedChunks)
+        private async Task<List<CriterionResult>> EvaluateWithAiAsync(
+            string projectTitle, List<string> decryptedChunks, string? storyBibleText = null)
         {
             // Use first TopK chunks as context (avoid token limit)
             var contextText = string.Join("\n\n---\n\n",
                 decryptedChunks.Take(TopK).Select((c, i) => $"[Đoạn {i + 1}]\n{c}"));
 
             var jsonTemplate = @"[
-  {""key"":""1.1"",""score"":<số>,""maxScore"":10,""feedback"":""<nhận xét tiếng Việt>""},
-  {""key"":""1.2"",""score"":<số>,""maxScore"":10,""feedback"":""<nhận xét>""},
-  {""key"":""1.3"",""score"":<số>,""maxScore"":5,""feedback"":""<nhận xét>""},
-  {""key"":""2.1"",""score"":<số>,""maxScore"":10,""feedback"":""<nhận xét>""},
-  {""key"":""2.2"",""score"":<số>,""maxScore"":10,""feedback"":""<nhận xét>""},
-  {""key"":""2.3"",""score"":<số>,""maxScore"":5,""feedback"":""<nhận xét>""},
-  {""key"":""3.1"",""score"":<số>,""maxScore"":10,""feedback"":""<nhận xét>""},
-  {""key"":""3.2"",""score"":<số>,""maxScore"":5,""feedback"":""<nhận xét>""},
-  {""key"":""3.3"",""score"":<số>,""maxScore"":5,""feedback"":""<nhận xét>""},
-  {""key"":""4.1"",""score"":<số>,""maxScore"":10,""feedback"":""<nhận xét>""},
-  {""key"":""4.2"",""score"":<số>,""maxScore"":5,""feedback"":""<nhận xét>""},
-  {""key"":""4.3"",""score"":<số>,""maxScore"":5,""feedback"":""<nhận xét>""},
-  {""key"":""5.1"",""score"":<số>,""maxScore"":5,""feedback"":""<nhận xét>""},
-  {""key"":""5.2"",""score"":<số>,""maxScore"":5,""feedback"":""<nhận xét>""}
+  {""key"":""1.1"",""score"":0,""maxScore"":10,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""1.2"",""score"":0,""maxScore"":10,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""1.3"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""2.1"",""score"":0,""maxScore"":10,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""2.2"",""score"":0,""maxScore"":10,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""2.3"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""3.1"",""score"":0,""maxScore"":10,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""3.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""3.3"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""4.1"",""score"":0,""maxScore"":10,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""4.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""4.3"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""5.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""5.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]}
 ]";
 
-            var prompt = $"""
-                Bạn là chuyên gia đánh giá bản thảo văn học Việt Nam. Hãy đánh giá tác phẩm "{projectTitle}" theo rubric sau.
+            var biblePart = string.IsNullOrWhiteSpace(storyBibleText)
+                ? ""
+                : $"\n\nTHÔNG TIN TÁC PHẨM:\n{storyBibleText}";
 
-                Nội dung tác phẩm:
-                {contextText}
+            var prompt = $$"""
+                Bạn là giám khảo văn học. Đọc kỹ văn bản và điền đầy đủ tất cả 14 tiêu chí vào JSON bên dưới.
 
-                Hãy chấm điểm theo 14 tiêu chí sau và trả về JSON array (không có text nào ngoài JSON):
-                {jsonTemplate}
-                Chỉ trả về JSON array, không có markdown, không có giải thích thêm.
+                QUY TẮC BẮT BUỘC:
+                - Điền feedback, errors, suggestions cho TẤT CẢ 14 mục, không được để trống
+                - feedback: 1-2 câu nhận xét thực tế từ văn bản
+                - errors: 1-2 lỗi cụ thể (có thể trích dẫn câu văn)
+                - suggestions: 1-2 gợi ý sửa lỗi cụ thể
+                - score: nghiêm khắc, thông thường 40-60% điểm tối đa
+
+                KEY: 1.1=Nhất quán bối cảnh(10) 1.2=Nhân quả sự kiện(10) 1.3=Nút thắt(5) 2.1=Động cơ nhân vật(10) 2.2=Tâm lý nhân vật(10) 2.3=Đối thoại(5) 3.1=Ngữ pháp(10) 3.2=Đa dạng câu(5) 3.3=Tránh sáo ngữ(5) 4.1=Sáng tạo(10) 4.2=Thể loại(5) 4.3=Nhịp độ(5) 5.1=Hoàn thiện(5) 5.2=Định dạng(5){{biblePart}}
+
+                Nội dung "{{projectTitle}}":
+                {{contextText}}
+
+                JSON (14 mục, điền đầy đủ):
+                {{jsonTemplate}}
                 """;
 
             var messages = new List<ChatMessage>
             {
-                ChatMessage.CreateSystemMessage("Bạn là chuyên gia đánh giá bản thảo văn học. Chỉ trả về JSON thuần túy."),
+                ChatMessage.CreateSystemMessage("Bạn là giám khảo văn học. Nhiệm vụ: điền đầy đủ 14 tiêu chí JSON với feedback/errors/suggestions thực tế. KHÔNG bỏ trống bất kỳ mục nào. Chỉ trả về JSON thuần túy."),
                 ChatMessage.CreateUserMessage(prompt),
             };
 
-            var response = await CompleteChatWithFallbackAsync(messages);
+            var response = await CompleteChatWithFallbackAsync(messages, maxTokens: 2500);
             var raw = response.Content[0].Text.Trim();
 
             // Strip markdown code fences if present
             if (raw.StartsWith("```")) raw = raw.Split('\n', 2)[1];
             if (raw.EndsWith("```")) raw = raw[..^3];
 
-            var aiResults = JsonSerializer.Deserialize<List<AiScoreItem>>(raw.Trim())
+            var aiResults = JsonSerializer.Deserialize<List<AiScoreItem>>(raw.Trim(),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
                 ?? throw new InvalidOperationException("Không thể parse kết quả từ AI.");
 
             return MergeWithRubric(aiResults);
@@ -261,7 +341,9 @@ namespace Service.Implementations
 
         private static List<CriterionResult> MergeWithRubric(List<AiScoreItem> aiResults)
         {
-            var lookup = aiResults.ToDictionary(x => x.Key);
+            var lookup = aiResults
+                .GroupBy(x => x.Key)
+                .ToDictionary(g => g.Key, g => g.First());
             return Rubric.Select(r =>
             {
                 lookup.TryGetValue(r.Key, out var ai);
@@ -274,42 +356,8 @@ namespace Service.Implementations
                     Score = score,
                     MaxScore = r.Max,
                     Feedback = ai?.Feedback ?? "Chưa có nhận xét.",
-                };
-            }).ToList();
-        }
-
-        private static List<CriterionResult> GenerateMockCriteria()
-        {
-            var rng = new Random();
-            var mockFeedbacks = new Dictionary<string, string>
-            {
-                ["1.1"] = "Cần xem xét thêm về tính nhất quán trong bối cảnh và thời gian của câu chuyện.",
-                ["1.2"] = "Các sự kiện có liên kết tương đối logic, nhưng một số chuyển cảnh cần mượt mà hơn.",
-                ["1.3"] = "Nút thắt câu chuyện khá rõ ràng, cách giải quyết cần thêm chiều sâu.",
-                ["2.1"] = "Động cơ nhân vật chính cần được thể hiện rõ hơn qua hành động cụ thể.",
-                ["2.2"] = "Nhân vật có tiềm năng phát triển đa chiều, cần khai thác thêm nội tâm.",
-                ["2.3"] = "Đối thoại tự nhiên, phản ánh được tính cách nhân vật khá tốt.",
-                ["3.1"] = "Ngữ pháp và chính tả nhìn chung tốt, cần chú ý một số lỗi dấu câu.",
-                ["3.2"] = "Cấu trúc câu còn khá đơn điệu, nên đa dạng hóa nhịp điệu văn xuôi.",
-                ["3.3"] = "Còn xuất hiện một số cụm từ sáo rỗng, cần thay thế bằng cách diễn đạt sáng tạo hơn.",
-                ["4.1"] = "Ý tưởng có điểm mới lạ nhất định, nhưng cốt truyện vẫn theo một số mô-típ quen thuộc.",
-                ["4.2"] = "Tác phẩm bám sát đặc trưng thể loại khá tốt.",
-                ["4.3"] = "Nhịp độ truyện ổn định, có thể tạo thêm điểm căng thẳng để duy trì hứng thú.",
-                ["5.1"] = "Bản thảo cần được định dạng và phân chương rõ ràng hơn trước khi gửi biên tập.",
-                ["5.2"] = "Đánh giá dựa trên dữ liệu mẫu — cần embed nội dung để phân tích chính xác.",
-            };
-
-            return Rubric.Select(r =>
-            {
-                var ratio = 0.5m + (decimal)rng.NextDouble() * 0.35m;
-                return new CriterionResult
-                {
-                    Key = r.Key,
-                    GroupName = r.Group,
-                    CriterionName = r.Name,
-                    Score = Math.Round(r.Max * ratio, 1),
-                    MaxScore = r.Max,
-                    Feedback = mockFeedbacks.TryGetValue(r.Key, out var f) ? f : "Chưa có nhận xét chi tiết.",
+                    Errors = ai?.Errors ?? new List<string>(),
+                    Suggestions = ai?.Suggestions ?? new List<string>(),
                 };
             }).ToList();
         }
@@ -357,6 +405,8 @@ namespace Service.Implementations
             public decimal Score { get; set; }
             public decimal MaxScore { get; set; }
             public string Feedback { get; set; } = string.Empty;
+            public List<string> Errors { get; set; } = new();
+            public List<string> Suggestions { get; set; } = new();
         }
     }
 }

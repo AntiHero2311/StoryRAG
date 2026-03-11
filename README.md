@@ -1,6 +1,291 @@
 # StoryRAG
 
-Ứng dụng hỗ trợ tác giả viết truyện với AI, sử dụng kỹ thuật RAG (Retrieval-Augmented Generation) để phân tích và trả lời câu hỏi về nội dung truyện.
+Ứng dụng hỗ trợ tác giả viết truyện với AI, sử dụng kỹ thuật **RAG (Retrieval-Augmented Generation)** — lưu nội dung dưới dạng vector embedding để AI có thể trả lời câu hỏi chính xác về bối cảnh, nhân vật, cốt truyện.
+
+---
+
+## 🏗️ Kiến trúc tổng thể
+
+```
+StoryRAG/
+├── Backend/   — ASP.NET Core Web API · PostgreSQL + pgvector · Gemini API
+└── Frontend/  — React 18 + TypeScript + Vite + TailwindCSS
+```
+
+---
+
+## ✨ Tính năng chính
+
+| Tính năng | Mô tả |
+|-----------|-------|
+| **Editor** | Workspace soạn thảo chương truyện với auto-save, quản lý phiên bản |
+| **Auto Embed** | Lưu chương → tự động chunk + embed ngầm → AI sẵn sàng ngay |
+| **AI Chat (RAG)** | Hỏi AI về nội dung truyện, nhân vật, bối cảnh dựa trên vector search |
+| **Lịch sử Chat** | Lưu toàn bộ Q&A theo dự án, xem lại bất cứ lúc nào |
+| **AI Rewrite** | Bôi đen đoạn văn → nhờ AI viết lại → xem lịch sử thay đổi |
+| **Phân tích AI** | Chấm điểm bản thảo theo rubric 100 điểm (14 tiêu chí, 5 nhóm) |
+| **Worldbuilding** | Quản lý bối cảnh, nhân vật — được đưa vào context khi hỏi AI |
+| **Gói đăng ký** | Free / Basic / Pro / Enterprise với giới hạn phân tích và token |
+
+---
+
+## 🤖 AI Providers
+
+| Provider | Vai trò | Model |
+|----------|---------|-------|
+| **Gemini API** (primary) | Chat + Embedding | `gemini-2.0-flash` / `gemini-embedding-001` |
+| **LM Studio** (fallback) | Chat khi Gemini lỗi non-429 | `qwen/qwen3.5-9b` (tùy chọn) |
+
+> **Free tier Gemini:** ~15 RPM cho chat, 100 RPM cho embedding. Backend tự động retry với backoff [10s → 30s → 65s] khi gặp 429. Embedding dùng `batchEmbedContents` — toàn bộ chunks trong 1 HTTP call.
+
+---
+
+## 🔄 RAG Pipeline
+
+```
+Ctrl+S / Lưu
+    ↓
+[1] Lưu nội dung chương
+    ↓ (ngầm)
+[2] Chunk — cắt text thành đoạn ~1500 ký tự, overlap 150
+    ↓
+[3] Embed — batchEmbedContents → vector 768 chiều → lưu pgvector
+    ↓ (indicator "AI sẵn sàng" trên navbar)
+
+Hỏi AI
+    ↓
+[4] Embed câu hỏi → vector
+    ↓
+[5] Cosine search — TopK chunks (chapter + worldbuilding + characters)
+    ↓
+[6] Gemini trả lời dựa trên context chunks
+```
+
+---
+
+## 🔧 Backend
+
+### Công nghệ
+
+- **Framework:** ASP.NET Core (.NET 8)
+- **Database:** PostgreSQL + pgvector extension
+- **ORM:** Entity Framework Core
+- **Auth:** JWT Bearer Token
+- **AI Primary:** Google Gemini API (via HTTP + OpenAI SDK compatible endpoint)
+- **AI Fallback:** LM Studio (OpenAI-compatible local server)
+
+### Cấu trúc 3 layers
+
+| Layer | Thư mục | Vai trò |
+|-------|---------|---------|
+| API | `Api/Controllers/` | HTTP endpoints, routing, DI |
+| Service | `Service/` | Business logic, AI integration, DTOs |
+| Repository | `Repository/` | Entities, DbContext, Migrations |
+
+### Controllers
+
+| Controller | Route | Mô tả |
+|------------|-------|-------|
+| `AuthController` | `/api/auth` | Đăng ký, đăng nhập, đổi mật khẩu |
+| `UserController` | `/api/user` | Profile, cài đặt |
+| `ProjectController` | `/api/project` | CRUD dự án + stats dashboard |
+| `ChapterController` | `/api/project/{id}/chapters` | Chương, phiên bản, chunking |
+| `AiController` | `/api/ai` | Embed, Chat (RAG), Rewrite, Phân tích, Lịch sử |
+| `WorldbuildingController` | `/api/project/{id}/worldbuilding` | Quản lý bối cảnh |
+| `CharacterController` | `/api/project/{id}/characters` | Quản lý nhân vật |
+| `SubscriptionController` | `/api/subscription` | Gói đăng ký |
+| `AdminController` | `/api/admin` | Quản trị user, thống kê |
+| `GenreController` | `/api/genre` | Thể loại truyện |
+
+### Database Schema
+
+```
+Users
+ ├── Projects
+ │    ├── Chapters
+ │    │    └── ChapterVersions
+ │    │         └── ChapterChunks  (embedding: vector(768))
+ │    ├── ProjectReports        (AI scoring)
+ │    ├── WorldbuildingEntries  (embedding: vector(768))
+ │    └── CharacterEntries      (embedding: vector(768))
+ ├── AiChatMessages            (lịch sử Q&A, encrypted)
+ ├── RewriteHistories          (lịch sử rewrite, encrypted)
+ └── UserSubscriptions → SubscriptionPlans
+
+SubscriptionPlans  (seed: Free / Basic / Pro / Enterprise)
+UserSettings       (editor font, size, theme...)
+```
+
+### Bảo mật nội dung
+
+Toàn bộ nội dung truyện được **mã hóa AES** trong database:
+- Mỗi user có **DEK** (Data Encryption Key) riêng.
+- DEK được mã hóa bằng **Master Key** trong config.
+- Nội dung chỉ giải mã trong memory khi cần xử lý.
+
+### Cấu hình (`appsettings.Development.json`)
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Database=storyrag;Username=postgres;Password=..."
+  },
+  "Jwt": {
+    "Key": "your-secret-key-min-32-chars",
+    "Issuer": "StoryRAG",
+    "Audience": "StoryRAG"
+  },
+  "Gemini": {
+    "ApiKey": "AIza...",
+    "ChatModel": "gemini-2.0-flash",
+    "EmbeddingModel": "gemini-embedding-001",
+    "EmbeddingDimensions": "768"
+  },
+  "AI": {
+    "BaseUrl": "http://localhost:1234/v1",
+    "ApiKey": "lm-studio",
+    "ChatModel": "qwen/qwen3.5-9b",
+    "EmbeddingModel": "nomic-embed-text"
+  },
+  "Security": {
+    "MasterKey": "your-master-key-min-32-chars"
+  }
+}
+```
+
+### Chạy Backend
+
+```bash
+cd Backend
+dotnet restore
+dotnet ef database update --project Repository --startup-project Api
+dotnet run --project Api
+```
+
+API: `http://localhost:5105` · Swagger: `http://localhost:5105/swagger`
+
+---
+
+## 🎨 Frontend
+
+### Công nghệ
+
+- **Framework:** React 18 + TypeScript
+- **Build:** Vite
+- **Styling:** TailwindCSS + CSS Variables (design tokens)
+- **HTTP:** Axios
+- **Icons:** Lucide React
+
+### Pages
+
+| Page | Route | Mô tả |
+|------|-------|-------|
+| `LandingPage` | `/` | Trang giới thiệu |
+| `LoginPage` | `/login` | Đăng nhập |
+| `RegisterPage` | `/register` | Đăng ký |
+| `HomePage` | `/home` | Dashboard: stats thực tế (dự án, chương, phân tích, chat) |
+| `ProjectsPage` | `/projects` | Danh sách dự án |
+| `WorkspacePage` | `/workspace/:projectId` | Editor + AI Chat + Rewrite + Worldbuilding |
+| `AnalysisPage` | `/analysis` | Phân tích AI — chấm điểm 100 điểm |
+| `SubscriptionPage` | `/subscription` | Subscription hiện tại |
+| `PlansPage` | `/plans` | Xem và chọn gói |
+| `ProfilePage` | `/profile` | Thông tin cá nhân |
+| `SettingsPage` | `/settings` | Cài đặt editor |
+| `AdminDashboardPage` | `/admin` | Quản trị user |
+| `AdminSubscriptionPage` | `/admin/subscription` | Quản trị gói |
+
+### WorkspacePage — UX chính
+
+```
+Ctrl+S hoặc nút "Lưu"
+  → Lưu nội dung ngay
+  → Toast "✅ Đã lưu"
+  → Ngầm: Chunk → Embed (indicator trên navbar)
+    "⏳ Đồng bộ AI..." → "✨ AI sẵn sàng"
+```
+
+**Panels:**
+- **Left** — Danh sách chương, thêm/xóa chương
+- **Center** — Editor contentEditable: font tùy chỉnh, bold/italic/underline, word count
+- **Right** — AI Chat (RAG) / Lịch sử phiên bản / Chat cũ
+- **Floating toolbar** — Bôi đen văn bản → nút "✨ Viết lại" → `RewritePanel`
+
+### Design System (Notion/Linear style)
+
+**Theme:** Dark `#111111` + Purple `#8b5cf6` · Light `#ffffff` + Purple `#7c3aed`
+
+| Token | Light | Dark |
+|-------|-------|------|
+| `--bg-app` | `#f8f8f8` | `#111111` |
+| `--bg-surface` | `#ffffff` | `#1a1a1a` |
+| `--bg-sidebar` | `#f3f3f3` | `#161616` |
+| `--accent` | `#7c3aed` | `#8b5cf6` |
+| `--text-primary` | `#0f0f0f` | `#f5f5f5` |
+| `--text-secondary` | `#6b7280` | `#a1a1aa` |
+
+### Toast System
+
+```tsx
+import { useToast } from '../components/Toast';
+
+const toast = useToast();
+toast.success('Đã lưu thành công');
+toast.error('Lỗi: ...');
+toast.info('AI đang đồng bộ...');
+toast.warning('Quota hết, thử lại sau');
+```
+
+### Chạy Frontend
+
+```bash
+cd Frontend
+npm install
+npm run dev
+```
+
+Frontend: `http://localhost:5173`
+
+---
+
+## 📊 Rubric chấm điểm AI (100 điểm)
+
+| # | Nhóm | Điểm |
+|---|------|------|
+| 1 | Cốt truyện & Mạch lạc (tính nhất quán, nhân quả, nút thắt) | 25 |
+| 2 | Xây dựng Nhân vật (động cơ, chiều sâu, đối thoại) | 25 |
+| 3 | Ngôn từ & Văn phong (ngữ pháp, cấu trúc câu, tránh sáo ngữ) | 20 |
+| 4 | Sáng tạo & Thể loại (độ sáng tạo, đặc trưng thể loại, sức cuốn hút) | 20 |
+| 5 | Tuân thủ & Hoàn thiện (mức độ hoàn thiện, định dạng) | 10 |
+
+| Điểm | Kết quả |
+|------|---------|
+| > 85 | ✅ Xuất sắc |
+| 71–85 | 🟢 Khá |
+| 51–70 | 🟡 Trung bình |
+| ≤ 50 | 🔴 Cần sửa lớn |
+
+---
+
+## 🚀 Khởi chạy toàn bộ
+
+```bash
+# 1. Tạo PostgreSQL database, bật extension vector
+# 2. Điền config vào Backend/Api/appsettings.Development.json
+
+# 3. Backend
+cd Backend
+dotnet restore
+dotnet ef database update --project Repository --startup-project Api
+dotnet run --project Api
+
+# 4. Frontend
+cd Frontend
+npm install
+npm run dev
+```
+
+> **LM Studio (tuỳ chọn):** Chỉ cần nếu muốn có fallback khi Gemini gặp lỗi non-429. Tải model `nomic-embed-text` và `qwen/qwen3.5-9b`, bật server tại `http://localhost:1234`.
+
 
 ---
 
@@ -180,6 +465,36 @@ npm run dev
 ```
 
 Frontend chạy tại `http://localhost:5173`
+
+### 🎨 Color Palette
+
+Bộ màu **Warm Parchment × Midnight Ink** — thiết kế để dễ đọc khi viết lâu.
+
+**☀️ Light Mode — Warm Parchment**
+
+| Token | Hex | Mô tả |
+|---|---|---|
+| `--bg-app` | `#ede8e1` | Kem giấy ấm (nền chính) |
+| `--bg-sidebar` | `#e4ddd5` | Kem đậm (sidebar) |
+| `--bg-surface` | `#f5f1ec` | Nền card/panel |
+| `--bg-topbar` | `#e4ddd5` | Topbar |
+| `--text-primary` | `#1c1611` | Nâu đen ấm |
+| `--text-secondary` | `#6b5f54` | Nâu xám |
+| `--border-color` | `#d0c9c0` | Viền kem |
+| `--input-bg` | `#ede8e3` | Nền input |
+
+**🌙 Dark Mode — Midnight Ink**
+
+| Token | Hex | Mô tả |
+|---|---|---|
+| `--bg-app` | `#0d0b12` | Đen tím sâu (nền chính) |
+| `--bg-sidebar` | `#161320` | Tím đen (sidebar) |
+| `--bg-surface` | `#1d1a2a` | Nền card/panel |
+| `--bg-topbar` | `#161320` | Topbar |
+| `--text-primary` | `#f0ecf8` | Trắng ấm (tím nhẹ) |
+| `--text-secondary` | `#9b93ab` | Tím xám nhạt |
+| `--border-color` | `rgba(255,255,255,0.06)` | Viền mờ |
+| `--input-bg` | `#221f30` | Nền input tối |
 
 ---
 

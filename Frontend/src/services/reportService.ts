@@ -8,6 +8,8 @@ export interface CriterionResult {
     score: number;
     maxScore: number;
     feedback: string;
+    errors: string[];
+    suggestions: string[];
 }
 
 export interface GroupResult {

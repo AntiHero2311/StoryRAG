@@ -28,9 +28,9 @@ Gõ vào ô tìm kiếm: `nomic-embed-text`
 > ⚠️ **Lưu ý quan trọng về tên model:** Trong LM Studio, sau khi load model lên Server, hãy kiểm tra cột `id` trong mục **Available Models**. Tên thực tế thường là `text-embedding-nomic-embed-text-v1.5` (không phải `nomic-embed-text`). Copy chính xác tên `id` đó vào `appsettings.Development.json` ở trường `EmbeddingModel`.
 
 ### 2. Model Chat / Reasoning (Dùng để trả lời câu chuyện, chấm điểm)
-Gõ vào ô tìm kiếm: `qwen3.5-9b` (hoặc `qwen/qwen3.5-9b`)
+Gõ vào ô tìm kiếm: `qwen2.5-1.5b-instruct`
 - Khuyên dùng: Chọn model của `bartowski` hoặc phiên bản đuôi **Q4_K_M** (để cân bằng hiệu năng và tốc độ).
-- Bấm **Download** (Dung lượng: ~6.55GB).
+- Bấm **Download** (Dung lượng: ~1GB).
 
 *(Ghi chú: Đây là model nhẹ nhất, phù hợp để test nhanh. Để AI mạnh hơn, xem **Bước 6: Model mạnh hơn** ở cuối tài liệu này.)*
 
@@ -42,7 +42,7 @@ Sau khi tải xong cả 2 Model, chúng ta cần bật API Server để Backend 
 
 1. Bấm vào icon **Developer (biểu tượng `< >`)** hoặc **Local Server** trên thanh bên trái của LM Studio.
 2. Ở phần **Model Loading**, bạn sẽ thấy một dropdown để chọn Model:
-   - Trong dropdown, chọn Model Chat: `qwen/qwen3.5-9b...`
+   - Trong dropdown, chọn Model Chat: `qwen2.5-1.5b-instruct...`
    - Đợi LM Studio tải Model vào RAM/VRAM máy tính.
 3. Ở khung **Server Options** bên phải màn hình:
    - **Cổng Server (Port)**: Chắc chắn là `1234`.
@@ -72,7 +72,7 @@ Khi Local Server đã chạy trơn tru, hãy mở source code Backend StoryRAG.
     "BaseUrl": "http://localhost:1234/v1",
     "ApiKey": "lm-studio",
     "EmbeddingModel": "text-embedding-nomic-embed-text-v1.5",
-    "ChatModel": "qwen/qwen3.5-9b"
+    "ChatModel": "qwen2.5-1.5b-instruct"
   }
 ```
 
@@ -104,7 +104,7 @@ Khi Local Server đã chạy trơn tru, hãy mở source code Backend StoryRAG.
 
 ## 🚀 Bước 6: Nâng cấp Model AI mạnh hơn
 
-Mặc định StoryRAG dùng `qwen/qwen3.5-9b` (9 tỷ tham số, ~6.55GB) — benchmark cao, hỗ trợ tiếng Việt tốt, Vision + Reasoning + Tool Use, context 262k. Dưới đây là các model đã được kiểm tra, sắp xếp theo chất lượng.
+Mặc định StoryRAG dùng `qwen2.5-1.5b-instruct` (~1GB) — Đây là phiên bản rất nhẹ, siêu tốc độ (lên đến 125 tok/s), hỗ trợ tiếng Việt khá tốt và tốn rất ít RAM/VRAM. Dưới đây là các model đã được kiểm tra, sắp xếp theo chất lượng.
 
 ### So sánh các Chat Model (đã kiểm tra)
 
@@ -138,7 +138,7 @@ Mặc định StoryRAG dùng `qwen/qwen3.5-9b` (9 tỷ tham số, ~6.55GB) — b
 
 ```json
 "AI": {
-  "ChatModel": "qwen/qwen3.5-9b",
+  "ChatModel": "qwen2.5-1.5b-instruct",
   "EmbeddingModel": "text-embedding-nomic-embed-text-v1.5"
 }
 ```

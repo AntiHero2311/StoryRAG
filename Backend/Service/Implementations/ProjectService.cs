@@ -157,6 +157,28 @@ namespace Service.Implementations
             await _context.SaveChangesAsync();
         }
 
+        public async Task<AuthorDashboardStats> GetUserStatsAsync(Guid userId)
+        {
+            var totalChapters = await _context.Chapters
+                .Where(c => c.Project.AuthorId == userId && !c.Project.IsDeleted)
+                .CountAsync();
+
+            var totalAnalysesUsed = await _context.UserSubscriptions
+                .Where(s => s.UserId == userId)
+                .SumAsync(s => (int?)s.UsedAnalysisCount) ?? 0;
+
+            var totalChatMessages = await _context.ChatMessages
+                .Where(m => m.UserId == userId)
+                .CountAsync();
+
+            return new AuthorDashboardStats
+            {
+                TotalChapters = totalChapters,
+                TotalAnalysesUsed = totalAnalysesUsed,
+                TotalChatMessages = totalChatMessages,
+            };
+        }
+
         private async Task<User> GetUserWithDekAsync(Guid userId)
         {
             var user = await _context.Users.FindAsync(userId)
