@@ -65,6 +65,10 @@ export interface UpdateVersionTitleRequest {
     title: string;
 }
 
+export interface RenameChapterRequest {
+    title: string;
+}
+
 // ── Service ────────────────────────────────────────────────────────────────
 
 export const chapterService = {
@@ -84,6 +88,10 @@ export const chapterService = {
 
     deleteChapter: (projectId: string, chapterId: string) =>
         api.delete(`/project/${projectId}/chapters/${chapterId}`).then(r => r.data),
+
+    /** Đổi tên chương (chỉ title, không ảnh hưởng content hay version). */
+    renameChapter: (projectId: string, chapterId: string, title: string) =>
+        api.patch<ChapterResponse>(`/project/${projectId}/chapters/${chapterId}/title`, { title }).then(r => r.data),
 
     // Version management
     getVersions: (projectId: string, chapterId: string) =>

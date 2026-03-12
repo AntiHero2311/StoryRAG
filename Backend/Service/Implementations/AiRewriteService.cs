@@ -18,6 +18,7 @@ namespace Service.Implementations
         private readonly ILogger<AiRewriteService> _logger;
         private readonly ChatClient _chatClient;        // LM Studio (fallback)
         private readonly ChatClient? _geminiChatClient; // Gemini (primary)
+        private readonly bool _geminiIsGemma;           // Gemma không hỗ trợ system role
 
         public AiRewriteService(AppDbContext context, IConfiguration config, ILogger<AiRewriteService> logger)
         {
@@ -36,7 +37,8 @@ namespace Service.Implementations
             var geminiKey = config["Gemini:ChatApiKey"] ?? string.Empty;
             if (!string.IsNullOrEmpty(geminiKey))
             {
-                var geminiModel = config["Gemini:ChatModel"] ?? "gemini-2.0-flash";
+                var geminiModel = config["Gemini:ChatModel"] ?? "gemma-3-27b-it";
+                _geminiIsGemma = geminiModel.StartsWith("gemma", StringComparison.OrdinalIgnoreCase);
                 var geminiOptions = new OpenAIClientOptions
                 {
                     Endpoint = new Uri("https://generativelanguage.googleapis.com/v1beta/openai/"),
@@ -52,8 +54,11 @@ namespace Service.Implementations
             {
                 try
                 {
+                    var geminiMessages = _geminiIsGemma
+                        ? GeminiRetryHelper.FlattenSystemForGemma(messages)
+                        : messages;
                     var geminiResult = await GeminiRetryHelper.ExecuteAsync(
-                        () => _geminiChatClient.CompleteChatAsync(messages),
+                        () => _geminiChatClient.CompleteChatAsync(geminiMessages),
                         _logger, "Gemini Rewrite");
                     return geminiResult.Value;
                 }
@@ -86,7 +91,7 @@ namespace Service.Implementations
                 ?? throw new KeyNotFoundException("Dự án không tồn tại hoặc bạn không có quyền truy cập.");
 
             // 2. Lấy user + DEK
-            var masterKey = _config["Encryption:MasterKey"] ?? throw new InvalidOperationException("Master key not configured.");
+            var masterKey = _config["Security:MasterKey"] ?? throw new InvalidOperationException("Master key not configured.");
             var user = await _context.Users.FindAsync(userId)
                 ?? throw new KeyNotFoundException("Người dùng không tồn tại.");
             var rawDek = EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
@@ -148,7 +153,7 @@ namespace Service.Implementations
                 .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted && p.AuthorId == userId)
                 ?? throw new KeyNotFoundException("Dự án không tồn tại.");
 
-            var masterKey = _config["Encryption:MasterKey"] ?? throw new InvalidOperationException("Master key not configured.");
+            var masterKey = _config["Security:MasterKey"] ?? throw new InvalidOperationException("Master key not configured.");
             var user = await _context.Users.FindAsync(userId)
                 ?? throw new KeyNotFoundException("Người dùng không tồn tại.");
             var rawDek = EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);

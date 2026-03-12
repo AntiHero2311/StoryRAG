@@ -135,6 +135,8 @@ export default function WorkspacePage() {
     const [isCreatingVersion, setIsCreatingVersion] = useState(false);
     const [renamingVersionNum, setRenamingVersionNum] = useState<number | null>(null);
     const [renameValue, setRenameValue] = useState('');
+    const [renamingChapterId, setRenamingChapterId] = useState<string | null>(null);
+    const [renameChapterValue, setRenameChapterValue] = useState('');
 
     // ── Chat state ─────────────────────────────────────────────────────────
     type ChatMsg = { role: 'user' | 'assistant'; content: string; tokens?: number };
@@ -267,6 +269,31 @@ export default function WorkspacePage() {
             }
         } catch (e: any) {
             toast.error(e?.response?.data?.message ?? 'Không thể xóa chương.');
+        }
+    };
+
+    // ── Rename chapter ─────────────────────────────────────────────────────
+    const doRenameChapter = async (chapterId: string, newTitle: string) => {
+        if (!projectId) return;
+        const trimmed = newTitle.trim();
+        if (!trimmed) { setRenamingChapterId(null); return; }
+        const ch = chapters.find(c => c.id === chapterId);
+        if (ch && (ch.title ?? `Chương ${ch.chapterNumber}`) === trimmed) {
+            setRenamingChapterId(null);
+            return;
+        }
+        try {
+            const updated = await chapterService.renameChapter(projectId, chapterId, trimmed);
+            setChapters(prev => prev.map(c => c.id === chapterId ? { ...c, title: updated.title } : c));
+            if (activeChapter?.id === chapterId) {
+                setActiveChapter(prev => prev ? { ...prev, title: updated.title } : prev);
+                setChapterTitle(updated.title ?? trimmed);
+            }
+            toast.success('Đã đổi tên chương.');
+        } catch (e: any) {
+            toast.error(e?.response?.data?.message ?? 'Không thể đổi tên chương.');
+        } finally {
+            setRenamingChapterId(null);
         }
     };
 
@@ -647,7 +674,7 @@ export default function WorkspacePage() {
                             chapters.map((ch) => (
                                 <div
                                     key={ch.id}
-                                    onClick={() => selectChapter(ch)}
+                                    onClick={() => renamingChapterId !== ch.id && selectChapter(ch)}
                                     className={`group w-full flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer transition-all border-l-2 ${activeChapter?.id === ch.id
                                         ? 'bg-[var(--accent)]/10 text-[var(--accent)] border-[var(--accent)]'
                                         : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 border-transparent'
@@ -655,17 +682,49 @@ export default function WorkspacePage() {
                                 >
                                     <FileText className="w-3.5 h-3.5 shrink-0" />
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-medium truncate">
-                                            {ch.title ?? `Chương ${ch.chapterNumber}`}
-                                        </p>
+                                        {renamingChapterId === ch.id ? (
+                                            <input
+                                                autoFocus
+                                                type="text"
+                                                value={renameChapterValue}
+                                                onChange={e => setRenameChapterValue(e.target.value)}
+                                                onBlur={() => doRenameChapter(ch.id, renameChapterValue)}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') { e.preventDefault(); doRenameChapter(ch.id, renameChapterValue); }
+                                                    if (e.key === 'Escape') { e.preventDefault(); setRenamingChapterId(null); }
+                                                }}
+                                                onClick={e => e.stopPropagation()}
+                                                className="w-full text-xs font-medium bg-[var(--bg-primary)] border border-[var(--accent)] rounded px-1.5 py-0.5 text-[var(--text-primary)] outline-none"
+                                            />
+                                        ) : (
+                                            <p className="text-xs font-medium truncate">
+                                                {ch.title ?? `Chương ${ch.chapterNumber}`}
+                                            </p>
+                                        )}
                                         <p className="text-[10px] opacity-50 mt-0.5">{ch.wordCount} từ · v{ch.currentVersionNum}</p>
                                     </div>
-                                    <button
-                                        onClick={e => { e.stopPropagation(); deleteChapter(ch.id); }}
-                                        className="w-5 h-5 hidden group-hover:flex items-center justify-center rounded text-[var(--text-secondary)] hover:text-rose-400 transition-colors"
-                                    >
-                                        <Trash2 className="w-3 h-3" />
-                                    </button>
+                                    {renamingChapterId !== ch.id && (
+                                        <div className="hidden group-hover:flex items-center gap-0.5">
+                                            <button
+                                                onClick={e => {
+                                                    e.stopPropagation();
+                                                    setRenameChapterValue(ch.title ?? `Chương ${ch.chapterNumber}`);
+                                                    setRenamingChapterId(ch.id);
+                                                }}
+                                                className="w-5 h-5 flex items-center justify-center rounded text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"
+                                                title="Đổi tên chương"
+                                            >
+                                                <Pencil className="w-3 h-3" />
+                                            </button>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); deleteChapter(ch.id); }}
+                                                className="w-5 h-5 flex items-center justify-center rounded text-[var(--text-secondary)] hover:text-rose-400 transition-colors"
+                                                title="Xóa chương"
+                                            >
+                                                <Trash2 className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             ))
                         )}
@@ -838,6 +897,13 @@ export default function WorkspacePage() {
                                         type="text"
                                         value={chapterTitle}
                                         onChange={e => setChapterTitle(e.target.value)}
+                                        onBlur={() => {
+                                            if (activeChapter && projectId && chapterTitle.trim() &&
+                                                chapterTitle !== (activeChapter.title ?? `Chương ${activeChapter.chapterNumber}`)) {
+                                                doRenameChapter(activeChapter.id, chapterTitle);
+                                            }
+                                        }}
+                                        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                                         className="w-full text-3xl font-bold text-[var(--text-primary)] bg-transparent outline-none mb-6 placeholder-[var(--text-secondary)]/30 border-none"
                                         style={{ fontFamily: `'${editorSettings.editorFont}', sans-serif`, letterSpacing: '-0.01em' }}
                                         placeholder="Tên chương..."

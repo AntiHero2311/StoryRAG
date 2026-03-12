@@ -77,6 +77,22 @@ namespace Api.Controllers
             catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
         }
 
+        /// <summary>Đổi tên chương (chỉ title).</summary>
+        [HttpPatch("{chapterId:guid}/title")]
+        public async Task<IActionResult> RenameChapter(Guid projectId, Guid chapterId, [FromBody] RenameChapterRequest request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized();
+                var chapter = await _chapterService.RenameChapterAsync(chapterId, userId.Value, request);
+                return Ok(chapter);
+            }
+            catch (UnauthorizedAccessException) { return Forbid(); }
+            catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
+        }
+
         [HttpDelete("{chapterId:guid}")]
         public async Task<IActionResult> DeleteChapter(Guid projectId, Guid chapterId)
         {

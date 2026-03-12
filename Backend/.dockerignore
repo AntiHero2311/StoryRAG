@@ -1,0 +1,24 @@
+# Build artifacts
+**/bin/
+**/obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+.config/
+
+# Logs
+*.log
+msbuild.binlog
+restore.log
+
+# EF Core bundles
+efbundle
+efbundle.exe
+
+# Local dev settings (không đưa vào image)
+**/appsettings.Development.json
+
+# SQL scripts (không cần trong image)
+*.sql

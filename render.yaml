@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: storyrag-backend
+    runtime: docker
+    dockerfilePath: ./Backend/Dockerfile
+    dockerContext: ./Backend
+    region: singapore
+    plan: free
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: Jwt__Key
+        sync: false
+      - key: Jwt__Issuer
+        value: StoryRAG_Issuer
+      - key: Jwt__Audience
+        value: StoryRAG_Audience
+      - key: Security__MasterKey
+        sync: false
+      - key: Gemini__ChatApiKey
+        sync: false
+      - key: Gemini__EmbedApiKey
+        sync: false
+      - key: Gemini__EmbeddingModel
+        value: gemini-embedding-001
+      - key: Gemini__ChatModel
+        value: gemma-3-27b-it
+      - key: Gemini__EmbeddingDimensions
+        value: "768"
+      - key: Email__SmtpHost
+        value: smtp.gmail.com
+      - key: Email__SmtpPort
+        value: "587"
+      - key: Email__Username
+        sync: false
+      - key: Email__Password
+        sync: false
+      - key: Email__FromName
+        value: StoryNest
+      - key: Email__FromAddress
+        sync: false
+      - key: Cors__AllowedOrigins
+        sync: false

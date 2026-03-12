@@ -23,6 +23,7 @@ namespace Service.Implementations
         private readonly ILogger<ProjectReportService> _logger;
         private readonly ChatClient _chatClient;        // LM Studio (fallback)
         private readonly ChatClient? _geminiChatClient; // Gemini (primary)
+        private readonly bool _geminiIsGemma;           // Gemma không hỗ trợ system role
         private const int TopK = 8;
 
         // ── Rubric definition─────────────────────────────────────────────────────
@@ -66,7 +67,8 @@ namespace Service.Implementations
             var geminiKey = config["Gemini:ChatApiKey"] ?? string.Empty;
             if (!string.IsNullOrEmpty(geminiKey))
             {
-                var geminiModel = config["Gemini:ChatModel"] ?? "gemini-2.0-flash";
+                var geminiModel = config["Gemini:ChatModel"] ?? "gemma-3-27b-it";
+                _geminiIsGemma = geminiModel.StartsWith("gemma", StringComparison.OrdinalIgnoreCase);
                 var geminiOptions = new OpenAIClientOptions
                 {
                     Endpoint = new Uri("https://generativelanguage.googleapis.com/v1beta/openai/"),
@@ -85,8 +87,11 @@ namespace Service.Implementations
             {
                 try
                 {
+                    var geminiMessages = _geminiIsGemma
+                        ? GeminiRetryHelper.FlattenSystemForGemma(messages)
+                        : messages;
                     var geminiResult = await GeminiRetryHelper.ExecuteAsync(
-                        () => _geminiChatClient.CompleteChatAsync(messages, options),
+                        () => _geminiChatClient.CompleteChatAsync(geminiMessages, options),
                         _logger, "Gemini Report");
                     return geminiResult.Value;
                 }

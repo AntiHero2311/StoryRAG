@@ -9,17 +9,21 @@
 -- BƯỚC 1: XÓA TOÀN BỘ (CASCADE để tránh lỗi FK)
 -- ────────────────────────────────────────────────────────────
 
-DROP TABLE IF EXISTS "UserSettings"         CASCADE;
-DROP TABLE IF EXISTS "ProjectReports"       CASCADE;
-DROP TABLE IF EXISTS "ProjectGenres"       CASCADE;
-DROP TABLE IF EXISTS "ChapterChunks"       CASCADE;
-DROP TABLE IF EXISTS "ChapterVersions"     CASCADE;
-DROP TABLE IF EXISTS "Chapters"            CASCADE;
-DROP TABLE IF EXISTS "UserSubscriptions"   CASCADE;
-DROP TABLE IF EXISTS "Projects"            CASCADE;
-DROP TABLE IF EXISTS "SubscriptionPlans"   CASCADE;
-DROP TABLE IF EXISTS "Genres"              CASCADE;
-DROP TABLE IF EXISTS "Users"               CASCADE;
+DROP TABLE IF EXISTS "RewriteHistories"      CASCADE;
+DROP TABLE IF EXISTS "ChatMessages"          CASCADE;
+DROP TABLE IF EXISTS "WorldbuildingEntries"  CASCADE;
+DROP TABLE IF EXISTS "CharacterEntries"      CASCADE;
+DROP TABLE IF EXISTS "UserSettings"          CASCADE;
+DROP TABLE IF EXISTS "ProjectReports"        CASCADE;
+DROP TABLE IF EXISTS "ProjectGenres"         CASCADE;
+DROP TABLE IF EXISTS "ChapterChunks"         CASCADE;
+DROP TABLE IF EXISTS "ChapterVersions"       CASCADE;
+DROP TABLE IF EXISTS "Chapters"              CASCADE;
+DROP TABLE IF EXISTS "UserSubscriptions"     CASCADE;
+DROP TABLE IF EXISTS "Projects"              CASCADE;
+DROP TABLE IF EXISTS "SubscriptionPlans"     CASCADE;
+DROP TABLE IF EXISTS "Genres"                CASCADE;
+DROP TABLE IF EXISTS "Users"                 CASCADE;
 DROP TABLE IF EXISTS "__EFMigrationsHistory" CASCADE;
 
 -- ────────────────────────────────────────────────────────────
@@ -250,6 +254,95 @@ CREATE TABLE "ProjectReports" (
     CONSTRAINT "FK_ProjectReports_Users"    FOREIGN KEY ("UserId")    REFERENCES "Users"    ("Id") ON DELETE CASCADE
 );
 
+-- ── WorldbuildingEntries ──────────────────────────────────────
+CREATE TABLE "WorldbuildingEntries" (
+    "Id"        uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "ProjectId" uuid                     NOT NULL,
+    "Title"     text                     NOT NULL,
+    "Content"   text                     NOT NULL DEFAULT '',
+    "Category"  character varying(50)    NOT NULL DEFAULT 'Other',
+    "Embedding" vector(768),
+    "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
+    "UpdatedAt" timestamp with time zone,
+    CONSTRAINT "PK_WorldbuildingEntries" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_WorldbuildingEntries_Projects_ProjectId" FOREIGN KEY ("ProjectId")
+        REFERENCES "Projects" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_WorldbuildingEntries_ProjectId" ON "WorldbuildingEntries" ("ProjectId");
+
+-- IVFFlat index cho vector search (uncomment sau khi có >= 100 rows embedding)
+-- CREATE INDEX "IX_WorldbuildingEntries_Embedding" ON "WorldbuildingEntries"
+--     USING ivfflat ("Embedding" vector_cosine_ops) WITH (lists = 100);
+
+-- ── CharacterEntries ──────────────────────────────────────────
+CREATE TABLE "CharacterEntries" (
+    "Id"          uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "ProjectId"   uuid                     NOT NULL,
+    "Name"        text                     NOT NULL,
+    "Role"        character varying(50)    NOT NULL DEFAULT 'Supporting',
+    "Description" text                     NOT NULL DEFAULT '',
+    "Background"  text,
+    "Notes"       text,
+    "Embedding"   vector(768),
+    "CreatedAt"   timestamp with time zone NOT NULL DEFAULT NOW(),
+    "UpdatedAt"   timestamp with time zone,
+    CONSTRAINT "PK_CharacterEntries" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_CharacterEntries_Projects_ProjectId" FOREIGN KEY ("ProjectId")
+        REFERENCES "Projects" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_CharacterEntries_ProjectId" ON "CharacterEntries" ("ProjectId");
+
+-- IVFFlat index cho vector search (uncomment sau khi có >= 100 rows embedding)
+-- CREATE INDEX "IX_CharacterEntries_Embedding" ON "CharacterEntries"
+--     USING ivfflat ("Embedding" vector_cosine_ops) WITH (lists = 100);
+
+-- ── ChatMessages ──────────────────────────────────────────────
+CREATE TABLE "ChatMessages" (
+    "Id"           uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "ProjectId"    uuid                     NOT NULL,
+    "UserId"       uuid                     NOT NULL,
+    "Question"     text                     NOT NULL,
+    "Answer"       text                     NOT NULL,
+    "InputTokens"  integer                  NOT NULL DEFAULT 0,
+    "OutputTokens" integer                  NOT NULL DEFAULT 0,
+    "TotalTokens"  integer                  NOT NULL DEFAULT 0,
+    "CreatedAt"    timestamp with time zone NOT NULL DEFAULT NOW(),
+    CONSTRAINT "PK_ChatMessages" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_ChatMessages_Projects_ProjectId" FOREIGN KEY ("ProjectId")
+        REFERENCES "Projects" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_ChatMessages_Users_UserId" FOREIGN KEY ("UserId")
+        REFERENCES "Users" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_ChatMessages_ProjectId_UserId" ON "ChatMessages" ("ProjectId", "UserId");
+CREATE INDEX "IX_ChatMessages_UserId"           ON "ChatMessages" ("UserId");
+
+-- ── RewriteHistories ──────────────────────────────────────────
+CREATE TABLE "RewriteHistories" (
+    "Id"            uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "ProjectId"     uuid                     NOT NULL,
+    "ChapterId"     uuid,
+    "UserId"        uuid                     NOT NULL,
+    "OriginalText"  text                     NOT NULL,
+    "RewrittenText" text                     NOT NULL,
+    "Instruction"   text                     NOT NULL DEFAULT '',
+    "TotalTokens"   integer                  NOT NULL DEFAULT 0,
+    "CreatedAt"     timestamp with time zone NOT NULL DEFAULT NOW(),
+    CONSTRAINT "PK_RewriteHistories" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_RewriteHistories_Projects_ProjectId" FOREIGN KEY ("ProjectId")
+        REFERENCES "Projects" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_RewriteHistories_Chapters_ChapterId" FOREIGN KEY ("ChapterId")
+        REFERENCES "Chapters" ("Id") ON DELETE SET NULL,
+    CONSTRAINT "FK_RewriteHistories_Users_UserId" FOREIGN KEY ("UserId")
+        REFERENCES "Users" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_RewriteHistories_ProjectId_UserId" ON "RewriteHistories" ("ProjectId", "UserId");
+CREATE INDEX "IX_RewriteHistories_UserId"            ON "RewriteHistories" ("UserId");
+CREATE INDEX "IX_RewriteHistories_ChapterId"         ON "RewriteHistories" ("ChapterId");
+
 -- ────────────────────────────────────────────────────────────
 -- BƯỚC 5: SEED DATA
 -- ────────────────────────────────────────────────────────────
@@ -298,4 +391,7 @@ INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
     ('20260227105604_AddChapterDraft',            '9.0.2'),
     ('20260227115512_UpdateChapterVersionSchema', '9.0.2'),
     ('20260228113206_AddProjectReports',          '9.0.2'),
-    ('20260228115136_AddUserSettings',            '9.0.2');
+    ('20260228115136_AddUserSettings',            '9.0.2'),
+    ('20260308053133_AddWorldbuildingAndCharacter','9.0.2'),
+    ('20260311090848_AddChatHistory',             '9.0.2'),
+    ('20260311100332_AddRewriteHistory',          '9.0.2');

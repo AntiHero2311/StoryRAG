@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using OpenAI.Chat;
 using System.ClientModel;
 using System.Net;
 
@@ -6,7 +7,7 @@ namespace Service.Helpers
 {
     /// <summary>
     /// Retry helper cho Gemini free tier — xử lý 429 Too Many Requests với exponential backoff.
-    /// Free tier limits: ~15 RPM cho chat, ~1500 RPD cho embedding.
+    /// Free tier limits: gemma-3-27b-it ~30 RPM / 14.4K RPD, gemini-embedding-001 ~100 RPM / 1K RPD.
     /// </summary>
     public static class GeminiRetryHelper
     {
@@ -38,6 +39,41 @@ namespace Service.Helpers
 
             // Attempt cuối — không catch, để lỗi propagate lên
             return await action();
+        }
+
+        /// <summary>
+        /// Gemma 3 không hỗ trợ system role ("Developer instruction is not enabled").
+        /// Phương thức này merge system message vào đầu user message đầu tiên.
+        /// </summary>
+        public static List<ChatMessage> FlattenSystemForGemma(IEnumerable<ChatMessage> messages)
+        {
+            var list = messages.ToList();
+            var systemParts = list
+                .OfType<SystemChatMessage>()
+                .SelectMany(s => s.Content)
+                .Select(p => p.Text)
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .ToList();
+
+            if (systemParts.Count == 0) return list;
+
+            var systemText = string.Join("\n\n", systemParts);
+            var remaining = list.Where(m => m is not SystemChatMessage).ToList();
+
+            var firstUser = remaining.FirstOrDefault(m => m is UserChatMessage);
+            if (firstUser != null)
+            {
+                var idx = remaining.IndexOf(firstUser);
+                var originalText = firstUser.Content[0].Text;
+                remaining[idx] = ChatMessage.CreateUserMessage(
+                    $"[Hướng dẫn hệ thống]\n{systemText}\n\n[Câu hỏi của người dùng]\n{originalText}");
+            }
+            else
+            {
+                remaining.Insert(0, ChatMessage.CreateUserMessage($"[Hướng dẫn hệ thống]\n{systemText}"));
+            }
+
+            return remaining;
         }
 
         private static bool Is429(Exception ex)

@@ -147,6 +147,15 @@ namespace Service.Implementations
             return detail;
         }
 
+        public async Task<ChapterResponse> RenameChapterAsync(Guid chapterId, Guid userId, RenameChapterRequest request)
+        {
+            var chapter = await GetChapterWithOwnerCheckAsync(chapterId, userId);
+            chapter.Title = request.Title.Trim();
+            chapter.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return MapToResponse(chapter);
+        }
+
         public async Task DeleteChapterAsync(Guid chapterId, Guid userId)
         {
             var chapter = await GetChapterWithOwnerCheckAsync(chapterId, userId);

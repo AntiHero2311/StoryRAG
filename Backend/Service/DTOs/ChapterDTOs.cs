@@ -34,6 +34,14 @@ namespace Service.DTOs
         public string? Title { get; set; }
     }
 
+    /// <summary>Đổi tên chương (chỉ title, không ảnh hưởng content).</summary>
+    public class RenameChapterRequest
+    {
+        [Required]
+        [MaxLength(255)]
+        public string Title { get; set; } = string.Empty;
+    }
+
     /// <summary>Đổi tên version.</summary>
     public class UpdateVersionTitleRequest
     {

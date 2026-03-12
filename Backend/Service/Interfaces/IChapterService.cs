@@ -12,6 +12,9 @@ namespace Service.Interfaces
         /// <summary>Lưu in-place: cập nhật nội dung + title của version đang active (không tạo version mới).</summary>
         Task<ChapterDetailResponse> UpdateChapterAsync(Guid chapterId, Guid userId, UpdateChapterRequest request);
 
+        /// <summary>Đổi tên chương (chỉ title, không ảnh hưởng content hay version).</summary>
+        Task<ChapterResponse> RenameChapterAsync(Guid chapterId, Guid userId, RenameChapterRequest request);
+
         Task DeleteChapterAsync(Guid chapterId, Guid userId);
 
         // ── Version management ─────────────────────────────────────────────────
