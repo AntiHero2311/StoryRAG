@@ -199,7 +199,12 @@ namespace Service.Implementations
             }
             var storyBibleText = bibleBuilder.ToString().Trim();
 
-            var criteria = await EvaluateWithAiAsync(projectTitle, decryptedChunks, storyBibleText, chapterCount, totalWords);
+            // Include author's AI instructions if set
+            var aiInstructions = !string.IsNullOrEmpty(project.AiInstructions)
+                ? EncryptionHelper.DecryptWithMasterKey(project.AiInstructions, rawDek)
+                : null;
+
+            var criteria = await EvaluateWithAiAsync(projectTitle, decryptedChunks, storyBibleText, chapterCount, totalWords, aiInstructions);
             var reportStatus = "Completed";
 
             // 5. Calculate total
@@ -293,7 +298,7 @@ namespace Service.Implementations
 
         private async Task<List<CriterionResult>> EvaluateWithAiAsync(
             string projectTitle, List<string> decryptedChunks, string? storyBibleText = null,
-            int chapterCount = 0, int totalWords = 0)
+            int chapterCount = 0, int totalWords = 0, string? aiInstructions = null)
         {
             // Use first TopK chunks as context (avoid token limit)
             var contextText = string.Join("\n\n---\n\n",
@@ -322,6 +327,10 @@ namespace Service.Implementations
             var biblePart = string.IsNullOrWhiteSpace(storyBibleText)
                 ? ""
                 : $"\n\nTHÔNG TIN TÁC PHẨM:\n{storyBibleText}";
+
+            var instructionsPart = string.IsNullOrWhiteSpace(aiInstructions)
+                ? ""
+                : $"\n\nGHI CHÚ CỦA TÁC GIẢ (lưu ý khi đánh giá):\n{aiInstructions}";
 
             var prompt = $$"""
                 Bạn là giám khảo văn học chuyên nghiệp. Nhiệm vụ: đọc kỹ toàn bộ văn bản và đánh giá nghiêm khắc, chi tiết theo 14 tiêu chí.
@@ -355,7 +364,7 @@ namespace Service.Implementations
                 4.2=Đặc trưng thể loại(5): có đáp ứng kỳ vọng thể loại không
                 4.3=Nhịp độ & Sức cuốn hút(5): pace, tension, muốn đọc tiếp không
                 5.1=Hoàn thiện bản thảo(5): số chương, độ hoàn chỉnh vòng cung câu chuyện
-                5.2=Định dạng & Trình bày(5): đoạn văn, đối thoại, xuống hàng{{biblePart}}
+                5.2=Định dạng & Trình bày(5): đoạn văn, đối thoại, xuống hàng{{biblePart}}{{instructionsPart}}
 
                 Nội dung tác phẩm "{{projectTitle}}":
                 {{contextText}}

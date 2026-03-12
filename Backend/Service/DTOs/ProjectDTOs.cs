@@ -10,6 +10,8 @@ namespace Service.DTOs
 
         public string? Summary { get; set; }
 
+        public string? AiInstructions { get; set; }
+
         public string Status { get; set; } = "Draft";
 
         public List<int> GenreIds { get; set; } = new();
@@ -23,6 +25,8 @@ namespace Service.DTOs
 
         public string? Summary { get; set; }
 
+        public string? AiInstructions { get; set; }
+
         public string? CoverImageURL { get; set; }
 
         public string Status { get; set; } = "Draft";
@@ -35,6 +39,7 @@ namespace Service.DTOs
         public Guid Id { get; set; }
         public string Title { get; set; } = string.Empty;
         public string? Summary { get; set; }
+        public string? AiInstructions { get; set; }
         public string? CoverImageURL { get; set; }
         public string Status { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }

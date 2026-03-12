@@ -15,6 +15,9 @@ namespace Repository.Entities
         /// <summary>AES-256 encrypted with user's DEK (nullable)</summary>
         public string? Summary { get; set; }
 
+        /// <summary>AES-256 encrypted — tác giả dặn AI: tone, quy tắc, spoiler rules...</summary>
+        public string? AiInstructions { get; set; }
+
         /// <summary>Plain text — public CDN URL, not sensitive</summary>
         public string? CoverImageURL { get; set; }
 

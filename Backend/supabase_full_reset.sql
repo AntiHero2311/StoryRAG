@@ -256,6 +256,10 @@ CREATE TABLE "ProjectReports" (
 );
 
 -- ── WorldbuildingEntries ──────────────────────────────────────
+-- Valid Category values:
+--   Primary: Setting (Bối cảnh), Location (Địa điểm), Rules (Quy tắc thế giới),
+--            Glossary (Thuật ngữ), Timeline (Dòng thời gian)
+--   Extended: Magic, History, Religion, Geography, Technology, World, Other
 CREATE TABLE "WorldbuildingEntries" (
     "Id"        uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
     "ProjectId" uuid                     NOT NULL,

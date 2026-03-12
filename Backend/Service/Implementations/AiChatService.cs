@@ -154,9 +154,12 @@ namespace Service.Implementations
             var masterKey = _config["Security:MasterKey"]!;
             var rawDek = EncryptionHelper.DecryptWithMasterKey(user!.DataEncryptionKey!, masterKey);
 
-            // Decrypt project summary (always included as context)
+            // Decrypt project summary and AI instructions (always included as context)
             var projectSummary = !string.IsNullOrEmpty(project.Summary)
                 ? EncryptionHelper.DecryptWithMasterKey(project.Summary, rawDek)
+                : null;
+            var aiInstructions = !string.IsNullOrEmpty(project.AiInstructions)
+                ? EncryptionHelper.DecryptWithMasterKey(project.AiInstructions, rawDek)
                 : null;
 
             var contextTexts = topChunks
@@ -179,7 +182,7 @@ namespace Service.Implementations
 
             // 6. Gọi OpenAI Chat với RAG context từ 3 nguồn
             var projectTitle = EncryptionHelper.DecryptWithMasterKey(project.Title, rawDek);
-            var systemPrompt = BuildSystemPrompt(projectTitle, projectSummary, contextTexts, worldbuildingTexts, characterTexts);
+            var systemPrompt = BuildSystemPrompt(projectTitle, projectSummary, aiInstructions, contextTexts, worldbuildingTexts, characterTexts);
 
             var messages = new List<ChatMessage>
             {
@@ -268,11 +271,15 @@ namespace Service.Implementations
             };
         }
 
-        private static string BuildSystemPrompt(string projectTitle, string? projectSummary, List<string> contextChunks, List<string> worldbuildingItems, List<string> characterItems)
+        private static string BuildSystemPrompt(string projectTitle, string? projectSummary, string? aiInstructions, List<string> contextChunks, List<string> worldbuildingItems, List<string> characterItems)
         {
             var summarySection = !string.IsNullOrWhiteSpace(projectSummary)
                 ? projectSummary
                 : "(Chưa có tóm tắt)";
+
+            var instructionsSection = !string.IsNullOrWhiteSpace(aiInstructions)
+                ? $"\n\n── [Ghi chú của tác giả — TUÂN THỦ TUYỆT ĐỐI] ──\n{aiInstructions}"
+                : string.Empty;
 
             var chunkSection = contextChunks.Count > 0
                 ? string.Join("\n\n---\n\n", contextChunks.Select((c, i) => $"[Đoạn {i + 1}]\n{c}"))
@@ -287,7 +294,7 @@ namespace Service.Implementations
                 : "(Chưa có nhân vật được embed)";
 
             return $"""
-                Bạn là trợ lý AI giúp tác giả phân tích và trả lời câu hỏi về nội dung truyện "{projectTitle}".
+                Bạn là trợ lý AI giúp tác giả phân tích và trả lời câu hỏi về nội dung truyện "{projectTitle}".{instructionsSection}
 
                 ── [Tóm tắt dự án] ──
                 {summarySection}

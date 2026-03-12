@@ -75,6 +75,9 @@ namespace Service.Implementations
                 Summary = string.IsNullOrEmpty(request.Summary)
                     ? null
                     : EncryptionHelper.EncryptWithMasterKey(request.Summary, rawDek),
+                AiInstructions = string.IsNullOrWhiteSpace(request.AiInstructions)
+                    ? null
+                    : EncryptionHelper.EncryptWithMasterKey(request.AiInstructions, rawDek),
                 Status = request.Status,
             };
 
@@ -117,6 +120,9 @@ namespace Service.Implementations
             project.Summary = newSummary == null
                 ? null
                 : EncryptionHelper.EncryptWithMasterKey(newSummary, rawDek);
+            project.AiInstructions = string.IsNullOrWhiteSpace(request.AiInstructions)
+                ? null
+                : EncryptionHelper.EncryptWithMasterKey(request.AiInstructions, rawDek);
 
             // Clear summary embedding when summary changes
             if (project.Summary == null) project.SummaryEmbedding = null;
@@ -316,6 +322,9 @@ namespace Service.Implementations
                 Summary = string.IsNullOrEmpty(project.Summary)
                     ? null
                     : EncryptionHelper.DecryptWithMasterKey(project.Summary, rawDek),
+                AiInstructions = string.IsNullOrEmpty(project.AiInstructions)
+                    ? null
+                    : EncryptionHelper.DecryptWithMasterKey(project.AiInstructions, rawDek),
                 CoverImageURL = project.CoverImageURL,
                 Status = project.Status,
                 CreatedAt = project.CreatedAt,

@@ -12,6 +12,7 @@ export interface ProjectResponse {
     id: string;
     title: string;
     summary: string | null;
+    aiInstructions: string | null;
     coverImageURL: string | null;
     status: 'Draft' | 'Published' | 'Archived';
     createdAt: string;
@@ -22,6 +23,7 @@ export interface ProjectResponse {
 export interface CreateProjectRequest {
     title: string;
     summary?: string;
+    aiInstructions?: string;
     status?: string;
     genreIds?: number[];
 }
@@ -29,6 +31,7 @@ export interface CreateProjectRequest {
 export interface UpdateProjectRequest {
     title: string;
     summary?: string;
+    aiInstructions?: string;
     coverImageURL?: string;
     status?: string;
     genreIds?: number[];

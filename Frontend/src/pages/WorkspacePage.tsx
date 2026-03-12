@@ -7,7 +7,7 @@ import {
     Undo2, Redo2, Save, Check, Loader2, Scissors,
     Clock, Send, Pencil, GitBranch, Zap, Type, Bot,
     Map, Users, Tag, AlignLeft, BookOpen, Search, Wand2, AlertCircle,
-    Download, Upload,
+    Download, Upload, Globe, MapPin, Shield, Scroll,
 } from 'lucide-react';
 import { getUserInfo } from '../utils/jwtHelper';
 import RewritePanel from '../components/RewritePanel';
@@ -23,6 +23,8 @@ import {
     type CreateWorldbuildingRequest,
     WORLDBUILDING_CATEGORIES,
     getCategoryLabel,
+    getCategoryColor,
+    getCategoryPlaceholder,
 } from '../services/worldbuildingService';
 import {
     characterService,
@@ -40,7 +42,7 @@ import { diffWords } from 'diff';
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
-type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis';
+type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions';
 
 // ── Diff Modal ─────────────────────────────────────────────────────────────
 function DiffModal({
@@ -919,6 +921,7 @@ export default function WorkspacePage() {
                                         { tab: 'synopsis' as ActiveTab, label: 'Tóm tắt', icon: AlignLeft, color: '#c084fc' },
                                         { tab: 'characters' as ActiveTab, label: 'Nhân vật', icon: Users, color: '#f472b6' },
                                         { tab: 'worldbuilding' as ActiveTab, label: 'Thế giới', icon: Map, color: 'var(--accent)' },
+                                        { tab: 'aiInstructions' as ActiveTab, label: 'Ghi chú AI', icon: Bot, color: '#34d399' },
                                     ] as const).map(item => {
                                         const isActive = activeTab === item.tab && rightPanelOpen;
                                         const Icon = item.icon;
@@ -1142,7 +1145,7 @@ export default function WorkspacePage() {
                         style={{ width: '320px', background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
                     >
                         {/* Panel header — tab switcher for History/AI, breadcrumb for Story Bible panels */}
-                        {(['worldbuilding', 'characters', 'genre', 'synopsis'] as ActiveTab[]).includes(activeTab) ? (
+                        {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions'] as ActiveTab[]).includes(activeTab) ? (
                             <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--border-color)] shrink-0">
                                 <button
                                     onClick={() => setActiveTab('chat')}
@@ -1156,6 +1159,7 @@ export default function WorkspacePage() {
                                     {activeTab === 'characters' && 'Nhân vật'}
                                     {activeTab === 'genre' && 'Thể loại'}
                                     {activeTab === 'synopsis' && 'Tóm tắt'}
+                                    {activeTab === 'aiInstructions' && 'Ghi chú AI'}
                                 </span>
                                 <button onClick={() => setRightPanelOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-lg shrink-0 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
                                     <X className="w-3.5 h-3.5" />
@@ -1637,6 +1641,11 @@ export default function WorkspacePage() {
                         {activeTab === 'synopsis' && projectId && (
                             <SynopsisPanel projectId={projectId} />
                         )}
+
+                        {/* ── AI Instructions Tab ── */}
+                        {activeTab === 'aiInstructions' && projectId && (
+                            <AiInstructionsPanel projectId={projectId} />
+                        )}
                     </div>
                 )}
             </div>
@@ -1645,6 +1654,20 @@ export default function WorkspacePage() {
 }
 
 // ── WorldbuildingPanel ─────────────────────────────────────────────────────
+
+function wbCategoryIcon(cat: string, size = 'w-3.5 h-3.5') {
+    const cls = `${size} shrink-0`;
+    switch (cat) {
+        case 'Setting':    return <Globe    className={cls} />;
+        case 'Location':   return <MapPin   className={cls} />;
+        case 'Rules':      return <Shield   className={cls} />;
+        case 'Glossary':   return <BookOpen className={cls} />;
+        case 'Timeline':   return <Clock    className={cls} />;
+        case 'Magic':      return <Zap      className={cls} />;
+        case 'History':    return <Scroll   className={cls} />;
+        default:           return <Map      className={cls} />;
+    }
+}
 
 function WorldbuildingPanel({ projectId }: { projectId: string }) {
     const [entries, setEntries] = useState<WorldbuildingEntry[]>([]);
@@ -1747,21 +1770,25 @@ function WorldbuildingPanel({ projectId }: { projectId: string }) {
                     <div>
                         <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-1.5 block">Danh mục</label>
                         <div className="flex flex-wrap gap-1.5">
-                            {WORLDBUILDING_CATEGORIES.map(c => (
-                                <button key={c.value} onClick={() => setForm(f => ({ ...f, category: c.value }))}
-                                    className="px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all"
-                                    style={form.category === c.value
-                                        ? { background: 'var(--accent)', color: '#fff' }
-                                        : { background: 'var(--bg-app)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
-                                    {c.label}
-                                </button>
-                            ))}
+                            {WORLDBUILDING_CATEGORIES.map(c => {
+                                const active = form.category === c.value;
+                                return (
+                                    <button key={c.value} onClick={() => setForm(f => ({ ...f, category: c.value }))}
+                                        className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all"
+                                        style={active
+                                            ? { background: `${c.color}22`, color: c.color, border: `1px solid ${c.color}55` }
+                                            : { background: 'var(--bg-app)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+                                        {wbCategoryIcon(c.value, 'w-2.5 h-2.5')}
+                                        {c.label}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                     <div>
                         <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-1.5 block">Nội dung</label>
                         <textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-                            placeholder="Mô tả chi tiết về yếu tố thế giới này..." rows={9}
+                            placeholder={getCategoryPlaceholder(form.category ?? 'Other')} rows={9}
                             className="w-full px-3 py-2 rounded-xl text-xs text-[var(--text-primary)] outline-none resize-none leading-relaxed"
                             style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }} />
                     </div>
@@ -1814,15 +1841,20 @@ function WorldbuildingPanel({ projectId }: { projectId: string }) {
                             : { background: 'var(--bg-app)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
                         Tất cả
                     </button>
-                    {usedCats.map(cat => (
-                        <button key={cat} onClick={() => setFilterCat(cat)}
-                            className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap shrink-0 transition-all"
-                            style={filterCat === cat
-                                ? { background: 'var(--accent)', color: '#fff' }
-                                : { background: 'var(--bg-app)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
-                            {getCategoryLabel(cat)}
-                        </button>
-                    ))}
+                    {usedCats.map(cat => {
+                        const color = getCategoryColor(cat);
+                        const active = filterCat === cat;
+                        return (
+                            <button key={cat} onClick={() => setFilterCat(cat)}
+                                className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap shrink-0 transition-all"
+                                style={active
+                                    ? { background: `${color}22`, color, border: `1px solid ${color}55` }
+                                    : { background: 'var(--bg-app)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+                                {wbCategoryIcon(cat, 'w-2.5 h-2.5')}
+                                {getCategoryLabel(cat)}
+                            </button>
+                        );
+                    })}
                 </div>
             )}
 
@@ -1845,20 +1877,27 @@ function WorldbuildingPanel({ projectId }: { projectId: string }) {
                         </button>
                     </div>
                 )}
-                {filtered.map(entry => (
+                {filtered.map(entry => {
+                    const color = getCategoryColor(entry.category);
+                    const isTimeline = entry.category === 'Timeline';
+                    return (
                     <div key={entry.id} className="rounded-2xl overflow-hidden transition-all"
-                        style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
+                        style={{
+                            background: 'var(--bg-app)',
+                            border: `1px solid var(--border-color)`,
+                            borderLeft: isTimeline ? `3px solid ${color}` : undefined,
+                        }}>
                         {/* Card body */}
                         <div className="px-3 pt-3 pb-2 flex items-start gap-2.5">
                             <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-                                style={{ background: 'rgba(139,92,246,0.12)' }}>
-                                <Map className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+                                style={{ background: `${color}18`, color }}>
+                                {wbCategoryIcon(entry.category)}
                             </div>
                             <div className="flex-1 min-w-0">
                                 <p className="text-xs font-bold text-[var(--text-primary)] truncate leading-tight">{entry.title}</p>
                                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                     <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
-                                        style={{ background: 'rgba(139,92,246,0.1)', color: 'var(--accent)' }}>
+                                        style={{ background: `${color}15`, color }}>
                                         {getCategoryLabel(entry.category)}
                                     </span>
                                     {entry.hasEmbedding
@@ -1898,7 +1937,8 @@ function WorldbuildingPanel({ projectId }: { projectId: string }) {
                             </button>
                         </div>
                     </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );
@@ -2504,6 +2544,115 @@ function SynopsisPanel({ projectId }: { projectId: string }) {
                             </span>
                         </div>
                     </>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function AiInstructionsPanel({ projectId }: { projectId: string }) {
+    const [instructions, setInstructions] = useState('');
+    const [savedInstructions, setSavedInstructions] = useState('');
+    const [projectTitle, setProjectTitle] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const dirty = instructions !== savedInstructions;
+
+    useEffect(() => {
+        setLoading(true);
+        projectService.getProject(projectId)
+            .then(p => {
+                const s = p.aiInstructions ?? '';
+                setInstructions(s);
+                setSavedInstructions(s);
+                setProjectTitle(p.title);
+            })
+            .catch(() => setError('Không thể tải ghi chú.'))
+            .finally(() => setLoading(false));
+    }, [projectId]);
+
+    const handleSave = async () => {
+        setSaving(true); setError(null);
+        try {
+            await projectService.updateProject(projectId, { title: projectTitle, aiInstructions: instructions });
+            setSavedInstructions(instructions);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+        } catch {
+            setError('Lưu thất bại. Thử lại.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="px-4 pt-3 pb-2 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                    <Bot className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-xs font-bold text-[var(--text-primary)]">Ghi chú AI</span>
+                    {dirty && !loading && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
+                            style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24' }}>
+                            Chưa lưu
+                        </span>
+                    )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                    {dirty && !loading && (
+                        <button onClick={() => { setInstructions(savedInstructions); setSaved(false); }}
+                            className="px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-colors"
+                            style={{ background: 'var(--hover-bg)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+                            Hoàn tác
+                        </button>
+                    )}
+                    <button onClick={handleSave} disabled={saving || loading || !dirty}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all disabled:opacity-40"
+                        style={{
+                            background: saved ? 'rgba(16,185,129,0.12)' : dirty ? 'rgba(52,211,153,0.15)' : 'var(--hover-bg)',
+                            color: saved ? '#10b981' : dirty ? '#34d399' : 'var(--text-secondary)',
+                            border: `1px solid ${saved ? 'rgba(16,185,129,0.2)' : dirty ? 'rgba(52,211,153,0.25)' : 'var(--border-color)'}`,
+                        }}>
+                        {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : saved ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
+                        {saved ? 'Đã lưu' : 'Lưu'}
+                    </button>
+                </div>
+            </div>
+
+            {/* Hint */}
+            <div className="mx-3 mb-2 px-3 py-2 rounded-xl text-[10px] leading-relaxed shrink-0"
+                style={{ background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.12)', color: 'var(--text-secondary)' }}>
+                💡 Những ghi chú này sẽ <strong>luôn được đưa vào context</strong> khi AI Chat và Phân tích. Dùng để dặn AI: giọng văn, quy tắc, spoiler, nhân vật bí ẩn...
+            </div>
+
+            {error && (
+                <div className="mx-3 mb-1 text-xs text-red-400 px-3 py-1.5 rounded-xl shrink-0" style={{ background: 'rgba(239,68,68,0.08)' }}>
+                    {error}
+                </div>
+            )}
+
+            <div className="flex-1 flex flex-col px-3 pb-3 gap-2 min-h-0">
+                {loading ? (
+                    <div className="flex items-center justify-center py-12">
+                        <Loader2 className="w-5 h-5 animate-spin text-emerald-400 opacity-60" />
+                    </div>
+                ) : (
+                    <div className="flex-1 relative min-h-0">
+                        <textarea
+                            value={instructions}
+                            onChange={e => { setInstructions(e.target.value); setSaved(false); }}
+                            placeholder={`Ví dụ:\n- Giọng văn: tối, buồn, gothic\n- Nhân vật X thực ra là phản diện, không tiết lộ\n- Magic system: không thể hồi sinh người chết\n- Truyện kết thúc bi kịch`}
+                            className="w-full h-full resize-none rounded-2xl text-[13px] leading-relaxed text-[var(--text-primary)] placeholder-[var(--text-secondary)] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all p-3.5"
+                            style={{
+                                background: 'var(--bg-app)',
+                                border: `1px solid ${dirty ? 'rgba(52,211,153,0.3)' : 'var(--border-color)'}`,
+                            }}
+                        />
+                    </div>
                 )}
             </div>
         </div>
