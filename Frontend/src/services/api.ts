@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Base URL of the C# Backend
-const BASE_URL = 'https://localhost:7259/api';
+// Base URL của Backend — override bằng .env.local khi dev local
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'https://localhost:7259/api';
 
 export const api = axios.create({
     baseURL: BASE_URL,

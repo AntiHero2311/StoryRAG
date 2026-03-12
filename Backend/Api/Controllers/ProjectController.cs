@@ -142,6 +142,27 @@ namespace Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Xuất toàn bộ chương của dự án thành file .txt.
+        /// </summary>
+        [HttpGet("{id:guid}/export")]
+        public async Task<IActionResult> ExportProject(Guid id)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var (fileName, content, mimeType) = await _projectService.ExportProjectAsync(id, userId.Value);
+                var bytes = System.Text.Encoding.UTF8.GetBytes(content);
+                return File(bytes, mimeType, fileName);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
         // ── Helper ───────────────────────────────────────────────────────────────
 
         private Guid? GetUserId()

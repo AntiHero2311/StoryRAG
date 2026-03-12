@@ -50,6 +50,18 @@ export const projectService = {
     deleteProject: (id: string) =>
         api.delete(`/project/${id}`).then(r => r.data),
 
+    exportProject: async (id: string, title: string) => {
+        const response = await api.get(`/project/${id}/export`, { responseType: 'blob' });
+        const url = URL.createObjectURL(new Blob([response.data], { type: 'text/plain;charset=utf-8' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${title}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    },
+
     getStats: () =>
         api.get<{ totalChapters: number; totalAnalysesUsed: number; totalChatMessages: number }>('/project/stats').then(r => r.data),
 };

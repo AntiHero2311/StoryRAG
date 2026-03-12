@@ -7,6 +7,7 @@ import {
     Undo2, Redo2, Save, Check, Loader2, Scissors,
     Clock, Send, Pencil, GitBranch, Zap, Type, Bot,
     Map, Users, Tag, AlignLeft, BookOpen, Search, Wand2, AlertCircle,
+    Download, Upload,
 } from 'lucide-react';
 import { getUserInfo } from '../utils/jwtHelper';
 import RewritePanel from '../components/RewritePanel';
@@ -161,10 +162,13 @@ export default function WorkspacePage() {
 
     // ── Refs ───────────────────────────────────────────────────────────────
     const editorRef = useRef<HTMLDivElement>(null);
+    const importFileRef = useRef<HTMLInputElement>(null);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // Tracks last time chunk+embed ran — Ctrl+S cooldown to avoid spam
     const lastEmbedRef = useRef<number>(0);
     const isEmbeddingRef = useRef<boolean>(false);
+    // Tracks which chapter is currently active to prevent stale async callbacks from overwriting it
+    const activeChapterIdRef = useRef<string | null>(null);
 
     // ── Init ───────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -229,6 +233,8 @@ export default function WorkspacePage() {
     // ── Select chapter ─────────────────────────────────────────────────────
     const selectChapter = async (ch: ChapterDetailResponse) => {
         if (!projectId) return;
+        // Mark intent early so stale background embeds won't overwrite after we switch
+        activeChapterIdRef.current = ch.id;
         // Save current before switching
         if (activeChapter && editorRef.current && activeChapter.id !== ch.id) {
             if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
@@ -264,12 +270,49 @@ export default function WorkspacePage() {
                 else {
                     setActiveChapter(null);
                     setChapterTitle('');
+                    activeChapterIdRef.current = null;
                     if (editorRef.current) editorRef.current.innerText = '';
                 }
             }
         } catch (e: any) {
             toast.error(e?.response?.data?.message ?? 'Không thể xóa chương.');
         }
+    };
+
+    // ── Export / Import chapter ─────────────────────────────────────────────
+    const handleExportChapter = () => {
+        if (!activeChapter || !editorRef.current) return;
+        const content = editorRef.current.innerText;
+        const title = chapterTitle || activeChapter.title || `Chương ${activeChapter.chapterNumber}`;
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${title}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !editorRef.current) return;
+        if (!confirm('Nội dung hiện tại sẽ bị thay thế bằng nội dung từ file. Tiếp tục?')) {
+            e.target.value = '';
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            const text = reader.result as string;
+            if (editorRef.current) {
+                editorRef.current.innerText = text;
+                updateWordCount();
+                scheduleAutoSave();
+            }
+        };
+        reader.readAsText(file, 'utf-8');
+        e.target.value = '';
     };
 
     // ── Rename chapter ─────────────────────────────────────────────────────
@@ -317,15 +360,19 @@ export default function WorkspacePage() {
             // Background chunk + embed (skip if already in progress)
             if (!isEmbeddingRef.current) {
                 isEmbeddingRef.current = true;
+                const embeddingChapterId = updated.id;
                 setAiSyncState('syncing');
                 (async () => {
                     try {
-                        await chapterService.chunkChapter(projectId, updated.id);
-                        await aiService.embedChapter(updated.id);
+                        await chapterService.chunkChapter(projectId, embeddingChapterId);
+                        await aiService.embedChapter(embeddingChapterId);
                         lastEmbedRef.current = Date.now();
-                        const embedded = await chapterService.getChapterDetail(projectId, updated.id);
+                        const embedded = await chapterService.getChapterDetail(projectId, embeddingChapterId);
                         setChapters(prev => prev.map(c => c.id === embedded.id ? embedded : c));
-                        setActiveChapter(embedded);
+                        // Only update active chapter if user hasn't switched away
+                        if (activeChapterIdRef.current === embeddingChapterId) {
+                            setActiveChapter(embedded);
+                        }
                         setAiSyncState('ready');
                         // Auto-reset to idle after 30s
                         setTimeout(() => setAiSyncState('idle'), 30_000);
@@ -878,6 +925,31 @@ export default function WorkspacePage() {
                         </div>
                         <div className="flex-1" />
                         <span className="text-[var(--text-secondary)] text-xs mr-2">{wordCount} từ</span>
+                        {activeChapter && (
+                            <>
+                                <button
+                                    onClick={handleExportChapter}
+                                    className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5"
+                                    title="Xuất chương (.txt)"
+                                >
+                                    <Download className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={() => importFileRef.current?.click()}
+                                    className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5"
+                                    title="Nhập chương từ file (.txt)"
+                                >
+                                    <Upload className="w-4 h-4" />
+                                </button>
+                                <input
+                                    ref={importFileRef}
+                                    type="file"
+                                    accept=".txt"
+                                    className="hidden"
+                                    onChange={handleImportFile}
+                                />
+                            </>
+                        )}
                         <button
                             onClick={() => setRightPanelOpen(o => !o)}
                             className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ml-1 ${rightPanelOpen ? 'bg-[var(--accent)]/10 text-[var(--accent)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5'}`}

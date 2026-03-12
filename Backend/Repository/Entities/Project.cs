@@ -1,3 +1,5 @@
+using Pgvector;
+
 namespace Repository.Entities
 {
     public class Project
@@ -20,6 +22,9 @@ namespace Repository.Entities
         public string Status { get; set; } = "Draft";
 
         public bool IsDeleted { get; set; } = false;
+
+        /// <summary>vector(768) embedding of project Summary — null until summary is saved</summary>
+        public Vector? SummaryEmbedding { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

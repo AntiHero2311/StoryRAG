@@ -80,5 +80,29 @@ namespace Api.Controllers
                 return BadRequest(new { Message = ex.Message });
             }
         }
+        [HttpPost("forgot-password")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            await _authService.ForgotPasswordAsync(request);
+            return Ok(new { Message = "Nếu email tồn tại, link đặt lại mật khẩu đã được gửi." });
+        }
+
+        [HttpPost("reset-password")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            try
+            {
+                await _authService.ResetPasswordAsync(request);
+                return Ok(new { Message = "Mật khẩu đã được đặt lại thành công." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
     }
 }

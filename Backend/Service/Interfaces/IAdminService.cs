@@ -6,5 +6,6 @@ namespace Service.Interfaces
     public interface IAdminService
     {
         Task<UserStatsResponse> GetUserStatsAsync();
+        Task<AdminOverviewStats> GetOverviewStatsAsync();
     }
 }

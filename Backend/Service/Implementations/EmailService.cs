@@ -44,6 +44,68 @@ namespace Service.Implementations
             await smtp.DisconnectAsync(true);
         }
 
+        public async Task SendPasswordResetEmailAsync(string toEmail, string fullName, string resetLink)
+        {
+            var smtpHost    = _config["Email:SmtpHost"]    ?? "smtp.gmail.com";
+            var smtpPort    = int.Parse(_config["Email:SmtpPort"] ?? "587");
+            var smtpUser    = _config["Email:Username"]    ?? "";
+            var smtpPass    = _config["Email:Password"]    ?? "";
+            var fromName    = _config["Email:FromName"]    ?? "StoryNest";
+            var fromAddress = _config["Email:FromAddress"] ?? smtpUser;
+
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(fromName, fromAddress));
+            message.To.Add(new MailboxAddress(fullName, toEmail));
+            message.Subject = "Đặt lại mật khẩu StoryNest 🔐";
+
+            var bodyBuilder = new BodyBuilder
+            {
+                HtmlBody = BuildResetHtmlBody(fullName, resetLink),
+                TextBody = $"Chào {fullName},\n\nBạn đã yêu cầu đặt lại mật khẩu.\nNhấn vào link sau để tiếp tục (có hiệu lực trong 1 giờ):\n{resetLink}\n\nNếu bạn không yêu cầu, hãy bỏ qua email này.\n\nTrân trọng,\nĐội ngũ StoryNest"
+            };
+            message.Body = bodyBuilder.ToMessageBody();
+
+            using var smtp = new SmtpClient();
+            await smtp.ConnectAsync(smtpHost, smtpPort, SecureSocketOptions.StartTls);
+            await smtp.AuthenticateAsync(smtpUser, smtpPass);
+            await smtp.SendAsync(message);
+            await smtp.DisconnectAsync(true);
+        }
+
+        private static string BuildResetHtmlBody(string fullName, string resetLink) => $"""
+            <!DOCTYPE html>
+            <html lang="vi">
+            <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+            <body style="margin:0;padding:0;background:#0a0a14;font-family:'Segoe UI',sans-serif;">
+              <div style="max-width:520px;margin:40px auto;background:linear-gradient(145deg,#141427,#1e1b4b);border:1px solid rgba(255,255,255,0.08);border-radius:24px;overflow:hidden;">
+                <div style="height:4px;background:linear-gradient(90deg,#6366f1,#8b5cf6,#ec4899);"></div>
+                <div style="padding:40px 36px;">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:32px;">
+                    <div style="width:36px;height:36px;background:rgba(99,102,241,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;">🔐</div>
+                    <span style="color:rgba(255,255,255,0.5);font-size:12px;font-weight:600;letter-spacing:3px;text-transform:uppercase;">StoryNest</span>
+                  </div>
+                  <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#ffffff;line-height:1.3;">Đặt lại mật khẩu</h1>
+                  <p style="margin:0 0 28px;font-size:15px;color:rgba(255,255,255,0.5);line-height:1.7;">
+                    Xin chào <strong style="color:rgba(255,255,255,0.8);">{fullName}</strong>,<br/>
+                    Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.<br/>
+                    Link có hiệu lực trong <strong style="color:#a78bfa;">1 giờ</strong>.
+                  </p>
+                  <a href="{resetLink}"
+                     style="display:block;text-align:center;padding:14px 28px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:14px;letter-spacing:0.3px;margin-bottom:24px;">
+                    Đặt lại mật khẩu →
+                  </a>
+                  <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.3);line-height:1.6;">
+                    Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này. Tài khoản của bạn vẫn an toàn.
+                  </p>
+                </div>
+                <div style="padding:20px 36px;border-top:1px solid rgba(255,255,255,0.06);">
+                  <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.2);text-align:center;">© 2026 StoryNest · Email tự động, vui lòng không trả lời.</p>
+                </div>
+              </div>
+            </body>
+            </html>
+            """;
+
         private static string BuildHtmlBody(string fullName) => $"""
             <!DOCTYPE html>
             <html lang="vi">

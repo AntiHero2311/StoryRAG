@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Pgvector;
 using Repository.Data;
 using Repository.Entities;
 using Service.DTOs;
 using Service.Helpers;
 using Service.Interfaces;
+using System.Net.Http.Json;
 
 namespace Service.Implementations
 {
@@ -79,6 +81,18 @@ namespace Service.Implementations
             _context.Projects.Add(project);
             await _context.SaveChangesAsync();
 
+            // Auto-embed summary if provided (non-fatal)
+            if (!string.IsNullOrWhiteSpace(request.Summary))
+            {
+                try
+                {
+                    var vector = await EmbedSummaryAsync(request.Summary);
+                    project.SummaryEmbedding = new Vector(vector);
+                    await _context.SaveChangesAsync();
+                }
+                catch { /* embedding failure is non-fatal */ }
+            }
+
             // Assign genres
             await SyncProjectGenresAsync(project.Id, request.GenreIds);
 
@@ -99,14 +113,32 @@ namespace Service.Implementations
             var rawDek = GetRawDek(user);
 
             project.Title = EncryptionHelper.EncryptWithMasterKey(request.Title, rawDek);
-            project.Summary = string.IsNullOrEmpty(request.Summary)
+            var newSummary = string.IsNullOrWhiteSpace(request.Summary) ? null : request.Summary;
+            project.Summary = newSummary == null
                 ? null
-                : EncryptionHelper.EncryptWithMasterKey(request.Summary, rawDek);
+                : EncryptionHelper.EncryptWithMasterKey(newSummary, rawDek);
+
+            // Clear summary embedding when summary changes
+            if (project.Summary == null) project.SummaryEmbedding = null;
+
             project.CoverImageURL = request.CoverImageURL;
             project.Status = request.Status;
             project.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+
+            // Auto-embed new summary (non-fatal)
+            if (!string.IsNullOrWhiteSpace(newSummary))
+            {
+                try
+                {
+                    var vector = await EmbedSummaryAsync(newSummary);
+                    project.SummaryEmbedding = new Vector(vector);
+                    project.UpdatedAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+                }
+                catch { /* embedding failure is non-fatal */ }
+            }
 
             // Sync genres
             await SyncProjectGenresAsync(project.Id, request.GenreIds);
@@ -157,6 +189,66 @@ namespace Service.Implementations
             await _context.SaveChangesAsync();
         }
 
+        public async Task<(string fileName, string content, string mimeType)> ExportProjectAsync(Guid projectId, Guid userId)
+        {
+            var project = await _context.Projects
+                .FirstOrDefaultAsync(p => p.Id == projectId && p.AuthorId == userId && !p.IsDeleted)
+                ?? throw new Exception("Không tìm thấy dự án.");
+
+            var user = await GetUserWithDekAsync(userId);
+            var rawDek = GetRawDek(user);
+
+            var title = EncryptionHelper.DecryptWithMasterKey(project.Title, rawDek);
+            var summary = string.IsNullOrEmpty(project.Summary)
+                ? null
+                : EncryptionHelper.DecryptWithMasterKey(project.Summary, rawDek);
+
+            var chapters = await _context.Chapters
+                .Where(c => c.ProjectId == projectId && !c.IsDeleted)
+                .OrderBy(c => c.ChapterNumber)
+                .ToListAsync();
+
+            var versionIds = chapters
+                .Where(c => c.CurrentVersionId.HasValue)
+                .Select(c => c.CurrentVersionId!.Value)
+                .ToList();
+
+            var versions = await _context.ChapterVersions
+                .Where(v => versionIds.Contains(v.Id))
+                .ToDictionaryAsync(v => v.Id);
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine(title);
+            sb.AppendLine(new string('═', 60));
+            if (!string.IsNullOrWhiteSpace(summary))
+            {
+                sb.AppendLine(summary);
+                sb.AppendLine(new string('─', 60));
+            }
+            sb.AppendLine();
+
+            foreach (var ch in chapters)
+            {
+                var chTitle = ch.Title ?? $"Chương {ch.ChapterNumber}";
+                sb.AppendLine($"Chương {ch.ChapterNumber}: {chTitle}");
+                sb.AppendLine(new string('─', 60));
+
+                if (ch.CurrentVersionId.HasValue && versions.TryGetValue(ch.CurrentVersionId.Value, out var ver))
+                {
+                    var chContent = EncryptionHelper.DecryptWithMasterKey(ver.Content, rawDek);
+                    sb.AppendLine(chContent);
+                }
+                sb.AppendLine();
+                sb.AppendLine(new string('═', 60));
+                sb.AppendLine();
+            }
+
+            var safeTitle = string.Concat(title.Split(System.IO.Path.GetInvalidFileNameChars()));
+            var fileName = $"{safeTitle}.txt";
+
+            return (fileName, sb.ToString(), "text/plain; charset=utf-8");
+        }
+
         public async Task<AuthorDashboardStats> GetUserStatsAsync(Guid userId)
         {
             var totalChapters = await _context.Chapters
@@ -195,6 +287,24 @@ namespace Service.Implementations
             string masterKey = _config["Security:MasterKey"]
                 ?? throw new Exception("MasterKey không tìm thấy trong cấu hình.");
             return EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
+        }
+
+        private async Task<float[]> EmbedSummaryAsync(string summaryText)
+        {
+            var text = $"search_document: {summaryText}";
+            var baseUrl = _config["AI:BaseUrl"] ?? "http://localhost:1234/v1";
+            var apiKey = _config["AI:ApiKey"] ?? "lm-studio";
+            var model = _config["AI:EmbeddingModel"] ?? "nomic-embed-text";
+
+            using var http = new System.Net.Http.HttpClient();
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+            var body = new { model, input = new[] { text } };
+            var response = await http.PostAsJsonAsync($"{baseUrl}/embeddings", body);
+            response.EnsureSuccessStatusCode();
+
+            var json = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            return json.GetProperty("data")[0].GetProperty("embedding")
+                .EnumerateArray().Select(x => x.GetSingle()).ToArray();
         }
 
         private static ProjectResponse MapToResponse(Project project, string rawDek)

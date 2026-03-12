@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
-    Plus, Pencil, Trash2, AlertTriangle, Loader2, MoreHorizontal, X, FolderOpen, Info, Search, ChevronDown, Check
+    Plus, Pencil, Trash2, AlertTriangle, Loader2, MoreHorizontal, X, FolderOpen, Info, Search, ChevronDown, Check, Download
 } from 'lucide-react';
 import {
     projectService,
@@ -324,35 +324,51 @@ function ProjectInfoModal({ project, onClose }: { project: ProjectResponse; onCl
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
             onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-3xl p-6 shadow-2xl">
-                <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-[var(--text-primary)] font-bold text-lg">Thông tin dự án</h2>
-                    <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
-                        <X className="w-4 h-4" />
-                    </button>
-                </div>
-
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">Tên dự án</label>
-                        <p className="text-[var(--text-primary)] font-medium bg-[var(--input-bg)] px-4 py-2.5 rounded-xl border border-[var(--border-color)]">{project.title}</p>
-                    </div>
-
-                    <div>
-                        <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">Trạng thái</label>
-                        <div className="bg-[var(--input-bg)] px-4 py-2.5 rounded-xl border border-[var(--border-color)]">
+            <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-3xl shadow-2xl overflow-hidden">
+                {/* Cover banner */}
+                <div className="relative h-28 bg-gradient-to-br from-[var(--accent)]/20 to-[var(--bg-primary)] flex items-end px-6 pb-4">
+                    {project.coverImageURL && (
+                        <img src={project.coverImageURL} alt="cover"
+                            className="absolute inset-0 w-full h-full object-cover opacity-30" />
+                    )}
+                    <div className="relative z-10 flex items-end gap-4 w-full">
+                        <div className="w-14 h-20 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] overflow-hidden shadow-lg flex items-center justify-center shrink-0">
+                            {project.coverImageURL
+                                ? <img src={project.coverImageURL} alt="cover" className="w-full h-full object-cover" />
+                                : <span className="text-2xl">📖</span>}
+                        </div>
+                        <div className="flex-1 min-w-0 mb-1">
+                            <p className="text-[var(--text-primary)] font-bold text-base truncate">{project.title}</p>
                             <StatusBadge status={project.status} />
                         </div>
+                        <button onClick={onClose} className="w-7 h-7 mb-1 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 transition-colors">
+                            <X className="w-4 h-4" />
+                        </button>
                     </div>
+                </div>
+
+                <div className="p-6 space-y-4">
+                    {project.genres.length > 0 && (
+                        <div>
+                            <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-2">Thể loại</label>
+                            <div className="flex flex-wrap gap-1.5">
+                                {project.genres.map(g => (
+                                    <span key={g.id}
+                                        className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold"
+                                        style={{ background: g.color + '20', color: g.color, border: `1px solid ${g.color}40` }}>
+                                        {g.name}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     <div>
                         <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">Tóm tắt</label>
                         <div className="bg-[var(--input-bg)] px-4 py-2.5 rounded-xl border border-[var(--border-color)] min-h-[4rem]">
-                            {project.summary ? (
-                                <p className="text-[var(--text-primary)] text-sm">{project.summary}</p>
-                            ) : (
-                                <p className="text-[var(--text-secondary)] text-sm italic">Không có tóm tắt</p>
-                            )}
+                            {project.summary
+                                ? <p className="text-[var(--text-primary)] text-sm">{project.summary}</p>
+                                : <p className="text-[var(--text-secondary)] text-sm italic">Không có tóm tắt</p>}
                         </div>
                     </div>
 
@@ -368,9 +384,9 @@ function ProjectInfoModal({ project, onClose }: { project: ProjectResponse; onCl
                     </div>
                 </div>
 
-                <div className="mt-6">
+                <div className="px-6 pb-6">
                     <button onClick={onClose} className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 flex items-center justify-center"
-                        style={{ background: 'var(--text-secondary)' }}>
+                        style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}>
                         Đóng
                     </button>
                 </div>
@@ -616,6 +632,9 @@ function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
                                             </button>
                                             <button onClick={() => { onEdit(project); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
                                                 <Pencil className="w-3.5 h-3.5" /> Chỉnh sửa
+                                            </button>
+                                            <button onClick={() => { projectService.exportProject(project.id, project.title); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
+                                                <Download className="w-3.5 h-3.5" /> Xuất file
                                             </button>
                                             <button onClick={() => { onDelete(project); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-rose-400 hover:bg-rose-500/10 transition-colors">
                                                 <Trash2 className="w-3.5 h-3.5" /> Xóa dự án

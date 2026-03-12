@@ -107,6 +107,49 @@ namespace Service.Implementations
             };
         }
 
+        public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email && u.IsActive);
+            // Always return success to avoid email enumeration
+            if (user == null) return;
+
+            // Generate secure token
+            var tokenBytes = new byte[32];
+            using (var rng = RandomNumberGenerator.Create()) rng.GetBytes(tokenBytes);
+            var token = Convert.ToBase64String(tokenBytes).Replace('+', '-').Replace('/', '_').TrimEnd('=');
+
+            user.PasswordResetToken = token;
+            user.PasswordResetTokenExpiryTime = DateTime.UtcNow.AddHours(1);
+            await _context.SaveChangesAsync();
+
+            var frontendUrl = _config["App:FrontendUrl"] ?? "http://localhost:5173";
+            var resetLink = $"{frontendUrl}/reset-password?token={token}";
+
+            _ = Task.Run(async () =>
+            {
+                try { await _emailService.SendPasswordResetEmailAsync(user.Email, user.FullName, resetLink); }
+                catch { /* gửi mail thất bại không làm fail request */ }
+            });
+        }
+
+        public async Task ResetPasswordAsync(ResetPasswordRequest request)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u =>
+                u.PasswordResetToken == request.Token &&
+                u.PasswordResetTokenExpiryTime > DateTime.UtcNow);
+
+            if (user == null)
+                throw new Exception("Token không hợp lệ hoặc đã hết hạn.");
+
+            CreatePasswordHash(request.NewPassword, out string hash, out string salt);
+            user.PasswordHash = hash;
+            user.PasswordSalt = salt;
+            user.PasswordResetToken = null;
+            user.PasswordResetTokenExpiryTime = null;
+
+            await _context.SaveChangesAsync();
+        }
+
         public async Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
         {
             var user = await _context.Users.FindAsync(userId);

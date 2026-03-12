@@ -173,7 +173,9 @@ export default function LoginPage() {
                                     <label className="text-xs font-semibold text-[var(--text-secondary)] group-focus-within:text-indigo-500 transition-colors">
                                         Mật khẩu
                                     </label>
-                                    <button type="button" className="text-xs font-medium text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors hover:underline underline-offset-4">
+                                    <button type="button"
+                                        onClick={() => navigate('/forgot-password')}
+                                        className="text-xs font-medium text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors hover:underline underline-offset-4">
                                         Quên mật khẩu?
                                     </button>
                                 </div>

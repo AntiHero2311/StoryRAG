@@ -1,0 +1,616 @@
+# COMPLETE API SURFACE MAP - StoryRAG Project
+# Generated: 2026-03-12 18:37:29
+
+## ============================================================================
+## BACKEND CONTROLLERS SUMMARY
+## ============================================================================
+
+**Total Controllers:** 12
+**Total Endpoints:** 69+
+**Base URL:** https://localhost:7259/api
+
+---
+
+## CONTROLLERS & DETAILED ENDPOINTS
+
+### 1. AdminController
+Route Prefix: /api/admin | Authorization: Admin Role
+
+├── GET /users/stats
+│   └─ Get user statistics (total, by role, detailed list)
+
+---
+
+### 2. AiController
+Route Prefix: /api/ai | Authorization: [Authorize]
+
+├── EMBEDDING & ANALYSIS
+│   ├── POST /chapters/{chapterId}/embed
+│   │   └─ Embed all chunks of chapter's current version
+│   ├── POST /{projectId}/analyze [LongRunning]
+│   │   └─ Analyze project by 100-point rubric, save result
+│   ├── GET /{projectId}/reports/latest
+│   │   └─ Get latest analysis report
+│   ├── GET /{projectId}/reports
+│   │   └─ Get full analysis report history
+│   └── GET /{projectId}/reports/{reportId}
+│       └─ Get specific report by ID
+│
+├── CHAT FUNCTIONALITY
+│   ├── POST /{projectId}/chat
+│   │   ├─ Body: { question: string }
+│   │   └─ Response: AiChatResult (answer, tokens, contextChunks)
+│   └── GET /{projectId}/chat/history
+│       ├─ Params: page, pageSize
+│       └─ Response: ChatHistoryResult (paginated items)
+│
+└── REWRITE FUNCTIONALITY
+    ├── POST /{projectId}/rewrite [LongRunning]
+    │   ├─ Body: { originalText, instruction?, chapterId? }
+    │   └─ Response: RewriteResult
+    └── GET /{projectId}/rewrite/history
+        ├─ Params: page, pageSize, chapterId?
+        └─ Response: RewriteHistoryResult (paginated items)
+
+---
+
+### 3. AuthController
+Route Prefix: /api/auth | Authorization: Public
+
+├── POST /register
+│   ├─ Body: { fullName, email, password }
+│   └─ Response: AuthResponse (token, userId, role)
+│
+├── POST /login
+│   ├─ Body: { email, password }
+│   └─ Response: AuthResponse
+│
+└── PUT /change-password [Authorize required]
+    ├─ Body: { oldPassword, newPassword }
+    └─ Response: { message }
+
+---
+
+### 4. BugReportController
+Route Prefix: /api/bug-reports | Authorization: [Authorize]
+
+├── USER OPERATIONS
+│   ├── POST / 
+│   │   ├─ Body: { title, description, category, priority }
+│   │   └─ Response: BugReportResponse
+│   │
+│   └── GET /my
+│       └─ Response: List<BugReportResponse> (user's reports only)
+│
+└── STAFF/ADMIN OPERATIONS [Roles="Staff,Admin"]
+    ├── GET / [optional ?status=Open|InProgress|Resolved|Closed]
+    │   └─ Response: List<BugReportResponse> (all reports)
+    │
+    ├── GET /stats
+    │   └─ Response: BugReportStatsResponse
+    │
+    ├── PUT /{reportId}
+    │   ├─ Body: { status, staffNote? }
+    │   └─ Response: BugReportResponse
+    │
+    └── DELETE /{reportId} [Admin only]
+        └─ Response: 204 NoContent
+
+---
+
+### 5. ChapterController
+Route Prefix: /api/project/{projectId}/chapters | Authorization: [Authorize]
+
+├── CHAPTER CRUD
+│   ├── GET /
+│   │   └─ Response: List<ChapterResponse>
+│   │
+│   ├── GET /{chapterId}
+│   │   └─ Response: ChapterDetailResponse (with versions, content)
+│   │
+│   ├── POST /
+│   │   ├─ Body: { chapterNumber, title?, content }
+│   │   └─ Response: ChapterDetailResponse
+│   │
+│   ├── PUT /{chapterId}
+│   │   ├─ Body: { title?, content }
+│   │   ├─ Note: Updates active version in-place (NO new version)
+│   │   └─ Response: ChapterDetailResponse
+│   │
+│   ├── PATCH /{chapterId}/title
+│   │   ├─ Body: { title }
+│   │   └─ Response: ChapterResponse
+│   │
+│   └── DELETE /{chapterId}
+│       └─ Response: { message }
+│
+├── VERSION MANAGEMENT
+│   ├── GET /{chapterId}/versions
+│   │   └─ Response: List<ChapterVersionSummary>
+│   │
+│   ├── GET /{chapterId}/versions/{versionNumber}
+│   │   └─ Response: ChapterVersionDetailResponse (with chunks)
+│   │
+│   ├── POST /{chapterId}/versions
+│   │   ├─ Body: { title? }
+│   │   ├─ Note: Creates new empty version, sets as active
+│   │   └─ Response: ChapterDetailResponse
+│   │
+│   ├── PATCH /{chapterId}/versions/{versionNumber}/activate
+│   │   ├─ Note: Switch to different version as active
+│   │   └─ Response: ChapterDetailResponse
+│   │
+│   ├── PATCH /{chapterId}/versions/{versionNumber}/title
+│   │   ├─ Body: { title }
+│   │   └─ Response: ChapterVersionSummary
+│   │
+│   └── DELETE /{chapterId}/versions/{versionNumber}
+│       ├─ Note: Only works if chapter has ≥2 versions
+│       └─ Response: { message }
+│
+└── CHUNKING
+    └── POST /{chapterId}/chunk
+        └─ Response: ChapterVersionDetailResponse (with chunks)
+
+---
+
+### 6. CharacterController
+Route Prefix: /api/project/{projectId}/character | Authorization: [Authorize]
+
+├── GET /
+│   └─ Response: List<CharacterEntry>
+│
+├── GET /{id}
+│   └─ Response: CharacterEntry
+│
+├── POST /
+│   ├─ Body: { name, role?, description, background?, notes? }
+│   └─ Response: CharacterEntry
+│
+├── PUT /{id}
+│   ├─ Body: { name?, role?, description?, background?, notes? }
+│   └─ Response: CharacterEntry
+│
+├── DELETE /{id}
+│   └─ Response: 204 NoContent
+│
+└── POST /{id}/embed
+    ├─ Note: Generate embedding for this character
+    └─ Response: CharacterEntry (hasEmbedding=true)
+
+---
+
+### 7. GenreController
+Route Prefix: /api/genre | Authorization: [Authorize]
+
+├── GET / [Roles="Author,Admin,Staff"]
+│   └─ Response: List<GenreResponse>
+│
+├── POST / [Admin only]
+│   ├─ Body: { name, slug, color?, description? }
+│   └─ Response: GenreResponse
+│
+├── PUT /{id} [Admin only]
+│   ├─ Body: { name, slug, color?, description? }
+│   └─ Response: GenreResponse
+│
+└── DELETE /{id} [Admin only]
+    └─ Response: { message }
+
+---
+
+### 8. ProjectController
+Route Prefix: /api/project | Authorization: Roles="Author"
+
+├── GET /
+│   └─ Response: List<ProjectResponse>
+│
+├── GET /{id}
+│   └─ Response: ProjectResponse
+│
+├── POST /
+│   ├─ Body: { title, summary?, status?, genreIds? }
+│   └─ Response: ProjectResponse
+│
+├── PUT /{id}
+│   ├─ Body: { title, summary?, coverImageURL?, status?, genreIds? }
+│   └─ Response: ProjectResponse
+│
+├── DELETE /{id}
+│   ├─ Note: Soft delete (IsDeleted=true)
+│   └─ Response: { message }
+│
+└── GET /stats
+    └─ Response: { totalChapters, totalAnalysesUsed, totalChatMessages }
+
+---
+
+### 9. SubscriptionController
+Route Prefix: /api/subscription | Authorization: Mixed
+
+├── PLANS - ADMIN
+│   ├── GET /plans [Authorize]
+│   │   ├─ Params: ?includeInactive=true (Admin only)
+│   │   └─ Response: List<SubscriptionPlan>
+│   │
+│   ├── GET /plans/{id} [Authorize]
+│   │   └─ Response: SubscriptionPlan
+│   │
+│   ├── POST /plans [Admin only]
+│   │   ├─ Body: { planName, price, maxAnalysisCount, maxTokenLimit, description?, isActive }
+│   │   └─ Response: SubscriptionPlan
+│   │
+│   ├── PUT /plans/{id} [Admin only]
+│   │   ├─ Body: partial update fields
+│   │   └─ Response: SubscriptionPlan
+│   │
+│   └── DELETE /plans/{id} [Admin only]
+│       ├─ Note: Deactivate plan
+│       └─ Response: { message }
+│
+└── MY SUBSCRIPTION - USER
+    ├── POST /subscribe [Authorize]
+    │   ├─ Body: { planId }
+    │   ├─ Note: Free plans (price=0) auto-activate
+    │   └─ Response: UserSubscription
+    │
+    └── GET /my [Authorize]
+        └─ Response: { message?, subscription?: UserSubscription | null }
+
+---
+
+### 10. UserController
+Route Prefix: /api/user | Authorization: [Authorize]
+
+├── GET /profile
+│   └─ Response: UserProfile (id, fullName, email, avatarURL, role)
+│
+└── PUT /profile
+    ├─ Body: { fullName, avatarURL? }
+    └─ Response: UserProfile
+
+---
+
+### 11. UserSettingsController
+Route Prefix: /api/settings | Authorization: [Authorize]
+
+├── GET /
+│   └─ Response: EditorSettings (editorFont, editorFontSize)
+│
+└── PUT /
+    ├─ Body: { editorFont?, editorFontSize? }
+    └─ Response: EditorSettings
+
+---
+
+### 12. WorldbuildingController
+Route Prefix: /api/project/{projectId}/worldbuilding | Authorization: [Authorize]
+
+├── GET /
+│   └─ Response: List<WorldbuildingEntry>
+│
+├── GET /{id}
+│   └─ Response: WorldbuildingEntry
+│
+├── POST /
+│   ├─ Body: { title, content, category? }
+│   └─ Response: WorldbuildingEntry
+│
+├── PUT /{id}
+│   ├─ Body: { title?, content?, category? }
+│   └─ Response: WorldbuildingEntry
+│
+├── DELETE /{id}
+│   └─ Response: 204 NoContent
+│
+└── POST /{id}/embed
+    ├─ Note: Generate embedding for this entry
+    └─ Response: WorldbuildingEntry (hasEmbedding=true)
+
+---
+
+## ============================================================================
+## SERVICE INTERFACES INVENTORY (17 Interfaces)
+## ============================================================================
+
+IAdminService
+├── GetUserStatsAsync() -> UserStatsResponse
+
+IAiChatService
+├── ChatAsync(projectId, question, userId) -> AiChatResult
+└── GetChatHistoryAsync(projectId, userId, page, pageSize) -> ChatHistoryResult
+
+IAiRewriteService
+├── RewriteAsync(projectId, chapterId?, text, instruction, userId) -> RewriteResult
+└── GetHistoryAsync(projectId, userId, chapterId?, page, pageSize) -> RewriteHistoryResult
+
+IAuthService
+├── RegisterAsync(request) -> AuthResponse
+├── LoginAsync(request) -> AuthResponse
+└── ChangePasswordAsync(userId, request) -> bool
+
+IBugReportService
+├── CreateAsync(userId, request) -> BugReportResponse
+├── GetMyReportsAsync(userId) -> List<BugReportResponse>
+├── GetAllAsync(statusFilter?) -> List<BugReportResponse>
+├── GetStatsAsync() -> BugReportStatsResponse
+├── UpdateStatusAsync(reportId, staffId, request) -> BugReportResponse
+└── DeleteAsync(reportId) -> void
+
+ICharacterService
+├── GetAllAsync(projectId, userId) -> List<CharacterResponse>
+├── GetByIdAsync(id, projectId, userId) -> CharacterResponse?
+├── CreateAsync(projectId, userId, request) -> CharacterResponse
+├── UpdateAsync(id, projectId, userId, request) -> CharacterResponse
+├── DeleteAsync(id, projectId, userId) -> void
+└── EmbedAsync(id, projectId, userId) -> CharacterResponse
+
+IChapterService (13 methods)
+├── GetChaptersByProjectAsync(projectId, userId) -> List<ChapterResponse>
+├── GetChapterDetailAsync(chapterId, userId) -> ChapterDetailResponse
+├── CreateChapterAsync(projectId, userId, request) -> ChapterDetailResponse
+├── UpdateChapterAsync(chapterId, userId, request) -> ChapterDetailResponse
+├── RenameChapterAsync(chapterId, userId, request) -> ChapterResponse
+├── DeleteChapterAsync(chapterId, userId) -> void
+├── GetVersionsAsync(chapterId, userId) -> List<ChapterVersionSummary>
+├── GetVersionDetailAsync(chapterId, versionNumber, userId) -> ChapterVersionDetailResponse
+├── CreateNewVersionAsync(chapterId, userId, request) -> ChapterDetailResponse
+├── SetActiveVersionAsync(chapterId, versionNumber, userId) -> ChapterDetailResponse
+├── UpdateVersionTitleAsync(chapterId, versionNumber, userId, request) -> ChapterVersionSummary
+├── DeleteVersionAsync(chapterId, versionNumber, userId) -> void
+└── ChunkVersionAsync(chapterId, userId) -> ChapterVersionDetailResponse
+
+IChunkingService
+├── SplitIntoChunks(content, chunkSize=1500, overlap=150) -> List<string>
+└── EstimateTokenCount(text) -> int
+
+IEmbeddingService
+├── EmbedChapterAsync(chapterId, userId) -> void
+└── GetEmbeddingAsync(text) -> float[]
+
+IEmailService
+└── SendWelcomeEmailAsync(email, fullName) -> void
+
+IGenreService
+├── GetAllGenresAsync() -> List<GenreResponse>
+├── GetGenreByIdAsync(id) -> GenreResponse
+├── CreateGenreAsync(request) -> GenreResponse
+├── UpdateGenreAsync(id, request) -> GenreResponse
+└── DeleteGenreAsync(id) -> void
+
+IProjectReportService
+├── AnalyzeAsync(projectId, userId) -> ProjectReportResponse
+├── GetLatestAsync(projectId, userId) -> ProjectReportResponse?
+├── GetAllAsync(projectId, userId) -> List<ProjectReportSummary>
+└── GetByIdAsync(reportId, projectId, userId) -> ProjectReportResponse?
+
+IProjectService
+├── GetUserProjectsAsync(userId) -> List<ProjectResponse>
+├── GetProjectByIdAsync(projectId, userId) -> ProjectResponse
+├── CreateProjectAsync(userId, request) -> ProjectResponse
+├── UpdateProjectAsync(projectId, userId, request) -> ProjectResponse
+├── DeleteProjectAsync(projectId, userId) -> void
+└── GetUserStatsAsync(userId) -> AuthorDashboardStats
+
+ISubscriptionService
+├── GetAllPlansAsync(includeInactive=false) -> IEnumerable<SubscriptionPlanResponse>
+├── GetPlanByIdAsync(id) -> SubscriptionPlanResponse
+├── CreatePlanAsync(request) -> SubscriptionPlanResponse
+├── UpdatePlanAsync(id, request) -> SubscriptionPlanResponse
+├── DeletePlanAsync(id) -> void
+├── GetMySubscriptionAsync(userId) -> UserSubscriptionResponse?
+└── SubscribeToPlanAsync(userId, planId) -> UserSubscriptionResponse
+
+IUserService
+├── GetUserProfileAsync(userId) -> UserProfileResponse
+└── UpdateUserProfileAsync(userId, request) -> UserProfileResponse
+
+IUserSettingsService
+├── GetAsync(userId) -> EditorSettingsResponse
+└── UpdateAsync(userId, request) -> EditorSettingsResponse
+
+IWorldbuildingService
+├── GetAllAsync(projectId, userId) -> List<WorldbuildingResponse>
+├── GetByIdAsync(id, projectId, userId) -> WorldbuildingResponse?
+├── CreateAsync(projectId, userId, request) -> WorldbuildingResponse
+├── UpdateAsync(id, projectId, userId, request) -> WorldbuildingResponse
+├── DeleteAsync(id, projectId, userId) -> void
+└── EmbedAsync(id, projectId, userId) -> WorldbuildingResponse
+
+---
+
+## ============================================================================
+## FRONTEND SERVICE FILES & API MAPPING (14 Services)
+## ============================================================================
+
+File: adminService.ts
+├── getUserStats() -> GET /admin/users/stats
+
+File: aiService.ts (5 methods)
+├── embedChapter(chapterId) -> POST /ai/chapters/{chapterId}/embed
+├── chat(projectId, question) -> POST /ai/{projectId}/chat
+├── getChatHistory(projectId, page=1, pageSize=20) -> GET /ai/{projectId}/chat/history
+├── rewrite(projectId, request) -> POST /ai/{projectId}/rewrite
+└── getRewriteHistory(projectId, page=1, pageSize=20, chapterId?) -> GET /ai/{projectId}/rewrite/history
+
+File: authService.ts (3 methods)
+├── register(data) -> POST /Auth/register
+├── login(data) -> POST /Auth/login
+└── changePassword(data) -> PUT /Auth/change-password
+
+File: bugReportService.ts (6 methods)
+├── create(data) -> POST /bug-reports
+├── getMy() -> GET /bug-reports/my
+├── getAll(status?) -> GET /bug-reports
+├── getStats() -> GET /bug-reports/stats
+├── updateStatus(reportId, data) -> PUT /bug-reports/{reportId}
+└── delete(reportId) -> DELETE /bug-reports/{reportId}
+
+File: characterService.ts (6 methods)
+├── getAll(projectId) -> GET /project/{projectId}/character
+├── getById(projectId, id) -> GET /project/{projectId}/character/{id}
+├── create(projectId, data) -> POST /project/{projectId}/character
+├── update(projectId, id, data) -> PUT /project/{projectId}/character/{id}
+├── delete(projectId, id) -> DELETE /project/{projectId}/character/{id}
+└── embed(projectId, id) -> POST /project/{projectId}/character/{id}/embed
+
+File: chapterService.ts (13 methods)
+├── getChapters(projectId) -> GET /project/{projectId}/chapters
+├── getChapterDetail(projectId, chapterId) -> GET /project/{projectId}/chapters/{chapterId}
+├── createChapter(projectId, data) -> POST /project/{projectId}/chapters
+├── updateChapter(projectId, chapterId, data) -> PUT /project/{projectId}/chapters/{chapterId}
+├── deleteChapter(projectId, chapterId) -> DELETE /project/{projectId}/chapters/{chapterId}
+├── renameChapter(projectId, chapterId, title) -> PATCH /project/{projectId}/chapters/{chapterId}/title
+├── getVersions(projectId, chapterId) -> GET /project/{projectId}/chapters/{chapterId}/versions
+├── getVersionDetail(projectId, chapterId, versionNumber) -> GET /project/{projectId}/chapters/{chapterId}/versions/{versionNumber}
+├── createNewVersion(projectId, chapterId, data?) -> POST /project/{projectId}/chapters/{chapterId}/versions
+├── setActiveVersion(projectId, chapterId, versionNumber) -> PATCH /project/{projectId}/chapters/{chapterId}/versions/{versionNumber}/activate
+├── updateVersionTitle(projectId, chapterId, versionNumber, title) -> PATCH /project/{projectId}/chapters/{chapterId}/versions/{versionNumber}/title
+├── deleteVersion(projectId, chapterId, versionNumber) -> DELETE /project/{projectId}/chapters/{chapterId}/versions/{versionNumber}
+└── chunkChapter(projectId, chapterId) -> POST /project/{projectId}/chapters/{chapterId}/chunk
+
+File: editorSettingsService.ts (2 methods)
+├── get() -> GET /settings
+└── update(data) -> PUT /settings
+
+File: genreService.ts (4 methods)
+├── getGenres() -> GET /genre
+├── createGenre(data) -> POST /genre
+├── updateGenre(id, data) -> PUT /genre/{id}
+└── deleteGenre(id) -> DELETE /genre/{id}
+
+File: projectService.ts (6 methods)
+├── getProjects() -> GET /project
+├── getProject(id) -> GET /project/{id}
+├── createProject(data) -> POST /project
+├── updateProject(id, data) -> PUT /project/{id}
+├── deleteProject(id) -> DELETE /project/{id}
+└── getStats() -> GET /project/stats
+
+File: reportService.ts (4 methods)
+├── analyze(projectId) -> POST /ai/{projectId}/analyze
+├── getLatest(projectId) -> GET /ai/{projectId}/reports/latest
+├── getAll(projectId) -> GET /ai/{projectId}/reports
+└── getById(projectId, reportId) -> GET /ai/{projectId}/reports/{reportId}
+
+File: subscriptionService.ts (7 methods)
+├── getPlans(includeInactive?) -> GET /subscription/plans
+├── getPlanById(id) -> GET /subscription/plans/{id}
+├── getMySubscription() -> GET /subscription/my
+├── createPlan(data) -> POST /subscription/plans
+├── updatePlan(id, data) -> PUT /subscription/plans/{id}
+├── deletePlan(id) -> DELETE /subscription/plans/{id}
+└── subscribe(planId) -> POST /subscription/subscribe
+
+File: userService.ts (2 methods)
+├── getProfile() -> GET /user/profile
+└── updateProfile(data) -> PUT /user/profile
+
+File: worldbuildingService.ts (6 methods)
+├── getAll(projectId) -> GET /project/{projectId}/worldbuilding
+├── getById(projectId, id) -> GET /project/{projectId}/worldbuilding/{id}
+├── create(projectId, data) -> POST /project/{projectId}/worldbuilding
+├── update(projectId, id, data) -> PUT /project/{projectId}/worldbuilding/{id}
+├── delete(projectId, id) -> DELETE /project/{projectId}/worldbuilding/{id}
+└── embed(projectId, id) -> POST /project/{projectId}/worldbuilding/{id}/embed
+
+---
+
+## ============================================================================
+## FRONTEND PAGES (17 Pages)
+## ============================================================================
+
+Page Files:
+1. AdminDashboardPage.tsx - Admin panel dashboard
+2. AdminSubscriptionPage.tsx - Subscription management for admins
+3. AnalysisPage.tsx - Project analysis and reports
+4. AuthPage.tsx - Authentication wrapper
+5. HomePage.tsx - Home page
+6. LandingPage.tsx - Landing page (likely public)
+7. LoginPage.tsx - User login
+8. NotFoundPage.tsx - 404 error page
+9. PlansPage.tsx - Subscription plans listing
+10. PrivacyPolicyPage.tsx - Privacy policy (likely public)
+11. ProfilePage.tsx - User profile page
+12. ProjectsPage.tsx - Projects listing/management
+13. RegisterPage.tsx - User registration
+14. SettingsPage.tsx - User settings
+15. StaffDashboardPage.tsx - Staff panel dashboard
+16. SubscriptionPage.tsx - User subscription management
+17. WorkspacePage.tsx - Main workspace/editor
+
+---
+
+## ============================================================================
+## API COVERAGE ANALYSIS & GAPS
+## ============================================================================
+
+✅ IMPLEMENTED FEATURES:
+  • User Authentication (register, login, password change)
+  • User Profile Management (get, update, settings)
+  • Project Management (full CRUD)
+  • Chapter Management (full CRUD with versioning)
+  • Chapter Chunking & Embedding
+  • Character Management (CRUD + embedding)
+  • Worldbuilding Management (CRUD + embedding)
+  • Genre Management (CRUD - admin only)
+  • AI Chat (question-answering with RAG)
+  • AI Analysis (100-point rubric evaluation)
+  • AI Rewrite (text rewriting with history)
+  • Subscription Management (plans + user subscriptions)
+  • Bug Reporting System (CRUD + staff workflow)
+  • Admin Dashboard (user stats)
+
+⚠️  POTENTIAL GAPS & MISSING ENDPOINTS:
+  1. FILE UPLOAD - No endpoints for:
+     • Avatar/Profile pictures upload
+     • Cover images for projects
+     • Document import/export
+  
+  2. SEARCH & FILTERING - No endpoints for:
+     • Search projects by title/keyword
+     • Filter chapters by status/date
+     • Search characters/worldbuilding entries
+     • Full-text search across project content
+  
+  3. BATCH OPERATIONS:
+     • Bulk delete chapters
+     • Bulk update chapter status
+     • Batch embed chapters
+  
+  4. COLLABORATION FEATURES:
+     • Project sharing/permissions
+     • Team/collaborative editing
+     • Comments/annotations
+  
+  5. IMPORT/EXPORT:
+     • Export project as PDF/EPUB
+     • Import chapters from files
+     • Export analysis reports
+  
+  6. NOTIFICATIONS:
+     • User notifications API
+     • Notification preferences
+     • Subscription reminders
+  
+  7. ANALYTICS:
+     • Detailed usage statistics
+     • Usage trends over time
+     • Performance metrics
+  
+  8. CONTENT MANAGEMENT:
+     • Pagination limits documented in code but not formalized
+     • Sorting options not visible
+     • Advanced filtering not available
+  
+  9. BACKUP & RESTORE:
+     • Project backup creation
+     • Restore from backup
+  
+  10. RATE LIMITING:
+     • No visible rate limiting info in controllers
+     • Token usage tracking visible in responses but no endpoint to check limits
+
+---
+
+END OF API SURFACE MAP

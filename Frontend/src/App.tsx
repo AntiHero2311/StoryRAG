@@ -13,6 +13,9 @@ import SubscriptionPage from './pages/SubscriptionPage';
 import PlansPage from './pages/PlansPage';
 import AdminSubscriptionPage from './pages/AdminSubscriptionPage';
 import AnalysisPage from './pages/AnalysisPage';
+import StaffDashboardPage from './pages/StaffDashboardPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
@@ -34,6 +37,9 @@ function App() {
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/admin/subscription" element={<AdminSubscriptionPage />} />
         <Route path="/analysis" element={<AnalysisPage />} />
+        <Route path="/staff" element={<StaffDashboardPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Router>

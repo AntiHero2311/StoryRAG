@@ -10,6 +10,7 @@ namespace Service.Interfaces
         Task<ProjectResponse> UpdateProjectAsync(Guid projectId, Guid userId, UpdateProjectRequest request);
         Task DeleteProjectAsync(Guid projectId, Guid userId);
         Task<AuthorDashboardStats> GetUserStatsAsync(Guid userId);
+        Task<(string fileName, string content, string mimeType)> ExportProjectAsync(Guid projectId, Guid userId);
     }
 
     public class AuthorDashboardStats

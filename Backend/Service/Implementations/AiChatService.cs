@@ -149,6 +149,11 @@ namespace Service.Implementations
             var masterKey = _config["Security:MasterKey"]!;
             var rawDek = EncryptionHelper.DecryptWithMasterKey(user!.DataEncryptionKey!, masterKey);
 
+            // Decrypt project summary (always included as context)
+            var projectSummary = !string.IsNullOrEmpty(project.Summary)
+                ? EncryptionHelper.DecryptWithMasterKey(project.Summary, rawDek)
+                : null;
+
             var contextTexts = topChunks
                 .Select(c => EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek))
                 .ToList();
@@ -169,7 +174,7 @@ namespace Service.Implementations
 
             // 6. Gọi OpenAI Chat với RAG context từ 3 nguồn
             var projectTitle = EncryptionHelper.DecryptWithMasterKey(project.Title, rawDek);
-            var systemPrompt = BuildSystemPrompt(projectTitle, contextTexts, worldbuildingTexts, characterTexts);
+            var systemPrompt = BuildSystemPrompt(projectTitle, projectSummary, contextTexts, worldbuildingTexts, characterTexts);
 
             var messages = new List<ChatMessage>
             {
@@ -259,8 +264,12 @@ namespace Service.Implementations
             };
         }
 
-        private static string BuildSystemPrompt(string projectTitle, List<string> contextChunks, List<string> worldbuildingItems, List<string> characterItems)
+        private static string BuildSystemPrompt(string projectTitle, string? projectSummary, List<string> contextChunks, List<string> worldbuildingItems, List<string> characterItems)
         {
+            var summarySection = !string.IsNullOrWhiteSpace(projectSummary)
+                ? projectSummary
+                : "(Chưa có tóm tắt)";
+
             var chunkSection = contextChunks.Count > 0
                 ? string.Join("\n\n---\n\n", contextChunks.Select((c, i) => $"[Đoạn {i + 1}]\n{c}"))
                 : "(Chưa có nội dung chương được embed)";
@@ -275,6 +284,9 @@ namespace Service.Implementations
 
             return $"""
                 Bạn là trợ lý AI giúp tác giả phân tích và trả lời câu hỏi về nội dung truyện "{projectTitle}".
+
+                ── [Tóm tắt dự án] ──
+                {summarySection}
 
                 ── [Nội dung truyện] ──
                 {chunkSection}

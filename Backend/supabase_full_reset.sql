@@ -99,6 +99,7 @@ CREATE TABLE "Projects" (
     "AuthorId"      uuid                     NOT NULL,
     "Title"         text                     NOT NULL,
     "Summary"       text,
+    "SummaryEmbedding" vector(768),
     "CoverImageURL" character varying(500),
     "Status"        character varying(20)    NOT NULL DEFAULT 'Draft',
     "IsDeleted"     boolean                  NOT NULL DEFAULT FALSE,
@@ -344,6 +345,31 @@ CREATE INDEX "IX_RewriteHistories_UserId"            ON "RewriteHistories" ("Use
 CREATE INDEX "IX_RewriteHistories_ChapterId"         ON "RewriteHistories" ("ChapterId");
 
 -- ────────────────────────────────────────────────────────────
+-- BugReports table
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE "BugReports" (
+    "Id"           uuid         NOT NULL DEFAULT uuid_generate_v4(),
+    "UserId"       uuid         NOT NULL,
+    "Title"        varchar(200) NOT NULL,
+    "Description"  text         NOT NULL,
+    "Category"     varchar(30)  NOT NULL DEFAULT 'Bug',
+    "Priority"     varchar(20)  NOT NULL DEFAULT 'Medium',
+    "Status"       varchar(20)  NOT NULL DEFAULT 'Open',
+    "StaffNote"    varchar(1000),
+    "ResolvedById" uuid,
+    "CreatedAt"    timestamptz  NOT NULL DEFAULT NOW(),
+    "UpdatedAt"    timestamptz,
+    CONSTRAINT "PK_BugReports" PRIMARY KEY ("Id"),
+    CONSTRAINT "CK_BugReports_Category" CHECK ("Category" IN ('Bug','UX','Feature','Other')),
+    CONSTRAINT "CK_BugReports_Priority" CHECK ("Priority" IN ('Low','Medium','High')),
+    CONSTRAINT "CK_BugReports_Status"   CHECK ("Status"   IN ('Open','InProgress','Resolved','Closed')),
+    CONSTRAINT "FK_BugReports_Users_UserId"       FOREIGN KEY ("UserId")       REFERENCES "Users"("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_BugReports_Users_ResolvedById" FOREIGN KEY ("ResolvedById") REFERENCES "Users"("Id") ON DELETE SET NULL
+);
+CREATE INDEX "IX_BugReports_Status" ON "BugReports" ("Status");
+CREATE INDEX "IX_BugReports_UserId" ON "BugReports" ("UserId");
+
+-- ────────────────────────────────────────────────────────────
 -- BƯỚC 5: SEED DATA
 -- ────────────────────────────────────────────────────────────
 
@@ -394,4 +420,5 @@ INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
     ('20260228115136_AddUserSettings',            '9.0.2'),
     ('20260308053133_AddWorldbuildingAndCharacter','9.0.2'),
     ('20260311090848_AddChatHistory',             '9.0.2'),
-    ('20260311100332_AddRewriteHistory',          '9.0.2');
+    ('20260311100332_AddRewriteHistory',          '9.0.2'),
+    ('20260312000001_AddBugReports',              '9.0.2');

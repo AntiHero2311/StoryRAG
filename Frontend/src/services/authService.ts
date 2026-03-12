@@ -16,6 +16,15 @@ export interface ChangePasswordData {
     newPassword: string;
 }
 
+export interface ForgotPasswordData {
+    email: string;
+}
+
+export interface ResetPasswordData {
+    token: string;
+    newPassword: string;
+}
+
 export interface AuthResponse {
     userId: string;
     fullName: string;
@@ -41,5 +50,15 @@ export const authService = {
     // Đổi mật khẩu
     changePassword: async (data: ChangePasswordData): Promise<void> => {
         await api.put('/Auth/change-password', data);
-    }
+    },
+
+    // Quên mật khẩu — gửi email reset link
+    forgotPassword: async (data: ForgotPasswordData): Promise<void> => {
+        await api.post('/Auth/forgot-password', data);
+    },
+
+    // Đặt lại mật khẩu với token từ email
+    resetPassword: async (data: ResetPasswordData): Promise<void> => {
+        await api.post('/Auth/reset-password', data);
+    },
 };

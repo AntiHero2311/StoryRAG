@@ -39,6 +39,9 @@ namespace Repository.Data
         public DbSet<WorldbuildingEntry> WorldbuildingEntries { get; set; }
         public DbSet<CharacterEntry> CharacterEntries { get; set; }
 
+        // Bug Reports
+        public DbSet<BugReport> BugReports { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -73,6 +76,7 @@ namespace Repository.Data
                 entity.ToTable(t => t.HasCheckConstraint("CK_Projects_Status", "\"Status\" IN ('Draft','Published','Archived')"));
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+                entity.Property(e => e.SummaryEmbedding).HasColumnType("vector(768)");
                 entity.HasOne(p => p.Author).WithMany().HasForeignKey(p => p.AuthorId).OnDelete(DeleteBehavior.Cascade);
             });
 
@@ -374,6 +378,41 @@ namespace Repository.Data
                       .WithMany()
                       .HasForeignKey(r => r.UserId)
                       .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── BugReport ──────────────────────────────────────────────────────────
+            modelBuilder.Entity<BugReport>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Description).IsRequired();
+                entity.Property(e => e.Category).IsRequired().HasMaxLength(30).HasDefaultValue("Bug");
+                entity.Property(e => e.Priority).IsRequired().HasMaxLength(20).HasDefaultValue("Medium");
+                entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue("Open");
+                entity.Property(e => e.StaffNote).HasMaxLength(1000);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.ToTable(t =>
+                {
+                    t.HasCheckConstraint("CK_BugReports_Category", "\"Category\" IN ('Bug','UX','Feature','Other')");
+                    t.HasCheckConstraint("CK_BugReports_Priority", "\"Priority\" IN ('Low','Medium','High')");
+                    t.HasCheckConstraint("CK_BugReports_Status", "\"Status\" IN ('Open','InProgress','Resolved','Closed')");
+                });
+
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.UserId);
+
+                entity.HasOne(b => b.User)
+                      .WithMany()
+                      .HasForeignKey(b => b.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(b => b.ResolvedBy)
+                      .WithMany()
+                      .HasForeignKey(b => b.ResolvedById)
+                      .OnDelete(DeleteBehavior.SetNull)
+                      .IsRequired(false);
             });
         }
     }

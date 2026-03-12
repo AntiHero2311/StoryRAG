@@ -18,10 +18,22 @@ namespace Api.Controllers
             _adminService = adminService;
         }
 
+        [HttpGet("stats/overview")]
+        public async Task<IActionResult> GetOverviewStats()
+        {
+            try
+            {
+                var stats = await _adminService.GetOverviewStatsAsync();
+                return Ok(stats);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
         /// <summary>
-        /// Lấy thống kê người dùng: tổng số, theo role, danh sách chi tiết.
-        /// Chỉ Admin mới được truy cập.
-        /// </summary>
+        /// Lấy thống kê người dùng</summary>
         [HttpGet("users/stats")]
         public async Task<IActionResult> GetUserStats()
         {

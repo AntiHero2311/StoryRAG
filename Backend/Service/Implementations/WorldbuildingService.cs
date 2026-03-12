@@ -68,6 +68,17 @@ namespace Service.Implementations
 
             _context.WorldbuildingEntries.Add(entry);
             await _context.SaveChangesAsync();
+
+            // Auto-embed after save (non-fatal if embedding service unavailable)
+            try
+            {
+                var vector = await EmbedDocumentAsync(request.Title, request.Content);
+                entry.Embedding = new Vector(vector);
+                entry.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+            }
+            catch { /* embedding failure is non-fatal */ }
+
             return MapToResponse(entry, rawDek);
         }
 
@@ -95,6 +106,22 @@ namespace Service.Implementations
 
             entry.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
+
+            // Auto-embed after update when content changed (non-fatal if embedding service unavailable)
+            if (request.Title != null || request.Content != null)
+            {
+                try
+                {
+                    var title = EncryptionHelper.DecryptWithMasterKey(entry.Title, rawDek);
+                    var content = EncryptionHelper.DecryptWithMasterKey(entry.Content, rawDek);
+                    var vector = await EmbedDocumentAsync(title, content);
+                    entry.Embedding = new Vector(vector);
+                    entry.UpdatedAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+                }
+                catch { /* embedding failure is non-fatal */ }
+            }
+
             return MapToResponse(entry, rawDek);
         }
 
