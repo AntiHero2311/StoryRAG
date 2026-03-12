@@ -79,9 +79,13 @@ namespace Service.Implementations
         }
 
         private async Task<OpenAI.Chat.ChatCompletion> CompleteChatWithFallbackAsync(
-            IEnumerable<ChatMessage> messages, int maxTokens = 2500)
+            IEnumerable<ChatMessage> messages, int maxTokens = 2500, float temperature = 0.7f)
         {
-            var options = new ChatCompletionOptions { MaxOutputTokenCount = maxTokens };
+            var options = new ChatCompletionOptions
+            {
+                MaxOutputTokenCount = maxTokens,
+                Temperature = temperature,
+            };
 
             if (_geminiChatClient != null)
             {
@@ -204,7 +208,7 @@ namespace Service.Implementations
                 ? EncryptionHelper.DecryptWithMasterKey(project.AiInstructions, rawDek)
                 : null;
 
-            var criteria = await EvaluateWithAiAsync(projectTitle, decryptedChunks, storyBibleText, chapterCount, totalWords, aiInstructions);
+            var (criteria, analyzeTokens) = await EvaluateWithAiAsync(projectTitle, decryptedChunks, storyBibleText, chapterCount, totalWords, aiInstructions);
             var reportStatus = "Completed";
 
             // 5. Calculate total
@@ -223,8 +227,9 @@ namespace Service.Implementations
             };
             _context.ProjectReports.Add(report);
 
-            // 7. Deduct usage
+            // 7. Deduct usage — trừ cả analysis count và token
             sub.UsedAnalysisCount += 1;
+            sub.UsedTokens += analyzeTokens;
             await _context.SaveChangesAsync();
 
             return BuildResponse(report.Id, projectId, projectTitle, reportStatus, total, criteria);
@@ -296,13 +301,14 @@ namespace Service.Implementations
                 throw new KeyNotFoundException("Dự án không tồn tại hoặc bạn không có quyền truy cập.");
         }
 
-        private async Task<List<CriterionResult>> EvaluateWithAiAsync(
+        private async Task<(List<CriterionResult> Criteria, int TokensUsed)> EvaluateWithAiAsync(
             string projectTitle, List<string> decryptedChunks, string? storyBibleText = null,
             int chapterCount = 0, int totalWords = 0, string? aiInstructions = null)
         {
-            // Use first TopK chunks as context (avoid token limit)
+            // Use first TopK chunks as context (avoid token limit) — sanitize trước khi nhúng vào prompt
             var contextText = string.Join("\n\n---\n\n",
-                decryptedChunks.Take(TopK).Select((c, i) => $"[Đoạn {i + 1}]\n{c}"));
+                decryptedChunks.Take(TopK)
+                    .Select((c, i) => $"[Đoạn {i + 1}]\n{PromptSanitizer.SanitizeUserContent(c)}"));
 
             var jsonTemplate = @"[
   {""key"":""1.1"",""score"":0,""maxScore"":10,""feedback"":"""",""errors"":[],""suggestions"":[]},
@@ -379,7 +385,7 @@ namespace Service.Implementations
                 ChatMessage.CreateUserMessage(prompt),
             };
 
-            var response = await CompleteChatWithFallbackAsync(messages, maxTokens: 4000);
+            var response = await CompleteChatWithFallbackAsync(messages, maxTokens: 4000, temperature: 0.1f);
             var raw = response.Content[0].Text.Trim();
 
             // Strip markdown code fences if present
@@ -390,7 +396,8 @@ namespace Service.Implementations
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
                 ?? throw new InvalidOperationException("Không thể parse kết quả từ AI.");
 
-            return MergeWithRubric(aiResults);
+            var tokensUsed = response.Usage?.TotalTokenCount ?? 0;
+            return (MergeWithRubric(aiResults), tokensUsed);
         }
 
         private static string BuildCompletenessNote(int chapterCount, int totalWords)

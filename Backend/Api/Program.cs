@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Pgvector.EntityFrameworkCore;
@@ -6,6 +7,7 @@ using Repository.Data;
 using Service.Implementations;
 using Service.Interfaces;
 using System.Text;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -77,6 +79,64 @@ builder.Services.AddSwaggerGen(c =>
 // Add Service Registration
 builder.Services.AddRequestTimeouts(options =>
     options.AddPolicy("LongRunning", TimeSpan.FromMinutes(10)));
+
+// Rate Limiting — giới hạn request đến AI endpoints, chống bot và abuse
+builder.Services.AddRateLimiter(options =>
+{
+    // Custom 429 response với Retry-After header
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.Headers["Retry-After"] = "60";
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            Message = "Bạn đang gửi quá nhiều yêu cầu. Vui lòng thử lại sau.",
+            RetryAfterSeconds = 60,
+            Code = "RATE_LIMIT_EXCEEDED"
+        }, token);
+    };
+
+    // SlidingWindow tránh burst tại ranh giới window
+    // Chat: tối đa 20 requests / phút / user
+    options.AddSlidingWindowLimiter("AiChat", opt =>
+    {
+        opt.PermitLimit = 20;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.SegmentsPerWindow = 4;
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit = 0;
+    });
+
+    // Rewrite: tối đa 15 requests / phút / user
+    options.AddSlidingWindowLimiter("AiRewrite", opt =>
+    {
+        opt.PermitLimit = 15;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.SegmentsPerWindow = 4;
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit = 0;
+    });
+
+    // Analyze: tối đa 3 requests / 10 phút / user (operation nặng)
+    options.AddSlidingWindowLimiter("AiAnalyze", opt =>
+    {
+        opt.PermitLimit = 3;
+        opt.Window = TimeSpan.FromMinutes(10);
+        opt.SegmentsPerWindow = 5;
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit = 0;
+    });
+
+    // Embed: tối đa 30 requests / phút / user
+    options.AddSlidingWindowLimiter("AiEmbed", opt =>
+    {
+        opt.PermitLimit = 30;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.SegmentsPerWindow = 4;
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit = 0;
+    });
+});
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
@@ -125,6 +185,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseRequestTimeouts();
+
+app.UseRateLimiter();
 
 app.UseCors("AllowFrontend");
 
