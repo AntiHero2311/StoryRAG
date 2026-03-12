@@ -33,6 +33,12 @@ namespace Service.Interfaces
         /// <summary>Xóa version (chỉ khi chapter có ≥2 version).</summary>
         Task DeleteVersionAsync(Guid chapterId, int versionNumber, Guid userId);
 
+        /// <summary>Toggle ghim version — version ghim không bị xóa tự động.</summary>
+        Task<ChapterVersionSummary> TogglePinVersionAsync(Guid chapterId, int versionNumber, Guid userId);
+
+        /// <summary>Lấy nội dung thuần của một version cụ thể để diff.</summary>
+        Task<string> GetVersionContentAsync(Guid chapterId, int versionNumber, Guid userId);
+
         // ── Chunking ───────────────────────────────────────────────────────────
         Task<ChapterVersionDetailResponse> ChunkVersionAsync(Guid chapterId, Guid userId);
     }

@@ -199,6 +199,36 @@ namespace Api.Controllers
             catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
         }
 
+        /// <summary>Toggle ghim phiên bản — version ghim không bị xóa tự động.</summary>
+        [HttpPut("{chapterId:guid}/versions/{versionNumber:int}/pin")]
+        public async Task<IActionResult> TogglePinVersion(Guid projectId, Guid chapterId, int versionNumber)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized();
+                var result = await _chapterService.TogglePinVersionAsync(chapterId, versionNumber, userId.Value);
+                return Ok(result);
+            }
+            catch (UnauthorizedAccessException) { return Forbid(); }
+            catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
+        }
+
+        /// <summary>Lấy nội dung thuần của một version để so sánh diff.</summary>
+        [HttpGet("{chapterId:guid}/versions/{versionNumber:int}/content")]
+        public async Task<IActionResult> GetVersionContent(Guid projectId, Guid chapterId, int versionNumber)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized();
+                var content = await _chapterService.GetVersionContentAsync(chapterId, versionNumber, userId.Value);
+                return Ok(new { content });
+            }
+            catch (UnauthorizedAccessException) { return Forbid(); }
+            catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
+        }
+
         // ── Chunking ───────────────────────────────────────────────────────────
 
         [HttpPost("{chapterId:guid}/chunk")]

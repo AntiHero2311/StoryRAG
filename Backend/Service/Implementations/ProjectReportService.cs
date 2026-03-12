@@ -129,9 +129,23 @@ namespace Service.Implementations
             var rawDek = EncryptionHelper.DecryptWithMasterKey(user!.DataEncryptionKey!, masterKey);
             var projectTitle = EncryptionHelper.DecryptWithMasterKey(project.Title, rawDek);
 
-            // 4. Fetch all embedded chunks for this project
+            // 4. Fetch chapters stats + all embedded chunks
+            var chapters = await _context.Chapters
+                .Where(c => c.ProjectId == projectId && !c.IsDeleted)
+                .OrderBy(c => c.ChapterNumber)
+                .ToListAsync();
+
+            var chapterCount = chapters.Count;
+            var totalWords = chapters.Sum(c => c.WordCount);
+
+            // Chỉ lấy chunks thuộc active version của mỗi chương
+            var activeVersionIds = await _context.Chapters
+                .Where(c => c.ProjectId == projectId && c.CurrentVersionId.HasValue)
+                .Select(c => c.CurrentVersionId!.Value)
+                .ToListAsync();
+
             var chunks = await _context.ChapterChunks
-                .Where(c => c.ProjectId == projectId && c.Embedding != null)
+                .Where(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId))
                 .ToListAsync();
 
             if (chunks.Count == 0)
@@ -185,7 +199,7 @@ namespace Service.Implementations
             }
             var storyBibleText = bibleBuilder.ToString().Trim();
 
-            var criteria = await EvaluateWithAiAsync(projectTitle, decryptedChunks, storyBibleText);
+            var criteria = await EvaluateWithAiAsync(projectTitle, decryptedChunks, storyBibleText, chapterCount, totalWords);
             var reportStatus = "Completed";
 
             // 5. Calculate total
@@ -278,7 +292,8 @@ namespace Service.Implementations
         }
 
         private async Task<List<CriterionResult>> EvaluateWithAiAsync(
-            string projectTitle, List<string> decryptedChunks, string? storyBibleText = null)
+            string projectTitle, List<string> decryptedChunks, string? storyBibleText = null,
+            int chapterCount = 0, int totalWords = 0)
         {
             // Use first TopK chunks as context (avoid token limit)
             var contextText = string.Join("\n\n---\n\n",
@@ -301,36 +316,61 @@ namespace Service.Implementations
   {""key"":""5.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]}
 ]";
 
+            // Build completeness context for AI
+            var completenessNote = BuildCompletenessNote(chapterCount, totalWords);
+
             var biblePart = string.IsNullOrWhiteSpace(storyBibleText)
                 ? ""
                 : $"\n\nTHÔNG TIN TÁC PHẨM:\n{storyBibleText}";
 
             var prompt = $$"""
-                Bạn là giám khảo văn học. Đọc kỹ văn bản và điền đầy đủ tất cả 14 tiêu chí vào JSON bên dưới.
+                Bạn là giám khảo văn học chuyên nghiệp. Nhiệm vụ: đọc kỹ toàn bộ văn bản và đánh giá nghiêm khắc, chi tiết theo 14 tiêu chí.
 
-                QUY TẮC BẮT BUỘC:
-                - Điền feedback, errors, suggestions cho TẤT CẢ 14 mục, không được để trống
-                - feedback: 1-2 câu nhận xét thực tế từ văn bản
-                - errors: 1-2 lỗi cụ thể (có thể trích dẫn câu văn)
-                - suggestions: 1-2 gợi ý sửa lỗi cụ thể
-                - score: nghiêm khắc, thông thường 40-60% điểm tối đa
+                THÔNG TIN HOÀN THIỆN TÁC PHẨM:
+                {{completenessNote}}
 
-                KEY: 1.1=Nhất quán bối cảnh(10) 1.2=Nhân quả sự kiện(10) 1.3=Nút thắt(5) 2.1=Động cơ nhân vật(10) 2.2=Tâm lý nhân vật(10) 2.3=Đối thoại(5) 3.1=Ngữ pháp(10) 3.2=Đa dạng câu(5) 3.3=Tránh sáo ngữ(5) 4.1=Sáng tạo(10) 4.2=Thể loại(5) 4.3=Nhịp độ(5) 5.1=Hoàn thiện(5) 5.2=Định dạng(5){{biblePart}}
+                QUY TẮC BẮT BUỘC — VI PHẠM SẼ BỊ HỦY:
+                1. feedback: 2-3 câu nhận xét CỤ THỂ, có trích dẫn câu văn thực tế từ văn bản (không nhận xét chung chung)
+                2. errors: TỐI THIỂU 3 lỗi cụ thể, mỗi lỗi nêu rõ vấn đề + ví dụ câu văn mắc lỗi (trích dẫn hoặc paraphrase)
+                3. suggestions: TỐI THIỂU 3 gợi ý sửa lỗi CỤ THỂ — nêu cách sửa, không nói chung chung như "cần cải thiện"
+                4. score: NGHIÊM KHẮC. Dải điểm thực tế:
+                   - Tác phẩm ít chương / chưa hoàn thiện / còn thô → 20-45% điểm tối đa
+                   - Bản nháp trung bình → 40-60% điểm tối đa
+                   - Bản thảo tốt → 60-75% điểm tối đa
+                   - Tác phẩm hoàn thiện xuất sắc → 75-90% điểm tối đa
+                5. Tiêu chí 5.1 (Hoàn thiện bản thảo): bắt buộc cho điểm thấp nếu tác phẩm còn ít chương, nội dung thưa thớt, kết thúc đột ngột hoặc chưa có vòng cung nhân vật rõ ràng
+                6. Tất cả 14 mục phải có đủ feedback + errors + suggestions — KHÔNG được để trống hoặc để mảng rỗng
 
-                Nội dung "{{projectTitle}}":
+                KEY TIÊU CHÍ:
+                1.1=Nhất quán bối cảnh(10): kiểm tra mâu thuẫn địa điểm/thời gian/sự kiện
+                1.2=Nhân quả sự kiện(10): logic chuỗi sự kiện, hành động → hậu quả
+                1.3=Nút thắt & Giải quyết(5): xung đột có rõ ràng và được giải quyết chưa
+                2.1=Động cơ nhân vật(10): hành động có logic với tính cách/hoàn cảnh không
+                2.2=Tâm lý & Chiều sâu nhân vật(10): nhân vật có chiều sâu, thay đổi, cảm xúc thực không
+                2.3=Đối thoại(5): tự nhiên, phản ánh tính cách, tránh cứng nhắc
+                3.1=Ngữ pháp & Rõ ràng(10): lỗi chính tả, ngữ pháp, câu tối nghĩa
+                3.2=Đa dạng cấu trúc câu(5): tránh lặp cấu trúc câu đơn điệu
+                3.3=Tránh sáo ngữ(5): phát hiện cụm từ/hình ảnh sáo rỗng lặp lại
+                4.1=Sáng tạo & Tránh lối mòn(10): ý tưởng mới lạ, tránh cốt truyện công thức
+                4.2=Đặc trưng thể loại(5): có đáp ứng kỳ vọng thể loại không
+                4.3=Nhịp độ & Sức cuốn hút(5): pace, tension, muốn đọc tiếp không
+                5.1=Hoàn thiện bản thảo(5): số chương, độ hoàn chỉnh vòng cung câu chuyện
+                5.2=Định dạng & Trình bày(5): đoạn văn, đối thoại, xuống hàng{{biblePart}}
+
+                Nội dung tác phẩm "{{projectTitle}}":
                 {{contextText}}
 
-                JSON (14 mục, điền đầy đủ):
+                Trả về JSON 14 mục (điền đầy đủ, không có trường nào rỗng):
                 {{jsonTemplate}}
                 """;
 
             var messages = new List<ChatMessage>
             {
-                ChatMessage.CreateSystemMessage("Bạn là giám khảo văn học. Nhiệm vụ: điền đầy đủ 14 tiêu chí JSON với feedback/errors/suggestions thực tế. KHÔNG bỏ trống bất kỳ mục nào. Chỉ trả về JSON thuần túy."),
+                ChatMessage.CreateSystemMessage("Bạn là giám khảo văn học nghiêm khắc và chuyên sâu. Phân tích cụ thể, trích dẫn ví dụ thực tế từ văn bản. Điền đủ 14 tiêu chí với TỐI THIỂU 3 errors và 3 suggestions mỗi mục. Cho điểm thấp nếu tác phẩm chưa hoàn thiện. Chỉ trả về JSON thuần túy, không có text khác."),
                 ChatMessage.CreateUserMessage(prompt),
             };
 
-            var response = await CompleteChatWithFallbackAsync(messages, maxTokens: 2500);
+            var response = await CompleteChatWithFallbackAsync(messages, maxTokens: 4000);
             var raw = response.Content[0].Text.Trim();
 
             // Strip markdown code fences if present
@@ -342,6 +382,29 @@ namespace Service.Implementations
                 ?? throw new InvalidOperationException("Không thể parse kết quả từ AI.");
 
             return MergeWithRubric(aiResults);
+        }
+
+        private static string BuildCompletenessNote(int chapterCount, int totalWords)
+        {
+            var completionLevel = chapterCount switch
+            {
+                0 => "Chưa có chương nào — điểm hoàn thiện phải là 0",
+                1 => "Mới có 1 chương — tác phẩm rất chưa hoàn thiện",
+                <= 3 => $"Có {chapterCount} chương ({totalWords} từ) — tác phẩm sơ khai, chưa đủ để đánh giá đầy đủ",
+                <= 7 => $"Có {chapterCount} chương ({totalWords} từ) — tác phẩm đang phát triển, thiếu chiều sâu",
+                <= 15 => $"Có {chapterCount} chương ({totalWords} từ) — bản thảo trung bình",
+                _ => $"Có {chapterCount} chương ({totalWords} từ) — tác phẩm dài, có thể đánh giá đầy đủ",
+            };
+
+            var wordNote = totalWords switch
+            {
+                < 1000 => "Nội dung rất ngắn (dưới 1,000 từ) — gần như không có gì để đánh giá",
+                < 5000 => "Nội dung ngắn (dưới 5,000 từ) — chưa đủ để thể hiện kỹ năng viết",
+                < 20000 => "Nội dung trung bình",
+                _ => "Nội dung dài, đủ ngữ liệu để đánh giá chính xác",
+            };
+
+            return $"{completionLevel}. {wordNote}. Hãy phản ánh mức độ hoàn thiện này vào tất cả tiêu chí, đặc biệt tiêu chí 5.1.";
         }
 
         private static List<CriterionResult> MergeWithRubric(List<AiScoreItem> aiResults)

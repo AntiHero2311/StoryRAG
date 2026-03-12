@@ -1,6 +1,6 @@
 # StoryRAG — Tổng Quan Kiến Trúc Hệ Thống
 
-> **Phiên bản tài liệu:** 1.0  
+> **Phiên bản tài liệu:** 1.1  
 > **Cập nhật lần cuối:** Tháng 3/2026
 
 ---
@@ -10,11 +10,14 @@
 **StoryRAG** là nền tảng hỗ trợ sáng tác truyện tích hợp AI, được xây dựng theo mô hình **RAG (Retrieval-Augmented Generation)**. Hệ thống cho phép tác giả viết, quản lý bản thảo và tương tác với AI để nhận phản hồi ngữ cảnh dựa trên nội dung truyện của chính mình — thay vì kiến thức chung của LLM.
 
 **Tính năng cốt lõi:**
-- ✍️ Quản lý project truyện, chương, version
-- 🤖 Chat AI theo ngữ cảnh (RAG) — AI "đọc" nội dung truyện của bạn
+- ✍️ Quản lý project truyện, chương, version (Git-style: pin, diff, restore)
+- 🤖 Chat AI theo ngữ cảnh (RAG) — AI "đọc" nội dung truyện của bạn (chỉ tốn token)
 - 🔁 Rewrite đoạn văn theo instruction
-- 📊 Phân tích, chấm điểm chất lượng truyện (thang 100 điểm)
+- 📊 Phân tích, chấm điểm chất lượng truyện (thang 100 điểm, có tính mức độ hoàn thiện)
 - 🌍 Quản lý Worldbuilding & nhân vật có vector embedding
+- 📥📤 Import/Export chương và dự án (`.txt`)
+- 🐛 Luồng báo cáo lỗi User → Staff
+- 🔑 Quên mật khẩu qua email (MailKit / Gmail SMTP)
 - 🔐 Mã hóa toàn bộ nội dung nhạy cảm theo từng user (AES-256)
 
 ---
@@ -145,13 +148,14 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | `Users` | Tài khoản người dùng | `DataEncryptionKey` (DEK riêng mỗi user) |
 | `Projects` | Bộ truyện | Title/Summary mã hóa AES-256 |
 | `Chapters` | Chương truyện | Draft content, version tracking |
-| `ChapterVersions` | Lịch sử version chương | `IsEmbedded` — đánh dấu đã vector hóa |
+| `ChapterVersions` | Lịch sử version chương | `IsChunked`, `IsEmbedded`, `IsPinned` — pin bảo vệ khỏi auto-prune |
 | `ChapterChunks` | Đoạn văn nhỏ để RAG | **`Embedding vector(768)`** — pgvector |
 | `WorldbuildingEntries` | Ghi chú thế giới truyện | **`Embedding vector(768)`** |
 | `CharacterEntries` | Hồ sơ nhân vật | **`Embedding vector(768)`** |
 | `ChatMessages` | Lịch sử chat AI | Question/Answer mã hóa AES-256 |
 | `RewriteHistories` | Lịch sử rewrite AI | OriginalText/RewrittenText mã hóa |
 | `ProjectReports` | Báo cáo phân tích truyện | `CriteriaJson` (JSONB, thang 100 điểm) |
+| `BugReports` | Báo cáo lỗi từ user | Category, Priority, Status, StaffNote |
 | `Genres` | Thể loại truyện | 14 thể loại mặc định |
 | `ProjectGenres` | Liên kết Project ↔ Genre | Many-to-many |
 | `SubscriptionPlans` | Gói dịch vụ (Free/Basic/Pro/Enterprise) | Token & analysis limits |
@@ -169,15 +173,19 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | POST | `/login` | Đăng nhập, nhận JWT |
 | POST | `/refresh` | Làm mới Access Token |
 | PUT | `/change-password` | Đổi mật khẩu |
+| POST | `/forgot-password` | Yêu cầu link reset qua email |
+| POST | `/reset-password` | Đặt mật khẩu mới bằng token từ email |
 
 ### 6.2 Projects — `/api/project`
 | Method | Endpoint | Mô tả |
 |---|---|---|
 | GET | `/` | Danh sách project của user |
 | GET | `/{id}` | Chi tiết project |
+| GET | `/stats` | Thống kê của user (số dự án, chương, phân tích...) |
 | POST | `/` | Tạo project mới |
 | PUT | `/{id}` | Cập nhật project |
 | DELETE | `/{id}` | Xóa mềm project |
+| GET | `/{id}/export` | Export toàn bộ chương ra file `.txt` |
 
 ### 6.3 Chapters — `/api/project/{projectId}/chapters`
 | Method | Endpoint | Mô tả |
@@ -185,25 +193,71 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | GET | `/` | Danh sách chương |
 | GET | `/{id}` | Chi tiết chương |
 | POST | `/` | Tạo chương mới |
-| PUT | `/{id}` | Cập nhật / lưu draft |
+| PUT | `/{id}` | Cập nhật / lưu nội dung |
+| PATCH | `/{id}/title` | Đổi tên chương |
 | DELETE | `/{id}` | Xóa chương |
+| POST | `/{id}/chunk` | Tạo chunks cho active version |
+| GET | `/{id}/versions` | Danh sách versions |
+| GET | `/{id}/versions/{num}` | Chi tiết version |
+| POST | `/{id}/versions` | Tạo version mới (snapshot từ active version) |
+| PATCH | `/{id}/versions/{num}/activate` | Chuyển sang version này |
+| PATCH | `/{id}/versions/{num}/title` | Đổi tên version |
+| PUT | `/{id}/versions/{num}/pin` | Toggle pin/unpin version |
+| GET | `/{id}/versions/{num}/content` | Lấy nội dung version để diff |
+| DELETE | `/{id}/versions/{num}` | Xóa version |
 
 ### 6.4 AI — `/api/ai`
 | Method | Endpoint | Mô tả |
 |---|---|---|
+| POST | `/chapters/{chapterId}/embed` | Embed active version của chương |
 | POST | `/{projectId}/chat` | Chat RAG với ngữ cảnh truyện |
 | GET | `/{projectId}/chat/history` | Lịch sử chat |
 | POST | `/{projectId}/rewrite` | Rewrite đoạn văn |
 | GET | `/{projectId}/rewrite/history` | Lịch sử rewrite |
 | POST | `/{projectId}/analyze` | Phân tích & chấm điểm truyện |
-| GET | `/{projectId}/reports` | Xem báo cáo phân tích |
-| POST | `/{projectId}/embed` | Tạo vector embedding cho chương |
+| GET | `/{projectId}/reports/latest` | Báo cáo phân tích mới nhất |
+| GET | `/{projectId}/reports` | Toàn bộ lịch sử báo cáo |
+| GET | `/{projectId}/reports/{reportId}` | Báo cáo cụ thể |
 
 ### 6.5 Worldbuilding & Characters
-| Route | Endpoint |
+| Route | Mô tả |
 |---|---|
-| `/api/project/{id}/worldbuilding` | CRUD worldbuilding entries |
-| `/api/project/{id}/character` | CRUD character profiles |
+| `GET/POST /api/project/{id}/worldbuilding` | Danh sách / Tạo mới |
+| `GET/PUT/DELETE /api/project/{id}/worldbuilding/{entryId}` | Chi tiết / Sửa / Xóa |
+| `POST /api/project/{id}/worldbuilding/{entryId}/embed` | Embed entry |
+| `GET/POST /api/project/{id}/character` | Danh sách / Tạo mới |
+| `GET/PUT/DELETE /api/project/{id}/character/{entryId}` | Chi tiết / Sửa / Xóa |
+| `POST /api/project/{id}/character/{entryId}/embed` | Embed character |
+
+### 6.6 Bug Reports — `/api/bug-reports`
+| Method | Endpoint | Auth | Mô tả |
+|---|---|---|---|
+| POST | `/` | Author | Gửi báo cáo lỗi |
+| GET | `/my` | Author | Báo cáo của chính mình |
+| GET | `/` | Staff/Admin | Tất cả báo cáo (filter by status) |
+| GET | `/stats` | Staff/Admin | Thống kê báo cáo |
+| PUT | `/{id}` | Staff/Admin | Cập nhật trạng thái + ghi chú |
+| DELETE | `/{id}` | Admin | Xóa báo cáo |
+
+### 6.7 Admin — `/api/admin`
+| Method | Endpoint | Mô tả |
+|---|---|---|
+| GET | `/stats/overview` | Tổng quan hệ thống (users, projects, reports, revenue...) |
+| GET | `/users/stats` | Thống kê chi tiết users theo role |
+
+### 6.8 Subscription — `/api/subscription`
+| Method | Endpoint | Mô tả |
+|---|---|---|
+| GET | `/plans` | Danh sách gói |
+| GET/POST | `/plans`, `/plans/{id}` | CRUD gói (Admin) |
+| POST | `/subscribe` | Đăng ký gói |
+| GET | `/my` | Gói đang dùng |
+
+### 6.9 Settings — `/api/settings`
+| Method | Endpoint | Mô tả |
+|---|---|---|
+| GET | `/` | Cài đặt editor hiện tại |
+| PUT | `/` | Cập nhật font, font size |
 
 ---
 
@@ -229,34 +283,43 @@ FALLBACK: LM Studio (local, OpenAI-compatible)
        ↓
 [2] EmbeddingService → chuyển câu hỏi thành vector 768-dim
        ↓
-[3] Vector search (pgvector cosine similarity):
-       ├─ Top 3 chunks từ ChapterChunks
+[3] Lấy active VersionId của mỗi chương trong project
+       ↓
+[4] Vector search (pgvector cosine similarity) — chỉ trong active versions:
+       ├─ Top 3 chunks từ ChapterChunks (active version)
        ├─ Top 2 từ WorldbuildingEntries
        └─ Top 2 từ CharacterEntries
        ↓
-[4] Ghép context + system prompt + lịch sử chat gần nhất
+[5] Ghép context + system prompt + lịch sử chat gần nhất
        ↓
-[5] Gọi Gemini API → nếu lỗi → fallback LM Studio
+[6] Gọi Gemini API → nếu lỗi → fallback LM Studio
        ↓
-[6] Lưu vào ChatMessages (mã hóa AES-256)
+[7] Lưu vào AiChatMessages (mã hóa AES-256)
        ↓
-[7] Trả về {answer, inputTokens, outputTokens, contextChunks}
+[8] Trả về {answer, inputTokens, outputTokens, contextChunks}
+       — chỉ trừ token, KHÔNG trừ lượt phân tích
 ```
 
 ### 7.3 Chapter Embedding Flow
 
 ```
-[1] User trigger embed chapter
+[1] User trigger embed chapter (hoặc auto sau khi lưu)
        ↓
-[2] ChunkingService: chia nội dung thành chunks
+[2] ChunkingService: chia nội dung ACTIVE VERSION thành chunks
        └─ Kích thước: ~1500 ký tự / chunk
        └─ Overlap: 150 ký tự (đảm bảo ngữ cảnh liên tục)
        ↓
-[3] EmbeddingService: gọi API lấy vector 768-dim cho mỗi chunk
+[3] EmbeddingService: gọi Gemini batchEmbedContents → vector 768-dim
        ↓
-[4] Lưu ChapterChunk.Embedding vào pgvector
+[4] Lưu ChapterChunk.Embedding vào pgvector (VersionId = active version)
        ↓
 [5] Đánh dấu ChapterVersion.IsEmbedded = true
+
+Khi switch version:
+  → Chapter.CurrentVersionId thay đổi
+  → RAG tự động dùng chunks của version mới
+  → Chunks của version cũ vẫn còn (dùng khi switch lại)
+  → Auto-prune: tối đa 20 versions/chapter, xóa oldest non-pinned kèm chunks
 ```
 
 ---
@@ -285,6 +348,7 @@ Allowed Origins:
   - http://localhost:5173  (Vite dev)
   - http://localhost:5174
   - http://localhost:3000
+  - https://storyrag-frontend.onrender.com  (Render production)
 ```
 
 ---
@@ -345,19 +409,20 @@ npm run dev
 
 | Interface | Trách nhiệm |
 |---|---|
-| `IAuthService` | Đăng ký, đăng nhập, refresh token, đổi mật khẩu |
+| `IAuthService` | Đăng ký, đăng nhập, refresh token, đổi mật khẩu, forgot/reset password |
 | `IUserService` | Xem/cập nhật profile |
-| `IProjectService` | CRUD project, stats tác giả |
-| `IChapterService` | CRUD chương, quản lý version, lưu draft |
-| `ICharacterService` | CRUD nhân vật |
-| `IWorldbuildingService` | CRUD worldbuilding/lore |
+| `IUserSettingsService` | Cài đặt editor (font, size) |
+| `IProjectService` | CRUD project, stats tác giả, export project |
+| `IChapterService` | CRUD chương, quản lý version (create/switch/pin/delete/prune), chunk |
+| `ICharacterService` | CRUD nhân vật + embed |
+| `IWorldbuildingService` | CRUD worldbuilding/lore + embed |
 | `IGenreService` | Quản lý thể loại (Admin) |
 | `ISubscriptionService` | Quản lý gói dịch vụ |
-| `IAiChatService` | RAG chat, lưu lịch sử, deduct token |
+| `IAiChatService` | RAG chat, lưu lịch sử, deduct token only |
 | `IAiRewriteService` | Rewrite theo instruction, lưu lịch sử |
 | `IEmbeddingService` | Gọi Gemini/LM Studio lấy embedding vector |
 | `IChunkingService` | Chia text thành chunks với overlap |
-| `IProjectReportService` | Phân tích & chấm điểm chất lượng truyện |
-| `IEmailService` | Gửi email (welcome, thông báo) qua Gmail SMTP |
+| `IProjectReportService` | Phân tích & chấm điểm (completeness-aware, deduct analysis count) |
+| `IEmailService` | Gửi email (welcome, password reset) qua Gmail SMTP |
 | `IAdminService` | Dashboard stats cho Admin |
-| `IUserSettingsService` | Cài đặt editor (font, size) |
+| `IBugReportService` | CRUD bug reports, cập nhật trạng thái (Staff/Admin) |

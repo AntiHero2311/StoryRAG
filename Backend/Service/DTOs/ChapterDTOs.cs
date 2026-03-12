@@ -84,6 +84,7 @@ namespace Service.DTOs
         public int TokenCount { get; set; }
         public bool IsChunked { get; set; }
         public bool IsEmbedded { get; set; }
+        public bool IsPinned { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public string CreatedByName { get; set; } = string.Empty;

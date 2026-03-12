@@ -28,6 +28,7 @@ export interface ChapterVersionSummary {
     tokenCount: number;
     isChunked: boolean;
     isEmbedded: boolean;
+    isPinned: boolean;
     createdAt: string;
     updatedAt: string | null;
     createdByName: string;
@@ -115,6 +116,14 @@ export const chapterService = {
     /** Xóa version (chỉ khi chapter có ≥2 version). */
     deleteVersion: (projectId: string, chapterId: string, versionNumber: number) =>
         api.delete(`/project/${projectId}/chapters/${chapterId}/versions/${versionNumber}`).then(r => r.data),
+
+    /** Toggle ghim version — version ghim không bị xóa tự động khi vượt giới hạn 20. */
+    pinVersion: (projectId: string, chapterId: string, versionNumber: number) =>
+        api.put<ChapterVersionSummary>(`/project/${projectId}/chapters/${chapterId}/versions/${versionNumber}/pin`).then(r => r.data),
+
+    /** Lấy nội dung thuần của version để so sánh diff. */
+    getVersionContent: (projectId: string, chapterId: string, versionNumber: number) =>
+        api.get<{ content: string }>(`/project/${projectId}/chapters/${chapterId}/versions/${versionNumber}/content`).then(r => r.data.content),
 
     // Chunking
     chunkChapter: (projectId: string, chapterId: string) =>

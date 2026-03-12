@@ -201,14 +201,24 @@ namespace Service.Implementations
 
             int newVersionNum = chapter.CurrentVersionNum + 1;
 
+            // Snapshot current content (copy from active version, not empty)
+            string snapshotContent = string.Empty;
+            if (chapter.CurrentVersionId.HasValue)
+            {
+                var currentVer = await _context.ChapterVersions
+                    .FirstOrDefaultAsync(v => v.Id == chapter.CurrentVersionId.Value);
+                if (currentVer != null)
+                    snapshotContent = EncryptionHelper.DecryptWithMasterKey(currentVer.Content, rawDek);
+            }
+
             var version = new ChapterVersion
             {
                 ChapterId = chapterId,
                 VersionNumber = newVersionNum,
                 Title = request.Title ?? $"Phiên bản {newVersionNum}",
-                Content = EncryptionHelper.EncryptWithMasterKey(string.Empty, rawDek),
-                WordCount = 0,
-                TokenCount = 0,
+                Content = EncryptionHelper.EncryptWithMasterKey(snapshotContent, rawDek),
+                WordCount = CountWords(snapshotContent),
+                TokenCount = _chunkingService.EstimateTokenCount(snapshotContent),
                 CreatedBy = userId,
             };
             _context.ChapterVersions.Add(version);
@@ -219,13 +229,16 @@ namespace Service.Implementations
             chapter.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
+            // Auto-prune: keep max 20 versions, delete oldest non-pinned first
+            await PruneVersionsAsync(chapterId, maxVersions: 20);
+
             var versions = await _context.ChapterVersions
                 .Include(v => v.Creator)
                 .Where(v => v.ChapterId == chapterId)
                 .OrderBy(v => v.VersionNumber)
                 .ToListAsync();
 
-            var detail = MapToDetailResponse(chapter, string.Empty);
+            var detail = MapToDetailResponse(chapter, snapshotContent);
             detail.Versions = versions.Select(v => MapToVersionSummary(v, rawDek)).ToList();
             return detail;
         }
@@ -345,6 +358,64 @@ namespace Service.Implementations
 
         // ── Private Helpers ────────────────────────────────────────────────────
 
+        private async Task PruneVersionsAsync(Guid chapterId, int maxVersions = 20)
+        {
+            var chapter = await _context.Chapters.FindAsync(chapterId);
+            var all = await _context.ChapterVersions
+                .Where(v => v.ChapterId == chapterId)
+                .OrderBy(v => v.VersionNumber)
+                .ToListAsync();
+
+            if (all.Count <= maxVersions) return;
+
+            // Candidates: oldest, non-pinned, not the currently active version
+            var toDelete = all
+                .Where(v => !v.IsPinned && v.Id != chapter?.CurrentVersionId)
+                .OrderBy(v => v.VersionNumber)
+                .Take(all.Count - maxVersions)
+                .ToList();
+
+            if (toDelete.Count == 0) return;
+
+            // Remove chunks belonging to deleted versions
+            var deleteIds = toDelete.Select(v => v.Id).ToList();
+            var chunks = await _context.ChapterChunks
+                .Where(c => deleteIds.Contains(c.VersionId))
+                .ToListAsync();
+            _context.ChapterChunks.RemoveRange(chunks);
+
+            _context.ChapterVersions.RemoveRange(toDelete);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<ChapterVersionSummary> TogglePinVersionAsync(Guid chapterId, int versionNumber, Guid userId)
+        {
+            await GetChapterWithOwnerCheckAsync(chapterId, userId);
+            var rawDek = await GetRawDekAsync(userId);
+
+            var version = await _context.ChapterVersions
+                .Include(v => v.Creator)
+                .FirstOrDefaultAsync(v => v.ChapterId == chapterId && v.VersionNumber == versionNumber)
+                ?? throw new Exception($"Phiên bản {versionNumber} không tồn tại.");
+
+            version.IsPinned = !version.IsPinned;
+            await _context.SaveChangesAsync();
+
+            return MapToVersionSummary(version, rawDek);
+        }
+
+        public async Task<string> GetVersionContentAsync(Guid chapterId, int versionNumber, Guid userId)
+        {
+            await GetChapterWithOwnerCheckAsync(chapterId, userId);
+            var rawDek = await GetRawDekAsync(userId);
+
+            var version = await _context.ChapterVersions
+                .FirstOrDefaultAsync(v => v.ChapterId == chapterId && v.VersionNumber == versionNumber)
+                ?? throw new Exception($"Phiên bản {versionNumber} không tồn tại.");
+
+            return EncryptionHelper.DecryptWithMasterKey(version.Content, rawDek);
+        }
+
         private async Task ValidateProjectOwnershipAsync(Guid projectId, Guid userId)
         {
             bool projectExists = await _context.Projects
@@ -426,6 +497,7 @@ namespace Service.Implementations
             TokenCount = v.TokenCount,
             IsChunked = v.IsChunked,
             IsEmbedded = v.IsEmbedded,
+            IsPinned = v.IsPinned,
             CreatedAt = v.CreatedAt,
             UpdatedAt = v.UpdatedAt,
             CreatedByName = v.Creator?.FullName ?? "Unknown",
@@ -442,6 +514,7 @@ namespace Service.Implementations
             TokenCount = v.TokenCount,
             IsChunked = v.IsChunked,
             IsEmbedded = v.IsEmbedded,
+            IsPinned = v.IsPinned,
             CreatedAt = v.CreatedAt,
             UpdatedAt = v.UpdatedAt,
             CreatedByName = v.Creator?.FullName ?? "Unknown",

@@ -35,11 +35,93 @@ import { projectService } from '../services/projectService';
 import { genreService } from '../services/genreService';
 import type { GenreResponse } from '../services/projectService';
 import { useToast } from '../components/Toast';
+import { diffWords } from 'diff';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
 type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis';
+
+// ── Diff Modal ─────────────────────────────────────────────────────────────
+function DiffModal({
+    currentVersionNum,
+    compareVersionNum,
+    currentContent,
+    compareContent,
+    onClose,
+    onRestore,
+}: {
+    currentVersionNum: number;
+    compareVersionNum: number;
+    currentContent: string;
+    compareContent: string;
+    onClose: () => void;
+    onRestore: () => void;
+}) {
+    const diffs = diffWords(compareContent, currentContent);
+    const added = diffs.filter(d => d.added).reduce((s, d) => s + d.count!, 0);
+    const removed = diffs.filter(d => d.removed).reduce((s, d) => s + d.count!, 0);
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="w-full max-w-4xl h-[85vh] flex flex-col rounded-2xl overflow-hidden shadow-2xl"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-3.5 shrink-0 border-b border-[var(--border-color)]">
+                    <div className="flex items-center gap-3">
+                        <GitBranch className="w-4 h-4 text-[var(--accent)]" />
+                        <span className="text-sm font-bold text-[var(--text-primary)]">
+                            So sánh V{compareVersionNum} → V{currentVersionNum} (hiện tại)
+                        </span>
+                        <span className="text-xs text-emerald-400 font-medium">+{added} từ</span>
+                        <span className="text-xs text-rose-400 font-medium">−{removed} từ</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button onClick={onRestore}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90"
+                            style={{ background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)' }}>
+                            <History className="w-3.5 h-3.5" /> Dùng V{compareVersionNum}
+                        </button>
+                        <button onClick={onClose}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:bg-[var(--text-primary)]/10 transition-colors">
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+                {/* Legend */}
+                <div className="flex items-center gap-4 px-5 py-2 shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-app)]">
+                    <span className="text-[10px] text-[var(--text-secondary)] font-medium uppercase tracking-wider">Chú thích:</span>
+                    <span className="flex items-center gap-1.5 text-xs">
+                        <span className="w-3 h-3 rounded-sm bg-emerald-500/25 border border-emerald-500/40 inline-block" />
+                        <span className="text-emerald-400">Thêm vào (V{currentVersionNum})</span>
+                    </span>
+                    <span className="flex items-center gap-1.5 text-xs">
+                        <span className="w-3 h-3 rounded-sm bg-rose-500/25 border border-rose-500/40 inline-block" />
+                        <span className="text-rose-400">Đã xóa (V{compareVersionNum})</span>
+                    </span>
+                </div>
+                {/* Diff content */}
+                <div className="flex-1 overflow-y-auto p-6 leading-[2] text-sm font-[var(--editor-font,serif)] scrollbar-thin"
+                    style={{ color: 'var(--text-primary)', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
+                    {diffs.map((part, i) => {
+                        if (part.added) return (
+                            <mark key={i} className="bg-emerald-500/20 text-emerald-300 rounded-sm px-[1px] not-italic">
+                                {part.value}
+                            </mark>
+                        );
+                        if (part.removed) return (
+                            <del key={i} className="bg-rose-500/20 text-rose-300 rounded-sm px-[1px] no-underline line-through decoration-rose-400/60">
+                                {part.value}
+                            </del>
+                        );
+                        return <span key={i}>{part.value}</span>;
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+}
 
 // ── Markdown renderer for AI chat bubbles ─────────────────────────────────
 function renderMd(text: string): ReactNode {
@@ -139,7 +221,12 @@ export default function WorkspacePage() {
     const [renamingChapterId, setRenamingChapterId] = useState<string | null>(null);
     const [renameChapterValue, setRenameChapterValue] = useState('');
 
-    // ── Chat state ─────────────────────────────────────────────────────────
+    // ── Diff state ─────────────────────────────────────────────────────────
+    const [diffModal, setDiffModal] = useState<{
+        compareVersionNum: number;
+        currentContent: string;
+        compareContent: string;
+    } | null>(null);
     type ChatMsg = { role: 'user' | 'assistant'; content: string; tokens?: number };
     const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
     const [chatInput, setChatInput] = useState('');
@@ -544,6 +631,30 @@ export default function WorkspacePage() {
             } : prev);
         } catch { /* silent */ } finally {
             setRenamingVersionNum(null);
+        }
+    };
+
+    const doTogglePin = async (versionNumber: number) => {
+        if (!projectId || !activeChapter) return;
+        try {
+            const updated = await chapterService.pinVersion(projectId, activeChapter.id, versionNumber);
+            setActiveChapter(prev => prev ? {
+                ...prev,
+                versions: prev.versions.map(v => v.versionNumber === versionNumber ? { ...v, isPinned: updated.isPinned } : v)
+            } : prev);
+        } catch (e: any) {
+            toast.error(e?.response?.data?.message ?? 'Không thể ghim phiên bản.');
+        }
+    };
+
+    const doCompareVersion = async (versionNumber: number) => {
+        if (!projectId || !activeChapter) return;
+        try {
+            const currentContent = editorRef.current?.innerText ?? '';
+            const compareContent = await chapterService.getVersionContent(projectId, activeChapter.id, versionNumber);
+            setDiffModal({ compareVersionNum: versionNumber, currentContent, compareContent });
+        } catch (e: any) {
+            toast.error('Không thể tải nội dung phiên bản.');
         }
     };
 
@@ -1177,6 +1288,22 @@ export default function WorkspacePage() {
                                                                 </div>
                                                                 {/* Action icons */}
                                                                 <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    {!isRenaming && !isActive && (
+                                                                        <button
+                                                                            onClick={e => { e.stopPropagation(); doCompareVersion(v.versionNumber); }}
+                                                                            className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-sky-400 hover:bg-sky-400/10 transition-all"
+                                                                            title="So sánh với hiện tại"
+                                                                        >
+                                                                            <GitBranch className="w-3 h-3" />
+                                                                        </button>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={e => { e.stopPropagation(); doTogglePin(v.versionNumber); }}
+                                                                        className={`w-6 h-6 flex items-center justify-center rounded-lg transition-all ${v.isPinned ? 'text-amber-400 bg-amber-400/10' : 'text-[var(--text-secondary)] hover:text-amber-400 hover:bg-amber-400/10'}`}
+                                                                        title={v.isPinned ? 'Bỏ ghim' : 'Ghim phiên bản (không bị xóa tự động)'}
+                                                                    >
+                                                                        <Tag className="w-3 h-3" />
+                                                                    </button>
                                                                     {!isRenaming && (
                                                                         <button
                                                                             onClick={e => { e.stopPropagation(); setRenamingVersionNum(v.versionNumber); setRenameValue(v.title || `Version ${v.versionNumber}`); }}
@@ -1186,7 +1313,7 @@ export default function WorkspacePage() {
                                                                             <Pencil className="w-3 h-3" />
                                                                         </button>
                                                                     )}
-                                                                    {(activeChapter.versions ?? []).length > 1 && (
+                                                                    {(activeChapter.versions ?? []).length > 1 && !v.isPinned && (
                                                                         <button
                                                                             onClick={e => { e.stopPropagation(); doDeleteVersion(v.versionNumber); }}
                                                                             className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-rose-400 hover:bg-rose-400/10 transition-all"
@@ -1213,10 +1340,15 @@ export default function WorkspacePage() {
                                                             </div>
 
                                                             {/* Row 3: status badges */}
-                                                            <div className="flex items-center gap-1.5 mt-2">
+                                                            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                                                                 {isActive && (
                                                                     <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent)]/15 text-[var(--accent)] uppercase tracking-wider">
                                                                         ● Đang dùng
+                                                                    </span>
+                                                                )}
+                                                                {v.isPinned && (
+                                                                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 uppercase tracking-wider flex items-center gap-0.5">
+                                                                        <Tag className="w-2 h-2" /> Ghim
                                                                     </span>
                                                                 )}
                                                                 <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full transition-all ${

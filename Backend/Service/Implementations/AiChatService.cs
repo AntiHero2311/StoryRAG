@@ -115,16 +115,21 @@ namespace Service.Implementations
             if (sub == null)
                 throw new InvalidOperationException("Bạn chưa có gói đăng ký hợp lệ. Vui lòng đăng ký gói để dùng AI Chat.");
 
-            if (sub.UsedAnalysisCount >= sub.Plan.MaxAnalysisCount)
-                throw new InvalidOperationException($"Bạn đã dùng hết {sub.Plan.MaxAnalysisCount} lần phân tích trong kỳ này.");
+            // Chat chỉ kiểm tra token, không tiêu hao lượt phân tích
 
             // 3. Embed câu hỏi
             var questionEmbedding = await _embeddingService.GetEmbeddingAsync(question);
             var queryVector = new Vector(questionEmbedding);
 
             // 4. Vector search — lấy TopK từ 3 nguồn: chapter chunks, worldbuilding, characters
+            // Chỉ tìm trong chunks thuộc active version của mỗi chương (tránh lấy chunks của version cũ)
+            var activeVersionIds = await _context.Chapters
+                .Where(c => c.ProjectId == projectId && c.CurrentVersionId.HasValue)
+                .Select(c => c.CurrentVersionId!.Value)
+                .ToListAsync();
+
             var topChunks = await _context.ChapterChunks
-                .Where(c => c.ProjectId == projectId && c.Embedding != null)
+                .Where(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId))
                 .OrderBy(c => c.Embedding!.CosineDistance(queryVector))
                 .Take(TopKChunks)
                 .ToListAsync();
@@ -206,8 +211,7 @@ namespace Service.Implementations
                 TotalTokens = totalTokens,
             });
 
-            // 9. Deduct usage
-            sub.UsedAnalysisCount += 1;
+            // 9. Deduct token usage only (chat không tính lượt phân tích)
             sub.UsedTokens += totalTokens;
             await _context.SaveChangesAsync();
 

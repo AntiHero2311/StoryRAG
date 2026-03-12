@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
+    "@types/diff": "^7.0.2",
     "axios": "^1.13.5",
+    "diff": "^8.0.3",
     "framer-motion": "^12.35.0",
     "lucide-react": "^0.575.0",
     "react": "^19.2.0",

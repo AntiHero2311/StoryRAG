@@ -34,6 +34,9 @@ namespace Repository.Entities
         /// <summary>Đã embed vào VectorDB chưa (Phase 2)</summary>
         public bool IsEmbedded { get; set; } = false;
 
+        /// <summary>Được ghim — không bị xóa tự động khi vượt giới hạn version</summary>
+        public bool IsPinned { get; set; } = false;
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         /// <summary>Cập nhật lần cuối (khi lưu in-place)</summary>
