@@ -17,6 +17,7 @@ namespace Repository.Data
         public DbSet<ProjectGenre> ProjectGenres { get; set; }
         public DbSet<SubscriptionPlan> SubscriptionPlans { get; set; }
         public DbSet<UserSubscription> UserSubscriptions { get; set; }
+        public DbSet<Payment> Payments { get; set; }
 
         // Chapter system
         public DbSet<Chapter> Chapters { get; set; }
@@ -120,6 +121,42 @@ namespace Repository.Data
                       .WithMany(p => p.UserSubscriptions)
                       .HasForeignKey(s => s.PlanId)
                       .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // ── Payment ────────────────────────────────────────────────────────────
+            modelBuilder.Entity<Payment>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Amount).HasPrecision(18, 2);
+                entity.Property(e => e.Currency).IsRequired().HasMaxLength(10).HasDefaultValue("VND");
+                entity.Property(e => e.PaymentMethod).IsRequired().HasMaxLength(50).HasDefaultValue("Card");
+                entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue("Pending");
+                entity.ToTable(t => t.HasCheckConstraint("CK_Payment_Status", "\"Status\" IN ('Pending','Completed','Failed','Refunded','Cancelled')"));
+                entity.Property(e => e.TransactionId).HasMaxLength(255);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                // Unique index on TransactionId (when not null)
+                entity.HasIndex(e => e.TransactionId).IsUnique().HasFilter("\"TransactionId\" IS NOT NULL");
+
+                // FK → Users
+                entity.HasOne(p => p.User)
+                      .WithMany()
+                      .HasForeignKey(p => p.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                // FK → SubscriptionPlans
+                entity.HasOne(p => p.Plan)
+                      .WithMany()
+                      .HasForeignKey(p => p.PlanId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // FK → UserSubscriptions (optional)
+                entity.HasOne(p => p.Subscription)
+                      .WithMany()
+                      .HasForeignKey(p => p.SubscriptionId)
+                      .OnDelete(DeleteBehavior.SetNull)
+                      .IsRequired(false);
             });
 
             // ── Chapter ───────────────────────────────────────────────────────────
