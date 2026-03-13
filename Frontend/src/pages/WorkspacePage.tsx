@@ -1,21 +1,23 @@
-import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     ArrowLeft, Plus, Sparkles, History, Bold,
     Italic, Underline,
     ChevronsLeft, ChevronsRight, Trash2, FileText, X,
     Undo2, Redo2, Save, Check, Loader2, Scissors,
-    Clock, Send, Pencil, GitBranch, Zap, Type, Bot,
+    Clock, Pencil, GitBranch, Zap, Type, Bot,
     Map, Users, Tag, AlignLeft, BookOpen, Search, Wand2, AlertCircle,
     Download, Upload, Globe, MapPin, Shield, Scroll,
 } from 'lucide-react';
 import { getUserInfo } from '../utils/jwtHelper';
 import RewritePanel from '../components/RewritePanel';
+import ChatPanel from '../components/workspace/ChatPanel';
+import ChatHistoryPanel from '../components/workspace/ChatHistoryPanel';
 import {
     chapterService,
     type ChapterDetailResponse,
 } from '../services/chapterService';
-import { aiService, type ChatHistoryItem } from '../services/aiService';
+import { aiService } from '../services/aiService';
 import { useEditorSettings, AVAILABLE_FONTS, AVAILABLE_SIZES } from '../hooks/useEditorSettings';
 import {
     worldbuildingService,
@@ -125,62 +127,7 @@ function DiffModal({
     );
 }
 
-// ── Markdown renderer for AI chat bubbles ─────────────────────────────────
-function renderMd(text: string): ReactNode {
-    const lines = text.split('\n');
-    const nodes: React.ReactNode[] = [];
-    let key = 0;
 
-    // Parse inline: **bold**, __underline__, *italic*, _italic_
-    const parseInline = (line: string): ReactNode[] => {
-        const parts: React.ReactNode[] = [];
-        // Combined regex: **bold**, __underline__, *italic*, _italic_
-        const re = /(\*\*[^*]+\*\*|__[^_]+__|(?<!\*)\*(?!\*)[^*]+(?<!\*)\*(?!\*)|(?<!_)_(?!_)[^_]+(?<!_)_(?!_))/g;
-        let last = 0, m: RegExpExecArray | null;
-        while ((m = re.exec(line)) !== null) {
-            if (m.index > last) parts.push(line.slice(last, m.index));
-            const raw = m[0];
-            if (raw.startsWith('**')) {
-                parts.push(<strong key={key++} className="font-semibold">{raw.slice(2, -2)}</strong>);
-            } else if (raw.startsWith('__')) {
-                parts.push(<u key={key++}>{raw.slice(2, -2)}</u>);
-            } else {
-                parts.push(<em key={key++}>{raw.slice(1, -1)}</em>);
-            }
-            last = m.index + raw.length;
-        }
-        if (last < line.length) parts.push(line.slice(last));
-        return parts;
-    };
-
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const trimmed = line.trim();
-
-        if (!trimmed) {
-            // Empty line → small spacing
-            nodes.push(<div key={key++} className="h-1.5" />);
-            continue;
-        }
-
-        // Bullet: lines starting with –, -, •, *
-        const bulletMatch = trimmed.match(/^([–\-•]|\*(?!\*))\s+(.*)/s);
-        if (bulletMatch) {
-            nodes.push(
-                <div key={key++} className="flex gap-1.5 items-start my-0.5">
-                    <span className="text-[var(--accent-text)] font-bold shrink-0 mt-px">•</span>
-                    <span>{parseInline(bulletMatch[2])}</span>
-                </div>
-            );
-            continue;
-        }
-
-        // Normal line
-        nodes.push(<div key={key++} className="leading-relaxed">{parseInline(trimmed)}</div>);
-    }
-
-    return <div className="flex flex-col gap-0.5">{nodes}</div>;
-}
 
 
 
@@ -229,19 +176,8 @@ export default function WorkspacePage() {
         currentContent: string;
         compareContent: string;
     } | null>(null);
-    type ChatMsg = { role: 'user' | 'assistant'; content: string; tokens?: number };
-    const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
-    const [chatInput, setChatInput] = useState('');
-    const [isChatLoading, setIsChatLoading] = useState(false);
-    // isEmbedding state removed — auto-embed via aiSyncState
-    const chatBottomRef = useRef<HTMLDivElement>(null);
+    // Chat state is now managed inside ChatPanel / ChatHistoryPanel components
 
-    // ── Chat History state ─────────────────────────────────────────────────
-    const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
-    const [chatHistoryTotal, setChatHistoryTotal] = useState(0);
-    const [chatHistoryPage, setChatHistoryPage] = useState(1);
-    const [isChatHistoryLoading, setIsChatHistoryLoading] = useState(false);
-    const CHAT_HISTORY_PAGE_SIZE = 20;
 
     // ── Rewrite state ──────────────────────────────────────────────────────
     const [rewritePanelOpen, setRewritePanelOpen] = useState(false);
@@ -526,48 +462,7 @@ export default function WorkspacePage() {
         };
     }, []);
 
-    // ── AI Chat ────────────────────────────────────────────────────────────
-    const loadChatHistory = async (page = 1) => {
-        if (!projectId) return;
-        setIsChatHistoryLoading(true);
-        try {
-            const result = await aiService.getChatHistory(projectId, page, CHAT_HISTORY_PAGE_SIZE);
-            if (page === 1) {
-                setChatHistory(result.items);
-            } else {
-                setChatHistory(prev => [...prev, ...result.items]);
-            }
-            setChatHistoryTotal(result.totalCount);
-            setChatHistoryPage(page);
-        } catch {
-            // silent fail
-        } finally {
-            setIsChatHistoryLoading(false);
-        }
-    };
-
-    const doChat = async () => {
-        if (!projectId || !chatInput.trim() || isChatLoading) return;
-        const question = chatInput.trim();
-        setChatInput('');
-        setChatMessages(prev => [...prev, { role: 'user', content: question }]);
-        setIsChatLoading(true);
-        setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
-        try {
-            const result = await aiService.chat(projectId, question);
-            setChatMessages(prev => [...prev, {
-                role: 'assistant',
-                content: result.answer,
-                tokens: result.totalTokens,
-            }]);
-        } catch (e: any) {
-            const msg = e?.response?.data?.message ?? 'AI Chat thất bại. Vui lòng thử lại.';
-            setChatMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${msg}` }]);
-        } finally {
-            setIsChatLoading(false);
-            setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
-        }
-    };
+    // AI Chat logic is now inside ChatPanel / ChatHistoryPanel components
 
     // ── Create new version ─────────────────────────────────────────────────
     const doCreateVersion = async () => {
@@ -747,8 +642,8 @@ export default function WorkspacePage() {
                     <div
                         title={
                             aiSyncState === 'syncing' ? '⏳ AI đang đồng bộ dữ liệu...' :
-                            aiSyncState === 'ready'   ? '✨ AI đã sẵn sàng' :
-                                                        '⚠️ Đồng bộ thất bại'
+                                aiSyncState === 'ready' ? '✨ AI đã sẵn sàng' :
+                                    '⚠️ Đồng bộ thất bại'
                         }
                         className="shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-medium transition-all"
                         style={{
@@ -761,12 +656,12 @@ export default function WorkspacePage() {
                         }}
                     >
                         {aiSyncState === 'syncing' && <Loader2 className="w-3 h-3 animate-spin" />}
-                        {aiSyncState === 'ready'   && <Sparkles className="w-3 h-3" />}
-                        {aiSyncState === 'error'   && <AlertCircle className="w-3 h-3" />}
+                        {aiSyncState === 'ready' && <Sparkles className="w-3 h-3" />}
+                        {aiSyncState === 'error' && <AlertCircle className="w-3 h-3" />}
                         <span>
                             {aiSyncState === 'syncing' ? 'Đồng bộ AI...' :
-                             aiSyncState === 'ready'   ? 'AI sẵn sàng' :
-                                                         'Lỗi đồng bộ'}
+                                aiSyncState === 'ready' ? 'AI sẵn sàng' :
+                                    'Lỗi đồng bộ'}
                         </span>
                     </div>
                 )}
@@ -1166,24 +1061,24 @@ export default function WorkspacePage() {
                                 </button>
                             </div>
                         ) : (
-                        <div className="flex items-center gap-2 px-2 py-2.5 border-b border-[var(--border-color)] shrink-0">
-                            <div className="flex-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-                                <div className="flex bg-[var(--bg-app)] rounded-xl p-0.5 gap-0.5 w-max min-w-full">
-                                    <TabBtn active={activeTab === 'history'} onClick={() => { setActiveTab('history'); }}>
-                                        <History className="w-3 h-3" /> Lịch sử
-                                    </TabBtn>
-                                    <TabBtn active={activeTab === 'chat'} onClick={() => setActiveTab('chat')}>
-                                        <Sparkles className="w-3 h-3" /> AI Chat
-                                    </TabBtn>
-                                    <TabBtn active={activeTab === 'chatHistory'} onClick={() => { setActiveTab('chatHistory'); loadChatHistory(1); }}>
-                                        <Clock className="w-3 h-3" /> Chat cũ
-                                    </TabBtn>
+                            <div className="flex items-center gap-2 px-2 py-2.5 border-b border-[var(--border-color)] shrink-0">
+                                <div className="flex-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+                                    <div className="flex bg-[var(--bg-app)] rounded-xl p-0.5 gap-0.5 w-max min-w-full">
+                                        <TabBtn active={activeTab === 'history'} onClick={() => { setActiveTab('history'); }}>
+                                            <History className="w-3 h-3" /> Lịch sử
+                                        </TabBtn>
+                                        <TabBtn active={activeTab === 'chat'} onClick={() => setActiveTab('chat')}>
+                                            <Sparkles className="w-3 h-3" /> AI Chat
+                                        </TabBtn>
+                                        <TabBtn active={activeTab === 'chatHistory'} onClick={() => { setActiveTab('chatHistory'); }}>
+                                            <Clock className="w-3 h-3" /> Chat cũ
+                                        </TabBtn>
+                                    </div>
                                 </div>
+                                <button onClick={() => setRightPanelOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-lg shrink-0 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
                             </div>
-                            <button onClick={() => setRightPanelOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-lg shrink-0 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
-                                <X className="w-3.5 h-3.5" />
-                            </button>
-                        </div>
                         )}
 
                         {/* ── History Tab ── */}
@@ -1242,140 +1137,135 @@ export default function WorkspacePage() {
                                             <div className="absolute left-[19px] top-4 bottom-4 w-px bg-[var(--border-color)]" />
 
                                             <div className="space-y-2">
-                                            {[...(activeChapter.versions ?? [])].sort((a, b) => b.versionNumber - a.versionNumber).map(v => {
-                                                const isActive = v.versionNumber === activeChapter.currentVersionNum;
-                                                const isRenaming = renamingVersionNum === v.versionNumber;
-                                                return (
-                                                    <div
-                                                        key={v.id}
-                                                        onClick={() => !isActive && doSwitchVersion(v.versionNumber)}
-                                                        className={`relative pl-9 group transition-all ${!isActive ? 'cursor-pointer' : 'cursor-default'}`}
-                                                    >
-                                                        {/* Timeline dot */}
-                                                        <div className={`absolute left-[13px] top-3.5 w-[13px] h-[13px] rounded-full border-2 transition-all z-10 ${
-                                                            isActive
+                                                {[...(activeChapter.versions ?? [])].sort((a, b) => b.versionNumber - a.versionNumber).map(v => {
+                                                    const isActive = v.versionNumber === activeChapter.currentVersionNum;
+                                                    const isRenaming = renamingVersionNum === v.versionNumber;
+                                                    return (
+                                                        <div
+                                                            key={v.id}
+                                                            onClick={() => !isActive && doSwitchVersion(v.versionNumber)}
+                                                            className={`relative pl-9 group transition-all ${!isActive ? 'cursor-pointer' : 'cursor-default'}`}
+                                                        >
+                                                            {/* Timeline dot */}
+                                                            <div className={`absolute left-[13px] top-3.5 w-[13px] h-[13px] rounded-full border-2 transition-all z-10 ${isActive
                                                                 ? 'border-[var(--accent)] bg-[var(--accent)] shadow-[0_0_8px_rgba(139,92,246,0.5)]'
                                                                 : 'border-[var(--border-color)] bg-[var(--bg-app)] group-hover:border-[var(--accent)]/50'
-                                                        }`} />
+                                                                }`} />
 
-                                                        <div className={`rounded-xl border p-3 transition-all ${
-                                                            isActive
+                                                            <div className={`rounded-xl border p-3 transition-all ${isActive
                                                                 ? 'border-[var(--accent)]/40 bg-[var(--accent)]/5 shadow-[0_0_0_1px_rgba(139,92,246,0.1)]'
                                                                 : 'border-[var(--border-color)] hover:border-[var(--accent)]/25 hover:bg-[var(--text-primary)]/[0.02]'
-                                                        }`}>
-                                                            {/* Row 1: badge + name + actions */}
-                                                            <div className="flex items-center justify-between gap-2">
-                                                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                                    <span className={`shrink-0 w-6 h-5 flex items-center justify-center rounded-md text-[9px] font-bold tabular-nums ${
-                                                                        isActive ? 'bg-[var(--accent)]/25 text-[var(--accent)]' : 'bg-[var(--bg-app)] text-[var(--text-secondary)]'
-                                                                    }`}>
-                                                                        V{v.versionNumber}
+                                                                }`}>
+                                                                {/* Row 1: badge + name + actions */}
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                                        <span className={`shrink-0 w-6 h-5 flex items-center justify-center rounded-md text-[9px] font-bold tabular-nums ${isActive ? 'bg-[var(--accent)]/25 text-[var(--accent)]' : 'bg-[var(--bg-app)] text-[var(--text-secondary)]'
+                                                                            }`}>
+                                                                            V{v.versionNumber}
+                                                                        </span>
+                                                                        {isRenaming ? (
+                                                                            <input
+                                                                                autoFocus
+                                                                                value={renameValue}
+                                                                                onChange={e => setRenameValue(e.target.value)}
+                                                                                onBlur={() => doRenameVersion(v.versionNumber)}
+                                                                                onKeyDown={e => {
+                                                                                    if (e.key === 'Enter') doRenameVersion(v.versionNumber);
+                                                                                    if (e.key === 'Escape') setRenamingVersionNum(null);
+                                                                                }}
+                                                                                onClick={e => e.stopPropagation()}
+                                                                                className="flex-1 min-w-0 text-xs bg-[var(--bg-app)] border border-[var(--accent)]/50 rounded-lg px-2 py-0.5 text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[var(--accent)]/40"
+                                                                            />
+                                                                        ) : (
+                                                                            <span className="text-xs font-medium text-[var(--text-primary)] truncate flex-1">
+                                                                                {v.title || `Version ${v.versionNumber}`}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    {/* Action icons */}
+                                                                    <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        {!isRenaming && !isActive && (
+                                                                            <button
+                                                                                onClick={e => { e.stopPropagation(); doCompareVersion(v.versionNumber); }}
+                                                                                className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-sky-400 hover:bg-sky-400/10 transition-all"
+                                                                                title="So sánh với hiện tại"
+                                                                            >
+                                                                                <GitBranch className="w-3 h-3" />
+                                                                            </button>
+                                                                        )}
+                                                                        <button
+                                                                            onClick={e => { e.stopPropagation(); doTogglePin(v.versionNumber); }}
+                                                                            className={`w-6 h-6 flex items-center justify-center rounded-lg transition-all ${v.isPinned ? 'text-amber-400 bg-amber-400/10' : 'text-[var(--text-secondary)] hover:text-amber-400 hover:bg-amber-400/10'}`}
+                                                                            title={v.isPinned ? 'Bỏ ghim' : 'Ghim phiên bản (không bị xóa tự động)'}
+                                                                        >
+                                                                            <Tag className="w-3 h-3" />
+                                                                        </button>
+                                                                        {!isRenaming && (
+                                                                            <button
+                                                                                onClick={e => { e.stopPropagation(); setRenamingVersionNum(v.versionNumber); setRenameValue(v.title || `Version ${v.versionNumber}`); }}
+                                                                                className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--accent)]/10 transition-all"
+                                                                                title="Đổi tên"
+                                                                            >
+                                                                                <Pencil className="w-3 h-3" />
+                                                                            </button>
+                                                                        )}
+                                                                        {(activeChapter.versions ?? []).length > 1 && !v.isPinned && (
+                                                                            <button
+                                                                                onClick={e => { e.stopPropagation(); doDeleteVersion(v.versionNumber); }}
+                                                                                className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-rose-400 hover:bg-rose-400/10 transition-all"
+                                                                                title="Xóa phiên bản"
+                                                                            >
+                                                                                <Trash2 className="w-3 h-3" />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Row 2: meta */}
+                                                                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                                                    <span className="text-[10px] text-[var(--text-secondary)] flex items-center gap-1">
+                                                                        <Clock className="w-2.5 h-2.5" />
+                                                                        {new Date(v.updatedAt ?? v.createdAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                                                                     </span>
-                                                                    {isRenaming ? (
-                                                                        <input
-                                                                            autoFocus
-                                                                            value={renameValue}
-                                                                            onChange={e => setRenameValue(e.target.value)}
-                                                                            onBlur={() => doRenameVersion(v.versionNumber)}
-                                                                            onKeyDown={e => {
-                                                                                if (e.key === 'Enter') doRenameVersion(v.versionNumber);
-                                                                                if (e.key === 'Escape') setRenamingVersionNum(null);
-                                                                            }}
-                                                                            onClick={e => e.stopPropagation()}
-                                                                            className="flex-1 min-w-0 text-xs bg-[var(--bg-app)] border border-[var(--accent)]/50 rounded-lg px-2 py-0.5 text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[var(--accent)]/40"
-                                                                        />
-                                                                    ) : (
-                                                                        <span className="text-xs font-medium text-[var(--text-primary)] truncate flex-1">
-                                                                            {v.title || `Version ${v.versionNumber}`}
+                                                                    <span className="text-[10px] text-[var(--text-secondary)]">·</span>
+                                                                    <span className="text-[10px] text-[var(--text-secondary)]">{v.wordCount} từ</span>
+                                                                    {v.tokenCount > 0 && <>
+                                                                        <span className="text-[10px] text-[var(--text-secondary)]">·</span>
+                                                                        <span className="text-[10px] text-[var(--text-secondary)]">{v.tokenCount} tk</span>
+                                                                    </>}
+                                                                </div>
+
+                                                                {/* Row 3: status badges */}
+                                                                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                                                                    {isActive && (
+                                                                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent)]/15 text-[var(--accent)] uppercase tracking-wider">
+                                                                            ● Đang dùng
                                                                         </span>
                                                                     )}
-                                                                </div>
-                                                                {/* Action icons */}
-                                                                <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                    {!isRenaming && !isActive && (
-                                                                        <button
-                                                                            onClick={e => { e.stopPropagation(); doCompareVersion(v.versionNumber); }}
-                                                                            className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-sky-400 hover:bg-sky-400/10 transition-all"
-                                                                            title="So sánh với hiện tại"
-                                                                        >
-                                                                            <GitBranch className="w-3 h-3" />
-                                                                        </button>
+                                                                    {v.isPinned && (
+                                                                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 uppercase tracking-wider flex items-center gap-0.5">
+                                                                            <Tag className="w-2 h-2" /> Ghim
+                                                                        </span>
                                                                     )}
-                                                                    <button
-                                                                        onClick={e => { e.stopPropagation(); doTogglePin(v.versionNumber); }}
-                                                                        className={`w-6 h-6 flex items-center justify-center rounded-lg transition-all ${v.isPinned ? 'text-amber-400 bg-amber-400/10' : 'text-[var(--text-secondary)] hover:text-amber-400 hover:bg-amber-400/10'}`}
-                                                                        title={v.isPinned ? 'Bỏ ghim' : 'Ghim phiên bản (không bị xóa tự động)'}
-                                                                    >
-                                                                        <Tag className="w-3 h-3" />
-                                                                    </button>
-                                                                    {!isRenaming && (
-                                                                        <button
-                                                                            onClick={e => { e.stopPropagation(); setRenamingVersionNum(v.versionNumber); setRenameValue(v.title || `Version ${v.versionNumber}`); }}
-                                                                            className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--accent)]/10 transition-all"
-                                                                            title="Đổi tên"
-                                                                        >
-                                                                            <Pencil className="w-3 h-3" />
-                                                                        </button>
-                                                                    )}
-                                                                    {(activeChapter.versions ?? []).length > 1 && !v.isPinned && (
-                                                                        <button
-                                                                            onClick={e => { e.stopPropagation(); doDeleteVersion(v.versionNumber); }}
-                                                                            className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-rose-400 hover:bg-rose-400/10 transition-all"
-                                                                            title="Xóa phiên bản"
-                                                                        >
-                                                                            <Trash2 className="w-3 h-3" />
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Row 2: meta */}
-                                                            <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                                                <span className="text-[10px] text-[var(--text-secondary)] flex items-center gap-1">
-                                                                    <Clock className="w-2.5 h-2.5" />
-                                                                    {new Date(v.updatedAt ?? v.createdAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                                                </span>
-                                                                <span className="text-[10px] text-[var(--text-secondary)]">·</span>
-                                                                <span className="text-[10px] text-[var(--text-secondary)]">{v.wordCount} từ</span>
-                                                                {v.tokenCount > 0 && <>
-                                                                    <span className="text-[10px] text-[var(--text-secondary)]">·</span>
-                                                                    <span className="text-[10px] text-[var(--text-secondary)]">{v.tokenCount} tk</span>
-                                                                </>}
-                                                            </div>
-
-                                                            {/* Row 3: status badges */}
-                                                            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                                                                {isActive && (
-                                                                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent)]/15 text-[var(--accent)] uppercase tracking-wider">
-                                                                        ● Đang dùng
-                                                                    </span>
-                                                                )}
-                                                                {v.isPinned && (
-                                                                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 uppercase tracking-wider flex items-center gap-0.5">
-                                                                        <Tag className="w-2 h-2" /> Ghim
-                                                                    </span>
-                                                                )}
-                                                                <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full transition-all ${
-                                                                    v.isChunked
+                                                                    <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full transition-all ${v.isChunked
                                                                         ? 'bg-emerald-500/10 text-emerald-400'
                                                                         : 'bg-[var(--bg-app)] text-[var(--text-secondary)] opacity-50'
-                                                                }`}>
-                                                                    <Scissors className="w-2 h-2 inline mr-0.5 -mt-px" />
-                                                                    {v.isChunked ? 'Chunked' : 'Chưa chunk'}
-                                                                </span>
-                                                                <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full transition-all ${
-                                                                    v.isEmbedded
+                                                                        }`}>
+                                                                        <Scissors className="w-2 h-2 inline mr-0.5 -mt-px" />
+                                                                        {v.isChunked ? 'Chunked' : 'Chưa chunk'}
+                                                                    </span>
+                                                                    <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full transition-all ${v.isEmbedded
                                                                         ? 'bg-indigo-500/10 text-indigo-400'
                                                                         : 'bg-[var(--bg-app)] text-[var(--text-secondary)] opacity-50'
-                                                                }`}>
-                                                                    <Zap className="w-2 h-2 inline mr-0.5 -mt-px" />
-                                                                    {v.isEmbedded ? 'Embedded' : 'Chưa embed'}
-                                                                </span>
+                                                                        }`}>
+                                                                        <Zap className="w-2 h-2 inline mr-0.5 -mt-px" />
+                                                                        {v.isEmbedded ? 'Embedded' : 'Chưa embed'}
+                                                                    </span>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                );
-                                            })}
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     )}
@@ -1384,242 +1274,15 @@ export default function WorkspacePage() {
                         )}
 
                         {/* ── Chat Tab ── */}
-                        {activeTab === 'chat' && (
-                            <div className="flex-1 flex flex-col min-h-0">
-                                {/* Header */}
-                                <div className="px-4 pt-3 pb-2 flex items-center justify-between shrink-0">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-5 h-5 rounded-md flex items-center justify-center"
-                                            style={{ background: 'rgba(139,92,246,0.15)' }}>
-                                            <Sparkles className="w-3 h-3 text-[var(--accent-text)]" />
-                                        </div>
-                                        <span className="text-xs font-semibold text-[var(--text-primary)]">AI Chat</span>
-                                        {activeChapter?.versions?.[0]?.isEmbedded && (
-                                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold"
-                                                style={{ background: 'rgba(139,92,246,0.12)', color: 'var(--accent)' }}>
-                                                ● Sẵn sàng
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        {/* Clear chat */}
-                                        {chatMessages.length > 0 && (
-                                            <button
-                                                onClick={() => setChatMessages([])}
-                                                title="Xóa lịch sử chat"
-                                                className="w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-400/10 transition-colors"
-                                            >
-                                                <Trash2 className="w-3 h-3" />
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Messages */}
-                                <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-2.5 min-h-0 scrollbar-thin">
-                                    {chatMessages.length === 0 && (
-                                        <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 py-6">
-                                            <div className="w-11 h-11 rounded-2xl flex items-center justify-center"
-                                                style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                                                <Bot className="w-5 h-5 text-[var(--accent-text)]" />
-                                            </div>
-                                            <div>
-                                                <p className="text-[var(--text-primary)] text-xs font-semibold mb-1">Hỏi về nội dung truyện</p>
-                                                <p className="text-[var(--text-secondary)] text-[10px] leading-relaxed max-w-[180px]">
-                                                    {activeChapter?.versions?.[0]?.isEmbedded
-                                                        ? 'Hỏi bất cứ điều gì về nhân vật, cốt truyện, bối cảnh...'
-                                                        : 'Lưu chương để AI tự động đồng bộ dữ liệu.'}
-                                                </p>
-                                            </div>
-                                            {/* Suggestion chips */}
-                                            {activeChapter?.versions?.[0]?.isEmbedded && (
-                                                <div className="flex flex-col gap-1.5 w-full px-1">
-                                                    {[
-                                                        'Nhân vật chính là ai?',
-                                                        'Tóm tắt cốt truyện chương này',
-                                                        'Bối cảnh câu chuyện ở đâu?',
-                                                    ].map(q => (
-                                                        <button
-                                                            key={q}
-                                                            onClick={() => setChatInput(q)}
-                                                            className="text-left text-[10px] px-2.5 py-1.5 rounded-lg transition-all"
-                                                            style={{
-                                                                background: 'var(--bg-app)',
-                                                                border: '1px solid var(--border-color)',
-                                                                color: 'var(--text-secondary)',
-                                                            }}
-                                                            onMouseEnter={e => {
-                                                                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(139,92,246,0.4)';
-                                                                (e.currentTarget as HTMLElement).style.color = 'var(--accent)';
-                                                            }}
-                                                            onMouseLeave={e => {
-                                                                (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-color)';
-                                                                (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)';
-                                                            }}
-                                                        >
-                                                            💬 {q}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {chatMessages.map((msg, i) => (
-                                        <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                            {/* AI avatar */}
-                                            {msg.role === 'assistant' && (
-                                                <div className="w-5 h-5 rounded-md shrink-0 mt-0.5 flex items-center justify-center"
-                                                    style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                                                    <Sparkles className="w-2.5 h-2.5 text-[var(--accent-text)]" />
-                                                </div>
-                                            )}
-                                            <div
-                                                className="max-w-[82%] rounded-2xl px-3 py-2 text-xs leading-relaxed"
-                                                style={msg.role === 'user'
-                                                    ? { background: 'rgba(139,92,246,0.08)', color: 'var(--text-primary)', border: '1px solid rgba(139,92,246,0.2)' }
-                                                    : { background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }
-                                                }
-                                            >
-                                                {msg.role === 'assistant' ? renderMd(msg.content) : msg.content}
-                                                {msg.tokens && (
-                                                    <div className="mt-1 text-[9px] opacity-40">{msg.tokens.toLocaleString()} tokens</div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    {/* Loading dots */}
-                                    {isChatLoading && (
-                                        <div className="flex gap-2 justify-start">
-                                            <div className="w-5 h-5 rounded-md shrink-0 mt-0.5 flex items-center justify-center"
-                                                style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                                                <Sparkles className="w-2.5 h-2.5 text-[var(--accent-text)]" />
-                                            </div>
-                                            <div className="px-3 py-2.5 rounded-2xl flex items-center gap-2.5"
-                                                style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
-                                                <div className="flex gap-1 items-center">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style={{ animationDelay: '0ms' }} />
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style={{ animationDelay: '150ms' }} />
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style={{ animationDelay: '300ms' }} />
-                                                </div>
-                                                <span className="text-[10px] text-[var(--text-secondary)]">Đang phân tích...</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div ref={chatBottomRef} />
-                                </div>
-
-                                {/* Input */}
-                                <div className="px-3 pb-3 shrink-0">
-                                    <div className="rounded-xl overflow-hidden transition-all"
-                                        style={{
-                                            background: 'var(--bg-app)',
-                                            border: '1px solid var(--border-color)',
-                                            boxShadow: chatInput ? '0 0 0 2px rgba(139,92,246,0.15)' : 'none',
-                                        }}>
-                                        <textarea
-                                            value={chatInput}
-                                            onChange={e => setChatInput(e.target.value)}
-                                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doChat(); } }}
-                                            placeholder={activeChapter?.versions?.[0]?.isEmbedded ? 'Nhập câu hỏi... (Enter để gửi)' : 'Embed chương để dùng AI Chat'}
-                                            disabled={!activeChapter?.versions?.[0]?.isEmbedded || isChatLoading}
-                                            rows={1}
-                                            className="w-full bg-transparent resize-none text-xs text-[var(--text-primary)] placeholder-[var(--text-secondary)] outline-none px-3 pt-2.5 pb-1"
-                                            style={{ maxHeight: '96px' }}
-                                        />
-                                        <div className="flex items-center justify-between px-2 pb-2">
-                                            <span className="text-[9px] text-[var(--text-secondary)] opacity-50">
-                                                {chatInput.length > 0 ? `${chatInput.length} ký tự` : 'Shift+Enter xuống dòng'}
-                                            </span>
-                                            <button
-                                                onClick={doChat}
-                                                disabled={!chatInput.trim() || !activeChapter?.versions?.[0]?.isEmbedded || isChatLoading}
-                                                className="w-6 h-6 flex items-center justify-center rounded-lg shrink-0 transition-all disabled:opacity-25"
-                                                style={{
-                                                    background: chatInput.trim() && activeChapter?.versions?.[0]?.isEmbedded
-                                                        ? 'rgba(139,92,246,0.9)'
-                                                        : 'rgba(139,92,246,0.15)',
-                                                    color: chatInput.trim() ? '#fff' : 'var(--accent)',
-                                                }}
-                                            >
-                                                <Send className="w-3 h-3" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                        {activeTab === 'chat' && projectId && (
+                            <ChatPanel
+                                projectId={projectId}
+                                isEmbedded={!!activeChapter?.versions?.[0]?.isEmbedded}
+                            />
                         )}
                         {/* ── Chat History Tab ── */}
-                        {activeTab === 'chatHistory' && (
-                            <div className="flex-1 flex flex-col overflow-hidden">
-                                <div className="px-4 pt-3 pb-2 shrink-0 border-b border-[var(--border-color)] flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Clock className="w-3.5 h-3.5 text-[var(--accent-text)]" />
-                                        <span className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">Lịch sử AI Chat</span>
-                                    </div>
-                                    <span className="text-[10px] text-[var(--text-secondary)] bg-[var(--bg-app)] border border-[var(--border-color)] px-2 py-0.5 rounded-full">
-                                        {chatHistoryTotal} cuộc trò chuyện
-                                    </span>
-                                </div>
-
-                                <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 scrollbar-thin">
-                                    {isChatHistoryLoading && chatHistory.length === 0 ? (
-                                        <div className="flex items-center justify-center py-12 gap-2 text-[var(--text-secondary)]">
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                            <span className="text-xs">Đang tải...</span>
-                                        </div>
-                                    ) : chatHistory.length === 0 ? (
-                                        <div className="flex flex-col items-center justify-center py-12 gap-2 text-center">
-                                            <Bot className="w-8 h-8 text-[var(--text-secondary)] opacity-30" />
-                                            <p className="text-xs text-[var(--text-secondary)]">Chưa có lịch sử chat nào.</p>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            {chatHistory.map(item => (
-                                                <div key={item.id} className="rounded-xl overflow-hidden border border-[var(--border-color)]"
-                                                    style={{ background: 'var(--bg-app)' }}>
-                                                    {/* Question */}
-                                                    <div className="px-3 py-2 flex items-start gap-2"
-                                                        style={{ background: 'rgba(139,92,246,0.06)', borderBottom: '1px solid var(--border-color)' }}>
-                                                        <Search className="w-3 h-3 text-[var(--accent-text)] shrink-0 mt-0.5" />
-                                                        <p className="text-xs text-[var(--text-primary)] leading-relaxed">{item.question}</p>
-                                                    </div>
-                                                    {/* Answer */}
-                                                    <div className="px-3 py-2 flex items-start gap-2">
-                                                        <Sparkles className="w-3 h-3 text-[var(--accent-text)] shrink-0 mt-0.5" />
-                                                        <div className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                                                            {renderMd(item.answer)}
-                                                        </div>
-                                                    </div>
-                                                    {/* Footer */}
-                                                    <div className="px-3 pb-2 flex items-center justify-between">
-                                                        <span className="text-[9px] text-[var(--text-secondary)] opacity-50">
-                                                            {new Date(item.createdAt).toLocaleString('vi-VN')}
-                                                        </span>
-                                                        <span className="text-[9px] text-[var(--text-secondary)] opacity-50">
-                                                            {item.totalTokens.toLocaleString()} tokens
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            ))}
-
-                                            {/* Load more */}
-                                            {chatHistory.length < chatHistoryTotal && (
-                                                <button
-                                                    onClick={() => loadChatHistory(chatHistoryPage + 1)}
-                                                    disabled={isChatHistoryLoading}
-                                                    className="w-full py-2 text-xs text-[var(--accent-text)] hover:text-[var(--accent-text)] disabled:opacity-50 transition-colors flex items-center justify-center gap-1"
-                                                >
-                                                    {isChatHistoryLoading
-                                                        ? <><Loader2 className="w-3 h-3 animate-spin" /> Đang tải...</>
-                                                        : `Tải thêm (${chatHistoryTotal - chatHistory.length} còn lại)`}
-                                                </button>
-                                            )}
-                                        </>
-                                    )}
-                                </div>
-                            </div>
+                        {activeTab === 'chatHistory' && projectId && (
+                            <ChatHistoryPanel projectId={projectId} />
                         )}
 
                         {/* ── Worldbuilding Tab ── */}
@@ -1658,14 +1321,14 @@ export default function WorkspacePage() {
 function wbCategoryIcon(cat: string, size = 'w-3.5 h-3.5') {
     const cls = `${size} shrink-0`;
     switch (cat) {
-        case 'Setting':    return <Globe    className={cls} />;
-        case 'Location':   return <MapPin   className={cls} />;
-        case 'Rules':      return <Shield   className={cls} />;
-        case 'Glossary':   return <BookOpen className={cls} />;
-        case 'Timeline':   return <Clock    className={cls} />;
-        case 'Magic':      return <Zap      className={cls} />;
-        case 'History':    return <Scroll   className={cls} />;
-        default:           return <Map      className={cls} />;
+        case 'Setting': return <Globe className={cls} />;
+        case 'Location': return <MapPin className={cls} />;
+        case 'Rules': return <Shield className={cls} />;
+        case 'Glossary': return <BookOpen className={cls} />;
+        case 'Timeline': return <Clock className={cls} />;
+        case 'Magic': return <Zap className={cls} />;
+        case 'History': return <Scroll className={cls} />;
+        default: return <Map className={cls} />;
     }
 }
 
@@ -1881,62 +1544,62 @@ function WorldbuildingPanel({ projectId }: { projectId: string }) {
                     const color = getCategoryColor(entry.category);
                     const isTimeline = entry.category === 'Timeline';
                     return (
-                    <div key={entry.id} className="rounded-2xl overflow-hidden transition-all"
-                        style={{
-                            background: 'var(--bg-app)',
-                            border: `1px solid var(--border-color)`,
-                            borderLeft: isTimeline ? `3px solid ${color}` : undefined,
-                        }}>
-                        {/* Card body */}
-                        <div className="px-3 pt-3 pb-2 flex items-start gap-2.5">
-                            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-                                style={{ background: `${color}18`, color }}>
-                                {wbCategoryIcon(entry.category)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-xs font-bold text-[var(--text-primary)] truncate leading-tight">{entry.title}</p>
-                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
-                                        style={{ background: `${color}15`, color }}>
-                                        {getCategoryLabel(entry.category)}
-                                    </span>
-                                    {entry.hasEmbedding
-                                        ? <span className="text-[10px] font-semibold" style={{ color: '#10b981' }}>✦ AI ready</span>
-                                        : <span className="text-[10px] opacity-40 text-[var(--text-secondary)]">○ chưa embed</span>}
+                        <div key={entry.id} className="rounded-2xl overflow-hidden transition-all"
+                            style={{
+                                background: 'var(--bg-app)',
+                                border: `1px solid var(--border-color)`,
+                                borderLeft: isTimeline ? `3px solid ${color}` : undefined,
+                            }}>
+                            {/* Card body */}
+                            <div className="px-3 pt-3 pb-2 flex items-start gap-2.5">
+                                <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                                    style={{ background: `${color}18`, color }}>
+                                    {wbCategoryIcon(entry.category)}
                                 </div>
-                                {entry.content && (
-                                    <p className="text-[11px] text-[var(--text-secondary)] mt-1.5 leading-relaxed"
-                                        style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                                        {entry.content}
-                                    </p>
-                                )}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-[var(--text-primary)] truncate leading-tight">{entry.title}</p>
+                                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
+                                            style={{ background: `${color}15`, color }}>
+                                            {getCategoryLabel(entry.category)}
+                                        </span>
+                                        {entry.hasEmbedding
+                                            ? <span className="text-[10px] font-semibold" style={{ color: '#10b981' }}>✦ AI ready</span>
+                                            : <span className="text-[10px] opacity-40 text-[var(--text-secondary)]">○ chưa embed</span>}
+                                    </div>
+                                    {entry.content && (
+                                        <p className="text-[11px] text-[var(--text-secondary)] mt-1.5 leading-relaxed"
+                                            style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                            {entry.content}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                            {/* Action bar */}
+                            <div className="px-3 pb-2.5 flex items-center gap-1.5" style={{ borderTop: '1px solid var(--border-color)' }}>
+                                <button onClick={() => handleEmbed(entry.id)} disabled={embeddingId === entry.id}
+                                    title={entry.hasEmbedding ? 'Re-embed' : 'Embed cho AI'}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-50"
+                                    style={entry.hasEmbedding
+                                        ? { background: 'rgba(16,185,129,0.08)', color: '#10b981' }
+                                        : { background: 'rgba(139,92,246,0.08)', color: 'var(--accent)' }}>
+                                    {embeddingId === entry.id
+                                        ? <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                        : <Zap className="w-2.5 h-2.5" />}
+                                    {entry.hasEmbedding ? 'Re-embed' : 'Embed AI'}
+                                </button>
+                                <button onClick={() => openEdit(entry)}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors"
+                                    style={{ background: 'var(--hover-bg)', color: 'var(--text-secondary)' }}>
+                                    <Pencil className="w-2.5 h-2.5" /> Sửa
+                                </button>
+                                <button onClick={() => handleDelete(entry.id)} disabled={deletingId === entry.id}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-50 ml-auto"
+                                    style={{ background: 'rgba(239,68,68,0.06)', color: '#ef4444' }}>
+                                    {deletingId === entry.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Trash2 className="w-2.5 h-2.5" />}
+                                </button>
                             </div>
                         </div>
-                        {/* Action bar */}
-                        <div className="px-3 pb-2.5 flex items-center gap-1.5" style={{ borderTop: '1px solid var(--border-color)' }}>
-                            <button onClick={() => handleEmbed(entry.id)} disabled={embeddingId === entry.id}
-                                title={entry.hasEmbedding ? 'Re-embed' : 'Embed cho AI'}
-                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-50"
-                                style={entry.hasEmbedding
-                                    ? { background: 'rgba(16,185,129,0.08)', color: '#10b981' }
-                                    : { background: 'rgba(139,92,246,0.08)', color: 'var(--accent)' }}>
-                                {embeddingId === entry.id
-                                    ? <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                    : <Zap className="w-2.5 h-2.5" />}
-                                {entry.hasEmbedding ? 'Re-embed' : 'Embed AI'}
-                            </button>
-                            <button onClick={() => openEdit(entry)}
-                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors"
-                                style={{ background: 'var(--hover-bg)', color: 'var(--text-secondary)' }}>
-                                <Pencil className="w-2.5 h-2.5" /> Sửa
-                            </button>
-                            <button onClick={() => handleDelete(entry.id)} disabled={deletingId === entry.id}
-                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-50 ml-auto"
-                                style={{ background: 'rgba(239,68,68,0.06)', color: '#ef4444' }}>
-                                {deletingId === entry.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Trash2 className="w-2.5 h-2.5" />}
-                            </button>
-                        </div>
-                    </div>
                     );
                 })}
             </div>
@@ -2659,7 +2322,7 @@ function AiInstructionsPanel({ projectId }: { projectId: string }) {
     );
 }
 
-function ToolbarBtn({ icon, title, onClick }: { icon: React.ReactNode; title: string; onClick: () => void }){
+function ToolbarBtn({ icon, title, onClick }: { icon: React.ReactNode; title: string; onClick: () => void }) {
     return (
         <button
             title={title}

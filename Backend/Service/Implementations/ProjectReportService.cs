@@ -26,23 +26,37 @@ namespace Service.Implementations
         private readonly bool _geminiIsGemma;           // Gemma không hỗ trợ system role
         private const int TopK = 8;
 
-        // ── Rubric definition─────────────────────────────────────────────────────
+        // ── Rubric definition (8 nhóm, 20 tiêu chí, 100 điểm) ──────────────────
         private static readonly List<(string Key, string Group, string Name, decimal Max)> Rubric = new()
         {
-            ("1.1", "Cốt truyện & Mạch lạc",      "Tính nhất quán nội bộ",          10),
-            ("1.2", "Cốt truyện & Mạch lạc",      "Liên kết nhân quả & Sự kiện",    10),
-            ("1.3", "Cốt truyện & Mạch lạc",      "Nút thắt & Giải quyết",           5),
-            ("2.1", "Xây dựng Nhân vật",           "Động cơ & Hành động",            10),
-            ("2.2", "Xây dựng Nhân vật",           "Chiều sâu nhân vật",             10),
-            ("2.3", "Xây dựng Nhân vật",           "Tương tác & Đối thoại",           5),
-            ("3.1", "Ngôn từ & Văn phong",         "Ngữ pháp & Sự rõ ràng",          10),
-            ("3.2", "Ngôn từ & Văn phong",         "Đa dạng cấu trúc câu",            5),
-            ("3.3", "Ngôn từ & Văn phong",         "Tránh sáo ngữ",                   5),
-            ("4.1", "Sáng tạo & Thể loại",         "Độ sáng tạo & Tránh lối mòn",   10),
-            ("4.2", "Sáng tạo & Thể loại",         "Đặc trưng thể loại",              5),
-            ("4.3", "Sáng tạo & Thể loại",         "Sức cuốn hút",                    5),
-            ("5.1", "Tuân thủ & Hoàn thiện",       "Mức độ hoàn thiện bản thảo",      5),
-            ("5.2", "Tuân thủ & Hoàn thiện",       "Tuân thủ định dạng",               5),
+            // 1. Expectations — Kỳ vọng thể loại & tiền đề (10 điểm)
+            ("1.1", "Kỳ vọng",                    "Thể loại",                        5),
+            ("1.2", "Kỳ vọng",                    "Tiền đề",                         5),
+            // 2. Characters — Nhân vật (20 điểm)
+            ("2.1", "Nhân vật",                    "Phát triển nhân vật",              5),
+            ("2.2", "Nhân vật",                    "Tính cách & Sự hấp dẫn",          5),
+            ("2.3", "Nhân vật",                    "Mối quan hệ & Tương tác",         5),
+            ("2.4", "Nhân vật",                    "Sự đa dạng nhân vật",             5),
+            // 3. Plot & Structure — Cốt truyện & Cấu trúc (15 điểm)
+            ("3.1", "Cốt truyện & Cấu trúc",      "Diễn biến cốt truyện",            5),
+            ("3.2", "Cốt truyện & Cấu trúc",      "Cấu trúc & Tổ chức",              5),
+            ("3.3", "Cốt truyện & Cấu trúc",      "Kết thúc",                        5),
+            // 4. Writing & Language — Ngôn ngữ & Văn phong (15 điểm)
+            ("4.1", "Ngôn ngữ & Văn phong",        "Phong cách & Giọng văn",          5),
+            ("4.2", "Ngôn ngữ & Văn phong",        "Ngữ pháp & Sự trôi chảy",        5),
+            ("4.3", "Ngôn ngữ & Văn phong",        "Tính dễ đọc",                     5),
+            // 5. Enjoyment & Engagement — Sự hấp dẫn (10 điểm)
+            ("5.1", "Sự hấp dẫn",                 "Mức độ thú vị",                    5),
+            ("5.2", "Sự hấp dẫn",                 "Mức độ cuốn hút",                 5),
+            // 6. Emotional Impact — Tác động cảm xúc (10 điểm)
+            ("6.1", "Tác động cảm xúc",           "Sự đồng cảm",                     5),
+            ("6.2", "Tác động cảm xúc",           "Chiều sâu cảm xúc",               5),
+            // 7. Themes — Chủ đề (10 điểm)
+            ("7.1", "Chủ đề",                     "Khám phá chủ đề",                 5),
+            ("7.2", "Chủ đề",                     "Chiều sâu chủ đề",                5),
+            // 8. World-Building & Setting — Xây dựng thế giới (10 điểm)
+            ("8.1", "Xây dựng thế giới",           "Xây dựng thế giới",               5),
+            ("8.2", "Xây dựng thế giới",           "Bối cảnh",                        5),
         };
 
         public ProjectReportService(AppDbContext context, IConfiguration config, IEmbeddingService embeddingService, ILogger<ProjectReportService> logger)
@@ -311,20 +325,26 @@ namespace Service.Implementations
                     .Select((c, i) => $"[Đoạn {i + 1}]\n{PromptSanitizer.SanitizeUserContent(c)}"));
 
             var jsonTemplate = @"[
-  {""key"":""1.1"",""score"":0,""maxScore"":10,""feedback"":"""",""errors"":[],""suggestions"":[]},
-  {""key"":""1.2"",""score"":0,""maxScore"":10,""feedback"":"""",""errors"":[],""suggestions"":[]},
-  {""key"":""1.3"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-  {""key"":""2.1"",""score"":0,""maxScore"":10,""feedback"":"""",""errors"":[],""suggestions"":[]},
-  {""key"":""2.2"",""score"":0,""maxScore"":10,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""1.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""1.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""2.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""2.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
   {""key"":""2.3"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-  {""key"":""3.1"",""score"":0,""maxScore"":10,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""2.4"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""3.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
   {""key"":""3.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
   {""key"":""3.3"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-  {""key"":""4.1"",""score"":0,""maxScore"":10,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""4.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
   {""key"":""4.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
   {""key"":""4.3"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
   {""key"":""5.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-  {""key"":""5.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]}
+  {""key"":""5.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""6.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""6.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""7.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""7.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""8.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
+  {""key"":""8.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]}
 ]";
 
             // Build completeness context for AI
@@ -339,7 +359,7 @@ namespace Service.Implementations
                 : $"\n\nGHI CHÚ CỦA TÁC GIẢ (lưu ý khi đánh giá):\n{aiInstructions}";
 
             var prompt = $$"""
-                Bạn là giám khảo văn học chuyên nghiệp. Nhiệm vụ: đọc kỹ toàn bộ văn bản và đánh giá nghiêm khắc, chi tiết theo 14 tiêu chí.
+                Bạn là giám khảo văn học chuyên nghiệp. Nhiệm vụ: đọc kỹ toàn bộ văn bản và đánh giá nghiêm khắc, chi tiết theo 20 tiêu chí trong 8 nhóm.
 
                 THÔNG TIN HOÀN THIỆN TÁC PHẨM:
                 {{completenessNote}}
@@ -353,35 +373,56 @@ namespace Service.Implementations
                    - Bản nháp trung bình → 40-60% điểm tối đa
                    - Bản thảo tốt → 60-75% điểm tối đa
                    - Tác phẩm hoàn thiện xuất sắc → 75-90% điểm tối đa
-                5. Tiêu chí 5.1 (Hoàn thiện bản thảo): bắt buộc cho điểm thấp nếu tác phẩm còn ít chương, nội dung thưa thớt, kết thúc đột ngột hoặc chưa có vòng cung nhân vật rõ ràng
-                6. Tất cả 14 mục phải có đủ feedback + errors + suggestions — KHÔNG được để trống hoặc để mảng rỗng
+                5. Tất cả 20 mục phải có đủ feedback + errors + suggestions — KHÔNG được để trống hoặc để mảng rỗng
 
-                KEY TIÊU CHÍ:
-                1.1=Nhất quán bối cảnh(10): kiểm tra mâu thuẫn địa điểm/thời gian/sự kiện
-                1.2=Nhân quả sự kiện(10): logic chuỗi sự kiện, hành động → hậu quả
-                1.3=Nút thắt & Giải quyết(5): xung đột có rõ ràng và được giải quyết chưa
-                2.1=Động cơ nhân vật(10): hành động có logic với tính cách/hoàn cảnh không
-                2.2=Tâm lý & Chiều sâu nhân vật(10): nhân vật có chiều sâu, thay đổi, cảm xúc thực không
-                2.3=Đối thoại(5): tự nhiên, phản ánh tính cách, tránh cứng nhắc
-                3.1=Ngữ pháp & Rõ ràng(10): lỗi chính tả, ngữ pháp, câu tối nghĩa
-                3.2=Đa dạng cấu trúc câu(5): tránh lặp cấu trúc câu đơn điệu
-                3.3=Tránh sáo ngữ(5): phát hiện cụm từ/hình ảnh sáo rỗng lặp lại
-                4.1=Sáng tạo & Tránh lối mòn(10): ý tưởng mới lạ, tránh cốt truyện công thức
-                4.2=Đặc trưng thể loại(5): có đáp ứng kỳ vọng thể loại không
-                4.3=Nhịp độ & Sức cuốn hút(5): pace, tension, muốn đọc tiếp không
-                5.1=Hoàn thiện bản thảo(5): số chương, độ hoàn chỉnh vòng cung câu chuyện
-                5.2=Định dạng & Trình bày(5): đoạn văn, đối thoại, xuống hàng{{biblePart}}{{instructionsPart}}
+                KEY TIÊU CHÍ (8 nhóm, 20 tiêu chí, mỗi tiêu chí tối đa 5 điểm):
+
+                ── NHÓM 1: KỲ VỌNG (10 điểm) ──
+                1.1=Thể loại(5): Tác phẩm có đáp ứng kỳ vọng của thể loại (romance, suspense, fantasy...) không? Có tuân thủ các quy ước thể loại không?
+                1.2=Tiền đề(5): Tiền đề của câu chuyện có hấp dẫn, rõ ràng và được khai thác tốt không?
+
+                ── NHÓM 2: NHÂN VẬT (20 điểm) ──
+                2.1=Phát triển nhân vật(5): Chất lượng backstory, động cơ và sự trưởng thành của nhân vật qua câu chuyện
+                2.2=Tính cách & Sự hấp dẫn(5): Nhân vật có sức hút, thực tế và dễ đồng cảm không?
+                2.3=Mối quan hệ & Tương tác(5): Chất lượng tương tác giữa các nhân vật, chemistry trong đối thoại
+                2.4=Sự đa dạng nhân vật(5): Có đa dạng về nhân vật phụ, nhân vật đối lập không? Tránh nhân vật một chiều
+
+                ── NHÓM 3: CỐT TRUYỆN & CẤU TRÚC (15 điểm) ──
+                3.1=Diễn biến cốt truyện(5): Chất lượng nhịp độ, xung đột, plot twist và cách giải quyết vấn đề
+                3.2=Cấu trúc & Tổ chức(5): Tính mạch lạc & logic của rising action, climax và các sự kiện
+                3.3=Kết thúc(5): Kết thúc có thỏa mãn, có tiềm năng và phù hợp với câu chuyện không?
+
+                ── NHÓM 4: NGÔN NGỮ & VĂN PHONG (15 điểm) ──
+                4.1=Phong cách & Giọng văn(5): Tone, style và bầu không khí của tác phẩm
+                4.2=Ngữ pháp & Sự trôi chảy(5): Ngữ pháp, chính tả và sự mượt mà trong cách viết
+                4.3=Tính dễ đọc(5): Câu văn có rõ ràng, dễ theo dõi không? Tránh mơ hồ, rối rắm
+
+                ── NHÓM 5: SỰ HẤP DẪN (10 điểm) ──
+                5.1=Mức độ thú vị(5): Tổng thể tác phẩm có thú vị không? Có tạo kỳ vọng cho phần tiếp theo không?
+                5.2=Mức độ cuốn hút(5): Người đọc có muốn đọc tiếp không? Tương tác tổng thể qua quá trình đọc
+
+                ── NHÓM 6: TÁC ĐỘNG CẢM XÚC (10 điểm) ──
+                6.1=Sự đồng cảm(5): Khả năng gợi lên kết nối cảm xúc với người đọc
+                6.2=Chiều sâu cảm xúc(5): Chiều sâu của các kết nối cảm xúc, có chạm đến cảm xúc sâu xa không?
+
+                ── NHÓM 7: CHỦ ĐỀ (10 điểm) ──
+                7.1=Khám phá chủ đề(5): Chủ đề có được trình bày rõ ràng và khám phá sâu sắc không?
+                7.2=Chiều sâu chủ đề(5): Chiều sâu của chủ đề — giá trị giáo dục, bình luận xã hội, triết lý sống
+
+                ── NHÓM 8: XÂY DỰNG THẾ GIỚI (10 điểm) ──
+                8.1=Xây dựng thế giới(5): Tính chân thực và sự phong phú của thế giới được xây dựng
+                8.2=Bối cảnh(5): Độ chính xác về lịch sử, văn hóa và chi tiết kỹ thuật trong bối cảnh{{biblePart}}{{instructionsPart}}
 
                 Nội dung tác phẩm "{{projectTitle}}":
                 {{contextText}}
 
-                Trả về JSON 14 mục (điền đầy đủ, không có trường nào rỗng):
+                Trả về JSON 20 mục (điền đầy đủ, không có trường nào rỗng):
                 {{jsonTemplate}}
                 """;
 
             var messages = new List<ChatMessage>
             {
-                ChatMessage.CreateSystemMessage("Bạn là giám khảo văn học nghiêm khắc và chuyên sâu. Phân tích cụ thể, trích dẫn ví dụ thực tế từ văn bản. Điền đủ 14 tiêu chí với TỐI THIỂU 3 errors và 3 suggestions mỗi mục. Cho điểm thấp nếu tác phẩm chưa hoàn thiện. Chỉ trả về JSON thuần túy, không có text khác."),
+                ChatMessage.CreateSystemMessage("Bạn là giám khảo văn học nghiêm khắc và chuyên sâu. Phân tích cụ thể, trích dẫn ví dụ thực tế từ văn bản. Điền đủ 20 tiêu chí với TỐI THIỂU 3 errors và 3 suggestions mỗi mục. Cho điểm thấp nếu tác phẩm chưa hoàn thiện. Chỉ trả về JSON thuần túy, không có text khác."),
                 ChatMessage.CreateUserMessage(prompt),
             };
 

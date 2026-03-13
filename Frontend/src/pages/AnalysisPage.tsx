@@ -1,315 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart2, BrainCircuit, ChevronDown, Loader2, AlertCircle, CheckCircle2, Sparkles, Clock, CreditCard } from 'lucide-react';
+import { BarChart2, BrainCircuit, Loader2, AlertCircle, CheckCircle2, Sparkles, Clock, CreditCard } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { UserInfo } from '../utils/jwtHelper';
 import { projectService, ProjectResponse } from '../services/projectService';
 import { reportService, ProjectReportResponse, ProjectReportSummary } from '../services/reportService';
 import { subscriptionService, UserSubscription } from '../services/subscriptionService';
-
-// ─── Score helpers ────────────────────────────────────────────────────────────
-function classifyColor(cls: string) {
-    switch (cls) {
-        case 'Xuất sắc': return { text: '#10b981', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.3)', gradient: ['#10b981', '#34d399'] };
-        case 'Khá': return { text: '#0ea5e9', bg: 'rgba(14,165,233,0.12)', border: 'rgba(14,165,233,0.3)', gradient: ['#0ea5e9', '#38bdf8'] };
-        case 'Trung bình': return { text: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.3)', gradient: ['#f59e0b', '#fbbf24'] };
-        default: return { text: '#ef4444', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.3)', gradient: ['#ef4444', '#f87171'] };
-    }
-}
-
-function groupColor(idx: number) {
-    const palette = ['#f5a623', '#10b981', '#0ea5e9', '#ec4899', '#8b5cf6'];
-    return palette[idx % palette.length];
-}
-
-// ─── SVG Donut Chart ──────────────────────────────────────────────────────────
-function DonutChart({ score, classification }: { score: number; classification: string }) {
-    const clr = classifyColor(classification);
-    const size = 160;
-    const strokeWidth = 14;
-    const r = (size - strokeWidth) / 2;
-    const circumference = 2 * Math.PI * r;
-    const pct = Math.min(score / 100, 1);
-
-    const [animated, setAnimated] = useState(false);
-    useEffect(() => {
-        const t = setTimeout(() => setAnimated(true), 80);
-        return () => clearTimeout(t);
-    }, [score]);
-
-    const dashOffset = animated ? circumference * (1 - pct) : circumference;
-    const gradId = `donut-grad-${classification.replace(/\s/g, '')}`;
-
-    return (
-        <div className="flex flex-col items-center gap-3">
-            <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-                <defs>
-                    <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor={clr.gradient[0]} />
-                        <stop offset="100%" stopColor={clr.gradient[1]} />
-                    </linearGradient>
-                </defs>
-                {/* Track */}
-                <circle cx={size / 2} cy={size / 2} r={r}
-                    fill="none" stroke="var(--bg-hover)" strokeWidth={strokeWidth} />
-                {/* Progress */}
-                <circle cx={size / 2} cy={size / 2} r={r}
-                    fill="none"
-                    stroke={`url(#${gradId})`}
-                    strokeWidth={strokeWidth}
-                    strokeLinecap="round"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={dashOffset}
-                    style={{ transition: 'stroke-dashoffset 1s cubic-bezier(0.4,0,0.2,1)' }}
-                />
-            </svg>
-            {/* Center label — overlaid */}
-            <div className="relative" style={{ marginTop: -(size + 8) }}>
-                <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ width: size, height: size }}>
-                    <span className="text-3xl font-black text-[var(--text-primary)] leading-none">{score.toFixed(0)}</span>
-                    <span className="text-[var(--text-secondary)] text-xs mt-0.5">/ 100 điểm</span>
-                </div>
-                <div style={{ width: size, height: size }} />
-            </div>
-            {/* Badge */}
-            <div className="px-4 py-1 rounded-full text-xs font-bold"
-                style={{ background: clr.bg, border: `1px solid ${clr.border}`, color: clr.text }}>
-                {classification}
-            </div>
-        </div>
-    );
-}
-
-// ─── SVG Radar Chart ──────────────────────────────────────────────────────────
-function RadarChart({ groups }: { groups: ProjectReportResponse['groups'] }) {
-    const size = 220;
-    const cx = size / 2;
-    const cy = size / 2;
-    const maxR = 80;
-    const labelR = maxR + 26;
-    const n = groups.length;
-    const [animated, setAnimated] = useState(false);
-
-    useEffect(() => {
-        const t = setTimeout(() => setAnimated(true), 150);
-        return () => clearTimeout(t);
-    }, [groups]);
-
-    const angleOf = (i: number) => (2 * Math.PI * i) / n - Math.PI / 2;
-
-    const bgPoints = Array.from({ length: n }, (_, i) => {
-        const a = angleOf(i);
-        return `${cx + maxR * Math.cos(a)},${cy + maxR * Math.sin(a)}`;
-    }).join(' ');
-
-    const scorePoints = groups.map((g, i) => {
-        const pct = animated ? g.score / g.maxScore : 0;
-        const a = angleOf(i);
-        const r = maxR * pct;
-        return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`;
-    }).join(' ');
-
-    const ticks = [0.25, 0.5, 0.75, 1];
-    const vbPad = 28;
-    const vbW = size + vbPad * 2;
-    const vbH = size + vbPad * 2;
-
-    return (
-        <div className="flex flex-col items-center gap-2">
-            <svg width={vbW} height={vbH} viewBox={`${-vbPad} ${-vbPad} ${vbW} ${vbH}`}>
-                {/* Tick rings */}
-                {ticks.map(t => (
-                    <polygon key={t}
-                        points={Array.from({ length: n }, (_, i) => {
-                            const a = angleOf(i);
-                            const r = maxR * t;
-                            return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`;
-                        }).join(' ')}
-                        fill="none" stroke="var(--border-color)" strokeWidth="1" opacity="0.6"
-                    />
-                ))}
-                {/* Axis lines */}
-                {Array.from({ length: n }, (_, i) => {
-                    const a = angleOf(i);
-                    return (
-                        <line key={i}
-                            x1={cx} y1={cy}
-                            x2={cx + maxR * Math.cos(a)}
-                            y2={cy + maxR * Math.sin(a)}
-                            stroke="var(--border-color)" strokeWidth="1" opacity="0.5"
-                        />
-                    );
-                })}
-                {/* Background polygon */}
-                <polygon points={bgPoints} fill="var(--bg-hover)" stroke="var(--border-color)" strokeWidth="1" opacity="0.4" />
-                {/* Score polygon */}
-                <polygon points={scorePoints}
-                    fill="rgba(245,166,35,0.18)"
-                    stroke="#f5a623"
-                    strokeWidth="2"
-                    strokeLinejoin="round"
-                    style={{ transition: 'all 0.9s cubic-bezier(0.4,0,0.2,1)' }}
-                />
-                {/* Score dots */}
-                {groups.map((g, i) => {
-                    const pct = animated ? g.score / g.maxScore : 0;
-                    const a = angleOf(i);
-                    const r = maxR * pct;
-                    return (
-                        <circle key={i}
-                            cx={cx + r * Math.cos(a)} cy={cy + r * Math.sin(a)}
-                            r={4} fill={groupColor(i)} stroke="var(--bg-surface)" strokeWidth="2"
-                            style={{ transition: `cx 0.9s, cy 0.9s` }}
-                        />
-                    );
-                })}
-                {/* Labels */}
-                {groups.map((g, i) => {
-                    const a = angleOf(i);
-                    const lx = cx + labelR * Math.cos(a);
-                    const ly = cy + labelR * Math.sin(a);
-                    const anchor = lx < cx - 5 ? 'end' : lx > cx + 5 ? 'start' : 'middle';
-                    const words = g.name.split(' ').slice(0, 2);
-                    return (
-                        <text key={i} textAnchor={anchor} fontSize="9.5" fontWeight="600" fill="var(--text-secondary)">
-                            {words.map((w, wi) => (
-                                <tspan key={wi} x={lx} dy={wi === 0 ? ly + 4 : '1.2em'}>{w}</tspan>
-                            ))}
-                        </text>
-                    );
-                })}
-            </svg>
-            <p className="text-[var(--text-secondary)] text-xs text-center">So sánh 5 nhóm</p>
-        </div>
-    );
-}
-
-// ─── Animated Score Bar ───────────────────────────────────────────────────────
-function ScoreBar({ score, max, color, delay = 0 }: { score: number; max: number; color: string; delay?: number }) {
-    const pct = Math.round((score / max) * 100);
-    const [animated, setAnimated] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const t = setTimeout(() => setAnimated(true), delay);
-        return () => clearTimeout(t);
-    }, [score, delay]);
-
-    return (
-        <div ref={ref} className="relative h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-hover)' }}>
-            <div className="h-full rounded-full"
-                style={{
-                    width: animated ? `${pct}%` : '0%',
-                    background: `linear-gradient(90deg, ${color}cc, ${color})`,
-                    transition: `width 0.7s cubic-bezier(0.4,0,0.2,1) ${delay}ms`,
-                }} />
-        </div>
-    );
-}
-
-// ─── Group Card ───────────────────────────────────────────────────────────────
-function GroupCard({ group, idx, expanded, onToggle }: {
-    group: ProjectReportResponse['groups'][0];
-    idx: number;
-    expanded: boolean;
-    onToggle: () => void;
-}) {
-    const color = groupColor(idx);
-    const pct = Math.round((group.score / group.maxScore) * 100);
-    return (
-        <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-            <button onClick={onToggle} className="w-full p-5 flex items-center gap-4 text-left hover:bg-[var(--bg-hover)] transition-colors">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm"
-                    style={{ background: `${color}18`, color }}>
-                    {idx + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                    <p className="text-[var(--text-primary)] font-semibold text-sm mb-2">{group.name}</p>
-                    <ScoreBar score={group.score} max={group.maxScore} color={color} delay={idx * 80} />
-                </div>
-                <div className="text-right shrink-0 ml-3">
-                    <span className="text-lg font-black" style={{ color }}>{group.score.toFixed(1)}</span>
-                    <span className="text-[var(--text-secondary)] text-xs">/{group.maxScore}</span>
-                    <div className="text-xs font-semibold" style={{ color: `${color}99` }}>{pct}%</div>
-                </div>
-                <ChevronDown className="w-4 h-4 text-[var(--text-secondary)] shrink-0 transition-transform"
-                    style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }} />
-            </button>
-
-            {expanded && (
-                    <div className="px-5 pb-5 flex flex-col gap-4" style={{ borderTop: '1px solid var(--border-color)' }}>
-                        {group.criteria.map((c, ci) => {
-                            const cpct = Math.round((c.score / c.maxScore) * 100);
-                            const hasErrors = c.errors && c.errors.length > 0;
-                            const hasSuggestions = c.suggestions && c.suggestions.length > 0;
-                            return (
-                                <div key={c.key} className="pt-4" style={{ borderTop: ci > 0 ? '1px solid var(--border-color)' : undefined }}>
-                                    {/* Header: key + name + score */}
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-                                                style={{ background: `${color}18`, color }}>
-                                                {c.key}
-                                            </span>
-                                            <span className="text-[var(--text-primary)] text-sm font-semibold">{c.criterionName}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                                            <span className="text-xs font-semibold" style={{ color: `${color}99` }}>{cpct}%</span>
-                                            <span className="text-sm font-bold" style={{ color }}>
-                                                {c.score.toFixed(1)}<span className="text-[var(--text-secondary)] font-normal text-xs">/{c.maxScore}</span>
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Score bar */}
-                                    <ScoreBar score={c.score} max={c.maxScore} color={color} delay={ci * 50} />
-
-                                    {/* Feedback — general assessment */}
-                                    {c.feedback && (
-                                        <p className="text-[var(--text-secondary)] text-xs leading-relaxed mt-2.5 pl-0.5">
-                                            {c.feedback}
-                                        </p>
-                                    )}
-
-                                    {/* Errors */}
-                                    {hasErrors && (
-                                        <div className="mt-3 rounded-xl p-3 flex flex-col gap-1.5"
-                                            style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)' }}>
-                                            <p className="text-xs font-bold mb-0.5 flex items-center gap-1.5" style={{ color: '#ef4444' }}>
-                                                <span>⚠</span> Vấn đề phát hiện
-                                            </p>
-                                            {c.errors.map((err, ei) => (
-                                                <div key={ei} className="flex items-start gap-2">
-                                                    <span className="text-xs mt-0.5 shrink-0" style={{ color: '#f87171' }}>•</span>
-                                                    <p className="text-xs leading-relaxed" style={{ color: '#fca5a5' }}>{err}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {/* Suggestions */}
-                                    {hasSuggestions && (
-                                        <div className="mt-2 rounded-xl p-3 flex flex-col gap-1.5"
-                                            style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }}>
-                                            <p className="text-xs font-bold mb-0.5 flex items-center gap-1.5" style={{ color: '#10b981' }}>
-                                                <span>✓</span> Gợi ý cải thiện
-                                            </p>
-                                            {c.suggestions.map((sug, si) => (
-                                                <div key={si} className="flex items-start gap-2">
-                                                    <span className="text-xs mt-0.5 shrink-0" style={{ color: '#34d399' }}>•</span>
-                                                    <p className="text-xs leading-relaxed" style={{ color: '#6ee7b7' }}>{sug}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-        </div>
-    );
-}
+import { classifyColor, groupColor } from '../components/analysis/helpers';
+import DonutChart from '../components/analysis/DonutChart';
+import RadarChart from '../components/analysis/RadarChart';
+import GroupCard from '../components/analysis/GroupCard';
 
 // ─── Main content ─────────────────────────────────────────────────────────────
 function AnalysisContent() {
@@ -334,7 +34,7 @@ function AnalysisContent() {
             .then(data => { setProjects(data); if (data.length > 0) setSelectedId(data[0].id); })
             .catch(() => setError('Không thể tải danh sách dự án.'))
             .finally(() => setLoadingProjects(false));
-        subscriptionService.getMySubscription().then(setSubscription).catch(() => {});
+        subscriptionService.getMySubscription().then(setSubscription).catch(() => { });
     }, []);
 
     // Load latest report + history when project changes
@@ -369,7 +69,7 @@ function AnalysisContent() {
             setHistory(all);
             setExpandedGroups({});
             // Refresh subscription usage
-            subscriptionService.getMySubscription().then(setSubscription).catch(() => {});
+            subscriptionService.getMySubscription().then(setSubscription).catch(() => { });
         } catch (e: any) {
             setError(e?.response?.data?.message || 'Phân tích thất bại. Vui lòng thử lại.');
         } finally {
@@ -685,5 +385,3 @@ export default function AnalysisPage() {
         </MainLayout>
     );
 }
-
-

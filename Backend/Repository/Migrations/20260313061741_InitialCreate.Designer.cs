@@ -13,8 +13,8 @@ using Repository.Data;
 namespace Repository.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260312131038_AddIsPinnedToChapterVersions")]
-    partial class AddIsPinnedToChapterVersions
+    [Migration("20260313061741_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -532,12 +532,95 @@ namespace Repository.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Repository.Entities.Payment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValue("VND");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Card");
+
+                    b.Property<int>("PlanId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("RefundedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Pending");
+
+                    b.Property<int?>("SubscriptionId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TransactionId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlanId");
+
+                    b.HasIndex("SubscriptionId");
+
+                    b.HasIndex("TransactionId")
+                        .IsUnique()
+                        .HasFilter("\"TransactionId\" IS NOT NULL");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Payments", t =>
+                        {
+                            t.HasCheckConstraint("CK_Payment_Status", "\"Status\" IN ('Pending','Completed','Failed','Refunded','Cancelled')");
+                        });
+                });
+
             modelBuilder.Entity("Repository.Entities.Project", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<string>("AiInstructions")
+                        .HasColumnType("text");
 
                     b.Property<Guid>("AuthorId")
                         .HasColumnType("uuid");
@@ -1081,6 +1164,32 @@ namespace Repository.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Repository.Entities.Payment", b =>
+                {
+                    b.HasOne("Repository.Entities.SubscriptionPlan", "Plan")
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Repository.Entities.UserSubscription", "Subscription")
+                        .WithMany()
+                        .HasForeignKey("SubscriptionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Repository.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
+
+                    b.Navigation("Subscription");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Repository.Entities.Project", b =>

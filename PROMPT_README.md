@@ -149,26 +149,32 @@ Trả về JSON array (không có text nào ngoài JSON):
 | < 30 chương hoặc < 20000 từ | "Bản thảo khá đầy đủ" |
 | ≥ 30 chương và ≥ 20000 từ | "Tác phẩm dài và hoàn thiện" |
 
-### Rubric 14 tiêu chí (100 điểm)
+### Rubric 20 tiêu chí — 8 nhóm (100 điểm)
 
-| Key | Nhóm | Tiêu chí | Điểm tối đa |
-|-----|------|----------|------------|
-| 1.1 | Cốt truyện & Mạch lạc | Tính nhất quán nội bộ | 10 |
-| 1.2 | Cốt truyện & Mạch lạc | Liên kết nhân quả & Sự kiện | 10 |
-| 1.3 | Cốt truyện & Mạch lạc | Nút thắt & Giải quyết | 5 |
-| 2.1 | Xây dựng Nhân vật | Động cơ & Hành động | 10 |
-| 2.2 | Xây dựng Nhân vật | Chiều sâu nhân vật | 10 |
-| 2.3 | Xây dựng Nhân vật | Tương tác & Đối thoại | 5 |
-| 3.1 | Ngôn từ & Văn phong | Ngữ pháp & Sự rõ ràng | 10 |
-| 3.2 | Ngôn từ & Văn phong | Đa dạng cấu trúc câu | 5 |
-| 3.3 | Ngôn từ & Văn phong | Tránh sáo ngữ | 5 |
-| 4.1 | Sáng tạo & Thể loại | Độ sáng tạo & Tránh lối mòn | 10 |
-| 4.2 | Sáng tạo & Thể loại | Đặc trưng thể loại | 5 |
-| 4.3 | Sáng tạo & Thể loại | Sức cuốn hút | 5 |
-| 5.1 | Tuân thủ & Hoàn thiện | **Mức độ hoàn thiện bản thảo** | 5 |
-| 5.2 | Tuân thủ & Hoàn thiện | Tuân thủ định dạng | 5 |
+| Key | Nhóm | Tiêu chí | Max | Giải thích |
+|-----|------|----------|-----|-----------|
+| 1.1 | 🎯 Kỳ vọng | Thể loại | 5 | Tác phẩm có đáp ứng quy ước thể loại (romance, suspense, fantasy...) không? |
+| 1.2 | 🎯 Kỳ vọng | Tiền đề | 5 | Tiền đề câu chuyện có hấp dẫn, rõ ràng và được khai thác tốt không? |
+| 2.1 | 👤 Nhân vật | Phát triển nhân vật | 5 | Chất lượng backstory, động cơ, sự trưởng thành qua câu chuyện |
+| 2.2 | 👤 Nhân vật | Tính cách & Sự hấp dẫn | 5 | Nhân vật có sức hút, thực tế, dễ đồng cảm? |
+| 2.3 | 👤 Nhân vật | Mối quan hệ & Tương tác | 5 | Chemistry đối thoại, chất lượng tương tác giữa nhân vật |
+| 2.4 | 👤 Nhân vật | Sự đa dạng nhân vật | 5 | Đa dạng nhân vật phụ, nhân vật đối lập; tránh nhân vật một chiều |
+| 3.1 | 📖 Cốt truyện & Cấu trúc | Diễn biến cốt truyện | 5 | Nhịp độ, xung đột, plot twist, cách giải quyết vấn đề |
+| 3.2 | 📖 Cốt truyện & Cấu trúc | Cấu trúc & Tổ chức | 5 | Mạch lạc, logic rising action / climax / falling action |
+| 3.3 | 📖 Cốt truyện & Cấu trúc | Kết thúc | 5 | Kết thúc có thỏa mãn, có tiềm năng, phù hợp câu chuyện? |
+| 4.1 | ✍️ Ngôn ngữ & Văn phong | Phong cách & Giọng văn | 5 | Tone, style, bầu không khí tác phẩm |
+| 4.2 | ✍️ Ngôn ngữ & Văn phong | Ngữ pháp & Sự trôi chảy | 5 | Ngữ pháp, chính tả, sự mượt mà trong cách viết |
+| 4.3 | ✍️ Ngôn ngữ & Văn phong | Tính dễ đọc | 5 | Câu văn rõ ràng, dễ theo dõi; tránh mơ hồ, rối rắm |
+| 5.1 | 🌟 Sự hấp dẫn | Mức độ thú vị | 5 | Tổng thể thú vị? Tạo kỳ vọng cho phần tiếp theo? |
+| 5.2 | 🌟 Sự hấp dẫn | Mức độ cuốn hút | 5 | Người đọc có muốn đọc tiếp? Tương tác qua quá trình đọc |
+| 6.1 | 💔 Tác động cảm xúc | Sự đồng cảm | 5 | Khả năng gợi lên kết nối cảm xúc với người đọc |
+| 6.2 | 💔 Tác động cảm xúc | Chiều sâu cảm xúc | 5 | Chiều sâu cảm xúc — có chạm đến cảm xúc sâu xa? |
+| 7.1 | 💡 Chủ đề | Khám phá chủ đề | 5 | Chủ đề trình bày rõ ràng, khám phá sâu sắc? |
+| 7.2 | 💡 Chủ đề | Chiều sâu chủ đề | 5 | Giá trị giáo dục, bình luận xã hội, triết lý sống |
+| 8.1 | 🌍 Xây dựng thế giới | Xây dựng thế giới | 5 | Tính chân thực, phong phú của thế giới được xây dựng |
+| 8.2 | 🌍 Xây dựng thế giới | Bối cảnh | 5 | Độ chính xác lịch sử, văn hóa, chi tiết kỹ thuật |
 
-> **5.1 tự động bị phạt** nếu tác phẩm chưa hoàn thiện (< 5 chương hoặc < 3000 từ) → max 2/5.
+> **Phân bổ:** Kỳ vọng 10đ, Nhân vật 20đ, Cốt truyện 15đ, Ngôn ngữ 15đ, Hấp dẫn 10đ, Cảm xúc 10đ, Chủ đề 10đ, Thế giới 10đ → **Tổng 100đ**
 
 ### Output JSON mong đợi
 
@@ -176,8 +182,8 @@ Trả về JSON array (không có text nào ngoài JSON):
 [
   {
     "key": "1.1",
-    "score": 6.5,
-    "maxScore": 10,
+    "score": 3.5,
+    "maxScore": 5,
     "feedback": "Lỗi 1: Nhân vật A ở chương 1 nói X nhưng chương 3 lại làm Y... Lỗi 2:... Lỗi 3:... Gợi ý 1:... Gợi ý 2:... Gợi ý 3:..."
   },
   ...

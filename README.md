@@ -4,33 +4,127 @@ Nền tảng hỗ trợ sáng tác truyện tích hợp AI, sử dụng kỹ thu
 
 ---
 
-## ✨ Tính năng chính
+## 📌 Trạng thái: Những thứ đã làm
 
-| Tính năng | Mô tả |
-|-----------|-------|
-| **Editor** | Workspace soạn thảo với auto-save, rich text (bold/italic/underline), word count |
-| **Lịch sử phiên bản** | Git-style versioning — tạo, ghim, so sánh diff, khôi phục các version của chương |
-| **Auto Embed** | Lưu chương → tự động chunk + embed ngầm → AI sẵn sàng ngay |
-| **AI Chat (RAG)** | Hỏi AI về nội dung truyện dựa trên vector search — chỉ tốn token, không tốn lượt phân tích |
-| **AI Rewrite** | Bôi đen đoạn văn → nhờ AI viết lại → xem lịch sử thay đổi |
-| **Phân tích AI** | Chấm điểm bản thảo theo rubric 100 điểm (14 tiêu chí, 5 nhóm) có tính mức độ hoàn thiện |
-| **Worldbuilding** | Quản lý bối cảnh, nhân vật — được embed vector và đưa vào context khi hỏi AI |
-| **Import / Export** | Import `.txt` vào chương, export chương hoặc toàn bộ dự án ra file |
-| **Báo cáo lỗi** | User gửi bug report → Staff xử lý qua dashboard riêng |
-| **Quên mật khẩu** | Gửi link reset qua email (Gmail SMTP / MailKit) |
-| **Admin thống kê** | Tổng quan hệ thống: users, projects, subscriptions |
-| **Gói đăng ký** | Free / Basic / Pro / Enterprise với giới hạn phân tích và token |
+### ✅ Backend (ASP.NET Core 8 — 3 Layers)
+
+| Tính năng | Controller | Service | Trạng thái |
+|-----------|------------|---------|------------|
+| **Auth** (đăng ký/đăng nhập/JWT/refresh token) | `AuthController` | `AuthService` | ✅ Hoàn thành |
+| **Quên/Reset mật khẩu** (Gmail SMTP) | `AuthController` | `EmailService` | ✅ Hoàn thành |
+| **User profile** | `UserController` | `UserService` | ✅ Hoàn thành |
+| **User settings** (font, size editor) | `UserSettingsController` | `UserSettingsService` | ✅ Hoàn thành |
+| **CRUD dự án** + stats + export | `ProjectController` | `ProjectService` | ✅ Hoàn thành |
+| **Chương + Phiên bản** (CRUD, pin, diff, import/export) | `ChapterController` | `ChapterService` | ✅ Hoàn thành |
+| **Chunking** (cắt text ~1500 ký tự, overlap 150) | — | `ChunkingService` | ✅ Hoàn thành |
+| **Embedding** (Gemini batchEmbedContents, vector 768) | — | `EmbeddingService` | ✅ Hoàn thành |
+| **AI Chat RAG** (cosine search + Gemini) | `AiController` | `AiChatService` | ✅ Hoàn thành |
+| **AI Rewrite** (viết lại đoạn văn) | `AiController` | `AiRewriteService` | ✅ Hoàn thành |
+| **Phân tích AI** (rubric 100 điểm, 14 tiêu chí) | `AiController` | `ProjectReportService` | ✅ Hoàn thành |
+| **Worldbuilding** (bối cảnh + embed) | `WorldbuildingController` | `WorldbuildingService` | ✅ Hoàn thành |
+| **Characters** (nhân vật + embed) | `CharacterController` | `CharacterService` | ✅ Hoàn thành |
+| **Subscription Plans** (CRUD gói, đăng ký, kiểm tra quota) | `SubscriptionController` | `SubscriptionService` | ✅ Hoàn thành |
+| **Payment** (tạo, cập nhật status, lịch sử, refund) | `PaymentController` | `PaymentService` | ✅ Hoàn thành |
+| **Bug Reports** (user gửi, staff xử lý) | `BugReportController` | `BugReportService` | ✅ Hoàn thành |
+| **Admin** (thống kê user, project, subscription) | `AdminController` | `AdminService` | ✅ Hoàn thành |
+| **Thể loại truyện** | `GenreController` | `GenreService` | ✅ Hoàn thành |
+| **AES-256 Encryption** (mã hóa nội dung truyện) | — | Helpers | ✅ Hoàn thành |
+| **Rate Limiting** (AI endpoints: chat/rewrite/analyze/embed) | `Program.cs` | — | ✅ Hoàn thành |
+| **LM Studio fallback** (khi Gemini lỗi non-429) | — | `AiChatService` | ✅ Hoàn thành |
+| **Swagger + JWT Auth** | `Program.cs` | — | ✅ Hoàn thành |
+| **Deploy config** (Render + Docker) | `render.yaml`, `Dockerfile` | — | ✅ Hoàn thành |
+| **Database** (PostgreSQL + pgvector trên Supabase) | — | EF Core 9 + 17 Migrations | ✅ Hoàn thành |
+
+### ✅ Frontend (React 19 + TypeScript + Vite 7)
+
+| Tính năng | Page/Component | Trạng thái |
+|-----------|----------------|------------|
+| **Landing Page** | `LandingPage.tsx` | ✅ Hoàn thành |
+| **Auth** (Login + Register — chung 1 page) | `AuthPage.tsx` | ✅ Hoàn thành |
+| **Quên mật khẩu** | `ForgotPasswordPage.tsx` | ✅ Hoàn thành |
+| **Reset mật khẩu** | `ResetPasswordPage.tsx` | ✅ Hoàn thành |
+| **Trang chủ / Dashboard** | `HomePage.tsx` | ✅ Hoàn thành |
+| **Danh sách dự án** (card kiểu sách) | `ProjectsPage.tsx` | ✅ Hoàn thành |
+| **Workspace Editor** (auto-save, rich text, word count) | `WorkspacePage.tsx` | ✅ Hoàn thành |
+| **AI Chat panel** (trong Workspace) | `WorkspacePage.tsx` | ✅ Hoàn thành |
+| **Version History** (pin, compare diff, switch) | `WorkspacePage.tsx` | ✅ Hoàn thành |
+| **AI Rewrite** (bôi đen → viết lại) | `RewritePanel.tsx` | ✅ Hoàn thành |
+| **Worldbuilding + Characters** (trong Workspace) | `WorkspacePage.tsx` | ✅ Hoàn thành |
+| **Phân tích AI** (rubric 100 điểm) | `AnalysisPage.tsx` | ✅ Hoàn thành |
+| **Subscription** (xem gói hiện tại) | `SubscriptionPage.tsx` | ✅ Hoàn thành |
+| **Plans** (chọn gói) | `PlansPage.tsx` | ✅ Hoàn thành |
+| **Profile** | `ProfilePage.tsx` | ✅ Hoàn thành |
+| **Settings** (cài đặt editor) | `SettingsPage.tsx` | ✅ Hoàn thành |
+| **Admin Dashboard** (thống kê + quản lý user) | `AdminDashboardPage.tsx` | ✅ Hoàn thành |
+| **Admin Subscription** (quản lý gói) | `AdminSubscriptionPage.tsx` | ✅ Hoàn thành |
+| **Staff Dashboard** (xử lý bug reports) | `StaffDashboardPage.tsx` | ✅ Hoàn thành |
+| **Privacy Policy** | `PrivacyPolicyPage.tsx` | ✅ Hoàn thành |
+| **404 Not Found** | `NotFoundPage.tsx` | ✅ Hoàn thành |
+| **Sidebar + Topbar** (collapse/expand, theme toggle) | `Sidebar.tsx`, `Topbar.tsx` | ✅ Hoàn thành |
+| **Toast notifications** | `Toast.tsx` | ✅ Hoàn thành |
+| **Dark/Light theme** (Warm Parchment × Midnight Ink) | CSS Variables | ✅ Hoàn thành |
+| **14 API services** | `services/*.ts` | ✅ Hoàn thành |
+
+### ✅ Hạ tầng & Bảo mật
+
+- ✅ JWT Bearer Token + Refresh Token
+- ✅ AES-256 encryption cho nội dung truyện (mỗi user 1 DEK)
+- ✅ Rate Limiting (SlidingWindow) cho tất cả AI endpoints
+- ✅ CORS cấu hình linh hoạt
+- ✅ Render deploy config (Docker)
+- ✅ Retry logic cho Gemini API (backoff 10s → 30s → 65s khi 429)
+- ✅ Roles: Author / Staff / Admin
 
 ---
 
-## 🤖 AI Providers
+## 🔲 Trạng thái: Những thứ CẦN LÀM
 
-| Provider | Vai trò | Model |
-|----------|---------|-------|
-| **Gemini API** (primary) | Chat + Embedding | `gemini-2.0-flash` / `gemini-embedding-001` |
-| **LM Studio** (fallback) | Chat khi Gemini lỗi non-429 | tùy chọn, OpenAI-compatible |
+### 🔴 Ưu tiên cao
 
-> **Free tier Gemini:** ~15 RPM cho chat, 100 RPM cho embedding. Backend tự động retry với backoff [10s → 30s → 65s] khi gặp 429. Embedding dùng `batchEmbedContents` — toàn bộ chunks trong 1 HTTP call.
+| # | Tính năng | Mô tả | Nơi ảnh hưởng |
+|---|-----------|-------|---------------|
+| 1 | **Route Guards / Protected Routes** | Chưa có kiểm tra auth ở frontend routes — ai cũng vào được bất kỳ trang nào | `App.tsx` |
+| 2 | **Refresh Token handling** ở Frontend | Backend hỗ trợ refresh token nhưng frontend chưa tự động refresh khi token hết hạn — user bị logout đột ngột | `api.ts` (interceptor) |
+| 3 | **Payment integration thực tế** | Backend có `PaymentController` + `PaymentService` đầy đủ nhưng frontend **chưa có** `paymentService.ts` — chưa tích hợp cổng thanh toán nào (VNPay/Momo/Stripe) | Frontend + Backend |
+| 4 | **Tách `WorkspacePage.tsx`** | File ~176KB, quá lớn — nên tách thành sub-components (EditorPanel, ChapterSidebar, AiChatPanel, VersionHistoryPanel, WorldbuildingPanel...) | `WorkspacePage.tsx` |
+| 5 | **Dọn dẹp file trùng lặp** | Có cả `LoginPage.tsx` (16KB) và `RegisterPage.tsx` (28KB) nhưng không dùng — `App.tsx` chỉ dùng `AuthPage.tsx` | `pages/` |
+
+### 🟡 Ưu tiên trung bình
+
+| # | Tính năng | Mô tả |
+|---|-----------|-------|
+| 6 | **Admin route protection** | Admin đã ẩn sidebar items cho "Projects"/"Analysis" nhưng chưa block truy cập trực tiếp qua URL |
+| 7 | **Error handling thống nhất** | Frontend chưa có global error boundary, mỗi page tự handle error riêng |
+| 8 | **Loading states / Skeleton UI** | Một số page chưa có loading skeleton khi fetch data |
+| 9 | **Responsive design** | Một số page có thể chưa tối ưu cho mobile |
+| 10 | **Import/Export toàn bộ dự án** | Backend hỗ trợ export project nhưng frontend chưa có UI rõ ràng |
+
+### 🟢 Ưu tiên thấp (Nice-to-have)
+
+| # | Tính năng | Mô tả |
+|---|-----------|-------|
+| 11 | **Unit Tests / Integration Tests** | Chưa có test nào (cả backend lẫn frontend) |
+| 12 | **CI/CD Pipeline** | Chưa có GitHub Actions hoặc pipeline tự động nào |
+| 13 | **Logging & Monitoring** | Chỉ có logging cơ bản qua `ILogger`, chưa có monitoring/alerting |
+| 14 | **PWA / Offline support** | Chưa hỗ trợ offline editing |
+| 15 | **Collaboration** (multi-user editing) | Chưa hỗ trợ nhiều người cùng chỉnh sửa |
+| 16 | **Notification system** (in-app) | Chưa có hệ thống thông báo real-time |
+| 17 | **Dọn file tạm** | `Frontend/temp.py`, `Frontend/temp.cjs`, `Frontend/front_build*.log` — nên xóa hoặc thêm vào `.gitignore` |
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Công nghệ |
+|-------|-----------|
+| **Frontend** | React 19, TypeScript, Vite 7, TailwindCSS 4, Axios, Framer Motion, Lucide React, React Router DOM 7, React Hook Form |
+| **Backend** | ASP.NET Core (.NET 8), Entity Framework Core 9, Swashbuckle (Swagger) |
+| **Database** | PostgreSQL + pgvector (Supabase) |
+| **AI** | Google Gemini API (primary), LM Studio (fallback) |
+| **Auth** | JWT Bearer + Refresh Token |
+| **Security** | AES-256 encryption, Rate Limiting |
+| **Email** | MailKit (Gmail SMTP) |
+| **Deploy** | Render (Docker) |
 
 ---
 
@@ -55,56 +149,9 @@ Hỏi AI
 [6] Gemini trả lời dựa trên context chunks
 ```
 
-> **Quan trọng:** RAG chỉ tìm trong chunks của **active version** hiện tại của mỗi chương. Khi switch version, AI tự động dùng chunks của version đó.
-
 ---
 
-## 🔧 Backend
-
-### Công nghệ
-
-- **Framework:** ASP.NET Core (.NET 8)
-- **Database:** PostgreSQL + pgvector extension (Supabase)
-- **ORM:** Entity Framework Core 9
-- **Auth:** JWT Bearer Token + Refresh Token
-- **AI Primary:** Google Gemini API
-- **AI Fallback:** LM Studio (OpenAI-compatible local server)
-- **Email:** MailKit (Gmail SMTP)
-
-### Cấu trúc 3 layers
-
-| Layer | Thư mục | Vai trò |
-|-------|---------|---------|
-| API | `Api/Controllers/` | HTTP endpoints, routing, DI |
-| Service | `Service/` | Business logic, AI integration, DTOs |
-| Repository | `Repository/` | Entities, DbContext, Migrations |
-
-### Controllers
-
-| Controller | Route | Mô tả |
-|------------|-------|-------|
-| `AuthController` | `/api/auth` | Đăng ký, đăng nhập, đổi mật khẩu, quên/reset mật khẩu |
-| `UserController` | `/api/user` | Profile |
-| `UserSettingsController` | `/api/settings` | Cài đặt editor (font, size) |
-| `ProjectController` | `/api/project` | CRUD dự án + stats + export |
-| `ChapterController` | `/api/project/{id}/chapters` | Chương, phiên bản (chunk/embed/pin/diff/import/export) |
-| `AiController` | `/api/ai` | Chat RAG, Rewrite, Phân tích, Lịch sử |
-| `WorldbuildingController` | `/api/project/{id}/worldbuilding` | Quản lý bối cảnh + embed |
-| `CharacterController` | `/api/project/{id}/character` | Quản lý nhân vật + embed |
-| `SubscriptionController` | `/api/subscription` | Gói đăng ký |
-| `GenreController` | `/api/genre` | Thể loại truyện |
-| `BugReportController` | `/api/bug-reports` | Báo cáo lỗi (user gửi, staff xử lý) |
-| `AdminController` | `/api/admin` | Thống kê tổng quan + users |
-
-### Roles
-
-| Role | Mô tả |
-|------|-------|
-| `Author` | Mặc định khi đăng ký |
-| `Staff` | Xử lý bug reports, được tạo bởi Admin |
-| `Admin` | Toàn quyền |
-
-### Database Schema
+## 📊 Database Schema
 
 ```
 Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterChunks (vector 768)
@@ -117,189 +164,28 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
   │           └──< RewriteHistories     (mã hóa)
   │
   ├──< UserSubscriptions >── SubscriptionPlans
+  ├──< Payments
   ├──< BugReports
   └──1 UserSettings
 ```
 
-### Bảo mật nội dung
+---
 
-Toàn bộ nội dung truyện được **mã hóa AES-256** trong database:
-- Mỗi user có **DEK** (Data Encryption Key) riêng, mã hóa bằng **MasterKey** từ config.
-- Nội dung chỉ giải mã trong memory khi cần xử lý.
-
-### Cấu hình (`appsettings.Development.json`)
-
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Host=...;Database=storyrag;Username=postgres;Password=..."
-  },
-  "Jwt": {
-    "Key": "your-secret-key-min-32-chars",
-    "Issuer": "StoryRAG",
-    "Audience": "StoryRAG"
-  },
-  "Gemini": {
-    "ChatApiKey": "AIza...",
-    "EmbedApiKey": "AIza...",
-    "ChatModel": "gemini-2.0-flash",
-    "EmbeddingModel": "gemini-embedding-001",
-    "EmbeddingDimensions": "768"
-  },
-  "AI": {
-    "BaseUrl": "http://localhost:1234/v1",
-    "ApiKey": "lm-studio",
-    "ChatModel": "your-local-model"
-  },
-  "Security": {
-    "MasterKey": "your-master-key-min-32-chars"
-  },
-  "Email": {
-    "Host": "smtp.gmail.com",
-    "Port": 587,
-    "Username": "your@gmail.com",
-    "Password": "gmail-app-password",
-    "FromName": "StoryRAG"
-  }
-}
-```
-
-### Chạy Backend
+## 🚀 Khởi chạy
 
 ```bash
+# Backend
 cd Backend
 dotnet restore
 dotnet ef database update --project Repository --startup-project Api
 dotnet run --project Api
-```
+# → http://localhost:5105 | Swagger: http://localhost:5105/swagger
 
-API: `http://localhost:5105` · Swagger: `http://localhost:5105/swagger`
-
----
-
-## 🎨 Frontend
-
-### Công nghệ
-
-- **Framework:** React 19 + TypeScript
-- **Build:** Vite 7
-- **Styling:** TailwindCSS 4 + CSS Variables (design tokens)
-- **HTTP:** Axios
-- **Icons:** Lucide React
-- **Routing:** React Router DOM 7
-- **Diff:** `diff` npm package (word-level diff cho version comparison)
-
-### Pages
-
-| Page | Route | Mô tả |
-|------|-------|-------|
-| `LandingPage` | `/` | Trang giới thiệu |
-| `AuthPage` | `/login`, `/register` | Đăng nhập / Đăng ký |
-| `ForgotPasswordPage` | `/forgot-password` | Yêu cầu reset mật khẩu qua email |
-| `ResetPasswordPage` | `/reset-password` | Đặt mật khẩu mới (từ link email) |
-| `HomePage` | `/home` | Dashboard cá nhân |
-| `ProjectsPage` | `/projects` | Danh sách dự án |
-| `WorkspacePage` | `/workspace/:projectId` | Editor + AI Chat + Rewrite + Worldbuilding + Version History |
-| `AnalysisPage` | `/analysis` | Phân tích AI — chấm điểm 100 điểm |
-| `SubscriptionPage` | `/subscription` | Subscription hiện tại |
-| `PlansPage` | `/plans` | Xem và chọn gói |
-| `ProfilePage` | `/profile` | Thông tin cá nhân |
-| `SettingsPage` | `/settings` | Cài đặt editor |
-| `AdminDashboardPage` | `/admin` | Quản trị user + thống kê |
-| `AdminSubscriptionPage` | `/admin/subscription` | Quản trị gói đăng ký |
-| `StaffDashboardPage` | `/staff` | Xử lý bug reports |
-
-### WorkspacePage — UX chính
-
-```
-Ctrl+S hoặc nút "Lưu"
-  → Lưu nội dung ngay
-  → Toast "✅ Đã lưu"
-  → Ngầm: Chunk → Embed (indicator trên navbar)
-    "⏳ Đồng bộ AI..." → "✨ AI sẵn sàng"
-```
-
-**Panels:**
-- **Left** — Danh sách chương, thêm/xóa chương, Import `.txt`
-- **Center** — Editor contentEditable: font tùy chỉnh, bold/italic/underline, word count, Export chương
-- **Right** — AI Chat / Lịch sử phiên bản (Pin, Compare diff, Switch) / Chat cũ
-- **Floating toolbar** — Bôi đen văn bản → nút "✨ Viết lại" → `RewritePanel`
-
-### Design System
-
-**Theme:** Warm Parchment (Light) × Midnight Ink (Dark)
-
-| Token | Light | Dark |
-|-------|-------|------|
-| `--bg-app` | `#ede8e1` | `#0d0b12` |
-| `--bg-surface` | `#f5f1ec` | `#1d1a2a` |
-| `--bg-sidebar` | `#e4ddd5` | `#161320` |
-| `--accent` | `#7c3aed` | `#8b5cf6` |
-| `--text-primary` | `#1c1611` | `#f0ecf8` |
-| `--text-secondary` | `#6b5f54` | `#9b93ab` |
-
-### Chạy Frontend
-
-```bash
+# Frontend
 cd Frontend
 npm install
 npm run dev
+# → http://localhost:5173
 ```
 
-Frontend: `http://localhost:5173`
-
----
-
-## 📊 Rubric chấm điểm AI (100 điểm)
-
-| # | Nhóm | Điểm |
-|---|------|------|
-| 1 | Cốt truyện & Mạch lạc (nhất quán, nhân quả, nút thắt) | 25 |
-| 2 | Xây dựng Nhân vật (động cơ, chiều sâu, đối thoại) | 25 |
-| 3 | Ngôn từ & Văn phong (ngữ pháp, cấu trúc câu, tránh sáo ngữ) | 20 |
-| 4 | Sáng tạo & Thể loại (độ sáng tạo, đặc trưng thể loại, sức cuốn hút) | 20 |
-| 5 | Tuân thủ & Hoàn thiện (mức độ hoàn thiện, định dạng) | 10 |
-
-> Điểm 5.1 (Hoàn thiện) tự động bị phạt nếu tác phẩm còn ít chương hoặc ít từ. Cần ≥3 lỗi + ≥3 gợi ý cho mỗi tiêu chí.
-
-| Điểm | Kết quả |
-|------|---------|
-| > 85 | ✅ Xuất sắc |
-| 71–85 | 🟢 Khá |
-| 51–70 | 🟡 Trung bình |
-| ≤ 50 | 🔴 Cần sửa lớn |
-
----
-
-## 💰 Gói đăng ký
-
-| Gói | Giá/tháng | Phân tích | Token AI |
-|-----|-----------|-----------|----------|
-| Free | 0đ | 3 | 20,000 |
-| Basic | 99,000đ | 20 | 150,000 |
-| Pro | 249,000đ | 100 | 500,000 |
-| Enterprise | 699,000đ | Không giới hạn | 2,000,000 |
-
-> **Lưu ý:** AI Chat chỉ tốn token, không tốn lượt phân tích. Lượt phân tích chỉ bị trừ khi chạy tính năng "Phân tích AI" (rubric 100 điểm).
-
----
-
-## 🚀 Khởi chạy toàn bộ
-
-```bash
-# 1. Tạo PostgreSQL database, bật extension vector
-# 2. Điền config vào Backend/Api/appsettings.Development.json
-
-# 3. Backend
-cd Backend
-dotnet restore
-dotnet ef database update --project Repository --startup-project Api
-dotnet run --project Api
-
-# 4. Frontend
-cd Frontend
-npm install
-npm run dev
-```
-
-> **LM Studio (tuỳ chọn):** Chỉ cần nếu muốn có fallback khi Gemini gặp lỗi non-429. Tải model embedding và chat, bật server tại `http://localhost:1234`.
+> **LM Studio (tuỳ chọn):** Chỉ cần nếu muốn có fallback khi Gemini gặp lỗi non-429. Tải model, bật server tại `http://localhost:1234`.

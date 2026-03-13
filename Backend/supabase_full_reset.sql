@@ -9,6 +9,7 @@
 -- BƯỚC 1: XÓA TOÀN BỘ (CASCADE để tránh lỗi FK)
 -- ────────────────────────────────────────────────────────────
 
+DROP TABLE IF EXISTS "Payments"              CASCADE;
 DROP TABLE IF EXISTS "RewriteHistories"      CASCADE;
 DROP TABLE IF EXISTS "ChatMessages"          CASCADE;
 DROP TABLE IF EXISTS "WorldbuildingEntries"  CASCADE;
@@ -99,6 +100,7 @@ CREATE TABLE "Projects" (
     "AuthorId"      uuid                     NOT NULL,
     "Title"         text                     NOT NULL,
     "Summary"       text,
+    "AiInstructions" text,
     "SummaryEmbedding" vector(768),
     "CoverImageURL" character varying(500),
     "Status"        character varying(20)    NOT NULL DEFAULT 'Draft',
@@ -161,6 +163,7 @@ CREATE TABLE "ChapterVersions" (
     "CreatedBy"     uuid                     NOT NULL,
     "IsChunked"     boolean                  NOT NULL DEFAULT FALSE,
     "IsEmbedded"    boolean                  NOT NULL DEFAULT FALSE,
+    "IsPinned"      boolean                  NOT NULL DEFAULT FALSE,
     "Title"         character varying(255),
     "UpdatedAt"     timestamp with time zone,
     "CreatedAt"     timestamp with time zone NOT NULL DEFAULT NOW(),
@@ -374,6 +377,42 @@ CREATE INDEX "IX_BugReports_Status" ON "BugReports" ("Status");
 CREATE INDEX "IX_BugReports_UserId" ON "BugReports" ("UserId");
 
 -- ────────────────────────────────────────────────────────────
+-- Payments table
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE "Payments" (
+    "Id"             uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "UserId"         uuid                     NOT NULL,
+    "SubscriptionId" integer                  NULL,
+    "PlanId"         integer                  NOT NULL,
+    "Amount"         numeric(18,2)            NOT NULL,
+    "Currency"       character varying(10)    NOT NULL DEFAULT 'VND',
+    "PaymentMethod"  character varying(50)    NOT NULL DEFAULT 'Card',
+    "Status"         character varying(20)    NOT NULL DEFAULT 'Pending',
+    "TransactionId"  character varying(255)   NULL,
+    "Description"    text                     NULL,
+    "PaidAt"         timestamp with time zone NULL,
+    "RefundedAt"     timestamp with time zone NULL,
+    "CreatedAt"      timestamp with time zone NOT NULL DEFAULT (NOW()),
+    "UpdatedAt"      timestamp with time zone NULL,
+    CONSTRAINT "PK_Payments" PRIMARY KEY ("Id"),
+    CONSTRAINT "CK_Payment_Status"
+        CHECK ("Status" IN ('Pending','Completed','Failed','Refunded','Cancelled')),
+    CONSTRAINT "FK_Payments_Users_UserId"
+        FOREIGN KEY ("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_Payments_SubscriptionPlans_PlanId"
+        FOREIGN KEY ("PlanId") REFERENCES "SubscriptionPlans" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_Payments_UserSubscriptions_SubscriptionId"
+        FOREIGN KEY ("SubscriptionId") REFERENCES "UserSubscriptions" ("Id") ON DELETE SET NULL
+);
+
+CREATE INDEX        "IX_Payments_UserId"         ON "Payments" ("UserId");
+CREATE INDEX        "IX_Payments_PlanId"         ON "Payments" ("PlanId");
+CREATE INDEX        "IX_Payments_SubscriptionId" ON "Payments" ("SubscriptionId");
+CREATE UNIQUE INDEX "IX_Payments_TransactionId"  ON "Payments" ("TransactionId") WHERE "TransactionId" IS NOT NULL;
+CREATE INDEX        "IX_Payments_Status"         ON "Payments" ("Status");
+CREATE INDEX        "IX_Payments_CreatedAt"      ON "Payments" ("CreatedAt" DESC);
+
+-- ────────────────────────────────────────────────────────────
 -- BƯỚC 5: SEED DATA
 -- ────────────────────────────────────────────────────────────
 
@@ -412,17 +451,4 @@ SELECT setval(pg_get_serial_sequence('"Genres"', 'Id'), 14);
 -- ────────────────────────────────────────────────────────────
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
-    ('20260224203002_InitialCreate',              '9.0.2'),
-    ('20260225094534_AddProjectsTable',           '9.0.2'),
-    ('20260225110717_RenameProjectColumns',       '9.0.2'),
-    ('20260226114705_AddSubscriptionTables',      '9.0.2'),
-    ('20260227091028_Phase2_EmbeddingVector768',  '9.0.2'),
-    ('20260227102011_AddGenres',                  '9.0.2'),
-    ('20260227105604_AddChapterDraft',            '9.0.2'),
-    ('20260227115512_UpdateChapterVersionSchema', '9.0.2'),
-    ('20260228113206_AddProjectReports',          '9.0.2'),
-    ('20260228115136_AddUserSettings',            '9.0.2'),
-    ('20260308053133_AddWorldbuildingAndCharacter','9.0.2'),
-    ('20260311090848_AddChatHistory',             '9.0.2'),
-    ('20260311100332_AddRewriteHistory',          '9.0.2'),
-    ('20260312000001_AddBugReports',              '9.0.2');
+    ('20260313061741_InitialCreate', '9.0.2');
