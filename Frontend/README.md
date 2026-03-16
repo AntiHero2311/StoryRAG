@@ -19,13 +19,14 @@ npm run preview   # preview production build
 
 | Package | Phiên bản | Vai trò |
 |---------|-----------|---------|
-| React | 18 | UI framework |
+| React | 19 | UI framework |
 | TypeScript | 5 | Type safety |
-| Vite | 6 | Build tool + HMR |
-| TailwindCSS | 3 | Utility-first styling |
+| Vite | 7 | Build tool + HMR |
+| TailwindCSS | 4 | Utility-first styling |
 | Axios | 1.x | HTTP client |
-| React Router | 6 | Client-side routing |
+| React Router | 7 | Client-side routing |
 | Lucide React | latest | Icons |
+| diff | latest | So sánh phiên bản văn bản |
 
 ---
 
@@ -34,11 +35,11 @@ npm run preview   # preview production build
 ```
 Frontend/src/
 ├── pages/           — Các trang chính
-├── components/      — Components dùng lại (Toast, RewritePanel, Sidebar...)
-├── services/        — Axios API calls (projectService, aiService, chapterService...)
-├── hooks/           — Custom React hooks (useEditorSettings)
-├── layouts/         — Layout wrappers (MainLayout)
-└── utils/           — Tiện ích (jwtHelper, formatters)
+├── components/      — Components dùng lại
+│   └── workspace/   — ChatPanel, ChatHistoryPanel
+├── services/        — Axios API calls
+├── hooks/           — Custom React hooks
+└── utils/           — Tiện ích (jwtHelper)
 ```
 
 ---
@@ -48,8 +49,9 @@ Frontend/src/
 | Page | Route | Mô tả |
 |------|-------|-------|
 | `LandingPage` | `/` | Trang giới thiệu sản phẩm |
-| `LoginPage` | `/login` | Đăng nhập |
-| `RegisterPage` | `/register` | Đăng ký tài khoản mới |
+| `AuthPage` | `/login` | Đăng nhập / Đăng ký (chung 1 page) |
+| `ForgotPasswordPage` | `/forgot-password` | Quên mật khẩu |
+| `ResetPasswordPage` | `/reset-password` | Đặt lại mật khẩu |
 | `HomePage` | `/home` | Dashboard — stats thực tế, dự án gần đây |
 | `ProjectsPage` | `/projects` | Danh sách + tạo/xóa dự án |
 | `WorkspacePage` | `/workspace/:projectId` | Editor soạn thảo chính |
@@ -60,6 +62,8 @@ Frontend/src/
 | `SettingsPage` | `/settings` | Cài đặt editor (font, size, theme) |
 | `AdminDashboardPage` | `/admin` | Quản trị user (Admin only) |
 | `AdminSubscriptionPage` | `/admin/subscription` | Quản trị gói đăng ký |
+| `StaffDashboardPage` | `/staff` | Xử lý bug reports (Staff only) |
+| `PrivacyPolicyPage` | `/privacy` | Chính sách bảo mật |
 
 ---
 
@@ -71,62 +75,69 @@ Frontend/src/
 ┌──────────┬───────────────────────────┬────────────────────┐
 │  Sidebar │       Editor              │    Right Panel     │
 │          │  (contentEditable)        │  AI Chat / History │
-│ Chapters │  ← Ctrl+S: Save + Embed  │  / Chat cũ         │
+│ Chapters │  ← Ctrl+S: Save + Embed  │  / Story Bible     │
 └──────────┴───────────────────────────┴────────────────────┘
 ```
+
+### Story Bible (Right Panel)
+
+| Tab | Component | Mục đích |
+|-----|-----------|----------|
+| Thế giới | `WorldbuildingPanel` | Bối cảnh, địa điểm, ma thuật... |
+| Nhân vật | `CharactersPanel` | CRUD nhân vật + embed |
+| Phong cách | `StyleGuidePanel` | POV, giọng văn, từ vựng |
+| Chủ đề | `ThemePanel` | Chủ đề trọng tâm tác phẩm |
+| Cốt truyện | `PlotNotePanel` | Arc, conflict, foreshadowing |
+| Thể loại | `GenrePanel` | Gán thể loại cho dự án |
+| Tóm tắt | `SynopsisPanel` | Tóm tắt nội dung |
+| Ghi chú AI | `AiInstructionsPanel` | Hướng dẫn riêng cho AI |
 
 ### Luồng Save
 
 ```
 Ctrl+S hoặc nút "Lưu"
   ↓ Lưu nội dung ngay ("✅ Đã lưu")
-  ↓ Ngầm: Chunk → Embed (nếu không đang embed)
+  ↓ Ngầm: Chunk → Embed
   ↓ Navbar indicator: "⏳ Đồng bộ AI..." → "✨ AI sẵn sàng"
 ```
 
-- **Spam Ctrl+S** khi đang embed → chỉ lưu, không khởi động embed thêm
-- `savedState`: `idle | saving | saved | error`
-- `aiSyncState`: `idle | syncing | ready | error`
-
-### Tính năng AI Rewrite
+### AI Rewrite
 
 1. Bôi đen đoạn văn (≥ 5 ký tự) trong editor
 2. Floating toolbar xuất hiện → click "✨ Viết lại"
-3. `RewritePanel` trượt vào từ phải → nhập hướng dẫn → AI viết lại
+3. `RewritePanel` trượt vào từ phải → nhập hướng dẫn
 4. Click "Chấp nhận" → replace trực tiếp vào editor
 
 ---
 
-## 🧩 Components quan trọng
+## 🔌 Services
 
-### `Toast` — Hệ thống thông báo
+| File | Mô tả |
+|------|-------|
+| `api.ts` | Axios instance, JWT interceptor, 401 redirect |
+| `projectService.ts` | CRUD dự án, stats, genres |
+| `chapterService.ts` | Chương, versions, chunk |
+| `aiService.ts` | Embed, chat, rewrite, analyze |
+| `worldbuildingService.ts` | CRUD + embed worldbuilding |
+| `characterService.ts` | CRUD + embed nhân vật |
+| `styleGuideService.ts` | CRUD + embed style guide |
+| `themeService.ts` | CRUD + embed chủ đề |
+| `plotNoteService.ts` | CRUD + embed ghi chú cốt truyện |
+| `authService.ts` | Login, register, forgot/reset password |
+| `adminService.ts` | Admin endpoints |
+| `subscriptionService.ts` | Plans, my subscription |
+| `genreService.ts` | Danh sách thể loại |
 
-```tsx
-// App.tsx — wrap toàn bộ app
-<ToastProvider>
-  <App />
-</ToastProvider>
+### Cấu hình API base URL
 
-// Trong bất kỳ component nào
-import { useToast } from '../components/Toast';
-const toast = useToast();
-
-toast.success('Đã lưu thành công');
-toast.error('Lỗi: không thể kết nối');
-toast.info('✨ Đang chunk & embed...');
-toast.warning('⚠️ AI đang quá tải');
+```ts
+// src/services/api.ts
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5105/api';
 ```
 
-### `RewritePanel`
-
-```tsx
-<RewritePanel
-  projectId="guid"
-  chapterId="guid"
-  selectedText="Đoạn văn gốc được bôi đen"
-  onAccept={(rewritten) => { /* replace vào editor */ }}
-  onClose={() => setPanelOpen(false)}
-/>
+Tạo `.env.local` để override:
+```
+VITE_API_URL=http://localhost:5105/api
 ```
 
 ---
@@ -142,56 +153,47 @@ toast.warning('⚠️ AI đang quá tải');
 | `--bg-app` | `#f8f8f8` | `#111111` | Nền chính |
 | `--bg-surface` | `#ffffff` | `#1a1a1a` | Card, panel |
 | `--bg-sidebar` | `#f3f3f3` | `#161616` | Sidebar |
-| `--bg-topbar` | `#ffffff` | `#141414` | Thanh navbar |
 | `--accent` | `#7c3aed` | `#8b5cf6` | Màu nhấn (purple) |
-| `--accent-subtle` | `rgba(124,58,237,0.08)` | `rgba(139,92,246,0.12)` | Nền accent nhạt |
-| `--accent-text` | `#7c3aed` | `#a78bfa` | Text accent |
 | `--text-primary` | `#0f0f0f` | `#f5f5f5` | Văn bản chính |
 | `--text-secondary` | `#6b7280` | `#a1a1aa` | Văn bản phụ |
 | `--border-color` | `rgba(0,0,0,0.08)` | `rgba(255,255,255,0.08)` | Viền |
-| `--success` | `#10b981` | `#34d399` | Toast success |
-| `--error` | `#ef4444` | `#f87171` | Toast error |
-
-### Sử dụng token trong TailwindCSS
-
-```tsx
-// Dùng CSS var inline
-<div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-
-// Dùng text color class  
-<p className="text-[var(--text-primary)]">
-<p className="text-[var(--text-secondary)]">
-
-// Accent color
-<button style={{ color: 'var(--accent)', background: 'var(--accent-subtle)' }}>
-```
+| `--hover-bg` | `rgba(0,0,0,0.04)` | `rgba(255,255,255,0.04)` | Nền hover |
 
 ---
 
-## 🔌 Services
+## 🧩 Components quan trọng
 
-| File | Mô tả |
-|------|-------|
-| `api.ts` | Axios instance với `baseURL`, JWT interceptor, 401 redirect |
-| `projectService.ts` | CRUD dự án + `getStats()` |
-| `chapterService.ts` | Chương, versions, chunk |
-| `aiService.ts` | Embed, chat, chat history, rewrite, rewrite history |
-| `worldbuildingService.ts` | CRUD worldbuilding entries |
-| `characterService.ts` | CRUD character entries |
-| `authService.ts` | Login, register, change password |
-| `adminService.ts` | Admin endpoints |
-| `subscriptionService.ts` | Plans, my subscription |
+### `Toast` — Thông báo toàn app
 
-### Cấu hình API base URL
+```tsx
+import { useToast } from '../components/Toast';
+const toast = useToast();
 
-```ts
-// src/services/api.ts
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5105/api';
+toast.success('Đã lưu thành công');
+toast.error('Lỗi kết nối');
+toast.info('✨ Đang embed...');
 ```
 
-Tạo `.env.local` để override:
+### `ChatPanel` — AI Chat trong Workspace
+
+```tsx
+<ChatPanel
+  projectId="guid"
+  chapterId="guid"
+  currentContent="nội dung chương hiện tại"
+/>
 ```
-VITE_API_URL=http://localhost:5105/api
+
+### `RewritePanel` — Viết lại đoạn văn
+
+```tsx
+<RewritePanel
+  projectId="guid"
+  chapterId="guid"
+  selectedText="Đoạn văn gốc"
+  onAccept={(rewritten) => { /* replace vào editor */ }}
+  onClose={() => setPanelOpen(false)}
+/>
 ```
 
 ---
@@ -209,4 +211,3 @@ removeToken(); // logout
 ```
 
 `api.ts` tự động đính kèm token vào mọi request và redirect về `/login` khi nhận 401.
-

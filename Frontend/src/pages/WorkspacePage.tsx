@@ -38,13 +38,16 @@ import {
 import { projectService } from '../services/projectService';
 import { genreService } from '../services/genreService';
 import type { GenreResponse } from '../services/projectService';
+import { styleGuideService, type StyleGuideEntry, type CreateStyleGuideRequest, STYLE_GUIDE_ASPECTS, getStyleGuideAspectLabel, getStyleGuideAspectColor } from '../services/styleGuideService';
+import { themeService, type ThemeEntry, type CreateThemeRequest } from '../services/themeService';
+import { plotNoteService, type PlotNoteEntry, type CreatePlotNoteRequest, PLOT_NOTE_TYPES, getPlotNoteTypeLabel, getPlotNoteTypeColor } from '../services/plotNoteService';
 import { useToast } from '../components/Toast';
 import { diffWords } from 'diff';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
-type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions';
+type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotNotes';
 
 // ── Diff Modal ─────────────────────────────────────────────────────────────
 function DiffModal({
@@ -220,7 +223,7 @@ export default function WorkspacePage() {
                 setActiveChapter(detail);
                 setChapterTitle(detail.title ?? `Chương ${detail.chapterNumber}`);
                 if (editorRef.current) {
-                    editorRef.current.innerText = detail.content ?? '';
+                    editorRef.current.innerHTML = detail.content ?? '';
                 }
             } else {
                 setChapters([]);
@@ -274,8 +277,8 @@ export default function WorkspacePage() {
         setActiveChapter(detail);
         setChapterTitle(detail.title ?? `Chương ${detail.chapterNumber}`);
         if (editorRef.current) {
-            editorRef.current.innerText = detail.content ?? '';
-            setWordCount((detail.content ?? '').trim().split(/\s+/).filter(Boolean).length);
+            editorRef.current.innerHTML = detail.content ?? '';
+            setWordCount((editorRef.current.innerText ?? '').trim().split(/\s+/).filter(Boolean).length);
         }
         // Reset version rename state
         setRenamingVersionNum(null);
@@ -331,6 +334,7 @@ export default function WorkspacePage() {
         reader.onload = () => {
             const text = reader.result as string;
             if (editorRef.current) {
+                // If importing plain text, we can use innerText to safely escape HTML
                 editorRef.current.innerText = text;
                 updateWordCount();
                 scheduleAutoSave();
@@ -369,7 +373,7 @@ export default function WorkspacePage() {
     const doSave = useCallback(async (showFeedback = true) => {
         if (!projectId || !activeChapter || !editorRef.current) return;
         if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
-        const content = editorRef.current.innerText ?? '';
+        const content = editorRef.current.innerHTML ?? '';
         if (showFeedback) setSavedState('saving');
         try {
             const updated = await chapterService.updateChapter(projectId, activeChapter.id, {
@@ -474,7 +478,7 @@ export default function WorkspacePage() {
             const updated = await chapterService.createNewVersion(projectId, activeChapter.id, {});
             setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
             setActiveChapter(updated);
-            if (editorRef.current) editorRef.current.innerText = '';
+            if (editorRef.current) editorRef.current.innerHTML = '';
         } catch (e: any) {
             toast.error(e?.response?.data?.message ?? 'Không thể tạo phiên bản mới.');
         } finally {
@@ -492,8 +496,8 @@ export default function WorkspacePage() {
             const updated = await chapterService.setActiveVersion(projectId, activeChapter.id, versionNumber);
             setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
             setActiveChapter(updated);
-            if (editorRef.current) editorRef.current.innerText = updated.content ?? '';
-            setWordCount((updated.content ?? '').trim().split(/\s+/).filter(Boolean).length);
+            if (editorRef.current) editorRef.current.innerHTML = updated.content ?? '';
+            setWordCount((editorRef.current.innerText ?? '').trim().split(/\s+/).filter(Boolean).length);
         } catch (e: any) {
             toast.error(e?.response?.data?.message ?? 'Không thể chuyển phiên bản.');
         }
@@ -547,7 +551,7 @@ export default function WorkspacePage() {
     const doCompareVersion = async (versionNumber: number) => {
         if (!projectId || !activeChapter) return;
         try {
-            const currentContent = editorRef.current?.innerText ?? '';
+            const currentContent = editorRef.current?.innerHTML ?? '';
             const compareContent = await chapterService.getVersionContent(projectId, activeChapter.id, versionNumber);
             setDiffModal({ compareVersionNum: versionNumber, currentContent, compareContent });
         } catch (e: any) {
@@ -624,18 +628,22 @@ export default function WorkspacePage() {
             )}
 
             {/* ── Top Nav ── */}
-            <nav className="flex items-center gap-4 px-5 shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-topbar)]" style={{ height: '52px' }}>
+            <nav className="flex items-center gap-4 px-5 shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-topbar)]" style={{ height: '60px' }}>
                 <button
                     onClick={() => navigate('/projects')}
                     className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors text-sm font-medium group shrink-0"
                 >
                     <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-                    Quay lại
                 </button>
 
-                <div className="flex-1 flex justify-center">
-                    <span className="text-[var(--text-primary)] font-bold text-sm truncate max-w-xs">{projectTitle}</span>
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center">
+                        <BookOpen className="w-4 h-4" />
+                    </div>
+                    <span className="text-[var(--text-primary)] font-bold text-[15px] truncate max-w-xs tracking-tight">{projectTitle}</span>
                 </div>
+
+                <div className="flex-1" />
 
                 {/* AI Sync status indicator */}
                 {activeChapter && aiSyncState !== 'idle' && (
@@ -667,16 +675,16 @@ export default function WorkspacePage() {
                 )}
 
                 {/* Save status */}
-                <div className="shrink-0 flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                    {savedState === 'saving' && <><Loader2 className="w-3 h-3 animate-spin" /> Đang lưu...</>}
-                    {savedState === 'saved' && <><Check className="w-3.5 h-3.5 text-emerald-400" /><span className="text-emerald-400">Đã lưu</span></>}
-                    {savedState === 'error' && <span className="text-rose-400">Lưu thất bại</span>}
+                <div className="shrink-0 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                    {savedState === 'saving' && <><Loader2 className="w-3.5 h-3.5 animate-spin" /> <span>Đang lưu...</span></>}
+                    {savedState === 'saved' && <><Check className="w-4 h-4 text-emerald-400" /><span className="text-emerald-400 font-medium">Đã lưu</span></>}
+                    {savedState === 'error' && <><AlertCircle className="w-4 h-4 text-rose-400" /><span className="text-rose-400 font-medium">Lưu thất bại</span></>}
                     {savedState === 'idle' && activeChapter && (
                         <button
                             onClick={() => doSave(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--text-primary)]/5 hover:bg-[var(--text-primary)]/10 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium bg-[var(--accent)]/10 text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-all hover:scale-105 active:scale-95"
                         >
-                            <Save className="w-3.5 h-3.5" /> Lưu
+                            <Save className="w-3.5 h-3.5" /> Lưu ngay
                         </button>
                     )}
                 </div>
@@ -687,102 +695,128 @@ export default function WorkspacePage() {
 
                 {/* Left Sidebar */}
                 <aside
-                    className="flex flex-col h-full transition-all duration-300 overflow-hidden shrink-0 rounded-2xl"
+                    className="flex flex-col h-full transition-all duration-300 overflow-hidden shrink-0 rounded-2xl relative"
                     style={{
-                        width: sidebarCollapsed ? '0px' : '220px',
+                        width: sidebarCollapsed ? '0px' : '280px',
                         background: 'var(--bg-sidebar)',
                         border: sidebarCollapsed ? 'none' : '1px solid var(--border-color)',
+                        boxShadow: 'inset -1px 0 0 rgba(0,0,0,0.2)'
                     }}
                 >
-                    <div className="px-3 pt-3 pb-1 shrink-0 flex items-center justify-between">
-                        <span className="text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider pl-1 opacity-60">Chương</span>
+                    <div className="px-5 pt-5 pb-3 shrink-0 flex items-center justify-between">
+                        <span className="text-[var(--text-secondary)] text-[11px] font-bold uppercase tracking-widest opacity-80">Mục lục</span>
                         <button
                             onClick={() => setSidebarCollapsed(true)}
-                            className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-all"
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 transition-all"
                         >
                             <ChevronsLeft className="w-4 h-4" />
                         </button>
                     </div>
 
-                    <div className="px-3 py-2 shrink-0">
-                        <button
-                            onClick={addChapter}
-                            disabled={isCreatingChapter}
-                            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50"
-                            style={{ background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)' }}
-                        >
-                            {isCreatingChapter
-                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                : <Plus className="w-3.5 h-3.5" />}
-                            Chương mới
-                        </button>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5 scrollbar-thin">
+                    <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2 scrollbar-thin">
                         {isLoadingChapters ? (
                             <div className="flex justify-center py-6">
                                 <Loader2 className="w-5 h-5 animate-spin text-[var(--text-secondary)]" />
                             </div>
                         ) : chapters.length === 0 ? (
-                            <p className="text-center text-[var(--text-secondary)] text-xs py-6 opacity-50">Chưa có chương nào</p>
+                            <div className="flex flex-col items-center py-10 gap-3 opacity-50">
+                                <FileText className="w-8 h-8 text-[var(--text-secondary)]" />
+                                <p className="text-center text-[var(--text-secondary)] text-sm font-medium">Chưa có chương nào</p>
+                            </div>
                         ) : (
-                            chapters.map((ch) => (
-                                <div
-                                    key={ch.id}
-                                    onClick={() => renamingChapterId !== ch.id && selectChapter(ch)}
-                                    className={`group w-full flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer transition-all border-l-2 ${activeChapter?.id === ch.id
-                                        ? 'bg-[var(--accent)]/10 text-[var(--accent)] border-[var(--accent)]'
-                                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 border-transparent'
-                                        }`}
-                                >
-                                    <FileText className="w-3.5 h-3.5 shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                        {renamingChapterId === ch.id ? (
-                                            <input
-                                                autoFocus
-                                                type="text"
-                                                value={renameChapterValue}
-                                                onChange={e => setRenameChapterValue(e.target.value)}
-                                                onBlur={() => doRenameChapter(ch.id, renameChapterValue)}
-                                                onKeyDown={e => {
-                                                    if (e.key === 'Enter') { e.preventDefault(); doRenameChapter(ch.id, renameChapterValue); }
-                                                    if (e.key === 'Escape') { e.preventDefault(); setRenamingChapterId(null); }
-                                                }}
-                                                onClick={e => e.stopPropagation()}
-                                                className="w-full text-xs font-medium bg-[var(--bg-primary)] border border-[var(--accent)] rounded px-1.5 py-0.5 text-[var(--text-primary)] outline-none"
-                                            />
-                                        ) : (
-                                            <p className="text-xs font-medium truncate">
-                                                {ch.title ?? `Chương ${ch.chapterNumber}`}
-                                            </p>
+                            chapters.map((ch) => {
+                                const isActive = activeChapter?.id === ch.id;
+                                return (
+                                    <div
+                                        key={ch.id}
+                                        onClick={() => renamingChapterId !== ch.id && selectChapter(ch)}
+                                        className={`group relative w-full flex flex-col gap-1.5 p-3 rounded-xl cursor-pointer transition-all duration-200 border border-transparent ${isActive
+                                            ? 'bg-[var(--accent)]/10 border-[var(--accent)]/20 shadow-sm'
+                                            : 'hover:bg-[var(--bg-surface)] hover:border-[var(--border-color)]'
+                                            }`}
+                                    >
+                                        {/* Active Indicator Line */}
+                                        {isActive && (
+                                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full bg-[var(--accent)]" />
                                         )}
-                                        <p className="text-[10px] opacity-50 mt-0.5">{ch.wordCount} từ · v{ch.currentVersionNum}</p>
-                                    </div>
-                                    {renamingChapterId !== ch.id && (
-                                        <div className="hidden group-hover:flex items-center gap-0.5">
-                                            <button
-                                                onClick={e => {
-                                                    e.stopPropagation();
-                                                    setRenameChapterValue(ch.title ?? `Chương ${ch.chapterNumber}`);
-                                                    setRenamingChapterId(ch.id);
-                                                }}
-                                                className="w-5 h-5 flex items-center justify-center rounded text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"
-                                                title="Đổi tên chương"
-                                            >
-                                                <Pencil className="w-3 h-3" />
-                                            </button>
-                                            <button
-                                                onClick={e => { e.stopPropagation(); deleteChapter(ch.id); }}
-                                                className="w-5 h-5 flex items-center justify-center rounded text-[var(--text-secondary)] hover:text-rose-400 transition-colors"
-                                                title="Xóa chương"
-                                            >
-                                                <Trash2 className="w-3 h-3" />
-                                            </button>
+
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex items-center gap-2 max-w-[80%]">
+                                                <span className={`flex items-center justify-center w-6 h-6 rounded bg-[var(--bg-app)] text-[10px] font-bold ${isActive ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}>
+                                                    {ch.chapterNumber}
+                                                </span>
+                                                {renamingChapterId === ch.id ? (
+                                                    <input
+                                                        autoFocus
+                                                        type="text"
+                                                        value={renameChapterValue}
+                                                        onChange={e => setRenameChapterValue(e.target.value)}
+                                                        onBlur={() => doRenameChapter(ch.id, renameChapterValue)}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter') { e.preventDefault(); doRenameChapter(ch.id, renameChapterValue); }
+                                                            if (e.key === 'Escape') { e.preventDefault(); setRenamingChapterId(null); }
+                                                        }}
+                                                        onClick={e => e.stopPropagation()}
+                                                        className="w-full text-sm font-bold bg-[var(--bg-primary)] border border-[var(--accent)] rounded px-1.5 py-0.5 text-[var(--text-primary)] outline-none"
+                                                    />
+                                                ) : (
+                                                    <p className={`text-sm font-bold truncate ${isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]'}`}>
+                                                        {ch.title ?? `Chương ${ch.chapterNumber}`}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            {/* Context Menu Hook */}
+                                            {renamingChapterId !== ch.id && (
+                                                <div className="opacity-0 group-hover:opacity-100 flex flex-col items-center gap-1 transition-opacity bg-[var(--bg-surface)] rounded-md shadow p-0.5 border border-[var(--border-color)] absolute right-2 top-2 z-10">
+                                                    <button
+                                                        onClick={e => {
+                                                            e.stopPropagation();
+                                                            setRenameChapterValue(ch.title ?? `Chương ${ch.chapterNumber}`);
+                                                            setRenamingChapterId(ch.id);
+                                                        }}
+                                                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-[var(--text-primary)]/10 text-[var(--text-primary)] transition-colors"
+                                                        title="Đổi tên"
+                                                    >
+                                                        <Pencil className="w-3 h-3" />
+                                                    </button>
+                                                    <button
+                                                        onClick={e => { e.stopPropagation(); deleteChapter(ch.id); }}
+                                                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-rose-500/20 text-rose-400 transition-colors"
+                                                        title="Xóa chương"
+                                                    >
+                                                        <Trash2 className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
-                                </div>
-                            ))
+
+                                        <div className="flex items-center gap-2 pl-8">
+                                            <span className="text-[11px] font-medium text-[var(--text-secondary)] opacity-80 bg-[var(--bg-app)] px-1.5 py-0.5 rounded">
+                                                {ch.wordCount} từ
+                                            </span>
+                                            <span className="text-[11px] font-medium text-[var(--text-secondary)] opacity-80 bg-[var(--bg-app)] px-1.5 py-0.5 rounded">
+                                                v{ch.currentVersionNum}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })
                         )}
+                    </div>
+
+                    <div className="px-4 py-3 shrink-0 border-t border-[var(--border-color)]">
+                        <button
+                            onClick={addChapter}
+                            disabled={isCreatingChapter}
+                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:scale-100 shadow-lg shadow-[var(--accent)]/20"
+                            style={{ background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)' }}
+                        >
+                            {isCreatingChapter
+                                ? <Loader2 className="w-4 h-4 animate-spin" />
+                                : <Plus className="w-4 h-4" />}
+                            Chương mới
+                        </button>
                     </div>
 
                     {/* ── Cẩm Nang Truyện (Story Bible) ── */}
@@ -816,6 +850,9 @@ export default function WorkspacePage() {
                                         { tab: 'synopsis' as ActiveTab, label: 'Tóm tắt', icon: AlignLeft, color: '#c084fc' },
                                         { tab: 'characters' as ActiveTab, label: 'Nhân vật', icon: Users, color: '#f472b6' },
                                         { tab: 'worldbuilding' as ActiveTab, label: 'Thế giới', icon: Map, color: 'var(--accent)' },
+                                        { tab: 'styleGuide' as ActiveTab, label: 'Phong cách', icon: BookOpen, color: '#f59e0b' },
+                                        { tab: 'themes' as ActiveTab, label: 'Chủ đề', icon: Sparkles, color: '#10b981' },
+                                        { tab: 'plotNotes' as ActiveTab, label: 'Cốt truyện', icon: Scroll, color: '#ef4444' },
                                         { tab: 'aiInstructions' as ActiveTab, label: 'Ghi chú AI', icon: Bot, color: '#34d399' },
                                     ] as const).map(item => {
                                         const isActive = activeTab === item.tab && rightPanelOpen;
@@ -985,21 +1022,28 @@ export default function WorkspacePage() {
                                             }
                                         }}
                                         onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                        className="w-full text-3xl font-bold text-[var(--text-primary)] bg-transparent outline-none mb-6 placeholder-[var(--text-secondary)]/30 border-none"
-                                        style={{ fontFamily: `'${editorSettings.editorFont}', sans-serif`, letterSpacing: '-0.01em' }}
-                                        placeholder="Tên chương..."
+                                        className="w-full text-4xl font-extrabold text-[var(--text-primary)] bg-transparent outline-none mb-4 placeholder-[var(--text-secondary)]/30 border-b-2 border-transparent focus:border-[var(--accent)]/20 pb-2 transition-colors"
+                                        style={{ fontFamily: `'${editorSettings.editorFont}', sans-serif`, letterSpacing: '-0.02em' }}
+                                        placeholder="Nhập tên chương..."
                                     />
-                                    {/* Version badge */}
-                                    <div className="flex items-center gap-2 mb-6">
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--accent)]/10 text-[var(--accent)]">
-                                            Version {activeChapter.currentVersionNum}
-                                        </span>
+                                    {/* Meta bar */}
+                                    <div className="flex items-center gap-3 mb-8">
+                                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[var(--bg-app)] border border-[var(--border-color)]">
+                                            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                                            <span className="text-[11px] font-bold text-[var(--text-secondary)]">V{activeChapter.currentVersionNum}</span>
+                                        </div>
                                         <button
                                             onClick={() => { setActiveTab('history'); setRightPanelOpen(true); }}
-                                            className="text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] underline transition-colors"
+                                            className="text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center gap-1"
                                         >
+                                            <History className="w-3 h-3" />
                                             {(activeChapter.versions ?? []).length} phiên bản
                                         </button>
+                                        <span className="text-[11px] text-[var(--text-secondary)] opacity-50">•</span>
+                                        <span className="text-[11px] font-medium text-[var(--text-secondary)] inline-flex items-center gap-1">
+                                            <AlignLeft className="w-3 h-3" />
+                                            {wordCount} từ
+                                        </span>
                                     </div>
                                     {/* Editor */}
                                     <div
@@ -1013,19 +1057,22 @@ export default function WorkspacePage() {
                                     />
                                 </>
                             ) : (
-                                <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-center">
-                                    <div className="w-16 h-16 rounded-2xl bg-[var(--accent)]/10 flex items-center justify-center">
-                                        <FileText className="w-8 h-8 text-[var(--accent)]" />
+                                <div className="flex flex-col items-center justify-center h-[60vh] gap-5 text-center px-4">
+                                    <div className="w-20 h-20 rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-color)] shadow-xl flex items-center justify-center relative">
+                                        <div className="absolute inset-0 bg-gradient-to-br from-[var(--accent)]/20 to-transparent rounded-3xl" />
+                                        <Wand2 className="w-10 h-10 text-[var(--text-primary)] relative z-10" />
                                     </div>
-                                    <p className="text-[var(--text-primary)] font-semibold">Chưa có chương nào</p>
-                                    <p className="text-[var(--text-secondary)] text-sm">Nhấn "Chương mới" để bắt đầu viết.</p>
+                                    <div className="space-y-1.5">
+                                        <p className="text-xl text-[var(--text-primary)] font-bold tracking-tight">Hành trình bắt đầu</p>
+                                        <p className="text-[var(--text-secondary)] text-sm max-w-sm">Tạo chương đầu tiên để bắt đầu viết tác phẩm của bạn. AI Copilot đã sẵn sàng hỗ trợ.</p>
+                                    </div>
                                     <button
                                         onClick={addChapter}
                                         disabled={isCreatingChapter}
-                                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white"
+                                        className="mt-2 flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-105 active:scale-95 shadow-xl shadow-[var(--accent)]/20"
                                         style={{ background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)' }}
                                     >
-                                        <Plus className="w-4 h-4" /> Tạo chương đầu tiên
+                                        <Plus className="w-4 h-4" /> Bắt đầu chương 1
                                     </button>
                                 </div>
                             )}
@@ -1036,50 +1083,47 @@ export default function WorkspacePage() {
                 {/* Right Panel */}
                 {rightPanelOpen && (
                     <div
-                        className="flex flex-col h-full shrink-0 transition-all duration-300 rounded-2xl overflow-hidden"
-                        style={{ width: '320px', background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
+                        className="flex flex-col h-full shrink-0 transition-all duration-300 rounded-2xl overflow-hidden relative"
+                        style={{ width: '360px', background: 'var(--bg-surface)', border: '1px solid var(--border-color)', boxShadow: 'inset 1px 0 0 rgba(0,0,0,0.2)' }}
                     >
-                        {/* Panel header — tab switcher for History/AI, breadcrumb for Story Bible panels */}
-                        {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions'] as ActiveTab[]).includes(activeTab) ? (
-                            <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--border-color)] shrink-0">
-                                <button
-                                    onClick={() => setActiveTab('chat')}
-                                    className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors text-sm">
-                                    ←
-                                </button>
-                                <BookOpen className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                                <span className="flex-1 text-xs font-bold text-[var(--text-primary)]">Cẩm Nang Truyện</span>
-                                <span className="text-[10px] text-[var(--text-secondary)] opacity-60">
-                                    {activeTab === 'worldbuilding' && 'Thế giới'}
-                                    {activeTab === 'characters' && 'Nhân vật'}
-                                    {activeTab === 'genre' && 'Thể loại'}
-                                    {activeTab === 'synopsis' && 'Tóm tắt'}
-                                    {activeTab === 'aiInstructions' && 'Ghi chú AI'}
-                                </span>
-                                <button onClick={() => setRightPanelOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-lg shrink-0 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
-                                    <X className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="flex items-center gap-2 px-2 py-2.5 border-b border-[var(--border-color)] shrink-0">
-                                <div className="flex-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-                                    <div className="flex bg-[var(--bg-app)] rounded-xl p-0.5 gap-0.5 w-max min-w-full">
+                        {/* Panel header */}
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] shrink-0 bg-[var(--bg-app)]">
+                            <div className="flex items-center gap-2">
+                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotNotes'] as ActiveTab[]).includes(activeTab) ? (
+                                    <>
+                                        <button onClick={() => setActiveTab('chat')} className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 transition-colors">
+                                            <ArrowLeft className="w-3.5 h-3.5" />
+                                        </button>
+                                        <BookOpen className="w-4 h-4 text-indigo-400 shrink-0" />
+                                        <span className="text-sm font-bold text-[var(--text-primary)]">
+                                            {activeTab === 'worldbuilding' && 'Thế giới'}
+                                            {activeTab === 'characters' && 'Nhân vật'}
+                                            {activeTab === 'genre' && 'Thể loại'}
+                                            {activeTab === 'synopsis' && 'Tóm tắt'}
+                                            {activeTab === 'styleGuide' && 'Phong cách'}
+                                            {activeTab === 'themes' && 'Chủ đề'}
+                                            {activeTab === 'plotNotes' && 'Cốt truyện'}
+                                            {activeTab === 'aiInstructions' && 'Ghi chú AI'}
+                                        </span>
+                                    </>
+                                ) : (
+                                    <div className="flex bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl p-1 gap-1 w-max">
                                         <TabBtn active={activeTab === 'history'} onClick={() => { setActiveTab('history'); }}>
-                                            <History className="w-3 h-3" /> Lịch sử
+                                            <History className="w-3.5 h-3.5" /> Lịch sử
                                         </TabBtn>
                                         <TabBtn active={activeTab === 'chat'} onClick={() => setActiveTab('chat')}>
-                                            <Sparkles className="w-3 h-3" /> AI Chat
+                                            <Sparkles className="w-3.5 h-3.5" /> AI Chat
                                         </TabBtn>
                                         <TabBtn active={activeTab === 'chatHistory'} onClick={() => { setActiveTab('chatHistory'); }}>
-                                            <Clock className="w-3 h-3" /> Chat cũ
+                                            <Clock className="w-3.5 h-3.5" /> Chat cũ
                                         </TabBtn>
                                     </div>
-                                </div>
-                                <button onClick={() => setRightPanelOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-lg shrink-0 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
-                                    <X className="w-3.5 h-3.5" />
-                                </button>
+                                )}
                             </div>
-                        )}
+                            <button onClick={() => setRightPanelOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-lg shrink-0 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 transition-colors">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
 
                         {/* ── History Tab ── */}
                         {activeTab === 'history' && (
@@ -1293,6 +1337,21 @@ export default function WorkspacePage() {
                         {/* ── Characters Tab ── */}
                         {activeTab === 'characters' && projectId && (
                             <CharactersPanel projectId={projectId} />
+                        )}
+
+                        {/* ── Style Guide Tab ── */}
+                        {activeTab === 'styleGuide' && projectId && (
+                            <StyleGuidePanel projectId={projectId} />
+                        )}
+
+                        {/* ── Themes Tab ── */}
+                        {activeTab === 'themes' && projectId && (
+                            <ThemePanel projectId={projectId} />
+                        )}
+
+                        {/* ── Plot Notes Tab ── */}
+                        {activeTab === 'plotNotes' && projectId && (
+                            <PlotNotePanel projectId={projectId} />
                         )}
 
                         {/* ── Genre Tab ── */}
@@ -1576,7 +1635,7 @@ function WorldbuildingPanel({ projectId }: { projectId: string }) {
                                 </div>
                             </div>
                             {/* Action bar */}
-                            <div className="px-3 pb-2.5 flex items-center gap-1.5" style={{ borderTop: '1px solid var(--border-color)' }}>
+                            <div className="px-3 pb-2.5 flex items-center gap-1.5 flex-wrap" style={{ borderTop: '1px solid var(--border-color)' }}>
                                 <button onClick={() => handleEmbed(entry.id)} disabled={embeddingId === entry.id}
                                     title={entry.hasEmbedding ? 'Re-embed' : 'Embed cho AI'}
                                     className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-50"
@@ -1872,7 +1931,7 @@ function CharactersPanel({ projectId }: { projectId: string }) {
                                 </div>
                             </div>
                             {/* Action bar */}
-                            <div className="px-3 pb-2.5 flex items-center gap-1.5" style={{ borderTop: '1px solid var(--border-color)' }}>
+                            <div className="px-3 pb-2.5 flex items-center gap-1.5 flex-wrap" style={{ borderTop: '1px solid var(--border-color)' }}>
                                 <button onClick={() => handleEmbed(entry.id)} disabled={embeddingId === entry.id}
                                     title={entry.hasEmbedding ? 'Re-embed' : 'Embed cho AI'}
                                     className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-50"
@@ -2208,6 +2267,673 @@ function SynopsisPanel({ projectId }: { projectId: string }) {
                         </div>
                     </>
                 )}
+            </div>
+        </div>
+    );
+}
+
+// ── StyleGuidePanel ──────────────────────────────────────────────────────────
+
+function StyleGuidePanel({ projectId }: { projectId: string }) {
+    const [entries, setEntries] = useState<StyleGuideEntry[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [view, setView] = useState<'list' | 'form'>('list');
+    const [editingEntry, setEditingEntry] = useState<StyleGuideEntry | null>(null);
+    const [filterAspect, setFilterAspect] = useState<string>('all');
+    const [form, setForm] = useState<CreateStyleGuideRequest>({ content: '', aspect: 'Other' });
+    const [saving, setSaving] = useState(false);
+    const [embeddingId, setEmbeddingId] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        styleGuideService.getAll(projectId)
+            .then(setEntries)
+            .catch(() => setError('Không thể tải dữ liệu.'))
+            .finally(() => setLoading(false));
+    }, [projectId]);
+
+    const openAdd = () => {
+        setForm({ content: '', aspect: 'Other' });
+        setEditingEntry(null);
+        setError(null);
+        setView('form');
+    };
+
+    const openEdit = (e: StyleGuideEntry) => {
+        setForm({ content: e.content, aspect: e.aspect });
+        setEditingEntry(e);
+        setError(null);
+        setView('form');
+    };
+
+    const handleSave = async () => {
+        if (!form.content.trim()) return;
+        setSaving(true);
+        setError(null);
+        try {
+            if (editingEntry) {
+                const updated = await styleGuideService.update(projectId, editingEntry.id, form);
+                setEntries(prev => prev.map(e => e.id === editingEntry.id ? updated : e));
+            } else {
+                const created = await styleGuideService.create(projectId, form);
+                setEntries(prev => [...prev, created]);
+            }
+            setView('list');
+        } catch { setError('Lưu thất bại.'); }
+        finally { setSaving(false); }
+    };
+
+    const handleEmbed = async (id: string) => {
+        setEmbeddingId(id);
+        setError(null);
+        try {
+            const updated = await styleGuideService.embed(projectId, id);
+            setEntries(prev => prev.map(e => e.id === id ? updated : e));
+        } catch { setError('Embed thất bại. Kiểm tra LM Studio.'); }
+        finally { setEmbeddingId(null); }
+    };
+
+    const handleDelete = async (id: string) => {
+        setDeletingId(id);
+        try {
+            await styleGuideService.delete(projectId, id);
+            setEntries(prev => prev.filter(e => e.id !== id));
+        } catch { setError('Xóa thất bại.'); }
+        finally { setDeletingId(null); }
+    };
+
+    const usedAspects = Array.from(new Set(entries.map(e => e.aspect)));
+    const filtered = filterAspect === 'all' ? entries : entries.filter(e => e.aspect === filterAspect);
+
+    /* ── Form view ── */
+    if (view === 'form') {
+        const p = STYLE_GUIDE_ASPECTS.find(a => a.value === form.aspect)?.placeholder || 'Mô tả...';
+        return (
+            <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="px-4 pt-3 pb-2.5 flex items-center gap-2 shrink-0 border-b border-[var(--border-color)]">
+                    <button onClick={() => { setView('list'); setError(null); }}
+                        className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg)] transition-colors text-sm">
+                        ←
+                    </button>
+                    <BookOpen className="w-3.5 h-3.5 text-amber-500" />
+                    <span className="text-xs font-bold text-[var(--text-primary)]">
+                        {editingEntry ? 'Sửa Phong Cách' : 'Thêm Phong Cách'}
+                    </span>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
+                    {error && (
+                        <div className="text-xs text-red-400 px-3 py-1.5 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)' }}>{error}</div>
+                    )}
+                    <div>
+                        <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-1.5 block">Khía cạnh</label>
+                        <div className="flex flex-wrap gap-1.5">
+                            {STYLE_GUIDE_ASPECTS.map(a => {
+                                const active = form.aspect === a.value;
+                                return (
+                                    <button key={a.value} onClick={() => setForm(f => ({ ...f, aspect: a.value }))}
+                                        className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all"
+                                        style={active
+                                            ? { background: `${a.color}22`, color: a.color, border: `1px solid ${a.color}55` }
+                                            : { background: 'var(--bg-app)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+                                        {a.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-1.5 block">Nội dung *</label>
+                        <textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
+                            placeholder={p} rows={10} autoFocus
+                            className="w-full px-3 py-2 rounded-xl text-xs text-[var(--text-primary)] outline-none resize-none leading-relaxed"
+                            style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }} />
+                    </div>
+                </div>
+
+                <div className="px-4 pb-4 pt-2.5 flex gap-2 shrink-0 border-t border-[var(--border-color)]">
+                    <button onClick={handleSave} disabled={saving || !form.content.trim()}
+                        className="flex-1 py-2 rounded-xl text-xs font-bold text-white disabled:opacity-50 flex items-center justify-center gap-1.5"
+                        style={{ background: 'var(--accent)' }}>
+                        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        {editingEntry ? 'Cập nhật' : 'Thêm mới'}
+                    </button>
+                    <button onClick={() => { setView('list'); setError(null); }}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+                        style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
+                        Hủy
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    /* ── List view ── */
+    return (
+        <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="px-4 pt-3 pb-2 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                    <BookOpen className="w-3.5 h-3.5 text-amber-500" />
+                    <span className="text-xs font-bold text-[var(--text-primary)]">Phong cách</span>
+                    <span className="w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold"
+                        style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
+                        {entries.length}
+                    </span>
+                </div>
+                <button onClick={openAdd}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all hover:opacity-80"
+                    style={{ background: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                    <Plus className="w-3 h-3" /> Thêm
+                </button>
+            </div>
+
+            {usedAspects.length > 1 && (
+                <div className="px-3 pb-2 flex gap-1.5 overflow-x-auto shrink-0" style={{ scrollbarWidth: 'none' }}>
+                    <button onClick={() => setFilterAspect('all')}
+                        className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap shrink-0 transition-all"
+                        style={filterAspect === 'all'
+                            ? { background: 'var(--accent)', color: '#fff' }
+                            : { background: 'var(--bg-app)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+                        Tất cả
+                    </button>
+                    {usedAspects.map(a => {
+                        const color = getStyleGuideAspectColor(a);
+                        const active = filterAspect === a;
+                        return (
+                            <button key={a} onClick={() => setFilterAspect(a)}
+                                className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap shrink-0 transition-all"
+                                style={active
+                                    ? { background: `${color}22`, color, border: `1px solid ${color}55` }
+                                    : { background: 'var(--bg-app)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+                                {getStyleGuideAspectLabel(a)}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
+            {error && <div className="mx-3 mb-2 text-xs text-red-400 px-3 py-1.5 rounded-xl shrink-0" style={{ background: 'rgba(239,68,68,0.08)' }}>{error}</div>}
+
+            <div className="flex-1 overflow-y-auto px-3 pb-3 flex flex-col gap-2">
+                {loading && <div className="text-xs text-[var(--text-secondary)] text-center py-10">Đang tải...</div>}
+                {!loading && entries.length === 0 && (
+                    <div className="flex flex-col items-center py-12 gap-2">
+                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(245, 158, 11, 0.08)' }}>
+                            <BookOpen className="w-6 h-6 opacity-30 text-amber-500" />
+                        </div>
+                        <p className="text-xs font-medium text-[var(--text-secondary)]">Chưa có quy tắc phong cách</p>
+                    </div>
+                )}
+                {filtered.map(entry => {
+                    const color = getStyleGuideAspectColor(entry.aspect);
+                    return (
+                        <div key={entry.id} className="rounded-2xl overflow-hidden transition-all"
+                            style={{ background: 'var(--bg-app)', border: `1px solid var(--border-color)` }}>
+                            <div className="px-3 pt-3 pb-2 flex items-start gap-2.5">
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
+                                            style={{ background: `${color}15`, color }}>
+                                            {getStyleGuideAspectLabel(entry.aspect)}
+                                        </span>
+                                        {entry.hasEmbedding
+                                            ? <span className="text-[10px] font-semibold text-emerald-500">✦ AI ready</span>
+                                            : <span className="text-[10px] opacity-40 text-[var(--text-secondary)]">○ chưa embed</span>}
+                                    </div>
+                                    <p className="text-[11px] text-[var(--text-primary)] mt-1.5 leading-relaxed"
+                                        style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                        {entry.content}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="px-3 pb-2.5 flex items-center gap-1.5 flex-wrap" style={{ borderTop: '1px solid var(--border-color)' }}>
+                                <button onClick={() => handleEmbed(entry.id)} disabled={embeddingId === entry.id}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-50"
+                                    style={entry.hasEmbedding
+                                        ? { background: 'rgba(16,185,129,0.08)', color: '#10b981' }
+                                        : { background: 'rgba(245, 158, 11, 0.08)', color: '#f59e0b' }}>
+                                    {embeddingId === entry.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Zap className="w-2.5 h-2.5" />}
+                                    {entry.hasEmbedding ? 'Re-embed' : 'Embed AI'}
+                                </button>
+                                <button onClick={() => openEdit(entry)}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors"
+                                    style={{ background: 'var(--hover-bg)', color: 'var(--text-secondary)' }}>
+                                    <Pencil className="w-2.5 h-2.5" /> Sửa
+                                </button>
+                                <button onClick={() => handleDelete(entry.id)} disabled={deletingId === entry.id}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-50 ml-auto"
+                                    style={{ background: 'rgba(239,68,68,0.06)', color: '#ef4444' }}>
+                                    {deletingId === entry.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Trash2 className="w-2.5 h-2.5" />}
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+// ── ThemePanel ─────────────────────────────────────────────────────────────
+
+function ThemePanel({ projectId }: { projectId: string }) {
+    const [entries, setEntries] = useState<ThemeEntry[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [view, setView] = useState<'list' | 'form'>('list');
+    const [editingEntry, setEditingEntry] = useState<ThemeEntry | null>(null);
+    const [form, setForm] = useState<CreateThemeRequest>({ title: '', description: '', notes: '' });
+    const [saving, setSaving] = useState(false);
+    const [embeddingId, setEmbeddingId] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        themeService.getAll(projectId)
+            .then(setEntries)
+            .catch(() => setError('Không thể tải dữ liệu.'))
+            .finally(() => setLoading(false));
+    }, [projectId]);
+
+    const openAdd = () => {
+        setForm({ title: '', description: '', notes: '' });
+        setEditingEntry(null);
+        setError(null);
+        setView('form');
+    };
+
+    const openEdit = (e: ThemeEntry) => {
+        setForm({ title: e.title, description: e.description, notes: e.notes ?? '' });
+        setEditingEntry(e);
+        setError(null);
+        setView('form');
+    };
+
+    const handleSave = async () => {
+        if (!form.title.trim()) return;
+        setSaving(true);
+        setError(null);
+        try {
+            if (editingEntry) {
+                const updated = await themeService.update(projectId, editingEntry.id, form);
+                setEntries(prev => prev.map(e => e.id === editingEntry.id ? updated : e));
+            } else {
+                const created = await themeService.create(projectId, form);
+                setEntries(prev => [...prev, created]);
+            }
+            setView('list');
+        } catch { setError('Lưu thất bại.'); }
+        finally { setSaving(false); }
+    };
+
+    const handleEmbed = async (id: string) => {
+        setEmbeddingId(id);
+        setError(null);
+        try {
+            const updated = await themeService.embed(projectId, id);
+            setEntries(prev => prev.map(e => e.id === id ? updated : e));
+        } catch { setError('Embed thất bại. Kiểm tra LM Studio.'); }
+        finally { setEmbeddingId(null); }
+    };
+
+    const handleDelete = async (id: string) => {
+        setDeletingId(id);
+        try {
+            await themeService.delete(projectId, id);
+            setEntries(prev => prev.filter(e => e.id !== id));
+        } catch { setError('Xóa thất bại.'); }
+        finally { setDeletingId(null); }
+    };
+
+    /* ── Form view ── */
+    if (view === 'form') {
+        return (
+            <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="px-4 pt-3 pb-2.5 flex items-center gap-2 shrink-0 border-b border-[var(--border-color)]">
+                    <button onClick={() => { setView('list'); setError(null); }}
+                        className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg)] transition-colors text-sm">
+                        ←
+                    </button>
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className="text-xs font-bold text-[var(--text-primary)]">
+                        {editingEntry ? 'Sửa Chủ Đề' : 'Thêm Chủ Đề'}
+                    </span>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
+                    {error && <div className="text-xs text-red-400 px-3 py-1.5 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)' }}>{error}</div>}
+                    <div>
+                        <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-1.5 block">Chủ đề *</label>
+                        <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                            placeholder="Ví dụ: Lòng tham, Sự chuộc lỗi..." maxLength={255} autoFocus
+                            className="w-full px-3 py-2 rounded-xl text-xs text-[var(--text-primary)] outline-none"
+                            style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }} />
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-1.5 block">Diễn giải *</label>
+                        <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                            placeholder="Chủ đề này được thể hiện như thế nào trong truyện?" rows={4}
+                            className="w-full px-3 py-2 rounded-xl text-xs text-[var(--text-primary)] outline-none resize-none leading-relaxed"
+                            style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }} />
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-1.5 block">Ghi chú thêm</label>
+                        <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                            placeholder="Ví dụ cụ thể, trích dẫn, hoặc cách nó phát triển..." rows={3}
+                            className="w-full px-3 py-2 rounded-xl text-xs text-[var(--text-primary)] outline-none resize-none leading-relaxed"
+                            style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }} />
+                    </div>
+                </div>
+
+                <div className="px-4 pb-4 pt-2.5 flex gap-2 shrink-0 border-t border-[var(--border-color)]">
+                    <button onClick={handleSave} disabled={saving || !form.title.trim()}
+                        className="flex-1 py-2 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5"
+                        style={{ background: 'var(--accent)' }}>
+                        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        {editingEntry ? 'Cập nhật' : 'Thêm mới'}
+                    </button>
+                    <button onClick={() => { setView('list'); setError(null); }}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                        style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>Hủy</button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="px-4 pt-3 pb-2 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className="text-xs font-bold text-[var(--text-primary)]">Chủ đề</span>
+                    <span className="w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold"
+                        style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>{entries.length}</span>
+                </div>
+                <button onClick={openAdd}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all"
+                    style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                    <Plus className="w-3 h-3" /> Thêm
+                </button>
+            </div>
+
+            {error && <div className="mx-3 mb-2 text-xs text-red-400 px-3 py-1.5 rounded-xl shrink-0" style={{ background: 'rgba(239,68,68,0.08)' }}>{error}</div>}
+
+            <div className="flex-1 overflow-y-auto px-3 pb-3 flex flex-col gap-2">
+                {loading && <div className="text-xs text-[var(--text-secondary)] text-center py-10">Đang tải...</div>}
+                {!loading && entries.length === 0 && (
+                    <div className="flex flex-col items-center py-12 gap-2">
+                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(16, 185, 129, 0.08)' }}>
+                            <Sparkles className="w-6 h-6 opacity-30 text-emerald-500" />
+                        </div>
+                        <p className="text-xs font-medium text-[var(--text-secondary)]">Chưa có chủ đề trọng tâm</p>
+                    </div>
+                )}
+                {entries.map(entry => (
+                    <div key={entry.id} className="rounded-2xl overflow-hidden shadow-sm" style={{ background: 'var(--bg-app)', border: `1px solid var(--border-color)` }}>
+                        <div className="px-3 pt-3 pb-2">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs font-bold text-[var(--text-primary)]">{entry.title}</p>
+                                {entry.hasEmbedding
+                                    ? <span className="text-[10px] font-semibold text-emerald-500">✦ AI ready</span>
+                                    : <span className="text-[10px] opacity-40 text-[var(--text-secondary)]">○ chưa embed</span>}
+                            </div>
+                            <p className="text-[11px] text-[var(--text-secondary)] mt-1.5 leading-relaxed">{entry.description}</p>
+                        </div>
+                        <div className="px-3 pb-2.5 flex items-center gap-1.5 flex-wrap" style={{ borderTop: '1px solid var(--border-color)' }}>
+                            <button onClick={() => handleEmbed(entry.id)} disabled={embeddingId === entry.id}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold disabled:opacity-50"
+                                style={entry.hasEmbedding
+                                    ? { background: 'rgba(16,185,129,0.08)', color: '#10b981' }
+                                    : { background: 'rgba(16, 185, 129, 0.08)', color: '#10b981' }}>
+                                {embeddingId === entry.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Zap className="w-2.5 h-2.5" />}
+                                {entry.hasEmbedding ? 'Re-embed' : 'Embed AI'}
+                            </button>
+                            <button onClick={() => openEdit(entry)}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold" style={{ background: 'var(--hover-bg)', color: 'var(--text-secondary)' }}>
+                                <Pencil className="w-2.5 h-2.5" /> Sửa
+                            </button>
+                            <button onClick={() => handleDelete(entry.id)} disabled={deletingId === entry.id}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold ml-auto" style={{ background: 'rgba(239,68,68,0.06)', color: '#ef4444' }}>
+                                {deletingId === entry.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Trash2 className="w-2.5 h-2.5" />}
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+// ── PlotNotePanel ──────────────────────────────────────────────────────────
+
+function PlotNotePanel({ projectId }: { projectId: string }) {
+    const [entries, setEntries] = useState<PlotNoteEntry[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [view, setView] = useState<'list' | 'form'>('list');
+    const [editingEntry, setEditingEntry] = useState<PlotNoteEntry | null>(null);
+    const [filterType, setFilterType] = useState<string>('all');
+    const [form, setForm] = useState<CreatePlotNoteRequest>({ type: 'Arc', title: '', content: '' });
+    const [saving, setSaving] = useState(false);
+    const [embeddingId, setEmbeddingId] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        plotNoteService.getAll(projectId)
+            .then(setEntries)
+            .catch(() => setError('Không thể tải dữ liệu.'))
+            .finally(() => setLoading(false));
+    }, [projectId]);
+
+    const openAdd = () => {
+        setForm({ type: 'Arc', title: '', content: '' });
+        setEditingEntry(null);
+        setError(null);
+        setView('form');
+    };
+
+    const openEdit = (e: PlotNoteEntry) => {
+        setForm({ type: e.type, title: e.title, content: e.content });
+        setEditingEntry(e);
+        setError(null);
+        setView('form');
+    };
+
+    const handleSave = async () => {
+        if (!form.title.trim()) return;
+        setSaving(true);
+        setError(null);
+        try {
+            if (editingEntry) {
+                const updated = await plotNoteService.update(projectId, editingEntry.id, form);
+                setEntries(prev => prev.map(e => e.id === editingEntry.id ? updated : e));
+            } else {
+                const created = await plotNoteService.create(projectId, form);
+                setEntries(prev => [...prev, created]);
+            }
+            setView('list');
+        } catch { setError('Lưu thất bại.'); }
+        finally { setSaving(false); }
+    };
+
+    const handleEmbed = async (id: string) => {
+        setEmbeddingId(id);
+        setError(null);
+        try {
+            const updated = await plotNoteService.embed(projectId, id);
+            setEntries(prev => prev.map(e => e.id === id ? updated : e));
+        } catch { setError('Embed thất bại. Kiểm tra LM Studio.'); }
+        finally { setEmbeddingId(null); }
+    };
+
+    const handleDelete = async (id: string) => {
+        setDeletingId(id);
+        try {
+            await plotNoteService.delete(projectId, id);
+            setEntries(prev => prev.filter(e => e.id !== id));
+        } catch { setError('Xóa thất bại.'); }
+        finally { setDeletingId(null); }
+    };
+
+    const usedTypes = Array.from(new Set(entries.map(e => e.type)));
+    const filtered = filterType === 'all' ? entries : entries.filter(e => e.type === filterType);
+
+    /* ── Form view ── */
+    if (view === 'form') {
+        const p = PLOT_NOTE_TYPES.find(t => t.value === form.type)?.placeholder || 'Mô tả...';
+        return (
+            <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="px-4 pt-3 pb-2.5 flex items-center gap-2 shrink-0 border-b border-[var(--border-color)]">
+                    <button onClick={() => { setView('list'); setError(null); }}
+                        className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg)] text-sm">
+                        ←
+                    </button>
+                    <Scroll className="w-3.5 h-3.5 text-rose-500" />
+                    <span className="text-xs font-bold text-[var(--text-primary)]">{editingEntry ? 'Sửa Ghi Chú Cốt Truyện' : 'Thêm Ghi Chú Cốt Truyện'}</span>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
+                    {error && <div className="text-xs text-red-400 px-3 py-1.5 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)' }}>{error}</div>}
+                    <div>
+                        <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-1.5 block">Tiêu đề (sự kiện/arc) *</label>
+                        <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                            placeholder="Nhập tiêu đề..." maxLength={255} autoFocus
+                            className="w-full px-3 py-2 rounded-xl text-xs text-[var(--text-primary)] outline-none"
+                            style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }} />
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-1.5 block">Loại ghi chú</label>
+                        <div className="flex flex-wrap gap-1.5">
+                            {PLOT_NOTE_TYPES.map(t => {
+                                const active = form.type === t.value;
+                                return (
+                                    <button key={t.value} onClick={() => setForm(f => ({ ...f, type: t.value }))}
+                                        className="px-2.5 py-1 rounded-full text-[10px] font-semibold"
+                                        style={active
+                                            ? { background: `${t.color}22`, color: t.color, border: `1px solid ${t.color}55` }
+                                            : { background: 'var(--bg-app)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+                                        {t.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-1.5 block">Nội dung *</label>
+                        <textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
+                            placeholder={p} rows={7}
+                            className="w-full px-3 py-2 rounded-xl text-xs text-[var(--text-primary)] outline-none resize-none leading-relaxed"
+                            style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }} />
+                    </div>
+                </div>
+
+                <div className="px-4 pb-4 pt-2.5 flex gap-2 shrink-0 border-t border-[var(--border-color)]">
+                    <button onClick={handleSave} disabled={saving || !form.title.trim()}
+                        className="flex-1 py-2 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5"
+                        style={{ background: 'var(--accent)' }}>
+                        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        {editingEntry ? 'Cập nhật' : 'Thêm mới'}
+                    </button>
+                    <button onClick={() => { setView('list'); setError(null); }}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                        style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>Hủy</button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="px-4 pt-3 pb-2 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                    <Scroll className="w-3.5 h-3.5 text-rose-500" />
+                    <span className="text-xs font-bold text-[var(--text-primary)]">Cốt truyện</span>
+                    <span className="w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold"
+                        style={{ background: 'rgba(244, 63, 94, 0.15)', color: '#f43f5e' }}>{entries.length}</span>
+                </div>
+                <button onClick={openAdd}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold"
+                    style={{ background: 'rgba(244, 63, 94, 0.12)', color: '#f43f5e', border: '1px solid rgba(244, 63, 94, 0.2)' }}>
+                    <Plus className="w-3 h-3" /> Thêm
+                </button>
+            </div>
+
+            {usedTypes.length > 1 && (
+                <div className="px-3 pb-2 flex gap-1.5 overflow-x-auto shrink-0" style={{ scrollbarWidth: 'none' }}>
+                    <button onClick={() => setFilterType('all')}
+                        className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap shrink-0 transition-all"
+                        style={filterType === 'all'
+                            ? { background: 'var(--accent)', color: '#fff' }
+                            : { background: 'var(--bg-app)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+                        Tất cả
+                    </button>
+                    {usedTypes.map(t => {
+                        const color = getPlotNoteTypeColor(t);
+                        const active = filterType === t;
+                        return (
+                            <button key={t} onClick={() => setFilterType(t)}
+                                className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap shrink-0 transition-all"
+                                style={active
+                                    ? { background: `${color}22`, color, border: `1px solid ${color}55` }
+                                    : { background: 'var(--bg-app)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+                                {getPlotNoteTypeLabel(t)}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
+            {error && <div className="mx-3 mb-2 text-xs text-red-400 px-3 py-1.5 rounded-xl shrink-0" style={{ background: 'rgba(239,68,68,0.08)' }}>{error}</div>}
+
+            <div className="flex-1 overflow-y-auto px-3 pb-3 flex flex-col gap-2">
+                {loading && <div className="text-xs text-[var(--text-secondary)] text-center py-10">Đang tải...</div>}
+                {!loading && entries.length === 0 && (
+                    <div className="flex flex-col items-center py-12 gap-2">
+                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(244, 63, 94, 0.08)' }}>
+                            <Scroll className="w-6 h-6 opacity-30 text-rose-500" />
+                        </div>
+                        <p className="text-xs font-medium text-[var(--text-secondary)]">Chưa có ghi chú cốt truyện</p>
+                    </div>
+                )}
+                {filtered.map(entry => {
+                    const color = getPlotNoteTypeColor(entry.type);
+                    return (
+                        <div key={entry.id} className="rounded-2xl overflow-hidden" style={{ background: 'var(--bg-app)', border: `1px solid var(--border-color)` }}>
+                            <div className="px-3 pt-3 pb-2">
+                                <div className="flex items-center justify-between mb-1">
+                                    <p className="text-xs font-bold text-[var(--text-primary)]">{entry.title}</p>
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: `${color}15`, color }}>
+                                        {getPlotNoteTypeLabel(entry.type)}
+                                    </span>
+                                </div>
+                                <div className="flex items-center mb-1">
+                                    {entry.hasEmbedding
+                                        ? <span className="text-[10px] font-semibold text-emerald-500">✦ AI ready</span>
+                                        : <span className="text-[10px] opacity-40 text-[var(--text-secondary)]">○ chưa embed</span>}
+                                </div>
+                                <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">{entry.content}</p>
+                            </div>
+                            <div className="px-3 pb-2.5 flex items-center gap-1.5 flex-wrap" style={{ borderTop: '1px solid var(--border-color)' }}>
+                                <button onClick={() => handleEmbed(entry.id)} disabled={embeddingId === entry.id}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold disabled:opacity-50"
+                                    style={entry.hasEmbedding
+                                        ? { background: 'rgba(16,185,129,0.08)', color: '#10b981' }
+                                        : { background: 'rgba(244, 63, 94, 0.08)', color: '#f43f5e' }}>
+                                    {embeddingId === entry.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Zap className="w-2.5 h-2.5" />}
+                                    {entry.hasEmbedding ? 'Re-embed' : 'Embed AI'}
+                                </button>
+                                <button onClick={() => openEdit(entry)}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold" style={{ background: 'var(--hover-bg)', color: 'var(--text-secondary)' }}>
+                                    <Pencil className="w-2.5 h-2.5" /> Sửa
+                                </button>
+                                <button onClick={() => handleDelete(entry.id)} disabled={deletingId === entry.id}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold ml-auto" style={{ background: 'rgba(239,68,68,0.06)', color: '#ef4444' }}>
+                                    {deletingId === entry.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Trash2 className="w-2.5 h-2.5" />}
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );

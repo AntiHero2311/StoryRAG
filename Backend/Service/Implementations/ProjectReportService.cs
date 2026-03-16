@@ -185,10 +185,19 @@ namespace Service.Implementations
 
             var characterEntries = await _context.CharacterEntries
                 .Where(c => c.ProjectId == projectId)
-                .Take(5).ToListAsync();
+                .ToListAsync();
             var worldEntries = await _context.WorldbuildingEntries
                 .Where(w => w.ProjectId == projectId)
-                .Take(3).ToListAsync();
+                .ToListAsync();
+            var styleGuideEntries = await _context.StyleGuideEntries
+                .Where(s => s.ProjectId == projectId)
+                .ToListAsync();
+            var themeEntries = await _context.ThemeEntries
+                .Where(t => t.ProjectId == projectId)
+                .ToListAsync();
+            var plotNoteEntries = await _context.PlotNoteEntries
+                .Where(p => p.ProjectId == projectId)
+                .ToListAsync();
 
             var bibleBuilder = new System.Text.StringBuilder();
             if (genres.Count > 0)
@@ -197,22 +206,55 @@ namespace Service.Implementations
                 bibleBuilder.AppendLine($"Tóm tắt: {summary[..Math.Min(300, summary.Length)]}");
             if (characterEntries.Count > 0)
             {
-                bibleBuilder.AppendLine("Nhân vật:");
+                bibleBuilder.AppendLine("Nhân vật quan trọng:");
                 foreach (var ch in characterEntries)
                 {
                     var chName = EncryptionHelper.DecryptWithMasterKey(ch.Name, rawDek);
                     var chDesc = EncryptionHelper.DecryptWithMasterKey(ch.Description, rawDek);
-                    bibleBuilder.AppendLine($"- {chName} ({ch.Role}): {chDesc[..Math.Min(120, chDesc.Length)]}");
+                    var chBg = !string.IsNullOrWhiteSpace(ch.Background) ? EncryptionHelper.DecryptWithMasterKey(ch.Background, rawDek) : "";
+                    var fullDesc = chDesc + (string.IsNullOrWhiteSpace(chBg) ? "" : $"\nTiểu sử: {chBg}");
+                    bibleBuilder.AppendLine($"- {chName} ({ch.Role}): {fullDesc[..Math.Min(1500, fullDesc.Length)]}");
                 }
             }
             if (worldEntries.Count > 0)
             {
-                bibleBuilder.AppendLine("Thế giới:");
+                bibleBuilder.AppendLine("Thế giới quan trọng:");
                 foreach (var w in worldEntries)
                 {
                     var wTitle = EncryptionHelper.DecryptWithMasterKey(w.Title, rawDek);
                     var wContent = EncryptionHelper.DecryptWithMasterKey(w.Content, rawDek);
-                    bibleBuilder.AppendLine($"- [{w.Category}] {wTitle}: {wContent[..Math.Min(120, wContent.Length)]}");
+                    bibleBuilder.AppendLine($"- [{w.Category}] {wTitle}: {wContent[..Math.Min(1500, wContent.Length)]}");
+                }
+            }
+            if (styleGuideEntries.Count > 0)
+            {
+                bibleBuilder.AppendLine("Phong cách viết & Ngôn ngữ:");
+                foreach (var s in styleGuideEntries)
+                {
+                    var sContent = EncryptionHelper.DecryptWithMasterKey(s.Content, rawDek);
+                    bibleBuilder.AppendLine($"- [{s.Aspect}]: {sContent[..Math.Min(1500, sContent.Length)]}");
+                }
+            }
+            if (themeEntries.Count > 0)
+            {
+                bibleBuilder.AppendLine("Chủ đề & Trọng tâm:");
+                foreach (var t in themeEntries)
+                {
+                    var tTitle = EncryptionHelper.DecryptWithMasterKey(t.Title, rawDek);
+                    var tDesc = EncryptionHelper.DecryptWithMasterKey(t.Description, rawDek);
+                    var tNotes = !string.IsNullOrWhiteSpace(t.Notes) ? EncryptionHelper.DecryptWithMasterKey(t.Notes, rawDek) : "";
+                    var fullDesc = tDesc + (string.IsNullOrWhiteSpace(tNotes) ? "" : $"\nGhi chú thêm: {tNotes}");
+                    bibleBuilder.AppendLine($"- {tTitle}: {fullDesc[..Math.Min(1500, fullDesc.Length)]}");
+                }
+            }
+            if (plotNoteEntries.Count > 0)
+            {
+                bibleBuilder.AppendLine("Ghi chú cốt truyện & Sự kiện:");
+                foreach (var p in plotNoteEntries)
+                {
+                    var pTitle = EncryptionHelper.DecryptWithMasterKey(p.Title, rawDek);
+                    var pContent = EncryptionHelper.DecryptWithMasterKey(p.Content, rawDek);
+                    bibleBuilder.AppendLine($"- [{p.Type}] {pTitle}: {pContent[..Math.Min(1500, pContent.Length)]}");
                 }
             }
             var storyBibleText = bibleBuilder.ToString().Trim();

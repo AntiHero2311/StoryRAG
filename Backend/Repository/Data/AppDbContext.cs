@@ -36,9 +36,12 @@ namespace Repository.Data
         // User Settings
         public DbSet<UserSettings> UserSettings { get; set; }
 
-        // Worldbuilding & Characters
+        // Worldbuilding & Characters & Other Notes
         public DbSet<WorldbuildingEntry> WorldbuildingEntries { get; set; }
         public DbSet<CharacterEntry> CharacterEntries { get; set; }
+        public DbSet<StyleGuideEntry> StyleGuideEntries { get; set; }
+        public DbSet<ThemeEntry> ThemeEntries { get; set; }
+        public DbSet<PlotNoteEntry> PlotNoteEntries { get; set; }
 
         // Bug Reports
         public DbSet<BugReport> BugReports { get; set; }
@@ -383,6 +386,55 @@ namespace Repository.Data
                 entity.HasOne(c => c.Project)
                       .WithMany()
                       .HasForeignKey(c => c.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── StyleGuideEntry ───────────────────────────────────────────────────
+            modelBuilder.Entity<StyleGuideEntry>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Aspect).IsRequired().HasMaxLength(50).HasDefaultValue("Other");
+                entity.Property(e => e.Content).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.Embedding).HasColumnType("vector(768)");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(s => s.Project)
+                      .WithMany()
+                      .HasForeignKey(s => s.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── ThemeEntry ────────────────────────────────────────────────────────
+            modelBuilder.Entity<ThemeEntry>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Title).IsRequired();
+                entity.Property(e => e.Description).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.Embedding).HasColumnType("vector(768)");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(t => t.Project)
+                      .WithMany()
+                      .HasForeignKey(t => t.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── PlotNoteEntry ─────────────────────────────────────────────────────
+            modelBuilder.Entity<PlotNoteEntry>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Type).IsRequired().HasMaxLength(50).HasDefaultValue("Other");
+                entity.Property(e => e.Title).IsRequired();
+                entity.Property(e => e.Content).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.Embedding).HasColumnType("vector(768)");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(p => p.Project)
+                      .WithMany()
+                      .HasForeignKey(p => p.ProjectId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
 

@@ -13,6 +13,9 @@ DROP TABLE IF EXISTS "Payments"              CASCADE;
 DROP TABLE IF EXISTS "RewriteHistories"      CASCADE;
 DROP TABLE IF EXISTS "ChatMessages"          CASCADE;
 DROP TABLE IF EXISTS "WorldbuildingEntries"  CASCADE;
+DROP TABLE IF EXISTS "PlotNoteEntries"       CASCADE;
+DROP TABLE IF EXISTS "ThemeEntries"          CASCADE;
+DROP TABLE IF EXISTS "StyleGuideEntries"     CASCADE;
 DROP TABLE IF EXISTS "CharacterEntries"      CASCADE;
 DROP TABLE IF EXISTS "UserSettings"          CASCADE;
 DROP TABLE IF EXISTS "ProjectReports"        CASCADE;
@@ -306,6 +309,56 @@ CREATE INDEX "IX_CharacterEntries_ProjectId" ON "CharacterEntries" ("ProjectId")
 -- CREATE INDEX "IX_CharacterEntries_Embedding" ON "CharacterEntries"
 --     USING ivfflat ("Embedding" vector_cosine_ops) WITH (lists = 100);
 
+-- ── StyleGuideEntries ─────────────────────────────────────────
+CREATE TABLE "StyleGuideEntries" (
+    "Id"        uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "ProjectId" uuid                     NOT NULL,
+    "Aspect"    character varying(50)    NOT NULL DEFAULT 'Other',
+    "Content"   text                     NOT NULL DEFAULT '',
+    "Embedding" vector(768),
+    "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
+    "UpdatedAt" timestamp with time zone,
+    CONSTRAINT "PK_StyleGuideEntries" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_StyleGuideEntries_Projects_ProjectId" FOREIGN KEY ("ProjectId")
+        REFERENCES "Projects" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_StyleGuideEntries_ProjectId" ON "StyleGuideEntries" ("ProjectId");
+
+-- ── ThemeEntries ──────────────────────────────────────────────
+CREATE TABLE "ThemeEntries" (
+    "Id"          uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "ProjectId"   uuid                     NOT NULL,
+    "Title"       text                     NOT NULL,
+    "Description" text                     NOT NULL DEFAULT '',
+    "Notes"       text,
+    "Embedding"   vector(768),
+    "CreatedAt"   timestamp with time zone NOT NULL DEFAULT NOW(),
+    "UpdatedAt"   timestamp with time zone,
+    CONSTRAINT "PK_ThemeEntries" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_ThemeEntries_Projects_ProjectId" FOREIGN KEY ("ProjectId")
+        REFERENCES "Projects" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_ThemeEntries_ProjectId" ON "ThemeEntries" ("ProjectId");
+
+-- ── PlotNoteEntries ───────────────────────────────────────────
+CREATE TABLE "PlotNoteEntries" (
+    "Id"        uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "ProjectId" uuid                     NOT NULL,
+    "Type"      character varying(50)    NOT NULL DEFAULT 'Other',
+    "Title"     text                     NOT NULL,
+    "Content"   text                     NOT NULL DEFAULT '',
+    "Embedding" vector(768),
+    "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
+    "UpdatedAt" timestamp with time zone,
+    CONSTRAINT "PK_PlotNoteEntries" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_PlotNoteEntries_Projects_ProjectId" FOREIGN KEY ("ProjectId")
+        REFERENCES "Projects" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_PlotNoteEntries_ProjectId" ON "PlotNoteEntries" ("ProjectId");
+
 -- ── ChatMessages ──────────────────────────────────────────────
 CREATE TABLE "ChatMessages" (
     "Id"           uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
@@ -451,4 +504,5 @@ SELECT setval(pg_get_serial_sequence('"Genres"', 'Id'), 14);
 -- ────────────────────────────────────────────────────────────
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
-    ('20260313061741_InitialCreate', '9.0.2');
+    ('20260313061741_InitialCreate', '9.0.2'),
+    ('20260313072231_AddContextTables', '9.0.2');

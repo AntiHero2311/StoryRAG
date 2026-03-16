@@ -155,6 +155,9 @@ builder.Services.AddScoped<IWorldbuildingService, WorldbuildingService>();
 builder.Services.AddScoped<ICharacterService, CharacterService>();
 builder.Services.AddScoped<IAiRewriteService, AiRewriteService>();
 builder.Services.AddScoped<IBugReportService, BugReportService>();
+builder.Services.AddScoped<IStyleGuideService, StyleGuideService>();
+builder.Services.AddScoped<IThemeService, ThemeService>();
+builder.Services.AddScoped<IPlotNoteService, PlotNoteService>();
 
 // Add Authentication Configuration
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

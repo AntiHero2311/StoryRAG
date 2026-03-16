@@ -1,0 +1,14 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Repository -> C:\Users\admin\Downloads\Projects\StoryRAG\Backend\Repository\bin\Debug\net8.0\Repository.dll
+C:\Users\admin\Downloads\Projects\StoryRAG\Backend\Service\Interfaces\IStyleGuideService.cs(1,7): error CS0246: The type or namespace name 'StoryRAG' could not be found (are you missing a using directive or an assembly reference?) [C:\Users\admin\Downloads\Projects\StoryRAG\Backend\Service\Service.csproj]
+C:\Users\admin\Downloads\Projects\StoryRAG\Backend\Service\Interfaces\IStyleGuideService.cs(3,7): error CS0246: The type or namespace name 'Shared' could not be found (are you missing a using directive or an assembly reference?) [C:\Users\admin\Downloads\Projects\StoryRAG\Backend\Service\Service.csproj]
+
+Build FAILED.
+
+C:\Users\admin\Downloads\Projects\StoryRAG\Backend\Service\Interfaces\IStyleGuideService.cs(1,7): error CS0246: The type or namespace name 'StoryRAG' could not be found (are you missing a using directive or an assembly reference?) [C:\Users\admin\Downloads\Projects\StoryRAG\Backend\Service\Service.csproj]
+C:\Users\admin\Downloads\Projects\StoryRAG\Backend\Service\Interfaces\IStyleGuideService.cs(3,7): error CS0246: The type or namespace name 'Shared' could not be found (are you missing a using directive or an assembly reference?) [C:\Users\admin\Downloads\Projects\StoryRAG\Backend\Service\Service.csproj]
+    0 Warning(s)
+    2 Error(s)
+
+Time Elapsed 00:00:00.90
