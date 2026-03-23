@@ -16,13 +16,15 @@ namespace Api.Controllers
         private readonly IAiChatService _aiChatService;
         private readonly IProjectReportService _reportService;
         private readonly IAiRewriteService _rewriteService;
+        private readonly IAiWritingService _writingService;
 
-        public AiController(IEmbeddingService embeddingService, IAiChatService aiChatService, IProjectReportService reportService, IAiRewriteService rewriteService)
+        public AiController(IEmbeddingService embeddingService, IAiChatService aiChatService, IProjectReportService reportService, IAiRewriteService rewriteService, IAiWritingService writingService)
         {
             _embeddingService = embeddingService;
             _aiChatService = aiChatService;
             _reportService = reportService;
             _rewriteService = rewriteService;
+            _writingService = writingService;
         }
 
         /// <summary>Embed tất cả chunks của current version của một chương.</summary>
@@ -201,6 +203,71 @@ namespace Api.Controllers
             catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
+        // ── Writing endpoints ─────────────────────────────────────────────────────
+
+        [HttpPost("{projectId:guid}/write")]
+        [EnableRateLimiting("AiRewrite")]
+        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
+        public async Task<IActionResult> WriteNew(Guid projectId, [FromBody] AiWriteRequest request)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var result = await _writingService.WriteNewAsync(projectId, request.Instruction, userId.Value);
+                return Ok(result);
+            }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
+        [HttpPost("{projectId:guid}/continue")]
+        [EnableRateLimiting("AiRewrite")]
+        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
+        public async Task<IActionResult> ContinueWriting(Guid projectId, [FromBody] AiContinueRequest request)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var result = await _writingService.ContinueWritingAsync(projectId, request.PreviousText, request.Instruction, userId.Value);
+                return Ok(result);
+            }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
+        [HttpPost("{projectId:guid}/polish")]
+        [EnableRateLimiting("AiRewrite")]
+        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
+        public async Task<IActionResult> Polish(Guid projectId, [FromBody] AiPolishRequest request)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var result = await _writingService.PolishAsync(projectId, request.OriginalText, request.Instruction, userId.Value);
+                return Ok(result);
+            }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
+        [HttpPost("{projectId:guid}/suggest")]
+        [EnableRateLimiting("AiRewrite")]
+        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
+        public async Task<IActionResult> Suggest(Guid projectId, [FromBody] AiSuggestRequest request)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var result = await _writingService.SuggestAsync(projectId, request.Context, request.TargetType, userId.Value);
+                return Ok(result);
+            }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
     }
 
     public class ChatRequest
@@ -222,5 +289,39 @@ namespace Api.Controllers
         public string? Instruction { get; set; }
 
         public Guid? ChapterId { get; set; }
+    }
+
+    public class AiWriteRequest
+    {
+        [Required]
+        [MaxLength(5000)]
+        public string Instruction { get; set; } = string.Empty;
+    }
+
+    public class AiContinueRequest
+    {
+        [Required]
+        public string PreviousText { get; set; } = string.Empty;
+
+        [MaxLength(5000)]
+        public string Instruction { get; set; } = string.Empty;
+    }
+
+    public class AiPolishRequest
+    {
+        [Required]
+        public string OriginalText { get; set; } = string.Empty;
+
+        [MaxLength(2000)]
+        public string Instruction { get; set; } = string.Empty;
+    }
+
+    public class AiSuggestRequest
+    {
+        [Required]
+        public string Context { get; set; } = string.Empty;
+        
+        [Required]
+        public string TargetType { get; set; } = string.Empty;
     }
 }

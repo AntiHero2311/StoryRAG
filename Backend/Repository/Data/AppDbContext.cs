@@ -42,6 +42,7 @@ namespace Repository.Data
         public DbSet<StyleGuideEntry> StyleGuideEntries { get; set; }
         public DbSet<ThemeEntry> ThemeEntries { get; set; }
         public DbSet<PlotNoteEntry> PlotNoteEntries { get; set; }
+        public DbSet<TimelineEvent> TimelineEvents { get; set; }
 
         // Bug Reports
         public DbSet<BugReport> BugReports { get; set; }
@@ -435,6 +436,27 @@ namespace Repository.Data
                 entity.HasOne(p => p.Project)
                       .WithMany()
                       .HasForeignKey(p => p.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── TimelineEvent ─────────────────────────────────────────────────────
+            modelBuilder.Entity<TimelineEvent>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Category).IsRequired().HasMaxLength(50).HasDefaultValue("Story");
+                entity.Property(e => e.Title).IsRequired();
+                entity.Property(e => e.Description).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.TimeLabel).HasMaxLength(100);
+                entity.Property(e => e.SortOrder).HasDefaultValue(0);
+                entity.Property(e => e.Importance).IsRequired().HasMaxLength(20).HasDefaultValue("Normal");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasIndex(e => new { e.ProjectId, e.SortOrder });
+
+                entity.HasOne(t => t.Project)
+                      .WithMany()
+                      .HasForeignKey(t => t.ProjectId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
 

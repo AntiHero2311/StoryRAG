@@ -154,10 +154,13 @@ builder.Services.AddScoped<IUserSettingsService, UserSettingsService>();
 builder.Services.AddScoped<IWorldbuildingService, WorldbuildingService>();
 builder.Services.AddScoped<ICharacterService, CharacterService>();
 builder.Services.AddScoped<IAiRewriteService, AiRewriteService>();
+builder.Services.AddScoped<IAiWritingService, AiWritingService>();
 builder.Services.AddScoped<IBugReportService, BugReportService>();
 builder.Services.AddScoped<IStyleGuideService, StyleGuideService>();
 builder.Services.AddScoped<IThemeService, ThemeService>();
 builder.Services.AddScoped<IPlotNoteService, PlotNoteService>();
+builder.Services.AddScoped<ITimelineEventService, TimelineEventService>();
+builder.Services.AddScoped<IExportService, ExportService>();
 
 // Add Authentication Configuration
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

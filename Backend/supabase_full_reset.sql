@@ -10,6 +10,7 @@
 -- ────────────────────────────────────────────────────────────
 
 DROP TABLE IF EXISTS "Payments"              CASCADE;
+DROP TABLE IF EXISTS "TimelineEvents"       CASCADE;
 DROP TABLE IF EXISTS "RewriteHistories"      CASCADE;
 DROP TABLE IF EXISTS "ChatMessages"          CASCADE;
 DROP TABLE IF EXISTS "WorldbuildingEntries"  CASCADE;
@@ -359,6 +360,27 @@ CREATE TABLE "PlotNoteEntries" (
 
 CREATE INDEX "IX_PlotNoteEntries_ProjectId" ON "PlotNoteEntries" ("ProjectId");
 
+-- ── TimelineEvents ─────────────────────────────────────────────────
+-- Category: Story | Historical | Character | World | Political | Other
+-- Importance: Critical | Major | Normal | Minor
+CREATE TABLE "TimelineEvents" (
+    "Id"          uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "ProjectId"   uuid                     NOT NULL,
+    "Category"    character varying(50)    NOT NULL DEFAULT 'Story',
+    "Title"       text                     NOT NULL,
+    "Description" text                     NOT NULL DEFAULT '',
+    "TimeLabel"   character varying(100),
+    "SortOrder"   integer                  NOT NULL DEFAULT 0,
+    "Importance"  character varying(20)    NOT NULL DEFAULT 'Normal',
+    "CreatedAt"   timestamp with time zone NOT NULL DEFAULT NOW(),
+    "UpdatedAt"   timestamp with time zone,
+    CONSTRAINT "PK_TimelineEvents" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_TimelineEvents_Projects_ProjectId" FOREIGN KEY ("ProjectId")
+        REFERENCES "Projects" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_TimelineEvents_ProjectId_SortOrder" ON "TimelineEvents" ("ProjectId", "SortOrder");
+
 -- ── ChatMessages ──────────────────────────────────────────────
 CREATE TABLE "ChatMessages" (
     "Id"           uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
@@ -505,4 +527,5 @@ SELECT setval(pg_get_serial_sequence('"Genres"', 'Id'), 14);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
     ('20260313061741_InitialCreate', '9.0.2'),
-    ('20260313072231_AddContextTables', '9.0.2');
+    ('20260313072231_AddContextTables', '9.0.2'),
+    ('20260323_AddTimelineEvents', '9.0.2');

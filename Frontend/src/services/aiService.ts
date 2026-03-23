@@ -63,6 +63,17 @@ export interface RewriteHistoryResult {
     pageSize: number;
 }
 
+export interface AiWritingResult {
+    generatedText: string;
+    totalTokens: number;
+}
+
+export interface AiSuggestionResult {
+    suggestions: string[];
+    analysis: string;
+    totalTokens: number;
+}
+
 // ── Service ────────────────────────────────────────────────────────────────
 
 export const aiService = {
@@ -102,6 +113,30 @@ export const aiService = {
         const res = await api.get<RewriteHistoryResult>(`/ai/${projectId}/rewrite/history`, {
             params: { page, pageSize, ...(chapterId ? { chapterId } : {}) },
         });
+        return res.data;
+    },
+
+    /** Viết mới từ đầu. */
+    writeNew: async (projectId: string, instruction: string): Promise<AiWritingResult> => {
+        const res = await api.post<AiWritingResult>(`/ai/${projectId}/write`, { instruction });
+        return res.data;
+    },
+
+    /** Viết tiếp đoạn văn hiện tại. */
+    continueWriting: async (projectId: string, previousText: string, instruction: string): Promise<AiWritingResult> => {
+        const res = await api.post<AiWritingResult>(`/ai/${projectId}/continue`, { previousText, instruction });
+        return res.data;
+    },
+
+    /** Đóng vai trò là editor trau chuốt lại đoạn văn. */
+    polish: async (projectId: string, originalText: string, instruction: string): Promise<AiWritingResult> => {
+        const res = await api.post<AiWritingResult>(`/ai/${projectId}/polish`, { originalText, instruction });
+        return res.data;
+    },
+
+    /** Lấy gợi ý tự động (nhân vật, bối cảnh...). */
+    suggest: async (projectId: string, context: string, targetType: string): Promise<AiSuggestionResult> => {
+        const res = await api.post<AiSuggestionResult>(`/ai/${projectId}/suggest`, { context, targetType });
         return res.data;
     },
 };

@@ -135,7 +135,8 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
   │           ├──< CharacterEntries     (vector)
   │           ├──< ProjectReports
   │           ├──< ChatMessages
-  │           └──< RewriteHistories
+  │           ├──< RewriteHistories
+  │           └──< TimelineEvents
   │
   ├──< UserSubscriptions >── SubscriptionPlans
   └──1 UserSettings
@@ -161,6 +162,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | `SubscriptionPlans` | Gói dịch vụ (Free/Basic/Pro/Enterprise) | Token & analysis limits |
 | `UserSubscriptions` | Đăng ký gói của user | `UsedTokens`, `UsedAnalysisCount` |
 | `UserSettings` | Cài đặt editor | Font, font size |
+| `TimelineEvents` | Mốc sự kiện dòng thời gian | Category, TimeLabel, SortOrder, Importance |
 
 ---
 
@@ -258,6 +260,15 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 |---|---|---|
 | GET | `/` | Cài đặt editor hiện tại |
 | PUT | `/` | Cập nhật font, font size |
+
+### 6.10 Timeline — `/api/projects/{projectId}/timeline`
+| Method | Endpoint | Mô tả |
+|---|---|---|
+| GET | `/` | Danh sách mốc sự kiện (sorted by sortOrder) |
+| POST | `/` | Thêm mốc sự kiện mới (auto sort) |
+| PUT | `/{id}` | Cập nhật mốc sự kiện |
+| DELETE | `/{id}` | Xóa mốc sự kiện |
+| PATCH | `/{id}/reorder` | Thay đổi thứ tự (sortOrder) |
 
 ---
 
@@ -426,3 +437,4 @@ npm run dev
 | `IEmailService` | Gửi email (welcome, password reset) qua Gmail SMTP |
 | `IAdminService` | Dashboard stats cho Admin |
 | `IBugReportService` | CRUD bug reports, cập nhật trạng thái (Staff/Admin) |
+| `ITimelineEventService` | CRUD mốc sự kiện dòng thời gian, tự động sort order |

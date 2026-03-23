@@ -13,6 +13,8 @@ import { getUserInfo } from '../utils/jwtHelper';
 import RewritePanel from '../components/RewritePanel';
 import ChatPanel from '../components/workspace/ChatPanel';
 import ChatHistoryPanel from '../components/workspace/ChatHistoryPanel';
+import AiWriterPanel from '../components/workspace/AiWriterPanel';
+import TimelinePanel from '../components/workspace/TimelinePanel';
 import {
     chapterService,
     type ChapterDetailResponse,
@@ -36,6 +38,7 @@ import {
     getRoleInfo,
 } from '../services/characterService';
 import { projectService } from '../services/projectService';
+import { exportService } from '../services/exportService';
 import { genreService } from '../services/genreService';
 import type { GenreResponse } from '../services/projectService';
 import { styleGuideService, type StyleGuideEntry, type CreateStyleGuideRequest, STYLE_GUIDE_ASPECTS, getStyleGuideAspectLabel, getStyleGuideAspectColor } from '../services/styleGuideService';
@@ -47,7 +50,62 @@ import { diffWords } from 'diff';
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
-type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotNotes';
+type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotNotes' | 'aiWriter' | 'timeline';
+
+// ── Export Modal ───────────────────────────────────────────────────────────
+function ExportModal({
+    target, // 'project' or 'chapter'
+    onClose,
+    onExport,
+    isLoading
+}: {
+    target: 'project' | 'chapter';
+    onClose: () => void;
+    onExport: (format: string) => void;
+    isLoading: boolean;
+}) {
+    const formats = [
+        { id: 'docx', label: 'Word (.docx)', icon: FileText, color: 'text-blue-500' },
+        { id: 'txt', label: 'Text (.txt)', icon: AlignLeft, color: 'text-gray-500' },
+        { id: 'md', label: 'Markdown (.md)', icon: BookOpen, color: 'text-gray-300' },
+        { id: 'html', label: 'HTML (.html)', icon: Globe, color: 'text-orange-500' },
+    ];
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            onClick={e => { if (e.target === e.currentTarget && !isLoading) onClose(); }}>
+            <div className="w-full max-w-sm flex flex-col rounded-2xl overflow-hidden shadow-2xl p-5"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
+                        <Download className="w-5 h-5 text-[var(--accent)]" /> 
+                        Xuất {target === 'project' ? 'Toàn bộ truyện' : 'Chương hiện tại'}
+                    </h3>
+                    <button onClick={onClose} disabled={isLoading} className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:bg-[var(--text-primary)]/10">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    {formats.map(fmt => {
+                        const Icon = fmt.icon;
+                        return (
+                            <button key={fmt.id} onClick={() => onExport(fmt.id)} disabled={isLoading}
+                                className="flex flex-col items-center justify-center p-4 rounded-xl border border-[var(--border-color)] bg-[var(--bg-app)] hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 transition-all disabled:opacity-50">
+                                <Icon className={`w-8 h-8 ${fmt.color} mb-2`} />
+                                <span className="text-sm font-semibold text-[var(--text-primary)]">{fmt.label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+                {isLoading && (
+                    <div className="mt-4 flex items-center justify-center gap-2 text-sm text-[var(--accent)]">
+                        <Loader2 className="w-4 h-4 animate-spin" /> Đang tạo file xuất...
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
 
 // ── Diff Modal ─────────────────────────────────────────────────────────────
 function DiffModal({
@@ -179,14 +237,23 @@ export default function WorkspacePage() {
         currentContent: string;
         compareContent: string;
     } | null>(null);
+
+    // ── Export state ───────────────────────────────────────────────────────
+    const [exportModal, setExportModal] = useState<{ open: boolean; target: 'project' | 'chapter' }>({ open: false, target: 'project' });
+    const [isExporting, setIsExporting] = useState(false);
+
     // Chat state is now managed inside ChatPanel / ChatHistoryPanel components
 
 
     // ── Rewrite state ──────────────────────────────────────────────────────
     const [rewritePanelOpen, setRewritePanelOpen] = useState(false);
+    const [rewriteMode, setRewriteMode] = useState<'rewrite' | 'polish'>('rewrite');
     const [rewriteSelectedText, setRewriteSelectedText] = useState('');
     const [selectionToolbar, setSelectionToolbar] = useState<{ visible: boolean; x: number; y: number }>({ visible: false, x: 0, y: 0 });
     const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // ── Continue Writing ───────────────────────────────────────────────────
+    const [isContinuingWriting, setIsContinuingWriting] = useState(false);
 
     // ── Refs ───────────────────────────────────────────────────────────────
     const editorRef = useRef<HTMLDivElement>(null);
@@ -308,19 +375,48 @@ export default function WorkspacePage() {
     };
 
     // ── Export / Import chapter ─────────────────────────────────────────────
-    const handleExportChapter = () => {
-        if (!activeChapter || !editorRef.current) return;
-        const content = editorRef.current.innerText;
-        const title = chapterTitle || activeChapter.title || `Chương ${activeChapter.chapterNumber}`;
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${title}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+    const doExport = async (format: string) => {
+        if (!projectId) return;
+        setIsExporting(true);
+        try {
+            if (exportModal.target === 'chapter') {
+                if (!activeChapter) return;
+                await exportService.exportChapter(projectId, activeChapter.id, format);
+            } else {
+                await exportService.exportProject(projectId, format);
+            }
+            setExportModal({ ...exportModal, open: false });
+            toast.success('Đã xuất file thành công.');
+        } catch (e: any) {
+            toast.error('Có lỗi xảy ra khi xuất file.');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    // ── Continue Writing ────────────────────────────────────────────────────
+    const handleContinueWriting = async () => {
+        if (!projectId || !activeChapter || !editorRef.current) return;
+        setIsContinuingWriting(true);
+        try {
+            const previousText = (editorRef.current.innerText || '').slice(-1500);
+            const res = await aiService.continueWriting(
+                projectId, 
+                previousText, 
+                "Hãy viết tiếp đoạn mạch truyện này một cách tự nhiên, chú ý giữ nguyên văn phong và nhịp truyện nội dung ở trên."
+            );
+            if (res.generatedText) {
+                // Ensure there is some spacing before appending
+                let textToAppend = res.generatedText;
+                editorRef.current.innerHTML += `<br><br>${textToAppend.replace(/\n/g, '<br>')}`;
+                updateWordCount();
+                scheduleAutoSave();
+            }
+        } catch (e: any) {
+            toast.error(e?.response?.data?.message ?? 'AI không thể viết tiếp lúc này. Hãy thử lại.');
+        } finally {
+            setIsContinuingWriting(false);
+        }
     };
 
     const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -560,7 +656,8 @@ export default function WorkspacePage() {
     };
 
     const execFormat = (command: string, value?: string) => {
-        editorRef.current?.focus();
+        if (!editorRef.current) return;
+        editorRef.current.focus();
         document.execCommand(command, false, value);
     };
 
@@ -592,6 +689,23 @@ export default function WorkspacePage() {
                             const sel = window.getSelection()?.toString().trim() ?? '';
                             if (sel.length >= 5) {
                                 setRewriteSelectedText(sel);
+                                setRewriteMode('rewrite');
+                                setRewritePanelOpen(true);
+                                setSelectionToolbar(prev => ({ ...prev, visible: false }));
+                            }
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all hover:bg-[var(--accent)]/10 text-[var(--text-secondary)] hover:text-[var(--accent)]"
+                    >
+                        <Wand2 className="w-3 h-3" />
+                        Viết lại
+                    </button>
+                    <div className="w-px h-3 bg-[var(--border-color)] mx-1" />
+                    <button
+                        onClick={() => {
+                            const sel = window.getSelection()?.toString().trim() ?? '';
+                            if (sel.length >= 5) {
+                                setRewriteSelectedText(sel);
+                                setRewriteMode('polish');
                                 setRewritePanelOpen(true);
                                 setSelectionToolbar(prev => ({ ...prev, visible: false }));
                             }
@@ -599,10 +713,20 @@ export default function WorkspacePage() {
                         className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all"
                         style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)' }}
                     >
-                        <Wand2 className="w-3 h-3" />
-                        Viết lại
+                        <Sparkles className="w-3 h-3" />
+                        Trau chuốt
                     </button>
                 </div>
+            )}
+
+            {/* ── Export Modal ── */}
+            {exportModal.open && (
+                <ExportModal
+                    target={exportModal.target}
+                    isLoading={isExporting}
+                    onClose={() => setExportModal({ ...exportModal, open: false })}
+                    onExport={doExport}
+                />
             )}
 
             {/* ── Rewrite Panel ── */}
@@ -611,6 +735,7 @@ export default function WorkspacePage() {
                     projectId={projectId!}
                     chapterId={activeChapter?.id}
                     selectedText={rewriteSelectedText}
+                    mode={rewriteMode}
                     onAccept={(rewritten) => {
                         // Replace selected text in editor
                         const sel = window.getSelection();
@@ -641,6 +766,12 @@ export default function WorkspacePage() {
                         <BookOpen className="w-4 h-4" />
                     </div>
                     <span className="text-[var(--text-primary)] font-bold text-[15px] truncate max-w-xs tracking-tight">{projectTitle}</span>
+                    <button
+                        onClick={() => setExportModal({ open: true, target: 'project' })}
+                        className="ml-2 flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--text-primary)]/10 transition-colors"
+                    >
+                        <Download className="w-3 h-3" /> Xuất dự án
+                    </button>
                 </div>
 
                 <div className="flex-1" />
@@ -854,6 +985,8 @@ export default function WorkspacePage() {
                                         { tab: 'themes' as ActiveTab, label: 'Chủ đề', icon: Sparkles, color: '#10b981' },
                                         { tab: 'plotNotes' as ActiveTab, label: 'Cốt truyện', icon: Scroll, color: '#ef4444' },
                                         { tab: 'aiInstructions' as ActiveTab, label: 'Ghi chú AI', icon: Bot, color: '#34d399' },
+                                        { tab: 'aiWriter' as ActiveTab, label: 'AI Writer', icon: Wand2, color: '#ec4899' },
+                                        { tab: 'timeline' as ActiveTab, label: 'Dòng t/gian', icon: Clock, color: '#06b6d4' },
                                     ] as const).map(item => {
                                         const isActive = activeTab === item.tab && rightPanelOpen;
                                         const Icon = item.icon;
@@ -974,9 +1107,9 @@ export default function WorkspacePage() {
                         {activeChapter && (
                             <>
                                 <button
-                                    onClick={handleExportChapter}
+                                    onClick={() => setExportModal({ open: true, target: 'chapter' })}
                                     className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5"
-                                    title="Xuất chương (.txt)"
+                                    title="Xuất chương"
                                 >
                                     <Download className="w-4 h-4" />
                                 </button>
@@ -1044,6 +1177,19 @@ export default function WorkspacePage() {
                                             <AlignLeft className="w-3 h-3" />
                                             {wordCount} từ
                                         </span>
+
+                                        <div className="flex-1" />
+
+                                        <button
+                                            onClick={handleContinueWriting}
+                                            disabled={isContinuingWriting}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all shadow-md shadow-[var(--accent)]/10 disabled:opacity-50"
+                                            style={{ background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)' }}
+                                            title="AI đọc 1500 ký tự cuối và viết tiếp"
+                                        >
+                                            {isContinuingWriting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bot className="w-3.5 h-3.5" />}
+                                            AI Viết tiếp
+                                        </button>
                                     </div>
                                     {/* Editor */}
                                     <div
@@ -1089,7 +1235,7 @@ export default function WorkspacePage() {
                         {/* Panel header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] shrink-0 bg-[var(--bg-app)]">
                             <div className="flex items-center gap-2">
-                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotNotes'] as ActiveTab[]).includes(activeTab) ? (
+                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotNotes', 'aiWriter', 'timeline'] as ActiveTab[]).includes(activeTab) ? (
                                     <>
                                         <button onClick={() => setActiveTab('chat')} className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 transition-colors">
                                             <ArrowLeft className="w-3.5 h-3.5" />
@@ -1104,6 +1250,8 @@ export default function WorkspacePage() {
                                             {activeTab === 'themes' && 'Chủ đề'}
                                             {activeTab === 'plotNotes' && 'Cốt truyện'}
                                             {activeTab === 'aiInstructions' && 'Ghi chú AI'}
+                                            {activeTab === 'aiWriter' && 'AI Writer'}
+                                            {activeTab === 'timeline' && 'Dòng thời gian'}
                                         </span>
                                     </>
                                 ) : (
@@ -1367,6 +1515,25 @@ export default function WorkspacePage() {
                         {/* ── AI Instructions Tab ── */}
                         {activeTab === 'aiInstructions' && projectId && (
                             <AiInstructionsPanel projectId={projectId} />
+                        )}
+
+                        {/* ── AI Writer Tab ── */}
+                        {activeTab === 'aiWriter' && projectId && (
+                            <AiWriterPanel
+                                projectId={projectId}
+                                onApplyContent={(content) => {
+                                    if (editorRef.current) {
+                                        editorRef.current.innerHTML += (editorRef.current.innerHTML.endsWith('<br>') ? '' : '<br><br>') + content.replace(/\n/g, '<br>');
+                                        updateWordCount();
+                                        scheduleAutoSave();
+                                    }
+                                }}
+                            />
+                        )}
+
+                        {/* ── Timeline Tab ── */}
+                        {activeTab === 'timeline' && projectId && (
+                            <TimelinePanel projectId={projectId} />
                         )}
                     </div>
                 )}

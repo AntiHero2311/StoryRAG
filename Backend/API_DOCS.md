@@ -569,6 +569,101 @@ Lấy thống kê người dùng: tổng số, theo role, danh sách chi tiết.
 
 ---
 
+## 10. Timeline — `/api/projects/{projectId}/timeline`
+
+> Quản lý dòng thời gian sự kiện của bộ truyện.
+
+### GET `/api/projects/{projectId}/timeline`
+Lấy toàn bộ mốc sự kiện của dự án, sắp xếp theo `sortOrder`.
+
+**Auth:** Bắt buộc.
+
+**Response `200`:** `TimelineEventDto[]`
+```json
+[
+  {
+    "id": "guid",
+    "projectId": "guid",
+    "category": "Story | Historical | Character | World | Political | Other",
+    "title": "string",
+    "description": "string",
+    "timeLabel": "string | null",
+    "sortOrder": 0,
+    "importance": "Critical | Major | Normal | Minor",
+    "createdAt": "datetime",
+    "updatedAt": "datetime | null"
+  }
+]
+```
+
+---
+
+### POST `/api/projects/{projectId}/timeline`
+Thêm mốc sự kiện mới. Nếu `sortOrder = 0`, hệ thống tự tính (max + 10).
+
+**Auth:** Bắt buộc.
+
+**Request Body:**
+```json
+{
+  "category": "Story",
+  "title": "string (required)",
+  "description": "string | null",
+  "timeLabel": "string | null",
+  "sortOrder": 0,
+  "importance": "Normal"
+}
+```
+
+**Response `201`:** `TimelineEventDto`.
+
+---
+
+### PUT `/api/projects/{projectId}/timeline/{id}`
+Cập nhật mốc sự kiện. Tất cả field đều optional.
+
+**Auth:** Bắt buộc.
+
+**Request Body:**
+```json
+{
+  "category": "string | null",
+  "title": "string | null",
+  "description": "string | null",
+  "timeLabel": "string | null",
+  "sortOrder": 0,
+  "importance": "string | null"
+}
+```
+
+**Response `200`:** `TimelineEventDto`.
+
+**Response `404`:** Nếu không tìm thấy.
+
+---
+
+### DELETE `/api/projects/{projectId}/timeline/{id}`
+Xóa mốc sự kiện.
+
+**Auth:** Bắt buộc.
+
+**Response `204`:** No Content.
+
+**Response `404`:** Nếu không tìm thấy.
+
+---
+
+### PATCH `/api/projects/{projectId}/timeline/{id}/reorder`
+Cập nhật `sortOrder` của một mốc sự kiện.
+
+**Auth:** Bắt buộc.
+
+**Request Body:** `integer` (sortOrder mới)
+
+**Response `204`:** No Content.
+
+---
+
 ## Error Response Format
 
 Tất cả lỗi trả về dạng:
