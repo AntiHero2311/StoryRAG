@@ -21,6 +21,9 @@ namespace Repository.Entities
         /// <summary>JSONB: array of 13 criterion results</summary>
         public string CriteriaJson { get; set; } = "[]";
 
+        /// <summary>Lưu lại phiên bản dự án lúc đánh giá (vd: v1.0.0)</summary>
+        public string ProjectVersion { get; set; } = "v1.0.0";
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
 

@@ -4,6 +4,7 @@ import { api } from './api';
 
 export type WorldbuildingCategory =
     // ── New primary categories ──
+    | 'Scene'      // Cảnh vật, Không gian hẹp
     | 'Setting'    // Bối cảnh
     | 'Location'   // Địa điểm
     | 'Rules'      // Quy tắc thế giới
@@ -67,6 +68,7 @@ export const worldbuildingService = {
 
 export const WORLDBUILDING_CATEGORIES: { value: WorldbuildingCategory; label: string; color: string; placeholder: string }[] = [
     // ── Primary ──
+    { value: 'Scene',      label: 'Cảnh',            color: '#c084fc', placeholder: 'Mô tả chi tiết một phân cảnh cụ thể, căn phòng, hay không gian mà nhân vật tương tác...' },
     { value: 'Setting',    label: 'Bối cảnh',        color: '#60a5fa', placeholder: 'Mô tả bối cảnh thế giới: thời đại, văn minh, không khí chung...' },
     { value: 'Location',   label: 'Địa điểm',        color: '#22d3ee', placeholder: 'Mô tả địa điểm, vị trí, địa danh quan trọng trong thế giới...' },
     { value: 'Rules',      label: 'Quy tắc thế giới', color: '#fb923c', placeholder: 'Quy tắc, luật lệ, giới hạn: magic system, vật lý thế giới, cấm kỵ...' },

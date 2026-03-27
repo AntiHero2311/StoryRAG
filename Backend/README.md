@@ -158,17 +158,32 @@ Authorization: Bearer <access_token>
 ```json
 {
   "totalScore": 78,
-  "grade": "Khá",
-  "groups": [
+  "classification": "Khá",
+  "projectVersion": "v1.12.35",
+  "overallFeedback": "Tác phẩm có nội tâm nhân vật sâu sắc...",
+  "warnings": [
     {
-      "groupName": "Cốt truyện & Mạch lạc",
-      "maxScore": 25, "score": 20,
-      "criteria": [
-        { "name": "Tính nhất quán nội bộ", "maxScore": 9, "score": 8, "feedback": "..." }
-      ]
+      "code": "INCOMPLETE",
+      "severity": "WARNING",
+      "title": "Truyện chưa có kết thúc",
+      "detail": "Cốt truyện dừng đột ngột giữa chương 5, chưa giải quyết mâu thuẫn chính."
     }
   ],
-  "overallFeedback": "..."
+  "groups": [
+    {
+      "name": "Cốt truyện & Mạch lạc",
+      "maxScore": 25, "score": 20,
+      "criteria": [
+        {
+          "key": "1.1", "name": "Tính nhất quán nội bộ",
+          "maxScore": 5, "score": 4,
+          "feedback": "Mạch truyện logic nhưng có vài mâu thuẫn nhỏ.",
+          "errors": ["..."],
+          "suggestions": ["..."]
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -190,7 +205,9 @@ Các bảng này cung cấp **context tự động** cho AI khi phân tích — 
 | `DELETE` | `/worldbuilding/{id}` | Xóa |
 | `POST` | `/worldbuilding/{id}/embed` | Embed cho AI |
 
-**Category values:** `Setting`, `Location`, `Rules`, `Glossary`, `Timeline`, `Magic`, `History`, `Religion`, `Geography`, `Technology`, `World`, `Other`
+**Category values:** `Scene` (Cảnh), `Setting`, `Location`, `Rules`, `Glossary`, `Timeline`, `Magic`, `History`, `Religion`, `Geography`, `Technology`, `World`, `Other`
+
+> **`Scene` (mới):** Dùng để mô tả phân cảnh cụ thể (căn phòng, vị trí kịch tính), khác với `Location` (vũng rộng) hay `Setting` (bối cảnh toàn cục).
 
 ### Characters — `/characters`
 
@@ -309,7 +326,8 @@ Các bảng này cung cấp **context tự động** cho AI khi phân tích — 
 | `AiChatService` | Gemini → LM Studio fallback (chỉ lỗi non-429), lưu lịch sử |
 | `AiRewriteService` | Gemini → LM Studio fallback, lưu lịch sử |
 | `ChunkingService` | 1500 ký tự, overlap 150, ưu tiên cắt tại `\n\n` → `.` → space |
-| `ProjectReportService` | Rubric 100 điểm, 8 nhóm tiêu chí, đọc toàn bộ context tables |
+| `AiWritingService` | Viết mới, tiếp nối, rất trau chuốt — tích hợp kỹ thuật **Show Don't Tell** & **Pacing** |
+| `ProjectReportService` | Rubric **5 điểm** (1-Kém → 5-Xuất sắc), phát hiện **4 loại cảnh báo** (INCOMPLETE/REPETITION/PLAGIARISM\_RISK/INCONSISTENCY), **Zero Hallucination**, chấm theo **Thể loại** |
 | `GeminiRetryHelper` | Backoff [10s, 30s, 65s] cho 429; throw lỗi thân thiện sau 3 lần |
 | `EncryptionHelper` | AES-256 với user DEK + Master Key |
 
@@ -332,7 +350,7 @@ PlotNoteEntries         — uuid PK, FK→Projects, Type, Embedding vector(768)
 
 ChatMessages            — uuid PK, FK→Projects, FK→Users
 RewriteHistories        — uuid PK, FK→Projects, FK→Users
-ProjectReports          — uuid PK, FK→Projects, CriteriaJson (jsonb)
+ProjectReports          — uuid PK, FK→Projects, CriteriaJson (jsonb), ProjectVersion (text)
 
 SubscriptionPlans       — int PK (seed: Free/Basic/Pro/Enterprise)
 UserSubscriptions       — int PK, FK→Users, FK→SubscriptionPlans

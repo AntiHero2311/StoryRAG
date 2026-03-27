@@ -19,6 +19,13 @@ export interface GroupResult {
     criteria: CriterionResult[];
 }
 
+export interface StoryWarning {
+    code: string;
+    severity: string;
+    title: string;
+    detail: string;
+}
+
 export interface ProjectReportResponse {
     id: string;
     projectId: string;
@@ -26,7 +33,9 @@ export interface ProjectReportResponse {
     status: 'Pending' | 'Completed' | 'Failed' | 'MockData';
     totalScore: number;
     classification: 'Cần sửa lớn' | 'Trung bình' | 'Khá' | 'Xuất sắc';
+    overallFeedback: string;
     groups: GroupResult[];
+    warnings: StoryWarning[];
     createdAt: string;
 }
 

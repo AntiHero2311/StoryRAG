@@ -112,9 +112,10 @@ namespace Service.Implementations
         {
             await CheckAndDeductTokenAsync(projectId, userId);
 
-            var systemPrompt = "Bạn là một nhà văn xuất sắc. Dựa vào yêu cầu chi tiết (thể loại, bối cảnh, dàn ý), hãy viết một chương truyện thật hấp dẫn, mạch lạc, có chiều sâu cảm xúc. " +
-                               "KHÔNG viết tiêu đề chương hay giới thiệu. Chỉ xuất trực tiếp nội dung văn bản. " +
-                               "Hành văn tự nhiên, mượt mà, đúng chuẩn tiếng Việt.";
+            var systemPrompt = "Bạn là một tiểu thuyết gia xuất sắc. Dựa vào yêu cầu chi tiết (thể loại, bối cảnh, dàn ý), hãy viết phần truyện thật hấp dẫn. BẮT BUỘC TUÂN THỦ CÁC KỸ THUẬT VIẾT VĂN SAU: " +
+                               "1. 'Show, don't tell' (Tả thay vì Kể): Ưu tiên dùng hành động, 5 giác quan, phản ứng cơ thể để bộc lộ cảm xúc, thay vì gọi thẳng tên cảm xúc. " +
+                               "2. Nhịp độ (Pacing): Kiểm soát nhịp độ phù hợp (nhanh ở cảnh hành động, chậm & sâu lắng ở nội tâm/tả cảnh). " +
+                               "KHÔNG viết tiêu đề chương hay lời chào giới thiệu. Chỉ xuất trực tiếp nội dung văn bản. Hành văn tự nhiên, mượt mà, đúng chuẩn ngữ pháp tiếng Việt.";
             var userMsg = $"Yêu cầu từ tác giả:\n<instruction>\n{PromptSanitizer.SanitizeAndWarn(instruction, _logger, "WriteNew")}\n</instruction>";
 
             var messages = new List<ChatMessage> { ChatMessage.CreateSystemMessage(systemPrompt), ChatMessage.CreateUserMessage(userMsg) };
@@ -131,8 +132,10 @@ namespace Service.Implementations
         {
             await CheckAndDeductTokenAsync(projectId, userId);
 
-            var systemPrompt = "Bạn là một nhà văn giàu kinh nghiệm. Nhiệm vụ của bạn là tiếp nối đoạn truyện đang dang dở, đảm bảo giữ vững văn phong (tone and voice), tính cách nhân vật và mạch cảm xúc của đoạn trước đó. " +
-                               "KHÔNG viết giới thiệu hoặc lời bình. Bắt đầu viết thẳng vào câu văn tiếp theo hoặc đoạn văn tiếp theo. Tiếng Việt chuẩn.";
+            var systemPrompt = "Bạn là một nhà văn giàu kinh nghiệm. Nhiệm vụ của bạn là tiếp nối mạch truyện dang dở, giữ vững văn phong (tone and voice), tính cách nhân vật. TUÂN THỦ KỸ THUẬT VIẾT: " +
+                               "1. 'Show, don't tell' (Tả thay vì Kể): Sử dụng 5 giác quan và ngôn ngữ cơ thể. " +
+                               "2. Tránh lặp từ, dùng từ nối tự nhiên. " +
+                               "KHÔNG viết lời mào đầu hay chào hỏi. Bắt đầu viết thẳng vào câu tiếp theo. Tiếng Việt chuẩn xác.";
             var userMsg = $"Nội dung phần trước:\n<previous_text>\n{PromptSanitizer.SanitizeAndWarn(previousText, _logger, "Continue_Prev")}\n</previous_text>\n\n" +
                           $"Hướng dẫn cho đoạn tiếp theo: {PromptSanitizer.SanitizeAndWarn(instruction, _logger, "Continue_Inst")}";
 
@@ -150,8 +153,10 @@ namespace Service.Implementations
         {
             await CheckAndDeductTokenAsync(projectId, userId);
 
-            var systemPrompt = "Bạn là một biên tập viên văn học tinh tế (Editor). Hãy đọc đoạn văn dưới đây và trau chuốt (polish) nó để câu từ mượt mà hơn, hình ảnh sống động hơn, loại bỏ từ lặp, bắt lỗi ngữ pháp, nhưng MỘT CÁCH TUYỆT ĐỐI GÌỮ NGUYÊN 100% cốt truyện và ý nghĩa gốc. " +
-                               "Chỉ xuất ra đoạn văn đã chỉnh sửa, KHÔNG bình luận, KHÔNG khen chê, KHÔNG viết lại quá đà làm sai lệc cá tính nhân vật. Tiếng Việt chuẩn.";
+            var systemPrompt = "Bạn là một Biên tập viên văn học tinh tế (Editor). Hãy đọc đoạn văn dưới đây và TRAU CHUỐT (Polish) lại. MỤC TIÊU: " +
+                               "1. Viết lại cho câu từ mượt mà, hình ảnh sống động hơn, loại bỏ từ lặp, bắt lỗi ngữ pháp. " +
+                               "2. Tích cực áp dụng 'Show, don't tell' (biến các câu kể lể khô khan thành câu miêu tả sắc nét) nhưng GÌỮ NGUYÊN 100% cốt truyện và ý nghĩa gốc. " +
+                               "Chỉ xuất ra nội dung đã chỉnh sửa, KHÔNG bình luận, KHÔNG khen chê. Tiếng Việt chuẩn xác và giàu cảm xúc.";
             
             var userMsg = $"Hướng dẫn thêm của tác giả (nếu có): {PromptSanitizer.SanitizeAndWarn(instruction, _logger, "Polish_Inst")}\n\n" +
                           $"Nội dung gốc:\n<original_text>\n{PromptSanitizer.SanitizeAndWarn(originalText, _logger, "Polish_Text")}\n</original_text>";
@@ -185,6 +190,97 @@ namespace Service.Implementations
             
             // Xử lý đơn giản: coi rawText là Analysis, không rã riêng List<string> (frontend tự map).
             return new AiSuggestionResult { Analysis = rawText, Suggestions = new List<string>(), TotalTokens = tokens };
+        }
+
+        public async Task<AiSceneAnalysisResult> AnalyzeScenesAsync(Guid projectId, string chapterContent, Guid userId)
+        {
+            await CheckAndDeductTokenAsync(projectId, userId);
+
+            var safeContent = PromptSanitizer.SanitizeAndWarn(chapterContent, _logger, "AnalyzeScenes");
+            var systemPrompt = "Bạn là biên tập viên văn học chuyên phân tích cấu trúc. " +
+                               "Nhiệm vụ: đọc chương truyện và phân rã thành các phân cảnh (Scenes/Beats). " +
+                               "QUAN TRỌNG: Chỉ dựa vào văn bản được cung cấp. " +
+                               "Trả về JSON thuần túy, không thêm bất kỳ text nào: " +
+                               "{\"chapterSummary\":\"...\",\"scenes\":[{\"title\":\"...\",\"description\":\"...\",\"openingLine\":\"câu đầu của cảnh\",\"type\":\"Action|Dialogue|Introspection|Transition|Revelation\"}]}";
+            var userMsg = $"Phân rã thành các Cảnh:\n<chapter>\n{safeContent[..Math.Min(15000, safeContent.Length)]}\n</chapter>";
+
+            var messages = new List<ChatMessage> { ChatMessage.CreateSystemMessage(systemPrompt), ChatMessage.CreateUserMessage(userMsg) };
+            var completion = await CompleteChatWithFallbackAsync(messages);
+            var rawText = completion.Content[0].Text.Trim();
+            var tokens = completion.Usage?.TotalTokenCount ?? 0;
+            await DeductTokenAsync(userId, tokens);
+
+            // Parse JSON
+            try
+            {
+                var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                // Strip markdown fences if any
+                var json = rawText.Trim('`').TrimStart("json\n".ToCharArray()).Trim();
+                var idx1 = json.IndexOf('{'); var idx2 = json.LastIndexOf('}');
+                if (idx1 >= 0 && idx2 > idx1) json = json[idx1..(idx2 + 1)];
+                var parsed = System.Text.Json.JsonSerializer.Deserialize<SceneAnalysisRaw>(json, jsonOpts);
+                return new AiSceneAnalysisResult
+                {
+                    ChapterSummary = parsed?.ChapterSummary ?? "",
+                    Scenes = parsed?.Scenes?.Select(s => new SceneItem
+                    {
+                        Title = s.Title ?? "",
+                        Description = s.Description ?? "",
+                        OpeningLine = s.OpeningLine ?? "",
+                        Type = s.Type ?? "Action"
+                    }).ToList() ?? new(),
+                    TotalTokens = tokens
+                };
+            }
+            catch
+            {
+                return new AiSceneAnalysisResult { ChapterSummary = rawText, Scenes = new(), TotalTokens = tokens };
+            }
+        }
+
+        public async Task<AiCliffhangerResult> AnalyzeCliffhangerAsync(Guid projectId, string chapterContent, Guid userId)
+        {
+            await CheckAndDeductTokenAsync(projectId, userId);
+
+            var safeContent = PromptSanitizer.SanitizeAndWarn(chapterContent, _logger, "AnalyzeCliffhanger");
+            var systemPrompt = "Bạn là biên tập viên văn học chuyên phân tích cấu trúc truyện. " +
+                               "Phân tích cấu trúc 3 hồi (Setup/Conflict/Climax) và phát hiện điểm Hạ hồi phân giải (Cliffhanger). " +
+                               "ZERO HALLUCINATION: Chỉ dựa vào văn bản được cung cấp, không suy diễn thêm. " +
+                               "Trả về JSON thuần túy: " +
+                               "{\"hasCliffhanger\":true/false,\"cliffhangerDescription\":\"...\",\"cliffhangerQuote\":\"câu văn gốc tạo cliffhanger\",\"actSetup\":\"mô tả hồi 1\",\"actConflict\":\"mô tả hồi 2\",\"actClimax\":\"mô tả hồi 3\",\"structureFeedback\":\"nhận xét tổng thể 2-3 câu\"}";
+            var userMsg = $"Phân tích cấu trúc và Cliffhanger:\n<chapter>\n{safeContent[..Math.Min(15000, safeContent.Length)]}\n</chapter>";
+
+            var messages = new List<ChatMessage> { ChatMessage.CreateSystemMessage(systemPrompt), ChatMessage.CreateUserMessage(userMsg) };
+            var completion = await CompleteChatWithFallbackAsync(messages);
+            var rawText = completion.Content[0].Text.Trim();
+            var tokens = completion.Usage?.TotalTokenCount ?? 0;
+            await DeductTokenAsync(userId, tokens);
+
+            try
+            {
+                var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var json = rawText.Trim('`').TrimStart("json\n".ToCharArray()).Trim();
+                var idx1 = json.IndexOf('{'); var idx2 = json.LastIndexOf('}');
+                if (idx1 >= 0 && idx2 > idx1) json = json[idx1..(idx2 + 1)];
+                var parsed = System.Text.Json.JsonSerializer.Deserialize<AiCliffhangerResult>(json, jsonOpts);
+                if (parsed != null) { parsed.TotalTokens = tokens; return parsed; }
+            }
+            catch { /* fallback below */ }
+            return new AiCliffhangerResult { StructureFeedback = rawText, TotalTokens = tokens };
+        }
+
+        // ── Inner raw parse types ─────────────────────────────────────────────────
+        private class SceneAnalysisRaw
+        {
+            public string? ChapterSummary { get; set; }
+            public List<SceneRaw>? Scenes { get; set; }
+        }
+        private class SceneRaw
+        {
+            public string? Title { get; set; }
+            public string? Description { get; set; }
+            public string? OpeningLine { get; set; }
+            public string? Type { get; set; }
         }
     }
 }

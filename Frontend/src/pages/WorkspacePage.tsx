@@ -15,6 +15,7 @@ import ChatPanel from '../components/workspace/ChatPanel';
 import ChatHistoryPanel from '../components/workspace/ChatHistoryPanel';
 import AiWriterPanel from '../components/workspace/AiWriterPanel';
 import TimelinePanel from '../components/workspace/TimelinePanel';
+import SceneCliffhangerPanel from '../components/workspace/SceneCliffhangerPanel';
 import {
     chapterService,
     type ChapterDetailResponse,
@@ -50,7 +51,7 @@ import { diffWords } from 'diff';
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
-type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotNotes' | 'aiWriter' | 'timeline';
+type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotNotes' | 'aiWriter' | 'timeline' | 'sceneCliffhanger';
 
 // ── Export Modal ───────────────────────────────────────────────────────────
 function ExportModal({
@@ -977,16 +978,17 @@ export default function WorkspacePage() {
                             {storyBibleOpen && (
                                 <div className="py-1">
                                     {([
-                                        { tab: 'genre' as ActiveTab, label: 'Thể loại', icon: Tag, color: '#818cf8' },
-                                        { tab: 'synopsis' as ActiveTab, label: 'Tóm tắt', icon: AlignLeft, color: '#c084fc' },
-                                        { tab: 'characters' as ActiveTab, label: 'Nhân vật', icon: Users, color: '#f472b6' },
-                                        { tab: 'worldbuilding' as ActiveTab, label: 'Thế giới', icon: Map, color: 'var(--accent)' },
-                                        { tab: 'styleGuide' as ActiveTab, label: 'Phong cách', icon: BookOpen, color: '#f59e0b' },
-                                        { tab: 'themes' as ActiveTab, label: 'Chủ đề', icon: Sparkles, color: '#10b981' },
-                                        { tab: 'plotNotes' as ActiveTab, label: 'Cốt truyện', icon: Scroll, color: '#ef4444' },
-                                        { tab: 'aiInstructions' as ActiveTab, label: 'Ghi chú AI', icon: Bot, color: '#34d399' },
-                                        { tab: 'aiWriter' as ActiveTab, label: 'AI Writer', icon: Wand2, color: '#ec4899' },
-                                        { tab: 'timeline' as ActiveTab, label: 'Dòng t/gian', icon: Clock, color: '#06b6d4' },
+                                        { tab: 'genre' as ActiveTab, label: 'Thể loại', desc: 'Phân loại truyện (fantasy, romance…)', icon: Tag, color: '#818cf8' },
+                                        { tab: 'synopsis' as ActiveTab, label: 'Tóm tắt', desc: 'Synopsis & mô tả tổng quan của truyện', icon: AlignLeft, color: '#c084fc' },
+                                        { tab: 'characters' as ActiveTab, label: 'Nhân vật', desc: 'Hồ sơ, vai trò và tính cách nhân vật', icon: Users, color: '#f472b6' },
+                                        { tab: 'worldbuilding' as ActiveTab, label: 'Thế giới', desc: 'Địa danh, bản đồ, lịch sử thế giới', icon: Map, color: 'var(--accent)' },
+                                        { tab: 'styleGuide' as ActiveTab, label: 'Phong cách', desc: 'Quy tắc ngôn ngữ, giọng văn, POV', icon: Zap, color: '#f59e0b' },
+                                        { tab: 'themes' as ActiveTab, label: 'Chủ đề', desc: 'Thông điệp, biểu tượng, ý nghĩa sâu xa', icon: Sparkles, color: '#10b981' },
+                                        { tab: 'plotNotes' as ActiveTab, label: 'Cốt truyện', desc: 'Outline, mốc sự kiện và cung bậc kịch tính', icon: Scroll, color: '#ef4444' },
+                                        { tab: 'aiInstructions' as ActiveTab, label: 'Ghi chú AI', desc: 'Hướng dẫn riêng để AI hiểu bối cảnh truyện', icon: Bot, color: '#34d399' },
+                                        { tab: 'aiWriter' as ActiveTab, label: 'AI Writer', desc: 'AI tạo nội dung theo yêu cầu tự do', icon: Wand2, color: '#ec4899' },
+                                        { tab: 'timeline' as ActiveTab, label: 'Dòng thời gian', desc: 'Trình tự sự kiện theo thứ tự thời gian', icon: Clock, color: '#06b6d4' },
+                                        { tab: 'sceneCliffhanger' as ActiveTab, label: 'Phân tích Cảnh', desc: 'Phân rã Cảnh & phát hiện Hạ hồi phân giải (Cliffhanger)', icon: Scissors, color: '#f97316' },
                                     ] as const).map(item => {
                                         const isActive = activeTab === item.tab && rightPanelOpen;
                                         const Icon = item.icon;
@@ -994,6 +996,7 @@ export default function WorkspacePage() {
                                             <button
                                                 key={item.tab}
                                                 onClick={() => { setActiveTab(item.tab); setRightPanelOpen(true); }}
+                                                title={item.desc}
                                                 className="w-full flex items-center gap-2.5 px-3 py-2 transition-all"
                                                 style={{
                                                     background: isActive ? `${item.color}18` : 'transparent',
@@ -1001,9 +1004,12 @@ export default function WorkspacePage() {
                                                 }}
                                             >
                                                 <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: isActive ? item.color : 'var(--text-secondary)' }} />
-                                                <span className="flex-1 text-xs font-medium text-left">{item.label}</span>
+                                                <span className="flex-1 text-left">
+                                                    <span className="block text-xs font-medium">{item.label}</span>
+                                                    <span className="block text-[10px] opacity-60 leading-tight">{item.desc}</span>
+                                                </span>
                                                 {isActive && (
-                                                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: item.color }} />
+                                                    <span className="w-1.5 h-1.5 rounded-full shrink-0 self-start mt-1.5" style={{ background: item.color }} />
                                                 )}
                                             </button>
                                         );
@@ -1235,7 +1241,7 @@ export default function WorkspacePage() {
                         {/* Panel header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] shrink-0 bg-[var(--bg-app)]">
                             <div className="flex items-center gap-2">
-                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotNotes', 'aiWriter', 'timeline'] as ActiveTab[]).includes(activeTab) ? (
+                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotNotes', 'aiWriter', 'timeline', 'sceneCliffhanger'] as ActiveTab[]).includes(activeTab) ? (
                                     <>
                                         <button onClick={() => setActiveTab('chat')} className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 transition-colors">
                                             <ArrowLeft className="w-3.5 h-3.5" />
@@ -1252,6 +1258,7 @@ export default function WorkspacePage() {
                                             {activeTab === 'aiInstructions' && 'Ghi chú AI'}
                                             {activeTab === 'aiWriter' && 'AI Writer'}
                                             {activeTab === 'timeline' && 'Dòng thời gian'}
+                                            {activeTab === 'sceneCliffhanger' && 'Phân tích Cảnh'}
                                         </span>
                                     </>
                                 ) : (
@@ -1534,6 +1541,16 @@ export default function WorkspacePage() {
                         {/* ── Timeline Tab ── */}
                         {activeTab === 'timeline' && projectId && (
                             <TimelinePanel projectId={projectId} />
+                        )}
+
+                        {/* ── Scene & Cliffhanger Analysis Tab ── */}
+                        {activeTab === 'sceneCliffhanger' && projectId && (
+                            <div className="flex-1 overflow-y-auto p-4">
+                                <SceneCliffhangerPanel
+                                    projectId={projectId}
+                                    chapterContent={editorRef.current?.innerText ?? ''}
+                                />
+                            </div>
                         )}
                     </div>
                 )}

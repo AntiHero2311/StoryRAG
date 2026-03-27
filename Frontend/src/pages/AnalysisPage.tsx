@@ -276,6 +276,52 @@ function AnalysisContent() {
                                     </div>
                                 </div>
 
+                                {/* Overall Feedback & Warnings */}
+                                {(report.overallFeedback || (report.warnings && report.warnings.length > 0)) && (
+                                    <div className="rounded-2xl mb-5 p-6"
+                                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                                        
+                                        {/* Nhận xét tổng quan */}
+                                        {report.overallFeedback && (
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-3">
+                                                    <Sparkles className="w-5 h-5 text-amber-500" />
+                                                    <h3 className="text-[var(--text-primary)] font-bold text-lg">Nhận xét tổng quan</h3>
+                                                </div>
+                                                <p className="text-[var(--text-secondary)] text-sm leading-relaxed whitespace-pre-line">
+                                                    {report.overallFeedback}
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {/* Cảnh báo đặc biệt */}
+                                        {report.warnings && report.warnings.length > 0 && (
+                                            <div className={`flex flex-col gap-3 ${report.overallFeedback ? 'mt-5 pt-5' : ''}`} 
+                                                style={report.overallFeedback ? { borderTop: '1px solid var(--border-color)' } : {}}>
+                                                {report.warnings.map(w => (
+                                                    <div key={w.code} className="flex gap-3 p-4 rounded-xl"
+                                                        style={{
+                                                            background: w.severity === 'CRITICAL' ? 'rgba(239,68,68,0.08)' : 'rgba(245,166,35,0.08)',
+                                                            border: `1px solid ${w.severity === 'CRITICAL' ? 'rgba(239,68,68,0.2)' : 'rgba(245,166,35,0.2)'}`
+                                                        }}>
+                                                        <AlertCircle className="w-5 h-5 shrink-0 mt-0.5"
+                                                            style={{ color: w.severity === 'CRITICAL' ? '#ef4444' : '#f5a623' }} />
+                                                        <div>
+                                                            <p className="font-bold text-sm mb-1"
+                                                                style={{ color: w.severity === 'CRITICAL' ? '#ef4444' : '#f5a623' }}>
+                                                                {w.title}
+                                                            </p>
+                                                            <p className="text-[var(--text-secondary)] text-xs leading-relaxed whitespace-pre-line">
+                                                                {w.detail}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* Group breakdown */}
                                 <div className="space-y-3">
                                     {report.groups.map((g, i) => (

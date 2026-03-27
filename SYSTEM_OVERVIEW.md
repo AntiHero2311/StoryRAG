@@ -13,8 +13,9 @@
 - ✍️ Quản lý project truyện, chương, version (Git-style: pin, diff, restore)
 - 🤖 Chat AI theo ngữ cảnh (RAG) — AI "đọc" nội dung truyện của bạn (chỉ tốn token)
 - 🔁 Rewrite đoạn văn theo instruction
-- 📊 Phân tích, chấm điểm chất lượng truyện (thang 100 điểm, có tính mức độ hoàn thiện)
-- 🌍 Quản lý Worldbuilding & nhân vật có vector embedding
+- ✍️ **Viết mới** từ dàn ý, **Tiếp nối** mạch truyện, **Trau chuốt** bản thảo — có tích hợp các kỹ thuật viết văn (Show don't tell, Pacing)
+- 📊 **Phân tích** chấm điểm chất lượng truyện (**Rubric 5 điểm**, 20 tiêu chí, **Zero Hallucination**, chấm theo Thể loại, phát hiện 4 cảnh báo đặc biệt)
+- 🌍 Quản lý Worldbuilding & nhân vật có vector embedding (thêm Category **Scene** cho phân cảnh cụ thể)
 - 📥📤 Import/Export chương và dự án (`.txt`)
 - 🐛 Luồng báo cáo lỗi User → Staff
 - 🔑 Quên mật khẩu qua email (MailKit / Gmail SMTP)
@@ -155,7 +156,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | `CharacterEntries` | Hồ sơ nhân vật | **`Embedding vector(768)`** |
 | `ChatMessages` | Lịch sử chat AI | Question/Answer mã hóa AES-256 |
 | `RewriteHistories` | Lịch sử rewrite AI | OriginalText/RewrittenText mã hóa |
-| `ProjectReports` | Báo cáo phân tích truyện | `CriteriaJson` (JSONB, thang 100 điểm) |
+| `ProjectReports` | Báo cáo phân tích truyện | `CriteriaJson` (JSONB), `ProjectVersion` (v1.chương.chunks), `OverallFeedback`, `Warnings` |
 | `BugReports` | Báo cáo lỗi từ user | Category, Priority, Status, StaffNote |
 | `Genres` | Thể loại truyện | 14 thể loại mặc định |
 | `ProjectGenres` | Liên kết Project ↔ Genre | Many-to-many |
@@ -433,7 +434,8 @@ npm run dev
 | `IAiRewriteService` | Rewrite theo instruction, lưu lịch sử |
 | `IEmbeddingService` | Gọi Gemini/LM Studio lấy embedding vector |
 | `IChunkingService` | Chia text thành chunks với overlap |
-| `IProjectReportService` | Phân tích & chấm điểm (completeness-aware, deduct analysis count) |
+| `IAiWritingService` | Viết mới từ dàn ý, tiếp nối mạch truyện, trau chuốt bản thảo — tích hợp kỹ thuật **Show Don't Tell**, **Pacing** |
+| `IProjectReportService` | Phân tích & chấm điểm theo **Rubric 5b điểm** (1-Kém → 5-Xuất sắc), **Zero Hallucination**, chấm theo **Thể loại**, phát hiện **4 cảnh báo** (INCOMPLETE / REPETITION / PLAGIARISM\_RISK / INCONSISTENCY), sinh `OverallFeedback` tâm huyết, ghi `ProjectVersion` |
 | `IEmailService` | Gửi email (welcome, password reset) qua Gmail SMTP |
 | `IAdminService` | Dashboard stats cho Admin |
 | `IBugReportService` | CRUD bug reports, cập nhật trạng thái (Staff/Admin) |

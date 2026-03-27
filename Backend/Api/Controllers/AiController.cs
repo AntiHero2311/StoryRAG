@@ -268,6 +268,42 @@ namespace Api.Controllers
             }
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
+
+        /// <summary>Phân rã nội dung chương thành danh sách Cảnh bằng AI.</summary>
+        [HttpPost("{projectId:guid}/scenes")]
+        [EnableRateLimiting("AiRewrite")]
+        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
+        public async Task<IActionResult> AnalyzeScenes(Guid projectId, [FromBody] AiAnalyzeContentRequest request)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var result = await _writingService.AnalyzeScenesAsync(projectId, request.Content, userId.Value);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
+        /// <summary>Phân tích cấu trúc 3 hồi và phát hiện Cliffhanger của chương.</summary>
+        [HttpPost("{projectId:guid}/cliffhanger")]
+        [EnableRateLimiting("AiRewrite")]
+        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
+        public async Task<IActionResult> AnalyzeCliffhanger(Guid projectId, [FromBody] AiAnalyzeContentRequest request)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var result = await _writingService.AnalyzeCliffhangerAsync(projectId, request.Content, userId.Value);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
     }
 
     public class ChatRequest
@@ -323,5 +359,13 @@ namespace Api.Controllers
         
         [Required]
         public string TargetType { get; set; } = string.Empty;
+    }
+
+    public class AiAnalyzeContentRequest
+    {
+        /// <summary>Nội dung chương/đoạn văn cần phân tích (tối đa ~15.000 ký tự sẽ được đọc)</summary>
+        [Required]
+        [MinLength(50, ErrorMessage = "Nội dung phải có ít nhất 50 ký tự để phân tích.")]
+        public string Content { get; set; } = string.Empty;
     }
 }
