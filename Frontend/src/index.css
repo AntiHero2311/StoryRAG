@@ -1,65 +1,16 @@
 @import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&subset=vietnamese&display=swap');
+@import "./design-tokens.css";
+
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&subset=vietnamese&display=swap');
+@import "./design-tokens.css";
 
 @layer base {
-  :root {
-    /* --- LIGHT MODE: Clean White (Notion style) --- */
-    --bg-app: #ffffff;
-    --bg-sidebar: #f7f7f5;
-    --bg-surface: #f1f1ef;
-    --bg-topbar: #ffffff;
-    --bg-editor: #ffffff;
-    --text-primary: #1a1a1a;
-    --text-secondary: #737373;
-    --text-tertiary: #a3a3a3;
-    --border-color: rgba(0, 0, 0, 0.08);
-    --border-strong: rgba(0, 0, 0, 0.15);
-    --input-bg: #f7f7f5;
-    --bg-panel: #1a1a1a;
-    --accent: #7c3aed;
-    --accent-hover: #6d28d9;
-    --accent-subtle: rgba(124, 58, 237, 0.08);
-    --accent-text: #7c3aed;
-    --success: #16a34a;
-    --error: #dc2626;
-    --warning: #d97706;
-    --info: #2563eb;
-    --hover-bg: rgba(0, 0, 0, 0.04);
-    --active-bg: rgba(124, 58, 237, 0.08);
-    --bg-hover: rgba(0, 0, 0, 0.04);
-  }
-
-  .dark {
-    /* --- DARK MODE: Neutral Dark (Linear/Notion style) --- */
-    --bg-app: #111111;
-    --bg-sidebar: #0f0f0f;
-    --bg-surface: #1a1a1a;
-    --bg-topbar: #111111;
-    --bg-editor: #111111;
-    --text-primary: #e2e2e2;
-    --text-secondary: #737373;
-    --text-tertiary: #525252;
-    --border-color: rgba(255, 255, 255, 0.07);
-    --border-strong: rgba(255, 255, 255, 0.12);
-    --input-bg: #1a1a1a;
-    --bg-panel: #0f0f0f;
-    --accent: #8b5cf6;
-    --accent-hover: #7c3aed;
-    --accent-subtle: rgba(139, 92, 246, 0.10);
-    --accent-text: #a78bfa;
-    --success: #22c55e;
-    --error: #f87171;
-    --warning: #fbbf24;
-    --info: #60a5fa;
-    --hover-bg: rgba(255, 255, 255, 0.04);
-    --active-bg: rgba(139, 92, 246, 0.10);
-    --bg-hover: rgba(255, 255, 255, 0.04);
-  }
-
   body {
     background-color: var(--bg-app);
     color: var(--text-primary);
-    font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+    font-family: var(--font-sans);
     @apply antialiased overflow-x-hidden transition-colors duration-200;
   }
 

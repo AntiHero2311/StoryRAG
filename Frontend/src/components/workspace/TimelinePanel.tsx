@@ -264,104 +264,110 @@ export default function TimelinePanel({ projectId }: TimelinePanelProps) {
                 )}
 
                 {!loading && events.length > 0 && (
-                    <div className="relative pt-3">
+                    <div className="relative pt-8 pb-12 w-[800px] max-w-full mx-auto">
                         {/* Vertical timeline line */}
-                        <div className="absolute left-[18px] top-0 bottom-0 w-0.5 rounded-full"
-                            style={{ background: 'linear-gradient(180deg, transparent, var(--border-color) 8%, var(--border-color) 92%, transparent)' }} />
+                        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 -translate-x-1/2 rounded-full"
+                            style={{ background: 'linear-gradient(180deg, transparent, var(--border-color) 4%, var(--border-color) 96%, transparent)' }} />
 
-                        <div className="flex flex-col gap-3">
-                            {events.map((evt, _idx) => {
+                        <div className="flex flex-col gap-6">
+                            {events.map((evt, idx) => {
                                 const impInfo = getImportanceInfo(evt.importance);
                                 const catColor = getCategoryColor(evt.category);
                                 const isExpanded = expandedId === evt.id;
+                                const isLeft = idx % 2 === 0;
 
                                 return (
-                                    <div key={evt.id} className="relative pl-11">
+                                    <div key={evt.id} className={`relative flex items-center w-full ${isLeft ? 'justify-start' : 'justify-end'}`}>
                                         {/* Timeline dot */}
                                         <div
-                                            className="absolute flex items-center justify-center rounded-full border-2 border-[var(--bg-surface)] z-10 transition-transform hover:scale-110"
+                                            className="absolute left-1/2 flex items-center justify-center rounded-full border-4 border-[var(--bg-app)] z-10 transition-transform hover:scale-125 -translate-x-1/2"
                                             style={{
-                                                width: impInfo.size,
-                                                height: impInfo.size,
-                                                left: 18 - impInfo.size / 2,
-                                                top: 12,
+                                                width: impInfo.size + 8,
+                                                height: impInfo.size + 8,
                                                 background: impInfo.color,
-                                                boxShadow: `0 0 0 3px ${impInfo.color}30`,
+                                                boxShadow: `0 0 0 1px ${impInfo.color}40`,
+                                                top: '1.5rem',
                                             }}
                                         />
 
+                                        {/* Connector Line */}
+                                        <div className={`absolute top-[1.5rem] mt-[5px] h-0.5 z-0 ${isLeft ? 'right-1/2 w-8' : 'left-1/2 w-8'}`}
+                                            style={{ background: catColor + '40' }} />
+
                                         {/* Card */}
-                                        <div
-                                            className="rounded-2xl overflow-hidden cursor-pointer transition-all hover:shadow-md group"
-                                            onClick={() => setExpandedId(isExpanded ? null : evt.id)}
-                                            style={{ background: 'var(--bg-app)', border: `1px solid ${isExpanded ? catColor + '55' : 'var(--border-color)'}` }}
-                                        >
-                                            {/* Card header */}
-                                            <div className="px-3 pt-2.5 pb-2 flex items-start gap-2">
-                                                {/* Time label */}
-                                                {evt.timeLabel && (
-                                                    <div className="shrink-0 mt-0.5 px-2 py-0.5 rounded-md text-[9px] font-bold whitespace-nowrap"
-                                                        style={{ background: `${catColor}18`, color: catColor }}>
-                                                        {evt.timeLabel}
+                                        <div className={`w-[calc(50%-2rem)] ${isLeft ? 'pr-4' : 'pl-4'}`}>
+                                            <div
+                                                className="rounded-2xl overflow-hidden cursor-pointer transition-all hover:-translate-y-1 group"
+                                                onClick={() => setExpandedId(isExpanded ? null : evt.id)}
+                                                style={{ background: 'var(--bg-surface)', border: `1px solid ${isExpanded ? catColor + '77' : 'var(--border-color)'}`, boxShadow: `0 8px 30px rgba(0,0,0,0.15)` }}
+                                            >
+                                                {/* Card header */}
+                                                <div className="px-5 pt-4 pb-3 flex items-start gap-3 flex-col sm:flex-row">
+                                                    <div className="flex-1 min-w-0 w-full">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            {evt.timeLabel && (
+                                                                <div className="shrink-0 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider"
+                                                                    style={{ background: `${catColor}18`, color: catColor }}>
+                                                                    {evt.timeLabel}
+                                                                </div>
+                                                            )}
+                                                            <div className="flex-1" />
+                                                            <span className="flex items-center gap-1.5 text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider"
+                                                                style={{ background: `${catColor}15`, color: catColor }}>
+                                                                <CategoryIcon cat={evt.category} className="w-3 h-3" />
+                                                                {getCategoryLabel(evt.category)}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[15px] font-bold text-[var(--text-primary)] leading-snug mb-2">{evt.title}</p>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full"
+                                                                style={{ background: `${impInfo.color}15`, color: impInfo.color }}>
+                                                                {impInfo.label}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Expand icon */}
+                                                    <div className="shrink-0 mt-1 text-[var(--text-secondary)] opacity-0 group-hover:opacity-100 transition-opacity self-end sm:self-start">
+                                                        {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                                                    </div>
+                                                </div>
+
+                                                {/* Expanded content */}
+                                                {isExpanded && (
+                                                    <div className="animate-in slide-in-from-top-2 duration-200">
+                                                        {evt.description && (
+                                                            <div className="px-5 pb-4 text-[13px] text-[var(--text-secondary)] leading-relaxed"
+                                                                style={{ borderTop: '1px solid var(--border-color)' }}>
+                                                                <p className="pt-3">{evt.description}</p>
+                                                            </div>
+                                                        )}
+                                                        {/* Actions */}
+                                                        <div className="px-5 pb-3 flex items-center gap-2 bg-[var(--bg-app)] pt-3" style={{ borderTop: '1px solid var(--border-color)' }}>
+                                                            <button onClick={e => { e.stopPropagation(); openEdit(evt); }}
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors hover:text-[var(--text-primary)]"
+                                                                style={{ background: 'var(--hover-bg)', color: 'var(--text-secondary)' }}>
+                                                                <Pencil className="w-3.5 h-3.5" /> Sửa sự kiện
+                                                            </button>
+                                                            <button onClick={e => { e.stopPropagation(); handleDelete(evt.id); }}
+                                                                disabled={deletingId === evt.id}
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold ml-auto disabled:opacity-50 transition-colors hover:bg-red-500/20"
+                                                                style={{ background: 'rgba(239,68,68,0.08)', color: '#ef4444' }}>
+                                                                {deletingId === evt.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                                                Xóa
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 )}
-
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs font-bold text-[var(--text-primary)] leading-snug pr-6">{evt.title}</p>
-                                                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                                        <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full font-semibold"
-                                                            style={{ background: `${catColor}15`, color: catColor }}>
-                                                            <CategoryIcon cat={evt.category} className="w-2 h-2" />
-                                                            {getCategoryLabel(evt.category)}
-                                                        </span>
-                                                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
-                                                            style={{ background: `${impInfo.color}15`, color: impInfo.color }}>
-                                                            {impInfo.label}
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                {/* Expand icon */}
-                                                <div className="shrink-0 mt-0.5 text-[var(--text-secondary)] opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                                                </div>
                                             </div>
-
-                                            {/* Expanded content */}
-                                            {isExpanded && (
-                                                <>
-                                                    {evt.description && (
-                                                        <div className="px-3 pb-2.5 text-[11px] text-[var(--text-secondary)] leading-relaxed"
-                                                            style={{ borderTop: '1px solid var(--border-color)' }}>
-                                                            <p className="pt-2">{evt.description}</p>
-                                                        </div>
-                                                    )}
-                                                    {/* Actions */}
-                                                    <div className="px-3 pb-2.5 flex items-center gap-1.5" style={{ borderTop: '1px solid var(--border-color)' }}>
-                                                        <button onClick={e => { e.stopPropagation(); openEdit(evt); }}
-                                                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold"
-                                                            style={{ background: 'var(--hover-bg)', color: 'var(--text-secondary)' }}>
-                                                            <Pencil className="w-2.5 h-2.5" /> Sửa
-                                                        </button>
-                                                        <button onClick={e => { e.stopPropagation(); handleDelete(evt.id); }}
-                                                            disabled={deletingId === evt.id}
-                                                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold ml-auto disabled:opacity-50"
-                                                            style={{ background: 'rgba(239,68,68,0.06)', color: '#ef4444' }}>
-                                                            {deletingId === evt.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Trash2 className="w-2.5 h-2.5" />}
-                                                            Xóa
-                                                        </button>
-                                                    </div>
-                                                </>
-                                            )}
                                         </div>
                                     </div>
                                 );
                             })}
 
                             {/* End cap */}
-                            <div className="relative pl-11 flex items-center gap-2">
-                                <div className="absolute left-[14px] w-2 h-2 rounded-full" style={{ background: 'var(--border-color)' }} />
-                                <span className="text-[10px] text-[var(--text-secondary)] italic">Hiện tại</span>
+                            <div className="relative flex items-center justify-center w-full mt-4">
+                                <div className="w-4 h-4 rounded-full border-4 border-[var(--bg-app)]" style={{ background: 'var(--border-color)' }} />
                             </div>
                         </div>
                     </div>

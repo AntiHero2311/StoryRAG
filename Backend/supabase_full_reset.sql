@@ -248,14 +248,15 @@ CREATE TABLE "UserSettings" (
 
 -- ── ProjectReports ────────────────────────────────────────────
 CREATE TABLE "ProjectReports" (
-    "Id"           uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
-    "ProjectId"    uuid                     NOT NULL,
-    "UserId"       uuid                     NOT NULL,
-    "Status"       character varying(20)    NOT NULL DEFAULT 'Pending',
-    "TotalScore"   numeric(5,2)             NOT NULL DEFAULT 0,
-    "CriteriaJson" jsonb                    NOT NULL DEFAULT '[]',
-    "CreatedAt"    timestamp with time zone NOT NULL DEFAULT NOW(),
-    "UpdatedAt"    timestamp with time zone,
+    "Id"             uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "ProjectId"      uuid                     NOT NULL,
+    "UserId"         uuid                     NOT NULL,
+    "Status"         character varying(20)    NOT NULL DEFAULT 'Pending',
+    "TotalScore"     numeric(5,2)             NOT NULL DEFAULT 0,
+    "CriteriaJson"   jsonb                    NOT NULL DEFAULT '[]',
+    "ProjectVersion" character varying(50)    NOT NULL DEFAULT 'v1.0.0',
+    "CreatedAt"      timestamp with time zone NOT NULL DEFAULT NOW(),
+    "UpdatedAt"      timestamp with time zone,
     CONSTRAINT "PK_ProjectReports" PRIMARY KEY ("Id"),
     CONSTRAINT "CK_ProjectReports_Status" CHECK ("Status" IN ('Pending','Completed','Failed','MockData')),
     CONSTRAINT "FK_ProjectReports_Projects" FOREIGN KEY ("ProjectId") REFERENCES "Projects" ("Id") ON DELETE CASCADE,
