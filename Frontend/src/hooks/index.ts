@@ -14,3 +14,6 @@ export {
 } from './useMediaQuery';
 
 export { default as useEditorSettings } from './useEditorSettings';
+
+export { useDeleteConfirm } from './useDeleteConfirm';
+export type { DeleteConfirmOptions } from './useDeleteConfirm';

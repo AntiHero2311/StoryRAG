@@ -32,5 +32,8 @@ export type { AlertProps } from './Alert';
 export { default as ConfirmDialog } from './ConfirmDialog';
 export type { ConfirmDialogProps } from './ConfirmDialog';
 
+export { default as DeleteConfirmationModal } from './DeleteConfirmationModal';
+export type { DeleteConfirmationModalProps } from './DeleteConfirmationModal';
+
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './Tabs';
 export type { TabsProps, TabsListProps, TabsTriggerProps, TabsContentProps } from './Tabs';
