@@ -63,8 +63,8 @@ namespace Service.Interfaces
         public string Title { get; set; } = string.Empty;
         /// <summary>Mô tả nội dung & tác dụng của cảnh này trong cốt truyện</summary>
         public string Description { get; set; } = string.Empty;
-        /// <summary>Câu văn đầu tiên/mở đầu của cảnh (để người dùng xác định vị trí)</summary>
-        public string OpeningLine { get; set; } = string.Empty;
+        /// <summary>Trích dẫn CÂU VĂN GỐC DÀI VÀ QUAN TRỌNG lấy chính xác từ bài viết để highlight cảnh</summary>
+        public string ExactQuote { get; set; } = string.Empty;
         /// <summary>Loại cảnh: Action / Dialogue / Introspection / Transition / Revelation</summary>
         public string Type { get; set; } = "Action";
     }

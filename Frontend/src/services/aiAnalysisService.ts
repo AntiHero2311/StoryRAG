@@ -5,7 +5,7 @@ import { api } from './api';
 export interface SceneItem {
     title: string;
     description: string;
-    openingLine: string;
+    exactQuote: string;
     /** Action | Dialogue | Introspection | Transition | Revelation */
     type: string;
 }
@@ -48,22 +48,41 @@ export function getSceneTypeLabel(type: string): string {
     return map[type] ?? type;
 }
 
+export interface AiAnalysisHistoryDto {
+    id: string;
+    projectId: string;
+    chapterId: string | null;
+    analysisType: string;
+    resultJson: string;
+    totalTokens: number;
+    createdAt: string;
+}
+
+export interface AiAnalysisHistoryResult {
+    items: AiAnalysisHistoryDto[];
+    totalCount: number;
+    page: number;
+    pageSize: number;
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export const aiAnalysisService = {
     /**
      * Phân rã nội dung chương thành danh sách các Cảnh (Scenes/Beats).
-     * @param projectId - ID của dự án
-     * @param content   - Nội dung chương cần phân tích
      */
-    analyzeScenes: (projectId: string, content: string) =>
-        api.post<AiSceneAnalysisResult>(`/ai/${projectId}/scenes`, { content }).then(r => r.data),
+    analyzeScenes: (projectId: string, content: string, chapterId?: string) =>
+        api.post<AiSceneAnalysisResult>(`/ai/${projectId}/scenes`, { content, chapterId }).then(r => r.data),
 
     /**
      * Phân tích cấu trúc 3 hồi và phát hiện điểm Hạ hồi phân giải (Cliffhanger).
-     * @param projectId - ID của dự án
-     * @param content   - Nội dung chương cần phân tích
      */
-    analyzeCliffhanger: (projectId: string, content: string) =>
-        api.post<AiCliffhangerResult>(`/ai/${projectId}/cliffhanger`, { content }).then(r => r.data),
+    analyzeCliffhanger: (projectId: string, content: string, chapterId?: string) =>
+        api.post<AiCliffhangerResult>(`/ai/${projectId}/cliffhanger`, { content, chapterId }).then(r => r.data),
+
+    /**
+     * Lấy lịch sử phân tích.
+     */
+    getAnalysisHistory: (projectId: string, type: 'Scenes' | 'Cliffhanger', page = 1, pageSize = 20) =>
+        api.get<AiAnalysisHistoryResult>(`/ai/${projectId}/analysis/history?type=${type}&page=${page}&pageSize=${pageSize}`).then(r => r.data),
 };

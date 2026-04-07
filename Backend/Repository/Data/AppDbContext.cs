@@ -33,6 +33,9 @@ namespace Repository.Data
         // Rewrite History
         public DbSet<RewriteHistory> RewriteHistories { get; set; }
 
+        // Ai Analysis History
+        public DbSet<AiAnalysisHistory> AiAnalysisHistories { get; set; }
+
         // User Settings
         public DbSet<UserSettings> UserSettings { get; set; }
 
@@ -473,6 +476,38 @@ namespace Repository.Data
 
                 entity.HasIndex(e => new { e.ProjectId, e.UserId });
                 entity.HasIndex(e => e.ChapterId);
+
+                entity.HasOne(r => r.Project)
+                      .WithMany()
+                      .HasForeignKey(r => r.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(r => r.Chapter)
+                      .WithMany()
+                      .HasForeignKey(r => r.ChapterId)
+                      .OnDelete(DeleteBehavior.SetNull)
+                      .IsRequired(false);
+
+                entity.HasOne(r => r.User)
+                      .WithMany()
+                      .HasForeignKey(r => r.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── AiAnalysisHistory ───────────────────────────────────────────────────
+            modelBuilder.Entity<AiAnalysisHistory>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.AnalysisType).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.EncryptedContext).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.EncryptedResult).IsRequired();
+                entity.Property(e => e.TotalTokens).HasDefaultValue(0);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasIndex(e => new { e.ProjectId, e.UserId });
+                entity.HasIndex(e => e.ChapterId);
+                entity.HasIndex(e => e.AnalysisType);
 
                 entity.HasOne(r => r.Project)
                       .WithMany()

@@ -249,6 +249,9 @@ export default function WorkspacePage() {
     // ── Delete confirmation ────────────────────────────────────────────────
     const deleteConfirm = useDeleteConfirm();
 
+    // ── Highlighting State ─────────────────────────────────────────────────
+    const [highlightsVisible, setHighlightsVisible] = useState(true);
+
     // Chat state is now managed inside ChatPanel / ChatHistoryPanel components
 
 
@@ -494,11 +497,53 @@ export default function WorkspacePage() {
         }
     };
 
+    // ── Highlighting logic ──────────────────────────────────────────────────
+    const clearHighlights = useCallback(() => {
+        if (!editorRef.current) return;
+        let html = editorRef.current.innerHTML;
+        if (!html.includes('ai-highlight')) return;
+        html = html.replace(/<mark class="ai-highlight"[^>]*>/g, '');
+        html = html.replace(/<\/mark>/g, '');
+        editorRef.current.innerHTML = html;
+        setHighlightsVisible(true);
+    }, []);
+
+    const highlightScenes = useCallback((scenes: { quote: string, color: string }[]) => {
+        if (!editorRef.current) return;
+        clearHighlights();
+        let html = editorRef.current.innerHTML;
+        let hasChanges = false;
+        scenes.forEach(scene => {
+            if (!scene.quote || scene.quote.length < 5) return;
+            const targetHtml = scene.quote.replace(/\n/g, '<br>');
+            const escaped = targetHtml.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(${escaped})`, 'g');
+            if (regex.test(html)) {
+                html = html.replace(regex, `<mark class="ai-highlight" style="background-color: ${scene.color}66; color: inherit; padding: 2px 0; border-radius: 4px; transition: background-color 0.2s;">$1</mark>`);
+                hasChanges = true;
+            } else {
+                const shortTarget = targetHtml.substring(0, 40);
+                if (shortTarget.length >= 10 && html.includes(shortTarget)) {
+                    const escapedShort = shortTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const regexShort = new RegExp(`(${escapedShort}[^<]*)`, 'g'); 
+                    html = html.replace(regexShort, `<mark class="ai-highlight" style="background-color: ${scene.color}66; color: inherit; padding: 2px 0; border-radius: 4px; transition: background-color 0.2s;">$1</mark>`);
+                    hasChanges = true;
+                }
+            }
+        });
+        if (hasChanges) {
+            editorRef.current.innerHTML = html;
+            setHighlightsVisible(true);
+        }
+    }, [clearHighlights]);
+
     // ── Save → background Chunk + Embed ──────────────────────────────────
     const doSave = useCallback(async (showFeedback = true) => {
         if (!projectId || !activeChapter || !editorRef.current) return;
         if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
-        const content = editorRef.current.innerHTML ?? '';
+        // Strip highlighting tags before saving
+        let content = editorRef.current.innerHTML ?? '';
+        content = content.replace(/<mark class="ai-highlight"[^>]*>/g, '').replace(/<\/mark>/g, '');
         if (showFeedback) setSavedState('saving');
         try {
             const updated = await chapterService.updateChapter(projectId, activeChapter.id, {
@@ -1060,12 +1105,12 @@ export default function WorkspacePage() {
                 )}
 
                 {/* Center - Editor & Boards */}
-                <div className="flex flex-col flex-1 min-w-0 rounded-2xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-                    <div className={activeTab === 'plotTimeline' && projectId ? "flex-1 w-full h-full overflow-hidden flex flex-col bg-[var(--bg-app)]" : "hidden"}>
+                <div className="flex flex-col flex-1 min-h-0 min-w-0 rounded-2xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                    <div className={activeTab === 'plotTimeline' && projectId ? "flex-1 min-h-0 w-full h-full overflow-hidden flex flex-col bg-[var(--bg-app)]" : "hidden"}>
                         {projectId && <TimelinePanel projectId={projectId} />}
                     </div>
                     
-                    <div className={activeTab !== 'plotTimeline' ? "flex-1 flex flex-col min-w-0" : "hidden"}>
+                    <div className={activeTab !== 'plotTimeline' ? "flex-1 min-h-0 flex flex-col min-w-0" : "hidden"}>
                         <>
                             {/* Toolbar */}
                             <div className="h-[48px] shrink-0 flex items-center gap-1 px-4 border-b border-[var(--border-color)]" style={{ background: 'var(--bg-topbar)' }}>
@@ -1236,8 +1281,8 @@ export default function WorkspacePage() {
                                                 ref={editorRef}
                                                 contentEditable
                                                 suppressContentEditableWarning
-                                                onInput={() => { updateWordCount(); scheduleAutoSave(); }}
-                                                className={`w-full min-h-[60vh] text-[var(--text-primary)] bg-transparent outline-none leading-[1.9] focus:outline-none`}
+                                                onInput={() => { updateWordCount(); scheduleAutoSave(); setHighlightsVisible(false); }}
+                                                className={`w-full min-h-[60vh] text-[var(--text-primary)] bg-transparent outline-none leading-[1.9] focus:outline-none ${!highlightsVisible ? 'hide-ai-highlights' : ''}`}
                                                 style={{ fontFamily: `'${editorSettings.editorFont}', sans-serif`, fontSize: `${editorSettings.editorFontSize}px`, letterSpacing: '0.01em' }}
                                                 data-placeholder="Bắt đầu viết tác phẩm của bạn tại đây..."
                                             />
@@ -1574,7 +1619,10 @@ export default function WorkspacePage() {
                             <div className="flex-1 overflow-y-auto p-4">
                                 <SceneCliffhangerPanel
                                     projectId={projectId}
+                                    chapterId={activeChapter?.id ?? null}
                                     chapterContent={editorRef.current?.innerText ?? ''}
+                                    onHighlightScenes={highlightScenes}
+                                    onClearHighlights={clearHighlights}
                                 />
                             </div>
                         )}

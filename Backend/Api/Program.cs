@@ -159,6 +159,7 @@ builder.Services.AddScoped<IBugReportService, BugReportService>();
 builder.Services.AddScoped<IStyleGuideService, StyleGuideService>();
 builder.Services.AddScoped<IThemeService, ThemeService>();
 builder.Services.AddScoped<IPlotNoteService, PlotNoteService>();
+builder.Services.AddScoped<IAiAnalysisHistoryService, AiAnalysisHistoryService>();
 builder.Services.AddScoped<ITimelineEventService, TimelineEventService>();
 builder.Services.AddScoped<IExportService, ExportService>();
 

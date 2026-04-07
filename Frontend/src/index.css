@@ -195,3 +195,8 @@
     animation: shimmer 2s infinite;
   }
 }
+/* AI Scene Highlights */
+.hide-ai-highlights mark.ai-highlight {
+    background-color: transparent !important;
+    color: inherit !important;
+}

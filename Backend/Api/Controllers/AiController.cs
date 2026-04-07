@@ -17,14 +17,16 @@ namespace Api.Controllers
         private readonly IProjectReportService _reportService;
         private readonly IAiRewriteService _rewriteService;
         private readonly IAiWritingService _writingService;
+        private readonly IAiAnalysisHistoryService _historyService;
 
-        public AiController(IEmbeddingService embeddingService, IAiChatService aiChatService, IProjectReportService reportService, IAiRewriteService rewriteService, IAiWritingService writingService)
+        public AiController(IEmbeddingService embeddingService, IAiChatService aiChatService, IProjectReportService reportService, IAiRewriteService rewriteService, IAiWritingService writingService, IAiAnalysisHistoryService historyService)
         {
             _embeddingService = embeddingService;
             _aiChatService = aiChatService;
             _reportService = reportService;
             _rewriteService = rewriteService;
             _writingService = writingService;
+            _historyService = historyService;
         }
 
         /// <summary>Embed tất cả chunks của current version của một chương.</summary>
@@ -281,6 +283,11 @@ namespace Api.Controllers
                 if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
 
                 var result = await _writingService.AnalyzeScenesAsync(projectId, request.Content, userId.Value);
+                
+                // Save history
+                var json = System.Text.Json.JsonSerializer.Serialize(result);
+                await _historyService.SaveHistoryAsync(projectId, request.ChapterId, userId.Value, "Scenes", json, result.TotalTokens);
+
                 return Ok(result);
             }
             catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
@@ -299,9 +306,34 @@ namespace Api.Controllers
                 if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
 
                 var result = await _writingService.AnalyzeCliffhangerAsync(projectId, request.Content, userId.Value);
+                
+                // Save history
+                var json = System.Text.Json.JsonSerializer.Serialize(result);
+                await _historyService.SaveHistoryAsync(projectId, request.ChapterId, userId.Value, "Cliffhanger", json, result.TotalTokens);
+
                 return Ok(result);
             }
             catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+        /// <summary>Lấy lịch sử phân tích cảnh và hạ hồi phân giải.</summary>
+        [HttpGet("{projectId:guid}/analysis/history")]
+        public async Task<IActionResult> GetAnalysisHistory(
+            Guid projectId,
+            [FromQuery] string type,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                pageSize = Math.Clamp(pageSize, 1, 100);
+                var result = await _historyService.GetHistoryAsync(projectId, userId.Value, type, page, pageSize);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
     }
@@ -367,5 +399,7 @@ namespace Api.Controllers
         [Required]
         [MinLength(50, ErrorMessage = "Nội dung phải có ít nhất 50 ký tự để phân tích.")]
         public string Content { get; set; } = string.Empty;
+
+        public Guid? ChapterId { get; set; }
     }
 }

@@ -201,7 +201,7 @@ namespace Service.Implementations
                                "Nhiệm vụ: đọc chương truyện và phân rã thành các phân cảnh (Scenes/Beats). " +
                                "QUAN TRỌNG: Chỉ dựa vào văn bản được cung cấp. " +
                                "Trả về JSON thuần túy, không thêm bất kỳ text nào: " +
-                               "{\"chapterSummary\":\"...\",\"scenes\":[{\"title\":\"...\",\"description\":\"...\",\"openingLine\":\"câu đầu của cảnh\",\"type\":\"Action|Dialogue|Introspection|Transition|Revelation\"}]}";
+                               "{\"chapterSummary\":\"...\",\"scenes\":[{\"title\":\"...\",\"description\":\"...\",\"exactQuote\":\"trích dẫn CHÍNH XÁC NGUYÊN VĂN 1-3 câu dài và quan trọng nhất từ văn bản gốc để đại diện cho cảnh này (sẽ dùng để highlight)\",\"type\":\"Action|Dialogue|Introspection|Transition|Revelation\"}]}";
             var userMsg = $"Phân rã thành các Cảnh:\n<chapter>\n{safeContent[..Math.Min(15000, safeContent.Length)]}\n</chapter>";
 
             var messages = new List<ChatMessage> { ChatMessage.CreateSystemMessage(systemPrompt), ChatMessage.CreateUserMessage(userMsg) };
@@ -226,7 +226,7 @@ namespace Service.Implementations
                     {
                         Title = s.Title ?? "",
                         Description = s.Description ?? "",
-                        OpeningLine = s.OpeningLine ?? "",
+                        ExactQuote = s.ExactQuote ?? s.OpeningLine ?? "", // Fallback
                         Type = s.Type ?? "Action"
                     }).ToList() ?? new(),
                     TotalTokens = tokens
@@ -279,7 +279,8 @@ namespace Service.Implementations
         {
             public string? Title { get; set; }
             public string? Description { get; set; }
-            public string? OpeningLine { get; set; }
+            public string? ExactQuote { get; set; }
+            public string? OpeningLine { get; set; } // Fallback
             public string? Type { get; set; }
         }
     }

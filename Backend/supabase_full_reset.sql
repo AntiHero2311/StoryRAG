@@ -12,6 +12,7 @@
 DROP TABLE IF EXISTS "Payments"              CASCADE;
 DROP TABLE IF EXISTS "TimelineEvents"       CASCADE;
 DROP TABLE IF EXISTS "RewriteHistories"      CASCADE;
+DROP TABLE IF EXISTS "AiAnalysisHistories"   CASCADE;
 DROP TABLE IF EXISTS "ChatMessages"          CASCADE;
 DROP TABLE IF EXISTS "WorldbuildingEntries"  CASCADE;
 DROP TABLE IF EXISTS "PlotNoteEntries"       CASCADE;
@@ -426,6 +427,30 @@ CREATE TABLE "RewriteHistories" (
 CREATE INDEX "IX_RewriteHistories_ProjectId_UserId" ON "RewriteHistories" ("ProjectId", "UserId");
 CREATE INDEX "IX_RewriteHistories_UserId"            ON "RewriteHistories" ("UserId");
 CREATE INDEX "IX_RewriteHistories_ChapterId"         ON "RewriteHistories" ("ChapterId");
+
+-- ── AiAnalysisHistories ───────────────────────────────────────
+CREATE TABLE "AiAnalysisHistories" (
+    "Id"               uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "ProjectId"        uuid                     NOT NULL,
+    "ChapterId"        uuid,
+    "UserId"           uuid                     NOT NULL,
+    "AnalysisType"     character varying(50)    NOT NULL,
+    "EncryptedContext" text                     NOT NULL DEFAULT '',
+    "EncryptedResult"  text                     NOT NULL,
+    "TotalTokens"      integer                  NOT NULL DEFAULT 0,
+    "CreatedAt"        timestamp with time zone NOT NULL DEFAULT NOW(),
+    CONSTRAINT "PK_AiAnalysisHistories" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_AiAnalysisHistories_Projects_ProjectId" FOREIGN KEY ("ProjectId")
+        REFERENCES "Projects" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_AiAnalysisHistories_Chapters_ChapterId" FOREIGN KEY ("ChapterId")
+        REFERENCES "Chapters" ("Id") ON DELETE SET NULL,
+    CONSTRAINT "FK_AiAnalysisHistories_Users_UserId" FOREIGN KEY ("UserId")
+        REFERENCES "Users" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_AiAnalysisHistories_ProjectId_UserId" ON "AiAnalysisHistories" ("ProjectId", "UserId");
+CREATE INDEX "IX_AiAnalysisHistories_ChapterId"        ON "AiAnalysisHistories" ("ChapterId");
+CREATE INDEX "IX_AiAnalysisHistories_AnalysisType"     ON "AiAnalysisHistories" ("AnalysisType");
 
 -- ────────────────────────────────────────────────────────────
 -- BugReports table
