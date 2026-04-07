@@ -43,4 +43,9 @@ EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 
+# Tắt FileSystemWatcher để tránh lỗi inotify limit trên Linux (Render)
+# "inotify instances has been reached" → exit status 139
+ENV DOTNET_USE_POLLING_FILE_WATCHER=1
+ENV DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE=false
+
 ENTRYPOINT ["dotnet", "Api.dll"]

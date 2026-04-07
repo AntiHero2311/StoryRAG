@@ -11,6 +11,14 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Tắt reloadOnChange cho config files để tránh lỗi inotify limit trên Linux (Render)
+// "The configured user limit (1024) on the number of inotify instances has been reached"
+// ASP.NET Core mặc định dùng FileSystemWatcher để watch appsettings.json → tốn inotify instances
+builder.Configuration.Sources
+    .OfType<Microsoft.Extensions.Configuration.Json.JsonConfigurationSource>()
+    .ToList()
+    .ForEach(s => s.ReloadOnChange = false);
+
 // Add services to the container.
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
