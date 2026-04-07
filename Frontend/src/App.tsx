@@ -1,32 +1,42 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ToastProvider } from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
 import RouteGuard from './components/RouteGuard';
 import RoleGuard from './components/RoleGuard';
-import LandingPage from './pages/LandingPage';
-import HomePage from './pages/HomePage';
-import AuthPage from './pages/AuthPage';
-import ProfilePage from './pages/ProfilePage';
-import AdminDashboardPage from './pages/AdminDashboardPage';
-import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
-import ProjectsPage from './pages/ProjectsPage';
-import SettingsPage from './pages/SettingsPage';
-import WorkspacePage from './pages/WorkspacePage';
-import SubscriptionPage from './pages/SubscriptionPage';
-import PlansPage from './pages/PlansPage';
-import AdminSubscriptionPage from './pages/AdminSubscriptionPage';
-import AnalysisPage from './pages/AnalysisPage';
-import StaffDashboardPage from './pages/StaffDashboardPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import NotFoundPage from './pages/NotFoundPage';
+
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const HomePage = lazy(() => import('./pages/HomePage'));
+const AuthPage = lazy(() => import('./pages/AuthPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
+const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage'));
+const PlansPage = lazy(() => import('./pages/PlansPage'));
+const AdminSubscriptionPage = lazy(() => import('./pages/AdminSubscriptionPage'));
+const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
+const StaffDashboardPage = lazy(() => import('./pages/StaffDashboardPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+
+// A simple fallback for Suspense
+const PageLoader = () => (
+    <div className="flex items-center justify-center h-screen bg-[var(--bg-app)]">
+        <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+    </div>
+);
 
 function App() {
   return (
     <ErrorBoundary>
       <ToastProvider>
         <Router>
-          <Routes>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
             {/* Public routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<AuthPage />} />
@@ -81,7 +91,8 @@ function App() {
 
             {/* 404 */}
             <Route path="*" element={<NotFoundPage />} />
-          </Routes>
+            </Routes>
+          </Suspense>
         </Router>
       </ToastProvider>
     </ErrorBoundary>

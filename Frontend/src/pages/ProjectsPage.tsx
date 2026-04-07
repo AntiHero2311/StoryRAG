@@ -87,43 +87,45 @@ function ProjectFormModal({ initial, onSubmit, onClose, loading, title, genres }
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#090514]/80 backdrop-blur-md"
             onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-3xl p-6 shadow-2xl">
-                <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-[var(--text-primary)] font-bold text-lg">{title}</h2>
-                    <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
-                        <X className="w-4 h-4" />
+            <div className="w-full max-w-lg glass-card rounded-[2rem] p-8 shadow-[0_0_60px_-15px_rgba(0,0,0,0.8)] border border-white/10 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 blur-[50px] rounded-full pointer-events-none" />
+                
+                <div className="flex items-center justify-between mb-6 relative z-10">
+                    <h2 className="text-white font-black text-2xl drop-shadow-md">{title}</h2>
+                    <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors">
+                        <X className="w-5 h-5" />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
                     <div>
-                        <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">
+                        <label className="block text-zinc-400 text-[13px] font-bold uppercase tracking-wider mb-2">
                             Tên dự án <span className="text-rose-400">*</span>
                         </label>
                         <input
                             type="text"
                             value={form.title}
                             onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                            placeholder="Ví dụ: Tiểu thuyết kiếm hiệp"
-                            className="w-full px-4 py-2.5 bg-[var(--input-bg)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] text-sm placeholder-[var(--text-secondary)]/50 outline-none focus:ring-2 focus:ring-[#f5a623]/50"
+                            placeholder="Ví dụ: Cuộc phiêu lưu chưa kể"
+                            className="w-full px-5 py-3.5 bg-black/20 border border-white/10 rounded-xl text-white text-[15px] placeholder-white/20 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 shadow-inner transition-all"
                         />
                     </div>
 
                     {genres.length > 0 && (
                         <div className="relative z-20" ref={dropdownRef}>
-                            <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">
+                            <label className="block text-zinc-400 text-[13px] font-bold uppercase tracking-wider mb-2">
                                 Thể loại
                             </label>
 
                             <div
                                 onClick={() => setIsGenreOpen(!isGenreOpen)}
-                                className="w-full min-h-[44px] px-4 py-2 bg-[var(--input-bg)] border border-[var(--border-color)] rounded-xl flex items-center justify-between cursor-pointer transition-all hover:border-[var(--text-secondary)]/50 focus-within:ring-2 focus-within:ring-[#f5a623]/50 focus-within:border-[#f5a623]/50"
+                                className="w-full min-h-[50px] px-5 py-2.5 bg-black/20 border border-white/10 rounded-xl flex items-center justify-between cursor-pointer transition-all hover:bg-white/5 focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500/50 shadow-inner"
                             >
-                                <div className="flex flex-wrap gap-1.5 flex-1 items-center">
+                                <div className="flex flex-wrap gap-2 flex-1 items-center">
                                     {form.genreIds.length === 0 ? (
-                                        <span className="text-[var(--text-secondary)]/50 text-sm py-0.5">Chọn thể loại...</span>
+                                        <span className="text-white/30 text-[15px] py-1">Chọn thể loại phù hợp (hành động, tình cảm...)...</span>
                                     ) : (
                                         form.genreIds.map(id => {
                                             const g = genres.find(x => x.id === id);
@@ -131,35 +133,35 @@ function ProjectFormModal({ initial, onSubmit, onClose, loading, title, genres }
                                             return (
                                                 <span
                                                     key={g.id}
-                                                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold transition-all hover:brightness-110"
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-all hover:brightness-110 shadow-sm"
                                                     style={{
-                                                        background: g.color + '20',
+                                                        background: g.color + '25',
                                                         color: g.color,
-                                                        border: `1px solid ${g.color}40`,
+                                                        border: `1px solid ${g.color}50`,
                                                     }}
                                                     onClick={(e) => { e.stopPropagation(); toggleGenre(g.id); }}
                                                 >
                                                     {g.name}
-                                                    <X className="w-3 h-3 hover:scale-110 transition-transform cursor-pointer" />
+                                                    <X className="w-3.5 h-3.5 hover:scale-110 transition-transform cursor-pointer" />
                                                 </span>
                                             );
                                         })
                                     )}
                                 </div>
-                                <ChevronDown className={`w-4 h-4 text-[var(--text-secondary)] transition-transform duration-200 ml-2 shrink-0 ${isGenreOpen ? 'rotate-180' : ''}`} />
+                                <ChevronDown className={`w-5 h-5 text-zinc-400 transition-transform duration-200 ml-2 shrink-0 ${isGenreOpen ? 'rotate-180' : ''}`} />
                             </div>
 
                             {isGenreOpen && (
-                                <div className="absolute z-10 top-full left-0 right-0 mt-2 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.4)] overflow-hidden flex flex-col max-h-[200px]">
-                                    <div className="p-2 border-b border-[var(--border-color)] shrink-0">
+                                <div className="absolute z-10 top-[calc(100%+8px)] left-0 right-0 glass-card rounded-xl shadow-[0_15px_40px_rgba(0,0,0,0.6)] border border-white/10 overflow-hidden flex flex-col max-h-[250px]">
+                                    <div className="p-3 border-b border-white/10 shrink-0 bg-white/5">
                                         <div className="relative">
-                                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
+                                            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
                                             <input
                                                 type="text"
                                                 placeholder="Tìm kiếm thể loại..."
                                                 value={genreSearch}
                                                 onChange={e => setGenreSearch(e.target.value)}
-                                                className="w-full pl-9 pr-3 py-2 bg-[var(--input-bg)] bg-opacity-50 border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] outline-none focus:border-[#f5a623]/50 focus:ring-1 focus:ring-[#f5a623]/50 transition-all placeholder-[var(--text-secondary)]/50"
+                                                className="w-full pl-10 pr-4 py-2.5 bg-black/30 border border-white/10 rounded-lg text-[15px] text-white outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all placeholder-white/20 shadow-inner"
                                             />
                                         </div>
                                     </div>
@@ -204,31 +206,34 @@ function ProjectFormModal({ initial, onSubmit, onClose, loading, title, genres }
                     )}
 
                     <div>
-                        <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">
+                        <label className="block text-zinc-400 text-[13px] font-bold uppercase tracking-wider mb-2">
                             Tóm tắt
                         </label>
                         <textarea
                             value={form.summary}
                             onChange={e => setForm(f => ({ ...f, summary: e.target.value }))}
-                            placeholder="Mô tả ngắn về dự án của bạn..."
-                            rows={3}
-                            className="w-full px-4 py-2.5 bg-[var(--input-bg)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] text-sm placeholder-[var(--text-secondary)]/50 outline-none focus:ring-2 focus:ring-[#f5a623]/50 resize-none"
+                            placeholder="Mô tả ngắn gọn cốt truyện, bối cảnh, hoặc mục tiêu sáng tác của dự án..."
+                            rows={5}
+                            className="w-full px-5 py-3.5 bg-black/20 border border-white/10 rounded-xl text-white text-[15px] placeholder-white/30 outline-none focus:ring-2 focus:ring-indigo-500/50 shadow-inner resize-y leading-relaxed"
                         />
                     </div>
 
                     <div>
-                        <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">
+                        <label className="block text-zinc-400 text-[13px] font-bold uppercase tracking-wider mb-2">
                             Trạng thái
                         </label>
-                        <select
-                            value={form.status}
-                            onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                            className="w-full px-4 py-2.5 bg-[var(--input-bg)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] text-sm outline-none focus:ring-2 focus:ring-[#f5a623]/50 appearance-none"
-                        >
-                            <option value="Draft">Bản nháp</option>
-                            <option value="Published">Đã xuất bản</option>
-                            <option value="Archived">Lưu trữ</option>
-                        </select>
+                        <div className="relative">
+                            <select
+                                value={form.status}
+                                onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                                className="w-full px-5 py-3.5 bg-black/20 border border-white/10 rounded-xl text-white text-[15px] font-medium outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none shadow-inner"
+                            >
+                                <option className="bg-slate-900" value="Draft">Bản nháp</option>
+                                <option className="bg-slate-900" value="Published">Đã xuất bản</option>
+                                <option className="bg-slate-900" value="Archived">Lưu trữ</option>
+                            </select>
+                            <ChevronDown className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+                        </div>
                     </div>
 
                     {error && (
@@ -237,16 +242,16 @@ function ProjectFormModal({ initial, onSubmit, onClose, loading, title, genres }
                         </p>
                     )}
 
-                    <div className="flex gap-3 pt-1">
+                    <div className="flex gap-4 pt-4">
                         <button type="button" onClick={onClose}
-                            className="flex-1 py-2.5 rounded-xl text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--text-primary)]/5 hover:bg-[var(--text-primary)]/10 transition-colors">
+                            className="flex-1 py-3.5 rounded-xl text-[15px] font-bold text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors shadow-sm">
                             Hủy
                         </button>
                         <button type="submit" disabled={loading}
-                            className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
-                            style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}>
-                            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                            Lưu
+                            className="flex-[2] py-3.5 rounded-xl text-[15px] font-bold text-white transition-all hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg"
+                            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6, #c084fc)' }}>
+                            {loading && <Loader2 className="w-5 h-5 animate-spin" />}
+                            Lưu cấu hình
                         </button>
                     </div>
                 </form>

@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 using Service.Interfaces;
 using Service.DTOs;
 using System;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace Api.Controllers
 {
@@ -19,17 +21,29 @@ namespace Api.Controllers
             _service = service;
         }
 
+        private Guid? GetUserId()
+        {
+            var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return Guid.TryParse(value, out var id) ? id : null;
+        }
+
         [HttpGet]
         public async Task<IActionResult> GetAll(Guid projectId)
         {
-            var events = await _service.GetByProjectAsync(projectId);
+            var userId = GetUserId();
+            if (userId == null) return Unauthorized();
+
+            var events = await _service.GetByProjectAsync(projectId, userId.Value);
             return Ok(events);
         }
 
         [HttpPost]
         public async Task<IActionResult> Create(Guid projectId, [FromBody] CreateTimelineEventRequest request)
         {
-            var evt = await _service.CreateAsync(projectId, request);
+            var userId = GetUserId();
+            if (userId == null) return Unauthorized();
+
+            var evt = await _service.CreateAsync(projectId, userId.Value, request);
             return CreatedAtAction(nameof(GetAll), new { projectId }, evt);
         }
 
@@ -38,7 +52,10 @@ namespace Api.Controllers
         {
             try
             {
-                var evt = await _service.UpdateAsync(id, request);
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized();
+
+                var evt = await _service.UpdateAsync(id, projectId, userId.Value, request);
                 return Ok(evt);
             }
             catch (KeyNotFoundException)
@@ -50,7 +67,10 @@ namespace Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(Guid projectId, Guid id)
         {
-            var success = await _service.DeleteAsync(id);
+            var userId = GetUserId();
+            if (userId == null) return Unauthorized();
+
+            var success = await _service.DeleteAsync(id, projectId, userId.Value);
             if (!success) return NotFound();
             return NoContent();
         }
@@ -58,7 +78,10 @@ namespace Api.Controllers
         [HttpPatch("{id}/reorder")]
         public async Task<IActionResult> Reorder(Guid projectId, Guid id, [FromBody] int newSortOrder)
         {
-            var success = await _service.ReorderAsync(id, newSortOrder);
+            var userId = GetUserId();
+            if (userId == null) return Unauthorized();
+
+            var success = await _service.ReorderAsync(id, projectId, userId.Value, newSortOrder);
             if (!success) return NotFound();
             return NoContent();
         }

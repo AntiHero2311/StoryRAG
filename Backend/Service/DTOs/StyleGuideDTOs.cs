@@ -14,4 +14,14 @@ namespace Service.DTOs
         public string? Aspect { get; set; }
         public string? Content { get; set; }
     }
+
+    public class StyleGuideResponse
+    {
+        public Guid Id { get; set; }
+        public Guid ProjectId { get; set; }
+        public string Aspect { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
+    }
 }

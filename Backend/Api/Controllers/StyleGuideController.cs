@@ -3,12 +3,14 @@ using Microsoft.AspNetCore.Mvc;
 using Service.Interfaces;
 using Service.DTOs;
 using System;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace Api.Controllers
 {
     [ApiController]
-    [Route("api/projects/{projectId}/style-guide")]
+    [Route("api/projects/{projectId}/style-guides")]
     [Authorize]
     public class StyleGuideController : ControllerBase
     {
@@ -19,17 +21,29 @@ namespace Api.Controllers
             _service = service;
         }
 
+        private Guid? GetUserId()
+        {
+            var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return Guid.TryParse(value, out var id) ? id : null;
+        }
+
         [HttpGet]
         public async Task<IActionResult> GetEntries(Guid projectId)
         {
-            var entries = await _service.GetEntriesByProjectIdAsync(projectId);
+            var userId = GetUserId();
+            if (userId == null) return Unauthorized();
+
+            var entries = await _service.GetEntriesByProjectIdAsync(projectId, userId.Value);
             return Ok(entries);
         }
 
         [HttpPost]
         public async Task<IActionResult> CreateEntry(Guid projectId, [FromBody] CreateStyleGuideRequest request)
         {
-            var entry = await _service.CreateEntryAsync(projectId, request);
+            var userId = GetUserId();
+            if (userId == null) return Unauthorized();
+
+            var entry = await _service.CreateEntryAsync(projectId, userId.Value, request);
             return CreatedAtAction(nameof(GetEntries), new { projectId }, entry);
         }
 
@@ -38,7 +52,10 @@ namespace Api.Controllers
         {
             try
             {
-                var entry = await _service.UpdateEntryAsync(id, request);
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized();
+
+                var entry = await _service.UpdateEntryAsync(id, projectId, userId.Value, request);
                 return Ok(entry);
             }
             catch (KeyNotFoundException)
@@ -50,7 +67,10 @@ namespace Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteEntry(Guid projectId, Guid id)
         {
-            var success = await _service.DeleteEntryAsync(id);
+            var userId = GetUserId();
+            if (userId == null) return Unauthorized();
+
+            var success = await _service.DeleteEntryAsync(id, projectId, userId.Value);
             if (!success) return NotFound();
             return NoContent();
         }
@@ -60,7 +80,10 @@ namespace Api.Controllers
         {
             try
             {
-                var success = await _service.GenerateEmbeddingAsync(id);
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized();
+
+                var success = await _service.GenerateEmbeddingAsync(id, projectId, userId.Value);
                 return success ? Ok() : BadRequest("Failed to generate embedding");
             }
             catch (NotImplementedException)

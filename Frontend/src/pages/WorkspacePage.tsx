@@ -16,7 +16,7 @@ import ChatHistoryPanel from '../components/workspace/ChatHistoryPanel';
 import AiWriterPanel from '../components/workspace/AiWriterPanel';
 import TimelinePanel from '../components/workspace/TimelinePanel';
 import SceneCliffhangerPanel from '../components/workspace/SceneCliffhangerPanel';
-import PlotBoard from '../components/workspace/PlotBoard';
+
 import {
     chapterService,
     type ChapterDetailResponse,
@@ -48,11 +48,13 @@ import { themeService, type ThemeEntry, type CreateThemeRequest } from '../servi
 
 import { useToast } from '../components/Toast';
 import { diffWords } from 'diff';
+import { DeleteConfirmationModal } from '../components/ui';
+import { useDeleteConfirm } from '../hooks';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
-type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotNotes' | 'aiWriter' | 'timeline' | 'sceneCliffhanger';
+type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotTimeline' | 'aiWriter' | 'sceneCliffhanger';
 
 // ── Export Modal ───────────────────────────────────────────────────────────
 function ExportModal({
@@ -202,7 +204,7 @@ export default function WorkspacePage() {
 
     // ── Layout state ───────────────────────────────────────────────────────
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-    const [storyBibleOpen, setStoryBibleOpen] = useState(true);
+    const [storyBibleOpen, setStoryBibleOpen] = useState(false);
     const [rightPanelOpen, setRightPanelOpen] = useState(true);
     const [activeTab, setActiveTab] = useState<ActiveTab>('chat');
 
@@ -243,6 +245,9 @@ export default function WorkspacePage() {
     // ── Export state ───────────────────────────────────────────────────────
     const [exportModal, setExportModal] = useState<{ open: boolean; target: 'project' | 'chapter' }>({ open: false, target: 'project' });
     const [isExporting, setIsExporting] = useState(false);
+
+    // ── Delete confirmation ────────────────────────────────────────────────
+    const deleteConfirm = useDeleteConfirm();
 
     // Chat state is now managed inside ChatPanel / ChatHistoryPanel components
 
@@ -356,24 +361,46 @@ export default function WorkspacePage() {
     // ── Delete chapter ─────────────────────────────────────────────────────
     const deleteChapter = async (chapterId: string) => {
         if (!projectId) return;
-        if (!confirm('Xóa chương này không?')) return;
-        try {
-            await chapterService.deleteChapter(projectId, chapterId);
-            const remaining = chapters.filter(c => c.id !== chapterId);
-            setChapters(remaining);
-            if (activeChapter?.id === chapterId) {
-                const next = remaining[0] ?? null;
-                if (next) await selectChapter(next);
-                else {
-                    setActiveChapter(null);
-                    setChapterTitle('');
-                    activeChapterIdRef.current = null;
-                    if (editorRef.current) editorRef.current.innerText = '';
+        
+        const chapter = chapters.find(c => c.id === chapterId);
+        const chapterName = chapter?.title || `Chương ${chapter?.chapterNumber}`;
+        
+        deleteConfirm.confirm({
+            itemName: chapterName,
+            itemType: 'chương',
+            title: 'Xác nhận xóa chương',
+            message: `Bạn có chắc chắn muốn xóa chương "${chapterName}"?\n\nToàn bộ nội dung và các phiên bản của chương này sẽ bị xóa vĩnh viễn.`,
+            confirmText: 'Xóa chương',
+            requireTyping: true,
+            typingConfirmText: 'XOA',
+            showWarnings: true,
+            warnings: [
+                'Tất cả các phiên bản của chương sẽ bị xóa',
+                'Dữ liệu nhúng (embeddings) liên quan sẽ bị xóa',
+                'Hành động này không thể hoàn tác',
+            ],
+            onConfirm: async () => {
+                try {
+                    await chapterService.deleteChapter(projectId, chapterId);
+                    const remaining = chapters.filter(c => c.id !== chapterId);
+                    setChapters(remaining);
+                    if (activeChapter?.id === chapterId) {
+                        const next = remaining[0] ?? null;
+                        if (next) await selectChapter(next);
+                        else {
+                            setActiveChapter(null);
+                            setChapterTitle('');
+                            activeChapterIdRef.current = null;
+                            if (editorRef.current) editorRef.current.innerText = '';
+                        }
+                    }
+                    toast.success(`Đã xóa chương "${chapterName}"`);
+                } catch (e: any) {
+                    toast.error(e?.response?.data?.message ?? 'Không thể xóa chương.');
+                    throw e; // Re-throw để DeleteConfirmationModal biết có lỗi
                 }
-            }
-        } catch (e: any) {
-            toast.error(e?.response?.data?.message ?? 'Không thể xóa chương.');
-        }
+            },
+        });
     };
 
     // ── Export / Import chapter ─────────────────────────────────────────────
@@ -595,7 +622,7 @@ export default function WorkspacePage() {
             setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
             setActiveChapter(updated);
             if (editorRef.current) editorRef.current.innerHTML = updated.content ?? '';
-            setWordCount((editorRef.current.innerText ?? '').trim().split(/\s+/).filter(Boolean).length);
+            setWordCount((editorRef.current?.innerText ?? '').trim().split(/\s+/).filter(Boolean).length);
         } catch (e: any) {
             toast.error(e?.response?.data?.message ?? 'Không thể chuyển phiên bản.');
         }
@@ -985,10 +1012,9 @@ export default function WorkspacePage() {
                                         { tab: 'worldbuilding' as ActiveTab, label: 'Thế giới', desc: 'Xây dựng bối cảnh, địa lý, và quy tắc phép thuật', icon: Map, color: 'var(--accent)' },
                                         { tab: 'styleGuide' as ActiveTab, label: 'Phong cách', desc: 'Thiết lập quy tắc, giọng văn và góc nhìn (POV)', icon: Zap, color: '#f59e0b' },
                                         { tab: 'themes' as ActiveTab, label: 'Chủ đề', desc: 'Ghi chú thông điệp cốt lõi và ẩn ý tác phẩm', icon: Sparkles, color: '#10b981' },
-                                        { tab: 'plotNotes' as ActiveTab, label: 'Cốt truyện', desc: 'Cấu trúc 3 hồi, dàn ý chi tiết & các mốc sự kiện', icon: Scroll, color: '#ef4444' },
+                                        { tab: 'plotTimeline' as ActiveTab, label: 'Tuyến truyện', desc: 'Cấu trúc cốt truyện & trình tự sự kiện', icon: Map, color: '#f59e0b' },
                                         { tab: 'aiInstructions' as ActiveTab, label: 'Ghi chú AI', desc: 'Cung cấp bối cảnh đặc biệt để AI hiểu đúng ý', icon: Bot, color: '#34d399' },
                                         { tab: 'aiWriter' as ActiveTab, label: 'AI Writer', desc: 'Trợ lý AI giúp viết, trau chuốt và nảy ý tưởng', icon: Wand2, color: '#ec4899' },
-                                        { tab: 'timeline' as ActiveTab, label: 'Dòng thời gian', desc: 'Quản lý trình tự các chuỗi sự kiện lịch sử', icon: Clock, color: '#06b6d4' },
                                         { tab: 'sceneCliffhanger' as ActiveTab, label: 'Phân tích Cảnh', desc: 'Phân rã chương & phát hiện điểm rơi kịch tính', icon: Scissors, color: '#f97316' },
                                     ] as const).map(item => {
                                         const isActive = activeTab === item.tab && rightPanelOpen;
@@ -1035,15 +1061,11 @@ export default function WorkspacePage() {
 
                 {/* Center - Editor & Boards */}
                 <div className="flex flex-col flex-1 min-w-0 rounded-2xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-                    {activeTab === 'timeline' && projectId ? (
-                        <div className="flex-1 w-full h-full overflow-hidden flex flex-col bg-[var(--bg-app)]">
-                            <TimelinePanel projectId={projectId} />
-                        </div>
-                    ) : activeTab === 'plotNotes' && projectId ? (
-                        <div className="flex-1 w-full h-full overflow-hidden flex flex-col bg-[var(--bg-app)]">
-                            <PlotBoard projectId={projectId} />
-                        </div>
-                    ) : (
+                    <div className={activeTab === 'plotTimeline' && projectId ? "flex-1 w-full h-full overflow-hidden flex flex-col bg-[var(--bg-app)]" : "hidden"}>
+                        {projectId && <TimelinePanel projectId={projectId} />}
+                    </div>
+                    
+                    <div className={activeTab !== 'plotTimeline' ? "flex-1 flex flex-col min-w-0" : "hidden"}>
                         <>
                             {/* Toolbar */}
                             <div className="h-[48px] shrink-0 flex items-center gap-1 px-4 border-b border-[var(--border-color)]" style={{ background: 'var(--bg-topbar)' }}>
@@ -1243,7 +1265,7 @@ export default function WorkspacePage() {
                                 </div>
                             </div>
                         </>
-                    )}
+                    </div>
                 </div>
 
                 {/* Right Panel */}
@@ -1255,7 +1277,7 @@ export default function WorkspacePage() {
                         {/* Panel header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] shrink-0 bg-[var(--bg-app)]">
                             <div className="flex items-center gap-2">
-                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotNotes', 'aiWriter', 'timeline', 'sceneCliffhanger'] as ActiveTab[]).includes(activeTab) ? (
+                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotTimeline', 'aiWriter', 'sceneCliffhanger'] as ActiveTab[]).includes(activeTab) ? (
                                     <>
                                         <button onClick={() => setActiveTab('chat')} className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 transition-colors">
                                             <ArrowLeft className="w-3.5 h-3.5" />
@@ -1268,10 +1290,9 @@ export default function WorkspacePage() {
                                             {activeTab === 'synopsis' && 'Tóm tắt'}
                                             {activeTab === 'styleGuide' && 'Phong cách'}
                                             {activeTab === 'themes' && 'Chủ đề'}
-                                            {activeTab === 'plotNotes' && 'Cốt truyện'}
+                                            {activeTab === 'plotTimeline' && 'Tuyến truyện'}
                                             {activeTab === 'aiInstructions' && 'Ghi chú AI'}
                                             {activeTab === 'aiWriter' && 'AI Writer'}
-                                            {activeTab === 'timeline' && 'Dòng thời gian'}
                                             {activeTab === 'sceneCliffhanger' && 'Phân tích Cảnh'}
                                         </span>
                                     </>
@@ -1560,6 +1581,26 @@ export default function WorkspacePage() {
                     </div>
                 )}
             </div>
+
+            {/* ── Delete Confirmation Modal ── */}
+            {deleteConfirm.isOpen && deleteConfirm.options && (
+                <DeleteConfirmationModal
+                    isOpen={deleteConfirm.isOpen}
+                    onClose={deleteConfirm.handleClose}
+                    onConfirm={deleteConfirm.handleConfirm}
+                    title={deleteConfirm.options.title}
+                    message={deleteConfirm.options.message}
+                    itemName={deleteConfirm.options.itemName}
+                    itemType={deleteConfirm.options.itemType}
+                    confirmText={deleteConfirm.options.confirmText}
+                    cancelText={deleteConfirm.options.cancelText}
+                    requireTyping={deleteConfirm.options.requireTyping}
+                    typingConfirmText={deleteConfirm.options.typingConfirmText}
+                    showWarnings={deleteConfirm.options.showWarnings}
+                    warnings={deleteConfirm.options.warnings}
+                    variant={deleteConfirm.options.variant}
+                />
+            )}
         </div>
     );
 }

@@ -8,11 +8,11 @@ namespace Service.Interfaces
 {
     public interface IStyleGuideService
     {
-        Task<List<StyleGuideEntry>> GetEntriesByProjectIdAsync(Guid projectId);
-        Task<StyleGuideEntry?> GetEntryByIdAsync(Guid id);
-        Task<StyleGuideEntry> CreateEntryAsync(Guid projectId, CreateStyleGuideRequest request);
-        Task<StyleGuideEntry> UpdateEntryAsync(Guid id, UpdateStyleGuideRequest request);
-        Task<bool> DeleteEntryAsync(Guid id);
-        Task<bool> GenerateEmbeddingAsync(Guid id);
+        Task<List<StyleGuideResponse>> GetEntriesByProjectIdAsync(Guid projectId, Guid userId);
+        Task<StyleGuideResponse?> GetEntryByIdAsync(Guid id, Guid projectId, Guid userId);
+        Task<StyleGuideResponse> CreateEntryAsync(Guid projectId, Guid userId, CreateStyleGuideRequest request);
+        Task<StyleGuideResponse> UpdateEntryAsync(Guid id, Guid projectId, Guid userId, UpdateStyleGuideRequest request);
+        Task<bool> DeleteEntryAsync(Guid id, Guid projectId, Guid userId);
+        Task<bool> GenerateEmbeddingAsync(Guid id, Guid projectId, Guid userId);
     }
 }

@@ -8,11 +8,11 @@ namespace Service.Interfaces
 {
     public interface IThemeService
     {
-        Task<List<ThemeEntry>> GetEntriesByProjectIdAsync(Guid projectId);
-        Task<ThemeEntry?> GetEntryByIdAsync(Guid id);
-        Task<ThemeEntry> CreateEntryAsync(Guid projectId, CreateThemeRequest request);
-        Task<ThemeEntry> UpdateEntryAsync(Guid id, UpdateThemeRequest request);
-        Task<bool> DeleteEntryAsync(Guid id);
-        Task<bool> GenerateEmbeddingAsync(Guid id);
+        Task<List<ThemeResponse>> GetEntriesByProjectIdAsync(Guid projectId, Guid userId);
+        Task<ThemeResponse?> GetEntryByIdAsync(Guid id, Guid projectId, Guid userId);
+        Task<ThemeResponse> CreateEntryAsync(Guid projectId, Guid userId, CreateThemeRequest request);
+        Task<ThemeResponse> UpdateEntryAsync(Guid id, Guid projectId, Guid userId, UpdateThemeRequest request);
+        Task<bool> DeleteEntryAsync(Guid id, Guid projectId, Guid userId);
+        Task<bool> GenerateEmbeddingAsync(Guid id, Guid projectId, Guid userId);
     }
 }

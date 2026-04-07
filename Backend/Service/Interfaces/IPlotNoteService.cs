@@ -8,11 +8,11 @@ namespace Service.Interfaces
 {
     public interface IPlotNoteService
     {
-        Task<List<PlotNoteEntry>> GetEntriesByProjectIdAsync(Guid projectId);
-        Task<PlotNoteEntry?> GetEntryByIdAsync(Guid id);
-        Task<PlotNoteEntry> CreateEntryAsync(Guid projectId, CreatePlotNoteRequest request);
-        Task<PlotNoteEntry> UpdateEntryAsync(Guid id, UpdatePlotNoteRequest request);
-        Task<bool> DeleteEntryAsync(Guid id);
-        Task<bool> GenerateEmbeddingAsync(Guid id);
+        Task<List<PlotNoteResponse>> GetEntriesByProjectIdAsync(Guid projectId, Guid userId);
+        Task<PlotNoteResponse?> GetEntryByIdAsync(Guid id, Guid projectId, Guid userId);
+        Task<PlotNoteResponse> CreateEntryAsync(Guid projectId, Guid userId, CreatePlotNoteRequest request);
+        Task<PlotNoteResponse> UpdateEntryAsync(Guid id, Guid projectId, Guid userId, UpdatePlotNoteRequest request);
+        Task<bool> DeleteEntryAsync(Guid id, Guid projectId, Guid userId);
+        Task<bool> GenerateEmbeddingAsync(Guid id, Guid projectId, Guid userId);
     }
 }

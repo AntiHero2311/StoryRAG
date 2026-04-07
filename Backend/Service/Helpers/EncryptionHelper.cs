@@ -40,29 +40,38 @@ namespace Service.Helpers
             }
         }
 
-        // Decrypts DEK using the System Master Key
         public static string DecryptWithMasterKey(string cipherText, string masterKey)
         {
             if (string.IsNullOrEmpty(cipherText)) return cipherText;
 
-            byte[] fullCipher = Convert.FromBase64String(cipherText);
-            byte[] iv = new byte[16];
-            // Extract IV
-            Array.Copy(fullCipher, 0, iv, 0, iv.Length);
-
-            using (Aes aes = Aes.Create())
+            try
             {
-                aes.Key = GetValidKey(masterKey, 32);
-                aes.IV = iv;
-                aes.Mode = CipherMode.CBC;
+                byte[] fullCipher = Convert.FromBase64String(cipherText);
+                if (fullCipher.Length < 16) return cipherText; // Quá ngắn để chứa IV
 
-                using (var decryptor = aes.CreateDecryptor())
-                using (var ms = new MemoryStream(fullCipher, iv.Length, fullCipher.Length - iv.Length))
-                using (var cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Read))
-                using (var reader = new StreamReader(cs, Encoding.UTF8))
+                byte[] iv = new byte[16];
+                Array.Copy(fullCipher, 0, iv, 0, iv.Length);
+
+                using (Aes aes = Aes.Create())
                 {
-                    return reader.ReadToEnd();
+                    aes.Key = GetValidKey(masterKey, 32);
+                    aes.IV = iv;
+                    aes.Mode = CipherMode.CBC;
+
+                    using (var decryptor = aes.CreateDecryptor())
+                    using (var ms = new MemoryStream(fullCipher, iv.Length, fullCipher.Length - iv.Length))
+                    using (var cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Read))
+                    using (var reader = new StreamReader(cs, Encoding.UTF8))
+                    {
+                        return reader.ReadToEnd();
+                    }
                 }
+            }
+            catch (Exception)
+            {
+                // Nếu lỗi Base64 (FormatException) hoặc lỗi giải mã (CryptographicException)
+                // -> Chuỗi có thể chưa được mã hóa (Plain text), trả về nguyên gốc.
+                return cipherText;
             }
         }
 

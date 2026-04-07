@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
     Plus, Loader2, Trash2, Pencil, Check, Clock,
-    Globe, Users, Scroll, Zap, ChevronUp, ChevronDown, CalendarDays
+    Globe, Users, Scroll, Zap, ChevronUp, ChevronDown, CalendarDays,
+    Milestone, Flame, Shuffle, Mountain
 } from 'lucide-react';
 import {
     timelineService,
@@ -19,6 +20,10 @@ interface TimelinePanelProps { projectId: string; }
 
 const CATEGORY_ICONS: Record<string, React.ElementType> = {
     Story: Scroll,
+    Arc: Milestone,
+    Conflict: Flame,
+    Twist: Shuffle,
+    Climax: Mountain,
     Historical: Clock,
     Character: Users,
     World: Globe,
@@ -142,7 +147,7 @@ export default function TimelinePanel({ projectId }: TimelinePanelProps) {
                             Mốc thời gian <span className="normal-case font-normal opacity-60">(tùy chỉnh)</span>
                         </label>
                         <input value={form.timeLabel ?? ''} onChange={e => setForm(f => ({ ...f, timeLabel: e.target.value }))}
-                            placeholder="VD: Năm 432 TCN, Mùa xuân Năm thứ 5, Ngày Thứ Không..."
+                            placeholder="VD: Hồi 1, Năm 432 TCN, Hiện tại..."
                             maxLength={100}
                             className="w-full px-3 py-2 rounded-xl text-xs text-[var(--text-primary)] outline-none"
                             style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }} />
@@ -226,7 +231,7 @@ export default function TimelinePanel({ projectId }: TimelinePanelProps) {
             <div className="px-4 pt-3 pb-2  flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
                     <CalendarDays className="w-3.5 h-3.5 text-violet-400" />
-                    <span className="text-xs font-bold text-[var(--text-primary)]">Dòng thời gian</span>
+                    <span className="text-xs font-bold text-[var(--text-primary)]">Tuyến truyện (Plot & Timeline)</span>
                     <span className="w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold"
                         style={{ background: 'rgba(139,92,246,0.15)', color: 'var(--accent)' }}>
                         {events.length}
@@ -250,9 +255,9 @@ export default function TimelinePanel({ projectId }: TimelinePanelProps) {
                             <CalendarDays className="w-7 h-7 opacity-25 text-violet-400" />
                         </div>
                         <div className="text-center">
-                            <p className="text-xs font-bold text-[var(--text-primary)] mb-1">Chưa có mốc sự kiện</p>
+                            <p className="text-xs font-bold text-[var(--text-primary)] mb-1">Chưa có dữ liệu Tuyến truyện</p>
                             <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed max-w-[200px]">
-                                Thêm các sự kiện lịch sử, cao trào, hoặc mốc quan trọng của bộ truyện
+                                Thêm các tình tiết cốt truyện, sự kiện lịch sử, hoặc cao trào quan trọng.
                             </p>
                         </div>
                         <button onClick={openAdd}

@@ -6,36 +6,36 @@ import { UserInfo } from '../utils/jwtHelper';
 
 // ── Plan visual config ────────────────────────────────────────────────────────
 const PLAN_CONFIG: Record<string, {
-    gradient: string;
-    bgCard: string;
-    popular?: boolean;
     emoji: string;
+    gradient: string;
     accentColor: string;
+    borderGlow: string;
+    popular?: boolean;
 }> = {
     Free: {
-        gradient: 'linear-gradient(135deg, #475569, #334155)',
-        bgCard: 'rgba(71,85,105,0.08)',
         emoji: '🆓',
-        accentColor: '#64748b',
+        gradient: 'from-slate-600 via-slate-700 to-slate-800',
+        accentColor: 'text-slate-400',
+        borderGlow: 'hover:shadow-[0_0_30px_-10px_rgba(148,163,184,0.3)]',
     },
     Basic: {
-        gradient: 'linear-gradient(135deg, #3b82f6, #4f46e5)',
-        bgCard: 'rgba(59,130,246,0.08)',
         emoji: '⚡',
-        accentColor: '#3b82f6',
+        gradient: 'from-blue-500 via-indigo-600 to-blue-700',
+        accentColor: 'text-blue-400',
+        borderGlow: 'hover:shadow-[0_0_30px_-10px_rgba(59,130,246,0.4)]',
     },
     Pro: {
-        gradient: 'linear-gradient(135deg, #8b5cf6, #6d28d9)',
-        bgCard: 'rgba(139,92,246,0.08)',
-        popular: true,
         emoji: '🚀',
-        accentColor: '#8b5cf6',
+        gradient: 'from-fuchsia-500 via-purple-600 to-indigo-700',
+        accentColor: 'text-purple-400',
+        borderGlow: 'shadow-[0_0_30px_-10px_rgba(168,85,247,0.4)] ring-1 ring-purple-500/50 hover:shadow-[0_0_40px_-5px_rgba(168,85,247,0.5)]',
+        popular: true,
     },
     Enterprise: {
-        gradient: 'linear-gradient(135deg, #f59e0b, #ea580c)',
-        bgCard: 'rgba(245,158,11,0.08)',
         emoji: '👑',
-        accentColor: '#f59e0b',
+        gradient: 'from-amber-400 via-orange-500 to-rose-600',
+        accentColor: 'text-amber-400',
+        borderGlow: 'hover:shadow-[0_0_30px_-10px_rgba(245,158,11,0.4)]',
     },
 };
 
@@ -56,7 +56,7 @@ function getFeatures(plan: SubscriptionPlan) {
             : `${plan.maxAnalysisCount} lần phân tích/tháng`,
         plan.maxTokenLimit >= 1_000_000
             ? `${(plan.maxTokenLimit / 1_000_000).toFixed(1)}M token AI/tháng`
-            : `${(plan.maxTokenLimit / 1_000).toFixed(0)}K token AI/tháng`,
+            : `${(plan.maxTokenLimit / 1000).toFixed(0)}K token AI/tháng`,
         'Lịch sử phân tích',
         ...(plan.planName !== 'Free' ? ['Xuất báo cáo PDF'] : []),
         ...(plan.planName === 'Pro' || plan.planName === 'Enterprise' ? ['Hỗ trợ ưu tiên'] : []),
@@ -80,69 +80,52 @@ function PlanCard({
     const isFree = plan.price === 0;
 
     return (
-        <div
-            className={`relative flex flex-col rounded-3xl overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${cfg.popular ? 'ring-2' : ''}`}
-            style={{
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-color)',
-                ...(cfg.popular ? { boxShadow: `0 0 0 2px ${cfg.accentColor}50` } : {}),
-            }}
-        >
+        <div className={`relative flex flex-col rounded-[2rem] glass-card border border-white/10 overflow-hidden transition-all duration-300 transform hover:-translate-y-2 ${cfg.borderGlow}`}>
+            
             {/* Popular badge */}
             {cfg.popular && (
-                <div
-                    className="absolute top-4 right-4 flex items-center gap-1 px-2.5 py-1 rounded-full text-white text-[10px] font-bold z-10"
-                    style={{ background: cfg.gradient }}
-                >
-                    <Star className="w-3 h-3 fill-white" /> Phổ biến
+                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-fuchsia-500 via-purple-600 to-indigo-600" />
+            )}
+            {cfg.popular && (
+                <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-300 text-[10px] font-black uppercase tracking-wider z-10 backdrop-blur-md shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+                    <Star className="w-3 h-3 fill-purple-400 text-purple-400" /> Nổi bật
                 </div>
             )}
 
-            {/* Gradient header */}
-            <div className="p-6 text-white" style={{ background: cfg.gradient }}>
-                <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-2">
-                    {cfg.emoji} {plan.planName}
-                </p>
-                <div className="flex items-end gap-1">
-                    <span className="font-black text-5xl leading-none">{main}</span>
-                    <span className="text-white/60 text-sm mb-1">{sub}</span>
+            {/* Header */}
+            <div className="p-8 relative overflow-hidden text-center">
+                <div className="relative z-10">
+                    <div className="text-4xl mb-3 drop-shadow-md">{cfg.emoji}</div>
+                    <h3 className="text-white font-black text-xl uppercase tracking-widest mb-4 opacity-90 drop-shadow-sm">{plan.planName}</h3>
+                    
+                    <div className="flex items-end justify-center gap-1 mb-2">
+                        <span className="font-black text-5xl leading-none text-transparent bg-clip-text bg-gradient-to-br from-white to-zinc-400 drop-shadow-sm">{main}</span>
+                        <span className="text-zinc-500 text-sm font-semibold mb-1">{sub}</span>
+                    </div>
+                    {plan.description && (
+                        <p className="text-zinc-400 text-xs mt-4 leading-relaxed font-medium px-2">{plan.description}</p>
+                    )}
                 </div>
-                {plan.description && (
-                    <p className="text-white/60 text-xs mt-3 leading-relaxed">{plan.description}</p>
-                )}
-                {isCurrent && (
-                    <span className="inline-block mt-3 px-3 py-1 rounded-xl bg-white/20 text-white text-[10px] font-bold">
-                        ✓ Gói hiện tại của bạn
-                    </span>
-                )}
             </div>
 
-            {/* Features */}
-            <div className="flex-1 p-5 space-y-2.5">
-                {features.map(f => (
-                    <div key={f} className="flex items-center gap-2.5">
-                        <div
-                            className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
-                            style={{ background: `${cfg.accentColor}20`, border: `1px solid ${cfg.accentColor}40` }}
-                        >
-                            <Check className="w-3 h-3" style={{ color: cfg.accentColor }} />
+            <div className="px-8 flex-1 flex flex-col justify-end">
+                {/* Features */}
+                <div className="space-y-4 py-6 border-t border-white/5">
+                    {features.map(f => (
+                        <div key={f} className="flex items-center gap-3">
+                            <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-white/5 border border-white/10 shadow-inner">
+                                <Check className={`w-3 h-3 ${cfg.accentColor}`} />
+                            </div>
+                            <span className="text-zinc-300 text-sm font-medium">{f}</span>
                         </div>
-                        <span className="text-[var(--text-secondary)] text-sm">{f}</span>
-                    </div>
-                ))}
+                    ))}
+                </div>
             </div>
 
             {/* CTA */}
-            <div className="p-5 pt-0">
+            <div className="p-8 pt-0 mt-auto">
                 {isCurrent ? (
-                    <div
-                        className="w-full py-3 rounded-2xl text-center text-sm font-semibold border"
-                        style={{
-                            background: `${cfg.accentColor}10`,
-                            borderColor: `${cfg.accentColor}30`,
-                            color: cfg.accentColor,
-                        }}
-                    >
+                    <div className="w-full py-4 rounded-xl text-center text-[15px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-inner">
                         ✓ Đang sử dụng
                     </div>
                 ) : (
@@ -150,10 +133,11 @@ function PlanCard({
                         id={`plan-select-${plan.id}`}
                         onClick={() => onSelect(plan)}
                         disabled={subscribing}
-                        className="w-full py-3 rounded-2xl text-white text-sm font-bold transition-all hover:opacity-90 hover:shadow-lg active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
-                        style={{ background: cfg.gradient }}
+                        className={`w-full py-4 rounded-xl text-white text-[15px] font-bold transition-all duration-300 flex items-center justify-center gap-2 
+                        bg-gradient-to-r ${cfg.gradient} 
+                        hover:brightness-110 hover:shadow-lg active:scale-95 disabled:opacity-50 shadow-inner`}
                     >
-                        {isFree ? '🆓 Dùng miễn phí' : 'Chọn gói này'}
+                        {isFree ? '🆓 Dùng miễn phí' : 'Nâng cấp ngay'}
                     </button>
                 )}
             </div>
@@ -161,7 +145,7 @@ function PlanCard({
     );
 }
 
-// ── Free Confirm Modal ────────────────────────────────────────────────────────
+// ── Modals ────────────────────────────────────────────────────────
 function FreeConfirmModal({ plan, onClose, onSuccess }: {
     plan: SubscriptionPlan;
     onClose: () => void;
@@ -187,84 +171,91 @@ function FreeConfirmModal({ plan, onClose, onSuccess }: {
     };
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div
-                className="w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
-            >
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#090514]/80 backdrop-blur-md">
+            <div className="w-full max-w-[400px] glass-card rounded-[2rem] border border-white/10 shadow-[0_0_60px_-15px_rgba(0,0,0,0.8)] overflow-hidden relative">
+                
                 {/* Close button */}
                 <button
                     onClick={onClose}
-                    className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-[var(--text-primary)]/10 text-[var(--text-secondary)] transition-colors"
+                    className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors z-20"
                 >
                     <X className="w-4 h-4" />
                 </button>
 
                 {!done ? (
                     <>
-                        {/* Header */}
-                        <div className="p-6 text-center" style={{ background: 'linear-gradient(135deg,#475569,#334155)' }}>
-                            <div className="text-4xl mb-2">🆓</div>
-                            <h3 className="text-white font-bold text-xl">Gói Free</h3>
-                            <p className="text-white/60 text-sm mt-1">Hoàn toàn miễn phí — không cần thanh toán</p>
+                        <div className="relative p-8 pb-6 text-center border-b border-white/5 overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-slate-500/20 blur-[50px] rounded-full pointer-events-none" />
+                            <div className="absolute bottom-0 left-0 w-32 h-32 bg-slate-400/10 blur-[40px] rounded-full pointer-events-none" />
+                            
+                            <div className="relative z-10">
+                                <div className="text-5xl mb-4 drop-shadow-md">🆓</div>
+                                <h3 className="text-white font-black text-2xl tracking-tight mb-2">Gói Khởi Điểm</h3>
+                                <p className="text-zinc-400 text-[13px] font-medium leading-relaxed">
+                                    Hoàn toàn miễn phí — trải nghiệm sức mạnh AI <br/>không cần thẻ thanh toán.
+                                </p>
+                            </div>
                         </div>
 
-                        <div className="p-6 space-y-4">
+                        <div className="p-8 space-y-6">
                             {/* What you get */}
-                            <div
-                                className="rounded-2xl p-4 space-y-2"
-                                style={{ background: 'rgba(71,85,105,0.08)', border: '1px solid rgba(71,85,105,0.2)' }}
-                            >
+                            <div className="rounded-2xl p-5 bg-white/5 border border-white/10 space-y-3.5 shadow-inner">
+                                <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2 px-1">Quyền lợi:</div>
                                 {getFeatures(plan).map(f => (
-                                    <div key={f} className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-                                        <Check className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {f}
+                                    <div key={f} className="flex items-center gap-3">
+                                        <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-slate-500/20 text-slate-300">
+                                            <Check className="w-3 h-3" />
+                                        </div>
+                                        <span className="text-zinc-200 text-sm font-semibold">{f}</span>
                                     </div>
                                 ))}
                             </div>
 
                             {error && (
-                                <div className="flex items-start gap-2 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm">
-                                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /> {error}
+                                <div className="flex items-center gap-3 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[13px] font-medium shadow-inner">
+                                    <AlertCircle className="w-5 h-5 shrink-0" /> {error}
                                 </div>
                             )}
 
-                            <div className="flex gap-3">
+                            <div className="flex gap-3 pt-2">
                                 <button
                                     onClick={onClose}
                                     disabled={loading}
-                                    className="flex-1 py-3 rounded-2xl border border-[var(--border-color)] text-[var(--text-secondary)] text-sm font-semibold hover:bg-[var(--text-primary)]/5 transition-all"
+                                    className="flex-1 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 text-white text-[15px] font-bold transition-all duration-300"
                                 >
-                                    Huỷ
+                                    Trở lại
                                 </button>
                                 <button
                                     id="free-plan-confirm-btn"
                                     onClick={handleConfirm}
                                     disabled={loading}
-                                    className="flex-1 py-3 rounded-2xl text-white text-sm font-bold transition-all hover:opacity-90 active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
-                                    style={{ background: 'linear-gradient(135deg,#475569,#334155)' }}
+                                    className="flex-1 py-3.5 rounded-xl text-white text-[15px] font-bold transition-all duration-300 flex items-center justify-center gap-2 bg-gradient-to-r from-slate-600 via-slate-700 to-slate-800 hover:brightness-110 shadow-lg active:scale-95 disabled:opacity-50"
                                 >
-                                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Đang đăng ký...</> : 'Xác nhận'}
+                                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Đang xử lý...</> : 'Bắt đầu ngay'}
                                 </button>
                             </div>
                         </div>
                     </>
                 ) : (
-                    /* Success state */
-                    <div className="p-8 text-center space-y-4">
-                        <div className="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto">
-                            <Check className="w-8 h-8 text-emerald-400" />
+                    <div className="p-10 text-center relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent pointer-events-none" />
+                        <div className="relative z-10 space-y-5">
+                            <div className="w-20 h-20 rounded-full bg-emerald-500/20 border-2 border-emerald-500/40 flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(16,185,129,0.3)]">
+                                <Check className="w-10 h-10 text-emerald-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-white font-black text-2xl tracking-tight mb-2">Đăng ký thành công!</h3>
+                                <p className="text-zinc-400 text-[15px] font-medium leading-relaxed">
+                                    Chào mừng bạn đến với thế giới của StoryNest. Bạn đã có thể bắt đầu sáng tác.
+                                </p>
+                            </div>
+                            <button
+                                onClick={onClose}
+                                className="w-full mt-4 py-4 rounded-xl text-white font-bold text-[15px] transition-all bg-gradient-to-r from-emerald-500 to-teal-600 hover:brightness-110 shadow-lg active:scale-95"
+                            >
+                                Đóng
+                            </button>
                         </div>
-                        <h3 className="text-[var(--text-primary)] font-bold text-xl">Đăng ký thành công! 🎉</h3>
-                        <p className="text-[var(--text-secondary)] text-sm">
-                            Bạn đã kích hoạt gói <strong>Free</strong>. Bắt đầu sử dụng ngay!
-                        </p>
-                        <button
-                            onClick={onClose}
-                            className="w-full py-3 rounded-2xl text-white font-semibold text-sm transition-all hover:opacity-90"
-                            style={{ background: 'linear-gradient(135deg,#475569,#334155)' }}
-                        >
-                            Bắt đầu
-                        </button>
                     </div>
                 )}
             </div>
@@ -272,34 +263,45 @@ function FreeConfirmModal({ plan, onClose, onSuccess }: {
     );
 }
 
-// ── Paid Plan Modal ───────────────────────────────────────────────────────────
 function PaidPlanModal({ plan, onClose }: { plan: SubscriptionPlan; onClose: () => void }) {
     const cfg = getConfig(plan.planName);
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div
-                className="w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
-            >
-                <div className="p-6 text-center" style={{ background: cfg.gradient }}>
-                    <Crown className="w-10 h-10 text-white mx-auto mb-2" />
-                    <h3 className="text-white font-bold text-xl">{cfg.emoji} {plan.planName}</h3>
-                    <p className="text-white/60 text-sm mt-1">
-                        {formatPrice(plan.price).main}{formatPrice(plan.price).sub}
-                    </p>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#090514]/80 backdrop-blur-md">
+            <div className="w-full max-w-[400px] glass-card rounded-[2rem] border border-white/10 shadow-[0_0_60px_-15px_rgba(0,0,0,0.8)] overflow-hidden relative">
+                
+                {/* Close button */}
+                <button
+                    onClick={onClose}
+                    className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors z-20"
+                >
+                    <X className="w-4 h-4" />
+                </button>
+
+                <div className="relative p-8 pb-6 text-center border-b border-white/5 overflow-hidden">
+                     <div className={`absolute top-0 right-0 w-32 h-32 blur-[50px] rounded-full pointer-events-none opacity-20 bg-gradient-to-tr ${cfg.gradient}`} />
+                     <div className="relative z-10">
+                        <div className="mx-auto w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-4 shadow-inner">
+                            <Crown className={`w-8 h-8 ${cfg.accentColor}`} />
+                        </div>
+                        <h3 className="text-white font-black text-2xl tracking-tight mb-2 uppercase">{cfg.emoji} {plan.planName}</h3>
+                        <p className="text-zinc-400 text-sm font-semibold">
+                            {formatPrice(plan.price).main}{formatPrice(plan.price).sub}
+                        </p>
+                    </div>
                 </div>
-                <div className="p-6 space-y-4 text-center">
-                    <p className="text-[var(--text-secondary)] text-sm leading-relaxed">
-                        Tính năng thanh toán đang được phát triển. Vui lòng liên hệ hỗ trợ để nâng cấp lên gói{' '}
-                        <strong className="text-[var(--text-primary)]">{plan.planName}</strong>.
+
+                <div className="p-8 space-y-6 text-center relative overflow-hidden">
+                    <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-[#101010] to-transparent pointer-events-none opacity-50" />
+                    <p className="text-zinc-300 text-[15px] leading-relaxed font-medium relative z-10 px-2">
+                        Tính năng thanh toán đang được hoàn thiện. <br/>
+                        Cảm ơn bạn đã quan tâm đến mục tiêu hỗ trợ StoryNest với gói nâng cấp siêu việt này.
                     </p>
                     <button
                         onClick={onClose}
-                        className="w-full py-3 rounded-2xl text-white text-sm font-bold hover:opacity-90 transition-all"
-                        style={{ background: cfg.gradient }}
+                        className={`w-full py-4 rounded-xl text-white text-[15px] font-bold transition-all bg-gradient-to-r ${cfg.gradient} hover:brightness-110 shadow-lg active:scale-95 relative z-10`}
                     >
-                        Đã hiểu
+                        Đã hiểu & Quay lại
                     </button>
                 </div>
             </div>
@@ -331,54 +333,60 @@ function PlansContent() {
     };
 
     if (loading) return (
-        <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-[#f5a623]" />
+        <div className="flex-1 flex items-center justify-center min-h-[500px]">
+            <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
         </div>
     );
 
     return (
-        <div className="flex-1 overflow-y-auto scrollbar-thin">
-            {/* Hero */}
-            <div className="text-center py-12 px-6">
-                <div
-                    className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-5 text-[#f5a623] text-xs font-bold border"
-                    style={{ background: 'rgba(245,166,35,0.1)', borderColor: 'rgba(245,166,35,0.3)' }}
-                >
-                    <Zap className="w-3.5 h-3.5" /> Chọn gói phù hợp
-                </div>
-                <h2 className="text-[var(--text-primary)] font-black text-4xl mb-3">
-                    Nâng cấp tài khoản
-                </h2>
-                <p className="text-[var(--text-secondary)] text-sm max-w-md mx-auto leading-relaxed">
-                    Tất cả gói bao gồm phân tích AI, quản lý dự án và xuất báo cáo tự động.
-                </p>
-                {current && (
-                    <div
-                        className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-2xl text-sm font-medium"
-                        style={{ background: 'rgba(245,166,35,0.1)', border: '1px solid rgba(245,166,35,0.25)', color: '#f5a623' }}
-                    >
-                        <Check className="w-4 h-4" /> Gói hiện tại: <strong>{current.planName}</strong>
+        <div className="flex-1 overflow-y-auto w-full relative">
+            
+            {/* Background effects */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] max-w-[800px] h-[300px] bg-indigo-600/10 blur-[120px] rounded-full pointer-events-none mix-blend-screen" />
+            <div className="absolute top-[20%] right-[10%] w-[300px] h-[300px] bg-purple-600/10 blur-[120px] rounded-full pointer-events-none mix-blend-screen" />
+
+            <div className="py-16 px-6 relative z-10">
+                {/* Hero */}
+                <div className="text-center mb-16 max-w-2xl mx-auto">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6 bg-white/5 border border-white/10 backdrop-blur-md shadow-lg">
+                        <Zap className="w-4 h-4 text-amber-400" />
+                        <span className="text-zinc-200 text-[13px] font-bold tracking-widest uppercase">Phá vỡ giới hạn</span>
                     </div>
-                )}
-            </div>
+                    
+                    <h2 className="text-4xl md:text-5xl font-black mb-6 text-white tracking-tight leading-tight">
+                        Chọn quyền năng <br/>
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-fuchsia-400 to-purple-400">kiến tạo thế giới của bạn</span>
+                    </h2>
+                    
+                    <p className="text-zinc-400 text-lg mx-auto leading-relaxed font-medium">
+                        Toàn quyền sử dụng bộ công cụ AI thông minh để xây dựng tiểu thuyết, nhân vật và thiết kế cốt truyện theo mong muốn.
+                    </p>
+                    
+                    {current && (
+                        <div className="inline-flex items-center gap-2 mt-8 px-5 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-bold shadow-inner">
+                            <Check className="w-5 h-5 text-indigo-400" /> Gói hiện hành: {current.planName}
+                        </div>
+                    )}
+                </div>
 
-            {/* Cards grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 px-6 pb-12 max-w-6xl mx-auto">
-                {plans.map(plan => (
-                    <PlanCard
-                        key={plan.id}
-                        plan={plan}
-                        current={current}
-                        subscribing={subscribing}
-                        onSelect={setSelected}
-                    />
-                ))}
-            </div>
+                {/* Cards grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 max-w-[1300px] mx-auto auto-rows-fr">
+                    {plans.map(plan => (
+                        <PlanCard
+                            key={plan.id}
+                            plan={plan}
+                            current={current}
+                            subscribing={subscribing}
+                            onSelect={setSelected}
+                        />
+                    ))}
+                </div>
 
-            {/* FAQ note */}
-            <div className="text-center pb-10 text-[var(--text-secondary)] text-xs">
-                Cần hỗ trợ? Liên hệ team qua{' '}
-                <span className="text-[#f5a623] font-semibold cursor-pointer hover:underline">support@storynest.vn</span>
+                {/* FAQ note */}
+                <div className="text-center mt-20 pb-10 text-zinc-500 text-sm font-medium">
+                    Bạn cần tư vấn thêm? Liên hệ với chúng tôi tại{' '}
+                    <a href="mailto:support@storynest.vn" className="text-indigo-400 font-bold hover:text-indigo-300 hover:underline transition-colors">support@storynest.vn</a>
+                </div>
             </div>
 
             {/* Modals */}

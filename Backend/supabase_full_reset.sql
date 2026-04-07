@@ -504,20 +504,20 @@ SELECT setval(pg_get_serial_sequence('"SubscriptionPlans"', 'Id'), 4);
 
 -- Genres
 INSERT INTO "Genres" ("Id","Name","Slug","Color","Description") VALUES
-    (1,  'Tiểu thuyết',         'tieu-thuyet',         '#6366f1', 'Tác phẩm văn xuôi dài'),
-    (2,  'Ngắn truyện',         'ngan-truyen',          '#8b5cf6', 'Truyện ngắn, truyện vừa'),
-    (3,  'Kiếm hiệp',           'kiem-hiep',            '#ef4444', 'Võ hiệp, kiếm khách'),
-    (4,  'Tiên hiệp',           'tien-hiep',            '#f59e0b', 'Tu tiên, luyện khí'),
-    (5,  'Huyền huyễn',         'huyen-huyen',          '#10b981', 'Fantasy, thế giới ảo'),
-    (6,  'Khoa học viễn tưởng', 'khoa-hoc-vien-tuong', '#3b82f6', 'Sci-Fi, tương lai'),
-    (7,  'Lãng mạn',            'lang-man',             '#ec4899', 'Tình cảm, lãng mạn'),
-    (8,  'Trinh thám',          'trinh-tham',           '#64748b', 'Điều tra, phá án'),
-    (9,  'Kinh dị',             'kinh-di',              '#dc2626', 'Horror, ma quái'),
-    (10, 'Lịch sử',             'lich-su',              '#92400e', 'Bối cảnh lịch sử'),
-    (11, 'Đô thị',              'do-thi',               '#0891b2', 'Cuộc sống hiện đại'),
-    (12, 'Xuyên không',         'xuyen-khong',          '#7c3aed', 'Isekai, xuyên thời gian'),
-    (13, 'Hệ thống',            'he-thong',             '#059669', 'LitRPG, hệ thống cấp bậc'),
-    (14, 'Gia đình',            'gia-dinh',             '#d97706', 'Tình cảm gia đình');
+    (1,  'Tiểu thuyết',         'tieu-thuyet',         '#4B5563', 'Tác phẩm văn xuôi dài'),
+    (2,  'Ngắn truyện',         'ngan-truyen',         '#94A3B8', 'Truyện ngắn, truyện vừa'),
+    (3,  'Kiếm hiệp',           'kiem-hiep',            '#B91C1C', 'Võ hiệp, kiếm khách'),
+    (4,  'Tiên hiệp',           'tien-hiep',            '#0EA5E9', 'Tu tiên, luyện khí'),
+    (5,  'Huyền huyễn',         'huyen-huyen',          '#8B5CF6', 'Fantasy, thế giới ảo'),
+    (6,  'Khoa học viễn tưởng', 'khoa-hoc-vien-tuong', '#2563EB', 'Sci-Fi, tương lai'),
+    (7,  'Lãng mạn',            'lang-man',             '#F43F5E', 'Tình cảm, lãng mạn'),
+    (8,  'Trinh thám',          'trinh-tham',           '#1E293B', 'Điều tra, phá án'),
+    (9,  'Kinh dị',             'kinh-di',              '#111827', 'Horror, ma quái'),
+    (10, 'Lịch sử',             'lich-su',              '#78350F', 'Bối cảnh lịch sử'),
+    (11, 'Đô thị',              'do-thi',               '#0D9488', 'Cuộc sống hiện đại'),
+    (12, 'Xuyên không',         'xuyen-khong',          '#7C3AED', 'Isekai, xuyên thời gian'),
+    (13, 'Hệ thống',            'he-thong',             '#10B981', 'LitRPG, hệ thống cấp bậc'),
+    (14, 'Gia đình',            'gia-dinh',             '#F59E0B', 'Tình cảm gia đình');
 
 SELECT setval(pg_get_serial_sequence('"Genres"', 'Id'), 14);
 

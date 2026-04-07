@@ -16,4 +16,15 @@ namespace Service.DTOs
         public string? Title { get; set; }
         public string? Content { get; set; }
     }
+
+    public class PlotNoteResponse
+    {
+        public Guid Id { get; set; }
+        public Guid ProjectId { get; set; }
+        public string Type { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
+    }
 }

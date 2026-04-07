@@ -2,7 +2,7 @@ import { api } from './api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type TimelineCategory = 'Historical' | 'Story' | 'Character' | 'World' | 'Political' | 'Other';
+export type TimelineCategory = 'Historical' | 'Story' | 'Arc' | 'Conflict' | 'Twist' | 'Climax' | 'Character' | 'World' | 'Political' | 'Other';
 export type TimelineImportance = 'Minor' | 'Normal' | 'Major' | 'Critical';
 
 export interface TimelineEventEntry {
@@ -39,11 +39,15 @@ export interface UpdateTimelineEventRequest {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 export const TIMELINE_CATEGORIES: { value: TimelineCategory; label: string; color: string }[] = [
-    { value: 'Story',      label: 'Cốt truyện',   color: '#8b5cf6' },
-    { value: 'Historical', label: 'Lịch sử',       color: '#f59e0b' },
-    { value: 'Character',  label: 'Nhân vật',      color: '#ec4899' },
-    { value: 'World',      label: 'Thế giới',      color: '#10b981' },
-    { value: 'Political',  label: 'Chính trị',     color: '#3b82f6' },
+    { value: 'Story',      label: 'Diễn biến chính', color: '#8b5cf6' },
+    { value: 'Arc',        label: 'Arc / Tuyến',    color: '#3b82f6' },
+    { value: 'Conflict',   label: 'Xung đột',       color: '#ef4444' },
+    { value: 'Twist',      label: 'Plot Twist',     color: '#f59e0b' },
+    { value: 'Climax',     label: 'Cao trào',       color: '#10b981' },
+    { value: 'Historical', label: 'Lịch sử',        color: '#d97706' },
+    { value: 'Character',  label: 'Nhân vật',       color: '#ec4899' },
+    { value: 'World',      label: 'Thế giới',       color: '#059669' },
+    { value: 'Political',  label: 'Chính trị',      color: '#2563eb' },
     { value: 'Other',      label: 'Khác',           color: '#6b7280' },
 ];
 

@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Repository.Data;
 using Repository.Entities;
+using Service.Helpers;
 using Service.Interfaces;
 using Service.DTOs;
 using System;
@@ -13,48 +15,72 @@ namespace Service.Implementations
     public class PlotNoteService : IPlotNoteService
     {
         private readonly AppDbContext _context;
+        private readonly IConfiguration _config;
 
-        public PlotNoteService(AppDbContext context)
+        public PlotNoteService(AppDbContext context, IConfiguration config)
         {
             _context = context;
+            _config = config;
         }
 
-        public async Task<List<PlotNoteEntry>> GetEntriesByProjectIdAsync(Guid projectId)
+        public async Task<List<PlotNoteResponse>> GetEntriesByProjectIdAsync(Guid projectId, Guid userId)
         {
+            await VerifyOwnershipAsync(projectId, userId);
+            var user = await GetUserAsync(userId);
+            var rawDek = GetDek(user);
+
             return await _context.PlotNoteEntries
                 .Where(e => e.ProjectId == projectId)
                 .OrderByDescending(e => e.CreatedAt)
+                .Select(e => MapToResponse(e, rawDek))
                 .ToListAsync();
         }
 
-        public async Task<PlotNoteEntry?> GetEntryByIdAsync(Guid id)
+        public async Task<PlotNoteResponse?> GetEntryByIdAsync(Guid id, Guid projectId, Guid userId)
         {
-            return await _context.PlotNoteEntries.FirstOrDefaultAsync(e => e.Id == id);
+            await VerifyOwnershipAsync(projectId, userId);
+            
+            var entry = await _context.PlotNoteEntries.FirstOrDefaultAsync(e => e.Id == id && e.ProjectId == projectId);
+            if (entry == null) return null;
+
+            var user = await GetUserAsync(userId);
+            var rawDek = GetDek(user);
+            return MapToResponse(entry, rawDek);
         }
 
-        public async Task<PlotNoteEntry> CreateEntryAsync(Guid projectId, CreatePlotNoteRequest request)
+        public async Task<PlotNoteResponse> CreateEntryAsync(Guid projectId, Guid userId, CreatePlotNoteRequest request)
         {
+            await VerifyOwnershipAsync(projectId, userId);
+            var user = await GetUserAsync(userId);
+            var rawDek = GetDek(user);
+
             var entry = new PlotNoteEntry
             {
+                Id = Guid.NewGuid(),
                 ProjectId = projectId,
-                Type = request.Type,
-                Title = request.Title,
-                Content = request.Content
+                Type = request.Type, // Type is an enum/category usually, but we can encrypt if needed. It's safe leaving as clear text if it's just 'Arc', 'Twist'. Keeping it clear to allow querying/filtering.
+                Title = EncryptionHelper.EncryptWithMasterKey(request.Title, rawDek),
+                Content = EncryptionHelper.EncryptWithMasterKey(request.Content, rawDek),
+                CreatedAt = DateTime.UtcNow
             };
 
             _context.PlotNoteEntries.Add(entry);
             await _context.SaveChangesAsync();
-            return entry;
+            return MapToResponse(entry, rawDek);
         }
 
-        public async Task<PlotNoteEntry> UpdateEntryAsync(Guid id, UpdatePlotNoteRequest request)
+        public async Task<PlotNoteResponse> UpdateEntryAsync(Guid id, Guid projectId, Guid userId, UpdatePlotNoteRequest request)
         {
-            var entry = await _context.PlotNoteEntries.FindAsync(id);
-            if (entry == null) throw new KeyNotFoundException("Entry not found");
+            await VerifyOwnershipAsync(projectId, userId);
+            var user = await GetUserAsync(userId);
+            var rawDek = GetDek(user);
+
+            var entry = await _context.PlotNoteEntries.FirstOrDefaultAsync(e => e.Id == id && e.ProjectId == projectId)
+                ?? throw new KeyNotFoundException("Plot note not found");
 
             if (request.Type != null) entry.Type = request.Type;
-            if (request.Title != null) entry.Title = request.Title;
-            if (request.Content != null) entry.Content = request.Content;
+            if (request.Title != null) entry.Title = EncryptionHelper.EncryptWithMasterKey(request.Title, rawDek);
+            if (request.Content != null) entry.Content = EncryptionHelper.EncryptWithMasterKey(request.Content, rawDek);
 
             entry.UpdatedAt = DateTime.UtcNow;
 
@@ -64,12 +90,13 @@ namespace Service.Implementations
             }
 
             await _context.SaveChangesAsync();
-            return entry;
+            return MapToResponse(entry, rawDek);
         }
 
-        public async Task<bool> DeleteEntryAsync(Guid id)
+        public async Task<bool> DeleteEntryAsync(Guid id, Guid projectId, Guid userId)
         {
-            var entry = await _context.PlotNoteEntries.FindAsync(id);
+            await VerifyOwnershipAsync(projectId, userId);
+            var entry = await _context.PlotNoteEntries.FirstOrDefaultAsync(e => e.Id == id && e.ProjectId == projectId);
             if (entry == null) return false;
 
             _context.PlotNoteEntries.Remove(entry);
@@ -77,9 +104,41 @@ namespace Service.Implementations
             return true;
         }
 
-        public async Task<bool> GenerateEmbeddingAsync(Guid id)
+        public async Task<bool> GenerateEmbeddingAsync(Guid id, Guid projectId, Guid userId)
         {
+            await VerifyOwnershipAsync(projectId, userId);
             throw new NotImplementedException();
         }
+
+        // ── Helpers ───────────────────────────────────────────────────────────────
+
+        private async Task VerifyOwnershipAsync(Guid projectId, Guid userId)
+        {
+            var exists = await _context.Projects
+                .AnyAsync(p => p.Id == projectId && !p.IsDeleted && p.AuthorId == userId);
+            if (!exists)
+                throw new KeyNotFoundException("Dự án không tồn tại hoặc bạn không có quyền truy cập.");
+        }
+
+        private async Task<Repository.Entities.User> GetUserAsync(Guid userId) =>
+            await _context.Users.FindAsync(userId)
+                ?? throw new KeyNotFoundException("User không tồn tại.");
+
+        private string GetDek(Repository.Entities.User user)
+        {
+            var masterKey = _config["Security:MasterKey"]!;
+            return EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
+        }
+
+        private static PlotNoteResponse MapToResponse(PlotNoteEntry e, string rawDek) => new()
+        {
+            Id = e.Id,
+            ProjectId = e.ProjectId,
+            Type = e.Type,
+            Title = EncryptionHelper.DecryptWithMasterKey(e.Title, rawDek),
+            Content = EncryptionHelper.DecryptWithMasterKey(e.Content, rawDek),
+            CreatedAt = e.CreatedAt,
+            UpdatedAt = e.UpdatedAt,
+        };
     }
 }
