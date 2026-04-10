@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Pgvector;
 using Repository.Data;
 using Repository.Entities;
 using Service.Helpers;
@@ -16,11 +17,13 @@ namespace Service.Implementations
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
+        private readonly IEmbeddingService _embeddingService;
 
-        public ThemeService(AppDbContext context, IConfiguration config)
+        public ThemeService(AppDbContext context, IConfiguration config, IEmbeddingService embeddingService)
         {
             _context = context;
             _config = config;
+            _embeddingService = embeddingService;
         }
 
         public async Task<List<ThemeResponse>> GetEntriesByProjectIdAsync(Guid projectId, Guid userId)
@@ -61,11 +64,19 @@ namespace Service.Implementations
                 Title = EncryptionHelper.EncryptWithMasterKey(request.Title, rawDek),
                 Description = EncryptionHelper.EncryptWithMasterKey(request.Description, rawDek),
                 Notes = request.Notes != null ? EncryptionHelper.EncryptWithMasterKey(request.Notes, rawDek) : null,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
             };
+
+            var embeddingVector = await EmbedDocumentAsync(
+                request.Title,
+                request.Description,
+                request.Notes);
+            entry.Embedding = new Vector(embeddingVector);
+            entry.UpdatedAt = DateTime.UtcNow;
 
             _context.ThemeEntries.Add(entry);
             await _context.SaveChangesAsync();
+
             return MapToResponse(entry, rawDek);
         }
 
@@ -82,14 +93,20 @@ namespace Service.Implementations
             if (request.Description != null) entry.Description = EncryptionHelper.EncryptWithMasterKey(request.Description, rawDek);
             if (request.Notes != null) entry.Notes = EncryptionHelper.EncryptWithMasterKey(request.Notes, rawDek);
 
-            entry.UpdatedAt = DateTime.UtcNow;
-
-            if (request.Title != null || request.Description != null || request.Notes != null)
+            var shouldRegenerateEmbedding = request.Title != null || request.Description != null || request.Notes != null;
+            if (shouldRegenerateEmbedding)
             {
-                entry.Embedding = null;
+                var title = request.Title ?? EncryptionHelper.DecryptWithMasterKey(entry.Title, rawDek);
+                var description = request.Description ?? EncryptionHelper.DecryptWithMasterKey(entry.Description, rawDek);
+                var notes = request.Notes ?? (entry.Notes != null ? EncryptionHelper.DecryptWithMasterKey(entry.Notes, rawDek) : null);
+                var embeddingVector = await EmbedDocumentAsync(title, description, notes);
+
+                entry.Embedding = new Vector(embeddingVector);
             }
 
+            entry.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
+
             return MapToResponse(entry, rawDek);
         }
 
@@ -104,10 +121,25 @@ namespace Service.Implementations
             return true;
         }
 
-        public async Task<bool> GenerateEmbeddingAsync(Guid id, Guid projectId, Guid userId)
+        public async Task<ThemeResponse> GenerateEmbeddingAsync(Guid id, Guid projectId, Guid userId)
         {
             await VerifyOwnershipAsync(projectId, userId);
-            throw new NotImplementedException();
+
+            var entry = await _context.ThemeEntries.FirstOrDefaultAsync(e => e.Id == id && e.ProjectId == projectId)
+                ?? throw new KeyNotFoundException("Theme not found");
+
+            var user = await GetUserAsync(userId);
+            var rawDek = GetDek(user);
+            var title = EncryptionHelper.DecryptWithMasterKey(entry.Title, rawDek);
+            var description = EncryptionHelper.DecryptWithMasterKey(entry.Description, rawDek);
+            var notes = entry.Notes != null ? EncryptionHelper.DecryptWithMasterKey(entry.Notes, rawDek) : null;
+            var embeddingVector = await EmbedDocumentAsync(title, description, notes);
+
+            entry.Embedding = new Vector(embeddingVector);
+            entry.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return MapToResponse(entry, rawDek);
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────────
@@ -130,6 +162,13 @@ namespace Service.Implementations
             return EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
         }
 
+        private async Task<float[]> EmbedDocumentAsync(string title, string description, string? notes)
+        {
+            var notesText = string.IsNullOrWhiteSpace(notes) ? string.Empty : $"\n{notes}";
+            var text = $"search_document: {title}\n{description}{notesText}";
+            return await _embeddingService.GetEmbeddingAsync(text);
+        }
+
         private static ThemeResponse MapToResponse(ThemeEntry e, string rawDek) => new()
         {
             Id = e.Id,
@@ -137,6 +176,7 @@ namespace Service.Implementations
             Title = EncryptionHelper.DecryptWithMasterKey(e.Title, rawDek),
             Description = EncryptionHelper.DecryptWithMasterKey(e.Description, rawDek),
             Notes = e.Notes != null ? EncryptionHelper.DecryptWithMasterKey(e.Notes, rawDek) : null,
+            HasEmbedding = e.Embedding != null,
             CreatedAt = e.CreatedAt,
             UpdatedAt = e.UpdatedAt,
         };

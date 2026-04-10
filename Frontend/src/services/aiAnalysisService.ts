@@ -83,6 +83,9 @@ export const aiAnalysisService = {
     /**
      * Lấy lịch sử phân tích.
      */
-    getAnalysisHistory: (projectId: string, type: 'Scenes' | 'Cliffhanger', page = 1, pageSize = 20) =>
-        api.get<AiAnalysisHistoryResult>(`/ai/${projectId}/analysis/history?type=${type}&page=${page}&pageSize=${pageSize}`).then(r => r.data),
+    getAnalysisHistory: (projectId: string, type: 'Scenes' | 'Cliffhanger', chapterId?: string | null, page = 1, pageSize = 20) => {
+        const params = new URLSearchParams({ type, page: String(page), pageSize: String(pageSize) });
+        if (chapterId) params.set('chapterId', chapterId);
+        return api.get<AiAnalysisHistoryResult>(`/ai/${projectId}/analysis/history?${params.toString()}`).then(r => r.data);
+    },
 };

@@ -13,6 +13,6 @@ namespace Service.Interfaces
         Task<StyleGuideResponse> CreateEntryAsync(Guid projectId, Guid userId, CreateStyleGuideRequest request);
         Task<StyleGuideResponse> UpdateEntryAsync(Guid id, Guid projectId, Guid userId, UpdateStyleGuideRequest request);
         Task<bool> DeleteEntryAsync(Guid id, Guid projectId, Guid userId);
-        Task<bool> GenerateEmbeddingAsync(Guid id, Guid projectId, Guid userId);
+        Task<StyleGuideResponse> GenerateEmbeddingAsync(Guid id, Guid projectId, Guid userId);
     }
 }

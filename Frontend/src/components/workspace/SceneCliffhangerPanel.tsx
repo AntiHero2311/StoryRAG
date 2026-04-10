@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Scissors, Zap, Loader2, ChevronDown, ChevronRight, BookOpen, MessageCircle, Brain, ArrowRight, Eye, AlertCircle, History, Clock } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Scissors, Zap, Loader2, ChevronDown, ChevronRight, BookOpen, MessageCircle, Brain, ArrowRight, Eye, AlertCircle, History, Clock, X } from 'lucide-react';
 import { aiAnalysisService, type AiSceneAnalysisResult, type AiCliffhangerResult, type AiAnalysisHistoryDto, SCENE_TYPE_COLORS, getSceneTypeLabel } from '../../services/aiAnalysisService';
 
 interface Props {
@@ -21,10 +21,16 @@ const SCENE_TYPE_ICONS: Record<string, React.ElementType> = {
     Revelation:    Eye,
 };
 
-export default function SceneCliffhangerPanel({ projectId, chapterId, chapterContent }: Props) {
+export default function SceneCliffhangerPanel({
+    projectId,
+    chapterId,
+    chapterContent,
+    onHighlightScenes,
+    onClearHighlights,
+}: Props) {
     const [activeView, setActiveView] = useState<ActiveView>('scenes');
     const [mode, setMode] = useState<Mode>('new');
-    
+
     // New Analysis State
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -32,8 +38,8 @@ export default function SceneCliffhangerPanel({ projectId, chapterId, chapterCon
     const [cliffResult, setCliffResult] = useState<AiCliffhangerResult | null>(null);
     const [expandedScene, setExpandedScene] = useState<number | null>(null);
 
-    // Callbacks to bubble
-    const { onHighlightScenes, onClearHighlights } = arguments[0] as Props;
+    // Active (clicked) scene — for click-to-highlight
+    const [activeSceneIndex, setActiveSceneIndex] = useState<number | null>(null);
 
     // History State
     const [historyLoading, setHistoryLoading] = useState(false);
@@ -42,25 +48,27 @@ export default function SceneCliffhangerPanel({ projectId, chapterId, chapterCon
 
     const hasContent = chapterContent.trim().length >= 50;
 
+    // Load history whenever mode/view/chapter/project changes
     useEffect(() => {
         if (mode === 'history') {
-            loadHistory();
-        }
-    }, [mode, activeView, projectId]);
-
-    const loadHistory = async () => {
-        setHistoryLoading(true);
-        try {
             const typeParam = activeView === 'scenes' ? 'Scenes' : 'Cliffhanger';
-            const res = await aiAnalysisService.getAnalysisHistory(projectId, typeParam);
-            setHistoryItems(res.items);
+            setHistoryLoading(true);
+            setHistoryItems([]);
             setExpandedHistoryId(null);
-        } catch (e: unknown) {
-            console.error('Failed to load history', e);
-        } finally {
-            setHistoryLoading(false);
+            aiAnalysisService
+                .getAnalysisHistory(projectId, typeParam, chapterId ?? undefined)
+                .then(res => setHistoryItems(res.items))
+                .catch(e => console.error('Failed to load history', e))
+                .finally(() => setHistoryLoading(false));
         }
-    };
+    }, [mode, activeView, projectId, chapterId]);
+
+    // Clear highlights when switching away from a result
+    useEffect(() => {
+        setActiveSceneIndex(null);
+        if (onClearHighlights) onClearHighlights();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sceneResult]);
 
     const analyze = async () => {
         if (!hasContent) {
@@ -84,7 +92,32 @@ export default function SceneCliffhangerPanel({ projectId, chapterId, chapterCon
         }
     };
 
-    const renderScenes = (result: AiSceneAnalysisResult) => (
+    // Highlight a single scene and smoothly scroll the editor to it
+    const handleSceneClick = useCallback((index: number, quote: string, color: string) => {
+        if (activeSceneIndex === index) {
+            // Second click = deselect
+            setActiveSceneIndex(null);
+            if (onClearHighlights) onClearHighlights();
+            return;
+        }
+
+        setActiveSceneIndex(index);
+        setExpandedScene(expandedScene === index ? index : index); // keep expanded
+
+        if (onHighlightScenes && quote) {
+            onHighlightScenes([{ quote, color }]);
+
+            // After a short delay, scroll the highlighted mark into view
+            setTimeout(() => {
+                const mark = document.querySelector('.ai-highlight');
+                if (mark) {
+                    mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        }
+    }, [activeSceneIndex, expandedScene, onHighlightScenes, onClearHighlights]);
+
+    const renderScenes = (result: AiSceneAnalysisResult, isHistoryMode = false) => (
         <div className="flex flex-col gap-3">
             {result.chapterSummary && (
                 <div className="rounded-xl p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
@@ -97,59 +130,117 @@ export default function SceneCliffhangerPanel({ projectId, chapterId, chapterCon
             )}
             <div className="flex items-center justify-between mb-1 mt-1">
                 <p className="text-xs text-[var(--text-secondary)] font-semibold">{result.scenes.length} phân cảnh được phát hiện</p>
-                {onHighlightScenes && (
-                    <button
-                        onClick={() => {
-                            const quotes = result.scenes.filter(s => s.exactQuote).map(s => ({
-                                quote: s.exactQuote,
-                                color: SCENE_TYPE_COLORS[s.type] ?? '#6b7280'
-                            }));
-                            onHighlightScenes(quotes);
-                        }}
-                        className="text-[10px] font-bold text-[var(--accent)] hover:underline flex items-center gap-1"
-                    >
-                        <Eye className="w-3 h-3" /> Hiện toàn bộ
-                    </button>
-                )}
+                <div className="flex items-center gap-2">
+                    {activeSceneIndex !== null && onClearHighlights && !isHistoryMode && (
+                        <button
+                            onClick={() => {
+                                setActiveSceneIndex(null);
+                                onClearHighlights();
+                            }}
+                            className="text-[10px] font-bold text-rose-400 hover:underline flex items-center gap-1"
+                        >
+                            <X className="w-3 h-3" /> Xóa highlight
+                        </button>
+                    )}
+                    {onHighlightScenes && (
+                        <button
+                            onClick={() => {
+                                setActiveSceneIndex(null);
+                                const quotes = result.scenes.filter(s => s.exactQuote).map(s => ({
+                                    quote: s.exactQuote,
+                                    color: SCENE_TYPE_COLORS[s.type] ?? '#6b7280'
+                                }));
+                                onHighlightScenes(quotes);
+                            }}
+                            className="text-[10px] font-bold text-[var(--accent)] hover:underline flex items-center gap-1"
+                        >
+                            <Eye className="w-3 h-3" /> Hiện toàn bộ
+                        </button>
+                    )}
+                </div>
             </div>
+
+            {/* Hint text for click behavior */}
+            {!isHistoryMode && onHighlightScenes && (
+                <p className="text-[10px] text-[var(--text-secondary)] opacity-60 flex items-center gap-1 -mt-1 mb-1">
+                    <Eye className="w-3 h-3" /> Bấm vào cảnh để highlight trong văn bản
+                </p>
+            )}
+
             {result.scenes.map((scene, i) => {
                 const color = SCENE_TYPE_COLORS[scene.type] ?? '#6b7280';
                 const Icon = SCENE_TYPE_ICONS[scene.type] ?? BookOpen;
-                // For history items, we don't have expandedScene state synced easily per scene, so just default expand all for simplicity or use a local state. 
-                // Since this is read-only render, let's keep it simple: always expand in history, toggle in new.
-                const isExpanded = mode === 'history' ? true : expandedScene === i;
-                
+                const isExpanded = isHistoryMode ? true : expandedScene === i;
+                const isActive = !isHistoryMode && activeSceneIndex === i;
+
                 return (
-                    <div key={i} className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-color)' }}
-                        onMouseEnter={() => {
-                            if (scene.exactQuote && onHighlightScenes) {
-                                onHighlightScenes([{ quote: scene.exactQuote, color }]);
-                            }
+                    <div
+                        key={i}
+                        className="rounded-xl overflow-hidden transition-all duration-200"
+                        style={{
+                            border: isActive
+                                ? `2px solid ${color}`
+                                : '1px solid var(--border-color)',
+                            boxShadow: isActive ? `0 0 12px ${color}33` : 'none',
+                            transform: isActive ? 'scale(1.005)' : 'scale(1)',
                         }}
-                        onMouseLeave={() => {
-                            if (onClearHighlights) onClearHighlights();
-                        }}>
+                    >
                         <button
-                            className={`w-full flex items-center gap-2 p-3 text-left ${mode === 'new' ? 'hover:bg-[var(--bg-app)]' : 'cursor-default'}`}
-                            style={{ background: 'var(--bg-surface)', transition: 'background-color 0.2s' }}
+                            className={`w-full flex items-center gap-2 p-3 text-left transition-all duration-150 ${!isHistoryMode ? 'cursor-pointer' : 'cursor-default'}`}
+                            style={{
+                                background: isActive ? `${color}18` : 'var(--bg-surface)',
+                            }}
                             onClick={() => {
-                                if (mode === 'new') setExpandedScene(isExpanded ? null : i);
-                                if (scene.exactQuote && onHighlightScenes) onHighlightScenes([{ quote: scene.exactQuote, color }]);
-                            }}>
-                            <div className="flex items-center justify-center w-6 h-6 rounded-lg shrink-0" style={{ background: `${color}22` }}>
+                                if (isHistoryMode) return;
+                                // Toggle expand
+                                setExpandedScene(isExpanded && activeSceneIndex === i ? null : i);
+                                // Click-to-highlight
+                                handleSceneClick(i, scene.exactQuote, color);
+                            }}
+                        >
+                            <div
+                                className="flex items-center justify-center w-7 h-7 rounded-lg shrink-0 transition-colors"
+                                style={{
+                                    background: isActive ? `${color}33` : `${color}22`,
+                                    border: isActive ? `1px solid ${color}55` : 'none',
+                                }}
+                            >
                                 <Icon className="w-3.5 h-3.5" style={{ color }} />
                             </div>
                             <div className="flex-1 min-w-0">
-                                <span className="text-xs font-bold text-[var(--text-primary)] block truncate">Cảnh {i + 1}: {scene.title}</span>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-bold text-[var(--text-primary)] block truncate">Cảnh {i + 1}: {scene.title}</span>
+                                    {isActive && (
+                                        <span
+                                            className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                                            style={{ background: `${color}22`, color }}
+                                        >
+                                            ● Đang xem
+                                        </span>
+                                    )}
+                                </div>
                                 <span className="text-[10px] font-medium" style={{ color }}>{getSceneTypeLabel(scene.type)}</span>
                             </div>
-                            {mode === 'new' && (isExpanded ? <ChevronDown className="w-4 h-4 text-[var(--text-secondary)] shrink-0" /> : <ChevronRight className="w-4 h-4 text-[var(--text-secondary)] shrink-0" />)}
+                            {!isHistoryMode && (
+                                isExpanded
+                                    ? <ChevronDown className="w-4 h-4 text-[var(--text-secondary)] shrink-0" />
+                                    : <ChevronRight className="w-4 h-4 text-[var(--text-secondary)] shrink-0" />
+                            )}
                         </button>
                         {isExpanded && (
-                            <div className="px-3 pb-3 pt-1 flex flex-col gap-2" style={{ background: 'var(--bg-app)' }}>
+                            <div
+                                className="px-3 pb-3 pt-1 flex flex-col gap-2"
+                                style={{ background: isActive ? `${color}08` : 'var(--bg-app)' }}
+                            >
                                 <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{scene.description}</p>
                                 {scene.exactQuote && (
-                                    <div className="rounded-lg p-2 border-l-2 pl-3" style={{ borderColor: color, background: `${color}10` }}>
+                                    <div
+                                        className="rounded-lg p-2 border-l-2 pl-3"
+                                        style={{
+                                            borderColor: color,
+                                            background: `${color}${isActive ? '1a' : '10'}`,
+                                        }}
+                                    >
                                         <p className="text-[10px] text-[var(--text-secondary)] italic">"{scene.exactQuote}"</p>
                                     </div>
                                 )}
@@ -265,7 +356,7 @@ export default function SceneCliffhangerPanel({ projectId, chapterId, chapterCon
                             </div>
                         )}
 
-                        {activeView === 'scenes' && sceneResult && renderScenes(sceneResult)}
+                        {activeView === 'scenes' && sceneResult && renderScenes(sceneResult, false)}
                         {activeView === 'cliffhanger' && cliffResult && renderCliffhanger(cliffResult)}
                     </div>
                 ) : (
@@ -283,12 +374,12 @@ export default function SceneCliffhangerPanel({ projectId, chapterId, chapterCon
                         ) : (
                             historyItems.map((item) => {
                                 const isExpanded = expandedHistoryId === item.id;
-                                let parsedResult: any = null;
-                                try { parsedResult = JSON.parse(item.resultJson); } catch (e) { /* ignore */ }
+                                let parsedResult: AiSceneAnalysisResult | AiCliffhangerResult | null = null;
+                                try { parsedResult = JSON.parse(item.resultJson); } catch { /* ignore */ }
 
                                 return (
                                     <div key={item.id} className="rounded-xl overflow-hidden shadow-sm" style={{ border: '1px solid var(--border-color)', background: 'var(--bg-surface)' }}>
-                                        <button 
+                                        <button
                                             className="w-full flex items-center justify-between p-3"
                                             onClick={() => setExpandedHistoryId(isExpanded ? null : item.id)}>
                                             <div className="flex items-center gap-2">
@@ -309,7 +400,9 @@ export default function SceneCliffhangerPanel({ projectId, chapterId, chapterCon
 
                                         {isExpanded && parsedResult && (
                                             <div className="p-3 border-t border-[var(--border-color)]" style={{ background: 'var(--bg-app)' }}>
-                                                {activeView === 'scenes' ? renderScenes(parsedResult as AiSceneAnalysisResult) : renderCliffhanger(parsedResult as AiCliffhangerResult)}
+                                                {activeView === 'scenes'
+                                                    ? renderScenes(parsedResult as AiSceneAnalysisResult, true)
+                                                    : renderCliffhanger(parsedResult as AiCliffhangerResult)}
                                             </div>
                                         )}
                                     </div>

@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Google.Apis.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -95,6 +96,100 @@ namespace Service.Implementations
 
             _context.Users.Update(user);
             await _context.SaveChangesAsync();
+
+            return new AuthResponse
+            {
+                UserId = user.Id,
+                FullName = user.FullName,
+                Email = user.Email,
+                Role = user.Role,
+                AccessToken = GenerateJwtToken(user),
+                RefreshToken = user.RefreshToken
+            };
+        }
+
+        public async Task<AuthResponse> LoginWithGoogleAsync(GoogleLoginRequest request)
+        {
+            var googleClientId = _config["GoogleAuth:ClientId"];
+            if (string.IsNullOrWhiteSpace(googleClientId))
+            {
+                throw new Exception("Google login chưa được cấu hình.");
+            }
+
+            GoogleJsonWebSignature.Payload payload;
+            try
+            {
+                payload = await GoogleJsonWebSignature.ValidateAsync(
+                    request.IdToken,
+                    new GoogleJsonWebSignature.ValidationSettings
+                    {
+                        Audience = new[] { googleClientId }
+                    });
+            }
+            catch (InvalidJwtException)
+            {
+                throw new Exception("Google token không hợp lệ.");
+            }
+
+            if (string.IsNullOrWhiteSpace(payload.Email) || payload.EmailVerified != true)
+            {
+                throw new Exception("Email Google chưa được xác thực.");
+            }
+
+            var normalizedEmail = payload.Email.Trim().ToLowerInvariant();
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
+            var isNewUser = false;
+
+            if (user == null)
+            {
+                var generatedPassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
+                CreatePasswordHash(generatedPassword, out string passwordHash, out string passwordSalt);
+
+                // Generate raw DEK for the user, then encrypt it with system MasterKey
+                string rawDek = EncryptionHelper.GenerateDataEncryptionKey();
+                string masterKey = _config["Security:MasterKey"] ?? throw new Exception("MasterKey not found in config");
+                string encryptedDek = EncryptionHelper.EncryptWithMasterKey(rawDek, masterKey);
+
+                user = new User
+                {
+                    FullName = string.IsNullOrWhiteSpace(payload.Name) ? normalizedEmail.Split('@')[0] : payload.Name.Trim(),
+                    Email = normalizedEmail,
+                    PasswordHash = passwordHash,
+                    PasswordSalt = passwordSalt,
+                    AvatarURL = payload.Picture,
+                    Role = "Author",
+                    DataEncryptionKey = encryptedDek,
+                    IsActive = true
+                };
+
+                _context.Users.Add(user);
+                isNewUser = true;
+            }
+
+            if (!user.IsActive)
+            {
+                throw new Exception("User is inactive.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(payload.Picture))
+            {
+                user.AvatarURL = payload.Picture;
+            }
+
+            var refreshToken = GenerateRefreshToken();
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+
+            await _context.SaveChangesAsync();
+
+            if (isNewUser)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try { await _emailService.SendWelcomeEmailAsync(user.Email, user.FullName); }
+                    catch { /* Lỗi gửi mail không làm fail đăng ký */ }
+                });
+            }
 
             return new AuthResponse
             {

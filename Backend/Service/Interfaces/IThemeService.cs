@@ -13,6 +13,6 @@ namespace Service.Interfaces
         Task<ThemeResponse> CreateEntryAsync(Guid projectId, Guid userId, CreateThemeRequest request);
         Task<ThemeResponse> UpdateEntryAsync(Guid id, Guid projectId, Guid userId, UpdateThemeRequest request);
         Task<bool> DeleteEntryAsync(Guid id, Guid projectId, Guid userId);
-        Task<bool> GenerateEmbeddingAsync(Guid id, Guid projectId, Guid userId);
+        Task<ThemeResponse> GenerateEmbeddingAsync(Guid id, Guid projectId, Guid userId);
     }
 }

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Pgvector;
 using Repository.Data;
 using Repository.Entities;
 using Service.Helpers;
@@ -16,11 +17,13 @@ namespace Service.Implementations
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
+        private readonly IEmbeddingService _embeddingService;
 
-        public StyleGuideService(AppDbContext context, IConfiguration config)
+        public StyleGuideService(AppDbContext context, IConfiguration config, IEmbeddingService embeddingService)
         {
             _context = context;
             _config = config;
+            _embeddingService = embeddingService;
         }
 
         public async Task<List<StyleGuideResponse>> GetEntriesByProjectIdAsync(Guid projectId, Guid userId)
@@ -60,11 +63,16 @@ namespace Service.Implementations
                 ProjectId = projectId,
                 Aspect = request.Aspect,
                 Content = EncryptionHelper.EncryptWithMasterKey(request.Content, rawDek),
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
             };
+
+            var embeddingVector = await EmbedDocumentAsync(request.Aspect, request.Content);
+            entry.Embedding = new Vector(embeddingVector);
+            entry.UpdatedAt = DateTime.UtcNow;
 
             _context.StyleGuideEntries.Add(entry);
             await _context.SaveChangesAsync();
+
             return MapToResponse(entry, rawDek);
         }
 
@@ -80,14 +88,18 @@ namespace Service.Implementations
             if (request.Aspect != null) entry.Aspect = request.Aspect;
             if (request.Content != null) entry.Content = EncryptionHelper.EncryptWithMasterKey(request.Content, rawDek);
 
-            entry.UpdatedAt = DateTime.UtcNow;
-
-            if (request.Aspect != null || request.Content != null)
+            var shouldRegenerateEmbedding = request.Aspect != null || request.Content != null;
+            if (shouldRegenerateEmbedding)
             {
-                entry.Embedding = null;
+                var aspect = request.Aspect ?? entry.Aspect;
+                var content = request.Content ?? EncryptionHelper.DecryptWithMasterKey(entry.Content, rawDek);
+                var embeddingVector = await EmbedDocumentAsync(aspect, content);
+                entry.Embedding = new Vector(embeddingVector);
             }
 
+            entry.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
+
             return MapToResponse(entry, rawDek);
         }
 
@@ -102,10 +114,23 @@ namespace Service.Implementations
             return true;
         }
 
-        public async Task<bool> GenerateEmbeddingAsync(Guid id, Guid projectId, Guid userId)
+        public async Task<StyleGuideResponse> GenerateEmbeddingAsync(Guid id, Guid projectId, Guid userId)
         {
             await VerifyOwnershipAsync(projectId, userId);
-            throw new NotImplementedException();
+
+            var entry = await _context.StyleGuideEntries.FirstOrDefaultAsync(e => e.Id == id && e.ProjectId == projectId)
+                ?? throw new KeyNotFoundException("Style guide not found");
+
+            var user = await GetUserAsync(userId);
+            var rawDek = GetDek(user);
+            var content = EncryptionHelper.DecryptWithMasterKey(entry.Content, rawDek);
+            var embeddingVector = await EmbedDocumentAsync(entry.Aspect, content);
+
+            entry.Embedding = new Vector(embeddingVector);
+            entry.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return MapToResponse(entry, rawDek);
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────────
@@ -128,12 +153,19 @@ namespace Service.Implementations
             return EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
         }
 
+        private async Task<float[]> EmbedDocumentAsync(string aspect, string content)
+        {
+            var text = $"search_document: {aspect}\n{content}";
+            return await _embeddingService.GetEmbeddingAsync(text);
+        }
+
         private static StyleGuideResponse MapToResponse(StyleGuideEntry e, string rawDek) => new()
         {
             Id = e.Id,
             ProjectId = e.ProjectId,
             Aspect = e.Aspect,
             Content = EncryptionHelper.DecryptWithMasterKey(e.Content, rawDek),
+            HasEmbedding = e.Embedding != null,
             CreatedAt = e.CreatedAt,
             UpdatedAt = e.UpdatedAt,
         };

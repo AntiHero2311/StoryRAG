@@ -56,6 +56,26 @@ Base URL: `http://localhost:<port>/api`
 
 ---
 
+### POST `/api/auth/google-login`
+Đăng nhập bằng Google.
+
+**Auth:** Không cần.
+
+> Yêu cầu backend đã cấu hình `GoogleAuth:ClientId` (hoặc env `GoogleAuth__ClientId`).
+
+**Request Body:**
+```json
+{
+  "idToken": "string (required)"
+}
+```
+
+**Response `200`:** `AuthResponse` (xem trên).
+
+**Response `401`:** `{ "message": "..." }`
+
+---
+
 ### PUT `/api/auth/change-password`
 Đổi mật khẩu.
 

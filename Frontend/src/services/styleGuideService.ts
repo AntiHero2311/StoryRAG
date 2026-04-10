@@ -32,7 +32,7 @@ export interface UpdateStyleGuideRequest {
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
-const BASE = (projectId: string) => `/projects/${projectId}/style-guide`;
+const BASE = (projectId: string) => `/projects/${projectId}/style-guides`;
 
 export const styleGuideService = {
     getAll: (projectId: string) =>

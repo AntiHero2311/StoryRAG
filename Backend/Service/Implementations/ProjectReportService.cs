@@ -22,8 +22,8 @@ namespace Service.Implementations
         private readonly IEmbeddingService _embeddingService;
         private readonly ILogger<ProjectReportService> _logger;
         private readonly ChatClient _chatClient;        // LM Studio (fallback)
-        private readonly ChatClient? _geminiChatClient; // Gemini (primary)
-        private readonly bool _geminiIsGemma;           // Gemma không hỗ trợ system role
+        private readonly List<GeminiChatClientSlot> _geminiChatClients = []; // Gemini pool
+        private static int _nextGeminiChatKeyIndex;
         private const int TopK = 8;
 
         // ── Rubric definition (8 nhóm, 20 tiêu chí, 100 điểm) ──────────────────
@@ -77,18 +77,29 @@ namespace Service.Implementations
             };
             _chatClient = new OpenAIClient(new ApiKeyCredential(apiKey), lmOptions).GetChatClient(model);
 
-            // Gemini (primary)
-            var geminiKey = config["Gemini:ChatApiKey"] ?? string.Empty;
-            if (!string.IsNullOrEmpty(geminiKey))
+            // Gemini (primary pool for report analysis)
+            var geminiModel = config["Gemini:ChatModel"] ?? "gemma-3-27b-it";
+            var geminiIsGemma = geminiModel.StartsWith("gemma", StringComparison.OrdinalIgnoreCase);
+            var geminiKeys = ReadApiKeys(
+                config,
+                "Gemini:AnalyzeApiKey",
+                "Gemini:ChatApiKey",
+                "Gemini:AnalyzeApiKeys",
+                "Gemini:ChatApiKeys");
+
+            if (geminiKeys.Count > 0)
             {
-                var geminiModel = config["Gemini:ChatModel"] ?? "gemma-3-27b-it";
-                _geminiIsGemma = geminiModel.StartsWith("gemma", StringComparison.OrdinalIgnoreCase);
                 var geminiOptions = new OpenAIClientOptions
                 {
                     Endpoint = new Uri("https://generativelanguage.googleapis.com/v1beta/openai/"),
                     NetworkTimeout = TimeSpan.FromMinutes(5),
                 };
-                _geminiChatClient = new OpenAIClient(new ApiKeyCredential(geminiKey), geminiOptions).GetChatClient(geminiModel);
+
+                for (var i = 0; i < geminiKeys.Count; i++)
+                {
+                    var client = new OpenAIClient(new ApiKeyCredential(geminiKeys[i]), geminiOptions).GetChatClient(geminiModel);
+                    _geminiChatClients.Add(new GeminiChatClientSlot(client, geminiIsGemma, $"key {i + 1}/{geminiKeys.Count}"));
+                }
             }
         }
 
@@ -101,22 +112,30 @@ namespace Service.Implementations
                 Temperature = temperature,
             };
 
-            if (_geminiChatClient != null)
+            if (_geminiChatClients.Count > 0)
             {
-                try
+                Exception? lastGeminiError = null;
+                foreach (var slot in GetRotatedGeminiClients())
                 {
-                    var geminiMessages = _geminiIsGemma
-                        ? GeminiRetryHelper.FlattenSystemForGemma(messages)
-                        : messages;
-                    var geminiResult = await GeminiRetryHelper.ExecuteAsync(
-                        () => _geminiChatClient.CompleteChatAsync(geminiMessages, options),
-                        _logger, "Gemini Report");
-                    return geminiResult.Value;
+                    try
+                    {
+                        var geminiMessages = slot.IsGemma
+                            ? GeminiRetryHelper.FlattenSystemForGemma(messages)
+                            : messages;
+                        var geminiResult = await GeminiRetryHelper.ExecuteAsync(
+                            () => slot.Client.CompleteChatAsync(geminiMessages, options),
+                            _logger,
+                            $"Gemini Report ({slot.KeyLabel})");
+                        return geminiResult.Value;
+                    }
+                    catch (Exception ex)
+                    {
+                        lastGeminiError = ex;
+                        _logger.LogWarning(ex, "Gemini chat thất bại với {KeyLabel}, thử key khác.", slot.KeyLabel);
+                    }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Gemini chat thất bại, fallback về LM Studio.");
-                }
+
+                _logger.LogWarning(lastGeminiError, "Gemini chat thất bại với toàn bộ key, fallback về LM Studio.");
             }
 
             var result = await _chatClient.CompleteChatAsync(messages, options);
@@ -716,6 +735,38 @@ namespace Service.Implementations
             > 50 => "Trung bình",
             _ => "Cần sửa lớn",
         };
+
+        private List<GeminiChatClientSlot> GetRotatedGeminiClients()
+        {
+            if (_geminiChatClients.Count <= 1)
+                return _geminiChatClients;
+
+            var start = Math.Abs(Interlocked.Increment(ref _nextGeminiChatKeyIndex));
+            return Enumerable.Range(0, _geminiChatClients.Count)
+                .Select(i => _geminiChatClients[(start + i) % _geminiChatClients.Count])
+                .ToList();
+        }
+
+        private static List<string> ReadApiKeys(IConfiguration config, params string[] configPaths)
+        {
+            var results = new List<string>();
+            foreach (var path in configPaths)
+            {
+                var raw = config[path];
+                if (string.IsNullOrWhiteSpace(raw))
+                    continue;
+
+                results.AddRange(
+                    raw.Split([',', ';', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Where(k => !string.IsNullOrWhiteSpace(k)));
+            }
+
+            return results
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+        }
+
+        private sealed record GeminiChatClientSlot(ChatClient Client, bool IsGemma, string KeyLabel);
 
         private class AiScoreItem
         {

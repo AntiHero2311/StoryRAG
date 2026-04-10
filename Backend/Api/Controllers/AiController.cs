@@ -321,6 +321,7 @@ namespace Api.Controllers
         public async Task<IActionResult> GetAnalysisHistory(
             Guid projectId,
             [FromQuery] string type,
+            [FromQuery] Guid? chapterId,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
@@ -330,7 +331,7 @@ namespace Api.Controllers
                 if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
 
                 pageSize = Math.Clamp(pageSize, 1, 100);
-                var result = await _historyService.GetHistoryAsync(projectId, userId.Value, type, page, pageSize);
+                var result = await _historyService.GetHistoryAsync(projectId, userId.Value, type, chapterId, page, pageSize);
                 return Ok(result);
             }
             catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }

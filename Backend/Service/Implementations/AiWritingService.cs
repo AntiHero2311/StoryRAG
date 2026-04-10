@@ -108,6 +108,21 @@ namespace Service.Implementations
             }
         }
 
+        private static string BuildPolishHistoryQuestion(string originalText, string instruction)
+        {
+            var normalizedInstruction = string.IsNullOrWhiteSpace(instruction)
+                ? "Trau chuốt theo mặc định"
+                : instruction.Trim().Replace("\r\n", " ").Replace('\n', ' ').Replace('\r', ' ');
+            if (normalizedInstruction.Length > 120)
+                normalizedInstruction = normalizedInstruction[..120] + "...";
+
+            var normalizedSource = (originalText ?? string.Empty).Trim().Replace("\r\n", " ").Replace('\n', ' ').Replace('\r', ' ');
+            if (normalizedSource.Length > 180)
+                normalizedSource = normalizedSource[..180] + "...";
+
+            return $"[Trau chuốt] {normalizedInstruction} | Đoạn gốc: {normalizedSource}";
+        }
+
         public async Task<AiWritingResult> WriteNewAsync(Guid projectId, string instruction, Guid userId)
         {
             await CheckAndDeductTokenAsync(projectId, userId);
@@ -165,9 +180,28 @@ namespace Service.Implementations
             var completion = await CompleteChatWithFallbackAsync(messages);
 
             var text = LlmOutputValidator.ValidateRewriteResponse(completion.Content[0].Text.Trim(), _logger);
+            var inputTokens = completion.Usage?.InputTokenCount ?? 0;
+            var outputTokens = completion.Usage?.OutputTokenCount ?? 0;
             var tokens = completion.Usage?.TotalTokenCount ?? 0;
 
             await DeductTokenAsync(userId, tokens);
+
+            var masterKey = _config["Security:MasterKey"] ?? throw new InvalidOperationException("Master key not configured.");
+            var user = await _context.Users.FindAsync(userId)
+                ?? throw new KeyNotFoundException("Người dùng không tồn tại.");
+            var rawDek = EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
+
+            _context.ChatMessages.Add(new AiChatMessage
+            {
+                ProjectId = projectId,
+                UserId = userId,
+                Question = EncryptionHelper.EncryptWithMasterKey(BuildPolishHistoryQuestion(originalText, instruction), rawDek),
+                Answer = EncryptionHelper.EncryptWithMasterKey(text, rawDek),
+                InputTokens = inputTokens,
+                OutputTokens = outputTokens,
+                TotalTokens = tokens,
+            });
+            await _context.SaveChangesAsync();
             return new AiWritingResult { GeneratedText = text, TotalTokens = tokens };
         }
 

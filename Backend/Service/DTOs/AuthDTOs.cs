@@ -28,6 +28,12 @@ namespace Service.DTOs
         public string Password { get; set; } = string.Empty;
     }
 
+    public class GoogleLoginRequest
+    {
+        [Required]
+        public string IdToken { get; set; } = string.Empty;
+    }
+
     public class ChangePasswordRequest
     {
         [Required]

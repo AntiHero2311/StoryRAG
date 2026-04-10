@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type ClipboardEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     ArrowLeft, Plus, Sparkles, History, Bold,
@@ -497,53 +497,138 @@ export default function WorkspacePage() {
         }
     };
 
-    // ── Highlighting logic ──────────────────────────────────────────────────
+    // ── Highlighting logic (DOM Range API — không bị vỡ bởi HTML tags) ───────
     const clearHighlights = useCallback(() => {
         if (!editorRef.current) return;
-        let html = editorRef.current.innerHTML;
-        if (!html.includes('ai-highlight')) return;
-        html = html.replace(/<mark class="ai-highlight"[^>]*>/g, '');
-        html = html.replace(/<\/mark>/g, '');
-        editorRef.current.innerHTML = html;
+        const marks = Array.from(editorRef.current.querySelectorAll('mark.ai-highlight'));
+        if (marks.length === 0) return;
+        marks.forEach(mark => {
+            const parent = mark.parentNode;
+            if (!parent) return;
+            while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+            parent.removeChild(mark);
+            parent.normalize();
+        });
         setHighlightsVisible(true);
     }, []);
 
     const highlightScenes = useCallback((scenes: { quote: string, color: string }[]) => {
         if (!editorRef.current) return;
         clearHighlights();
-        let html = editorRef.current.innerHTML;
-        let hasChanges = false;
-        scenes.forEach(scene => {
-            if (!scene.quote || scene.quote.length < 5) return;
-            const targetHtml = scene.quote.replace(/\n/g, '<br>');
-            const escaped = targetHtml.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(`(${escaped})`, 'g');
-            if (regex.test(html)) {
-                html = html.replace(regex, `<mark class="ai-highlight" style="background-color: ${scene.color}66; color: inherit; padding: 2px 0; border-radius: 4px; transition: background-color 0.2s;">$1</mark>`);
-                hasChanges = true;
-            } else {
-                const shortTarget = targetHtml.substring(0, 40);
-                if (shortTarget.length >= 10 && html.includes(shortTarget)) {
-                    const escapedShort = shortTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    const regexShort = new RegExp(`(${escapedShort}[^<]*)`, 'g'); 
-                    html = html.replace(regexShort, `<mark class="ai-highlight" style="background-color: ${scene.color}66; color: inherit; padding: 2px 0; border-radius: 4px; transition: background-color 0.2s;">$1</mark>`);
-                    hasChanges = true;
+
+        // Thu thập tất cả text node bên trong editor
+        function collectTextNodes(root: HTMLElement): Text[] {
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+            const nodes: Text[] = [];
+            let n: Node | null;
+            while ((n = walker.nextNode())) nodes.push(n as Text);
+            return nodes;
+        }
+
+        // Bọc [start, end) của plaintext bằng <mark>
+        function wrapRange(root: HTMLElement, startIdx: number, endIdx: number, color: string): boolean {
+            const textNodes = collectTextNodes(root);
+            let offset = 0;
+            let startNode: Text | null = null, startOff = 0;
+            let endNode: Text | null = null, endOff = 0;
+
+            for (const tn of textNodes) {
+                const len = (tn.textContent ?? '').length;
+                if (!startNode && offset + len > startIdx) {
+                    startNode = tn;
+                    startOff = Math.max(0, startIdx - offset);
+                }
+                if (startNode && offset + len >= endIdx) {
+                    endNode = tn;
+                    endOff = Math.min(len, endIdx - offset);
+                    break;
+                }
+                offset += len;
+            }
+
+            if (!startNode || !endNode) return false;
+
+            try {
+                const range = document.createRange();
+                range.setStart(startNode, startOff);
+                range.setEnd(endNode, endOff);
+
+                const mark = document.createElement('mark');
+                mark.className = 'ai-highlight';
+                mark.style.cssText = `background-color: ${color}55; color: inherit; padding: 2px 0; border-radius: 4px; transition: background-color 0.2s;`;
+
+                const fragment = range.extractContents();
+                mark.appendChild(fragment);
+                range.insertNode(mark);
+                return true;
+            } catch (err) {
+                console.warn('[highlight] wrapRange failed:', err);
+                return false;
+            }
+        }
+
+        const fullText = editorRef.current.innerText ?? '';
+        let anyHighlighted = false;
+
+        for (const scene of scenes) {
+            if (!scene.quote || scene.quote.length < 5) continue;
+
+            const q = scene.quote.trim();
+
+            // Strategy 1: full exact quote
+            let idx = fullText.indexOf(q);
+            if (idx !== -1) {
+                if (wrapRange(editorRef.current, idx, idx + q.length, scene.color)) {
+                    anyHighlighted = true;
+                    continue;
                 }
             }
-        });
-        if (hasChanges) {
-            editorRef.current.innerHTML = html;
+
+            // Strategy 2: first 100 chars
+            const p100 = q.substring(0, 100);
+            if (p100.length >= 10) {
+                idx = fullText.indexOf(p100);
+                if (idx !== -1 && wrapRange(editorRef.current, idx, idx + p100.length, scene.color)) {
+                    anyHighlighted = true;
+                    continue;
+                }
+            }
+
+            // Strategy 3: first 50 chars
+            const p50 = q.substring(0, 50);
+            if (p50.length >= 10) {
+                idx = fullText.indexOf(p50);
+                if (idx !== -1 && wrapRange(editorRef.current, idx, idx + p50.length, scene.color)) {
+                    anyHighlighted = true;
+                }
+            }
+        }
+
+        if (anyHighlighted) {
             setHighlightsVisible(true);
+            setTimeout(() => {
+                const mark = editorRef.current?.querySelector('mark.ai-highlight');
+                if (mark) mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 80);
         }
     }, [clearHighlights]);
+
 
     // ── Save → background Chunk + Embed ──────────────────────────────────
     const doSave = useCallback(async (showFeedback = true) => {
         if (!projectId || !activeChapter || !editorRef.current) return;
         if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
-        // Strip highlighting tags before saving
+        // Strip highlighting marks before saving (unwrap DOM nodes, then read innerHTML)
+        const marks = Array.from(editorRef.current.querySelectorAll('mark.ai-highlight'));
+        marks.forEach(mark => {
+            const parent = mark.parentNode;
+            if (!parent) return;
+            while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+            parent.removeChild(mark);
+            parent.normalize();
+        });
         let content = editorRef.current.innerHTML ?? '';
-        content = content.replace(/<mark class="ai-highlight"[^>]*>/g, '').replace(/<\/mark>/g, '');
+
         if (showFeedback) setSavedState('saving');
         try {
             const updated = await chapterService.updateChapter(projectId, activeChapter.id, {
@@ -740,6 +825,48 @@ export default function WorkspacePage() {
 
     const updateWordCount = () => {
         setWordCount(getWordCount());
+    };
+
+    const stripInlineColorsFromHtml = (rawHtml: string): string => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(rawHtml, 'text/html');
+
+        doc.body.querySelectorAll('script,style,link,meta').forEach(node => node.remove());
+
+        doc.body.querySelectorAll<HTMLElement>('*').forEach(el => {
+            el.removeAttribute('color');
+
+            if (el.hasAttribute('style')) {
+                const style = el.style;
+                style.removeProperty('color');
+                style.removeProperty('background');
+                style.removeProperty('background-color');
+                style.removeProperty('text-shadow');
+                style.removeProperty('caret-color');
+                style.removeProperty('-webkit-text-fill-color');
+                if (!style.cssText.trim()) el.removeAttribute('style');
+            }
+        });
+
+        return doc.body.innerHTML;
+    };
+
+    const handleEditorPaste = (e: ClipboardEvent<HTMLDivElement>) => {
+        e.preventDefault();
+
+        const html = e.clipboardData.getData('text/html');
+        const plain = e.clipboardData.getData('text/plain');
+
+        if (html) {
+            const sanitizedHtml = stripInlineColorsFromHtml(html);
+            document.execCommand('insertHTML', false, sanitizedHtml);
+        } else {
+            document.execCommand('insertText', false, plain);
+        }
+
+        updateWordCount();
+        scheduleAutoSave();
+        setHighlightsVisible(false);
     };
 
     // ── Render ─────────────────────────────────────────────────────────────
@@ -1282,6 +1409,7 @@ export default function WorkspacePage() {
                                                 contentEditable
                                                 suppressContentEditableWarning
                                                 onInput={() => { updateWordCount(); scheduleAutoSave(); setHighlightsVisible(false); }}
+                                                onPaste={handleEditorPaste}
                                                 className={`w-full min-h-[60vh] text-[var(--text-primary)] bg-transparent outline-none leading-[1.9] focus:outline-none ${!highlightsVisible ? 'hide-ai-highlights' : ''}`}
                                                 style={{ fontFamily: `'${editorSettings.editorFont}', sans-serif`, fontSize: `${editorSettings.editorFontSize}px`, letterSpacing: '0.01em' }}
                                                 data-placeholder="Bắt đầu viết tác phẩm của bạn tại đây..."
@@ -1658,6 +1786,7 @@ export default function WorkspacePage() {
 function wbCategoryIcon(cat: string, size = 'w-3.5 h-3.5') {
     const cls = `${size} shrink-0`;
     switch (cat) {
+        case 'World': return <Globe className={cls} />;
         case 'Setting': return <Globe className={cls} />;
         case 'Location': return <MapPin className={cls} />;
         case 'Rules': return <Shield className={cls} />;
@@ -1669,13 +1798,45 @@ function wbCategoryIcon(cat: string, size = 'w-3.5 h-3.5') {
     }
 }
 
+const WORLD_FOCUS_CATEGORY_ORDER = ['World', 'Setting', 'Location', 'Rules', 'Timeline', 'Glossary', 'Other'] as const;
+const WORLD_FOCUS_CATEGORIES = WORLD_FOCUS_CATEGORY_ORDER
+    .map(value => WORLDBUILDING_CATEGORIES.find(c => c.value === value))
+    .filter((c): c is NonNullable<typeof c> => !!c);
+
+function normalizeWorldCategory(category: string | undefined): string {
+    if (!category) return 'World';
+    switch (category) {
+        case 'Scene':
+        case 'Geography':
+        case 'Location':
+            return 'Location';
+        case 'Magic':
+        case 'Religion':
+        case 'Technology':
+        case 'Rules':
+            return 'Rules';
+        case 'History':
+        case 'Timeline':
+            return 'Timeline';
+        case 'Glossary':
+            return 'Glossary';
+        case 'Setting':
+            return 'Setting';
+        case 'World':
+            return 'World';
+        case 'Other':
+        default:
+            return 'Other';
+    }
+}
+
 function WorldbuildingPanel({ projectId }: { projectId: string }) {
     const [entries, setEntries] = useState<WorldbuildingEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [view, setView] = useState<'list' | 'form'>('list');
     const [editingEntry, setEditingEntry] = useState<WorldbuildingEntry | null>(null);
     const [filterCat, setFilterCat] = useState<string>('all');
-    const [form, setForm] = useState<CreateWorldbuildingRequest>({ title: '', content: '', category: 'Other' });
+    const [form, setForm] = useState<CreateWorldbuildingRequest>({ title: '', content: '', category: 'World' });
     const [saving, setSaving] = useState(false);
     const [embeddingId, setEmbeddingId] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -1689,14 +1850,14 @@ function WorldbuildingPanel({ projectId }: { projectId: string }) {
     }, [projectId]);
 
     const openAdd = () => {
-        setForm({ title: '', content: '', category: 'Other' });
+        setForm({ title: '', content: '', category: 'World' });
         setEditingEntry(null);
         setError(null);
         setView('form');
     };
 
     const openEdit = (e: WorldbuildingEntry) => {
-        setForm({ title: e.title, content: e.content, category: e.category });
+        setForm({ title: e.title, content: e.content, category: normalizeWorldCategory(e.category) });
         setEditingEntry(e);
         setError(null);
         setView('form');
@@ -1738,8 +1899,11 @@ function WorldbuildingPanel({ projectId }: { projectId: string }) {
         finally { setDeletingId(null); }
     };
 
-    const usedCats = Array.from(new Set(entries.map(e => e.category)));
-    const filtered = filterCat === 'all' ? entries : entries.filter(e => e.category === filterCat);
+    const usedCats = Array.from(new Set(entries.map(e => normalizeWorldCategory(e.category))))
+        .sort((a, b) => WORLD_FOCUS_CATEGORY_ORDER.indexOf(a as typeof WORLD_FOCUS_CATEGORY_ORDER[number]) - WORLD_FOCUS_CATEGORY_ORDER.indexOf(b as typeof WORLD_FOCUS_CATEGORY_ORDER[number]));
+    const filtered = filterCat === 'all'
+        ? entries
+        : entries.filter(e => normalizeWorldCategory(e.category) === filterCat);
 
     /* ── Form view ── */
     if (view === 'form') {
@@ -1769,8 +1933,11 @@ function WorldbuildingPanel({ projectId }: { projectId: string }) {
                     </div>
                     <div>
                         <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-1.5 block">Danh mục</label>
+                        <p className="text-[10px] mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                            Ưu tiên 6 danh mục cốt lõi để xây dựng thế giới gọn và nhất quán.
+                        </p>
                         <div className="flex flex-wrap gap-1.5">
-                            {WORLDBUILDING_CATEGORIES.map(c => {
+                            {WORLD_FOCUS_CATEGORIES.map(c => {
                                 const active = form.category === c.value;
                                 return (
                                     <button key={c.value} onClick={() => setForm(f => ({ ...f, category: c.value }))}
@@ -1788,7 +1955,7 @@ function WorldbuildingPanel({ projectId }: { projectId: string }) {
                     <div>
                         <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-1.5 block">Nội dung</label>
                         <textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-                            placeholder={getCategoryPlaceholder(form.category ?? 'Other')} rows={9}
+                            placeholder={getCategoryPlaceholder(normalizeWorldCategory(form.category ?? 'World'))} rows={9}
                             className="w-full px-3 py-2 rounded-xl text-xs text-[var(--text-primary)] outline-none resize-none leading-relaxed"
                             style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }} />
                     </div>
@@ -1878,8 +2045,9 @@ function WorldbuildingPanel({ projectId }: { projectId: string }) {
                     </div>
                 )}
                 {filtered.map(entry => {
-                    const color = getCategoryColor(entry.category);
-                    const isTimeline = entry.category === 'Timeline';
+                    const normalizedCategory = normalizeWorldCategory(entry.category);
+                    const color = getCategoryColor(normalizedCategory);
+                    const isTimeline = normalizedCategory === 'Timeline';
                     return (
                         <div key={entry.id} className="rounded-2xl overflow-hidden transition-all"
                             style={{
@@ -1891,14 +2059,14 @@ function WorldbuildingPanel({ projectId }: { projectId: string }) {
                             <div className="px-3 pt-3 pb-2 flex items-start gap-2.5">
                                 <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
                                     style={{ background: `${color}18`, color }}>
-                                    {wbCategoryIcon(entry.category)}
+                                    {wbCategoryIcon(normalizedCategory)}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-xs font-bold text-[var(--text-primary)] truncate leading-tight">{entry.title}</p>
                                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                         <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
                                             style={{ background: `${color}15`, color }}>
-                                            {getCategoryLabel(entry.category)}
+                                            {getCategoryLabel(normalizedCategory)}
                                         </span>
                                         {entry.hasEmbedding
                                             ? <span className="text-[10px] font-semibold" style={{ color: '#10b981' }}>✦ AI ready</span>

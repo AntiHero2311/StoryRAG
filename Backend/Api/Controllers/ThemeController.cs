@@ -83,12 +83,12 @@ namespace Api.Controllers
                 var userId = GetUserId();
                 if (userId == null) return Unauthorized();
 
-                var success = await _service.GenerateEmbeddingAsync(id, projectId, userId.Value);
-                return success ? Ok() : BadRequest("Failed to generate embedding");
+                var entry = await _service.GenerateEmbeddingAsync(id, projectId, userId.Value);
+                return Ok(entry);
             }
-            catch (NotImplementedException)
+            catch (KeyNotFoundException)
             {
-                return StatusCode(501, "Embedding generation not implemented yet.");
+                return NotFound();
             }
             catch (Exception ex)
             {

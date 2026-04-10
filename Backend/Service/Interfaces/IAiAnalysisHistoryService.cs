@@ -7,7 +7,7 @@ namespace Service.Interfaces
     public interface IAiAnalysisHistoryService
     {
         Task SaveHistoryAsync(Guid projectId, Guid? chapterId, Guid userId, string analysisType, string jsonResult, int totalTokens);
-        Task<AiAnalysisHistoryResult> GetHistoryAsync(Guid projectId, Guid userId, string analysisType, int page, int pageSize);
+        Task<AiAnalysisHistoryResult> GetHistoryAsync(Guid projectId, Guid userId, string analysisType, Guid? chapterId, int page, int pageSize);
     }
 
     public class AiAnalysisHistoryDto

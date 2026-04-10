@@ -45,7 +45,7 @@ namespace Service.Implementations
             await _context.SaveChangesAsync();
         }
 
-        public async Task<AiAnalysisHistoryResult> GetHistoryAsync(Guid projectId, Guid userId, string analysisType, int page, int pageSize)
+        public async Task<AiAnalysisHistoryResult> GetHistoryAsync(Guid projectId, Guid userId, string analysisType, Guid? chapterId, int page, int pageSize)
         {
             var project = await _context.Projects
                 .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted && p.AuthorId == userId)
@@ -57,6 +57,10 @@ namespace Service.Implementations
 
             var query = _context.AiAnalysisHistories
                 .Where(h => h.ProjectId == projectId && h.UserId == userId && h.AnalysisType == analysisType);
+
+            // Filter by chapter if provided
+            if (chapterId.HasValue)
+                query = query.Where(h => h.ChapterId == chapterId.Value);
 
             var total = await query.CountAsync();
             var items = await query

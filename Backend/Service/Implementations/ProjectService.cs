@@ -6,7 +6,6 @@ using Repository.Entities;
 using Service.DTOs;
 using Service.Helpers;
 using Service.Interfaces;
-using System.Net.Http.Json;
 
 namespace Service.Implementations
 {
@@ -14,11 +13,13 @@ namespace Service.Implementations
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
+        private readonly IEmbeddingService _embeddingService;
 
-        public ProjectService(AppDbContext context, IConfiguration config)
+        public ProjectService(AppDbContext context, IConfiguration config, IEmbeddingService embeddingService)
         {
             _context = context;
             _config = config;
+            _embeddingService = embeddingService;
         }
 
         public async Task<List<ProjectResponse>> GetUserProjectsAsync(Guid userId)
@@ -298,19 +299,7 @@ namespace Service.Implementations
         private async Task<float[]> EmbedSummaryAsync(string summaryText)
         {
             var text = $"search_document: {summaryText}";
-            var baseUrl = _config["AI:BaseUrl"] ?? "http://localhost:1234/v1";
-            var apiKey = _config["AI:ApiKey"] ?? "lm-studio";
-            var model = _config["AI:EmbeddingModel"] ?? "nomic-embed-text";
-
-            using var http = new System.Net.Http.HttpClient();
-            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
-            var body = new { model, input = new[] { text } };
-            var response = await http.PostAsJsonAsync($"{baseUrl}/embeddings", body);
-            response.EnsureSuccessStatusCode();
-
-            var json = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-            return json.GetProperty("data")[0].GetProperty("embedding")
-                .EnumerateArray().Select(x => x.GetSingle()).ToArray();
+            return await _embeddingService.GetEmbeddingAsync(text);
         }
 
         private static ProjectResponse MapToResponse(Project project, string rawDek)

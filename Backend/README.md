@@ -35,10 +35,13 @@ Authorization: Bearer <access_token>
 |--------|-------|-------|
 | `POST` | `/auth/register` | Đăng ký tài khoản (role mặc định: Author) |
 | `POST` | `/auth/login` | Đăng nhập, trả về JWT + refresh token |
+| `POST` | `/auth/google-login` | Đăng nhập bằng Google (gửi `idToken`) |
 | `POST` | `/auth/refresh` | Làm mới access token |
 | `PUT` | `/auth/change-password` 🔒 | Đổi mật khẩu |
 | `POST` | `/auth/forgot-password` | Gửi email reset password |
 | `POST` | `/auth/reset-password` | Đặt mật khẩu mới (dùng token từ email) |
+
+> `POST /auth/google-login` yêu cầu cấu hình `GoogleAuth:ClientId` (hoặc biến môi trường `GoogleAuth__ClientId`) trên Backend.
 
 **Response `POST /auth/login` (`200`)**
 ```json
@@ -128,6 +131,7 @@ Authorization: Bearer <access_token>
 | Method | Route | Mô tả |
 |--------|-------|-------|
 | `POST` | `/ai/{projectId}/rewrite` | Viết lại đoạn văn được chọn |
+| `POST` | `/ai/{projectId}/polish` | Trau chuốt đoạn văn và lưu vào lịch sử chat |
 | `GET` | `/ai/{projectId}/rewrite/history` | Lịch sử các lần rewrite |
 
 **Body `POST /rewrite`**
@@ -138,6 +142,8 @@ Authorization: Bearer <access_token>
   "instruction": "Viết lại theo phong cách bi kịch hơn"
 }
 ```
+
+> `POST /ai/{projectId}/polish` trả kết quả giống `write/continue` (`generatedText`, `totalTokens`) và tự động ghi vào `GET /ai/{projectId}/chat/history`.
 
 ### Phân tích AI
 
@@ -221,19 +227,21 @@ Các bảng này cung cấp **context tự động** cho AI khi phân tích — 
 
 **Role values:** `Protagonist`, `Antagonist`, `Supporting`, `Minor`
 
-### Style Guide — `/styleguide`
+### Style Guide — `/style-guides`
 
 | Method | Route | Mô tả |
 |--------|-------|-------|
-| `GET` | `/styleguide` | Danh sách quy tắc phong cách |
-| `POST` | `/styleguide` | Tạo mới |
-| `PUT` | `/styleguide/{id}` | Cập nhật |
-| `DELETE` | `/styleguide/{id}` | Xóa |
-| `POST` | `/styleguide/{id}/embed` | Embed cho AI |
+| `GET` | `/style-guides` | Danh sách quy tắc phong cách |
+| `POST` | `/style-guides` | Tạo mới |
+| `PUT` | `/style-guides/{id}` | Cập nhật |
+| `DELETE` | `/style-guides/{id}` | Xóa |
+| `POST` | `/style-guides/{id}/embed` | Embed cho AI |
+
+Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 
 **Aspect values:** `POV`, `Tone`, `Vocabulary`, `Dialogue`, `Pacing`, `Other`
 
-**Body `POST /styleguide`**
+**Body `POST /style-guides`**
 ```json
 {
   "aspect": "Tone",
@@ -251,6 +259,8 @@ Các bảng này cung cấp **context tự động** cho AI khi phân tích — 
 | `DELETE` | `/themes/{id}` | Xóa |
 | `POST` | `/themes/{id}/embed` | Embed cho AI |
 
+Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
+
 **Body `POST /themes`**
 ```json
 {
@@ -260,19 +270,21 @@ Các bảng này cung cấp **context tự động** cho AI khi phân tích — 
 }
 ```
 
-### Plot Notes — `/plotnotes`
+### Plot Notes — `/plot-notes`
 
 | Method | Route | Mô tả |
 |--------|-------|-------|
-| `GET` | `/plotnotes` | Danh sách ghi chú cốt truyện |
-| `POST` | `/plotnotes` | Tạo mới |
-| `PUT` | `/plotnotes/{id}` | Cập nhật |
-| `DELETE` | `/plotnotes/{id}` | Xóa |
-| `POST` | `/plotnotes/{id}/embed` | Embed cho AI |
+| `GET` | `/plot-notes` | Danh sách ghi chú cốt truyện |
+| `POST` | `/plot-notes` | Tạo mới |
+| `PUT` | `/plot-notes/{id}` | Cập nhật |
+| `DELETE` | `/plot-notes/{id}` | Xóa |
+| `POST` | `/plot-notes/{id}/embed` | Embed cho AI |
+
+Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 
 **Type values:** `Arc`, `Conflict`, `Foreshadowing`, `Twist`, `Climax`, `Resolution`, `Other`
 
-**Body `POST /plotnotes`**
+**Body `POST /plot-notes`**
 ```json
 {
   "type": "Foreshadowing",
@@ -322,14 +334,16 @@ Các bảng này cung cấp **context tự động** cho AI khi phân tích — 
 
 | Service | Vai trò |
 |---------|---------|
-| `EmbeddingService` | `batchEmbedContents` (max 100/batch, delay 2s), vector(768) |
+| `EmbeddingService` | `batchEmbedContents` với batch/token throttling (config qua `Gemini:Embedding*`), xoay key theo `Gemini:EmbedApiKey` + `Gemini:EmbedApiKey2` (hoặc `Gemini:EmbedApiKeys`), không fallback LM Studio |
 | `AiChatService` | Gemini → LM Studio fallback (chỉ lỗi non-429), lưu lịch sử |
 | `AiRewriteService` | Gemini → LM Studio fallback, lưu lịch sử |
 | `ChunkingService` | 1500 ký tự, overlap 150, ưu tiên cắt tại `\n\n` → `.` → space |
 | `AiWritingService` | Viết mới, tiếp nối, rất trau chuốt — tích hợp kỹ thuật **Show Don't Tell** & **Pacing** |
-| `ProjectReportService` | Rubric **5 điểm** (1-Kém → 5-Xuất sắc), phát hiện **4 loại cảnh báo** (INCOMPLETE/REPETITION/PLAGIARISM\_RISK/INCONSISTENCY), **Zero Hallucination**, chấm theo **Thể loại** |
+| `ProjectReportService` | Rubric **5 điểm** (1-Kém → 5-Xuất sắc), phát hiện **4 loại cảnh báo** (INCOMPLETE/REPETITION/PLAGIARISM\_RISK/INCONSISTENCY), **Zero Hallucination**, chấm theo **Thể loại**; phân tích ưu tiên `Gemini:AnalyzeApiKey`, fallback sang pool `Gemini:ChatApiKey`/`Gemini:ChatApiKeys`, cuối cùng mới về LM Studio |
 | `GeminiRetryHelper` | Backoff [10s, 30s, 65s] cho 429; throw lỗi thân thiện sau 3 lần |
 | `EncryptionHelper` | AES-256 với user DEK + Master Key |
+
+> Khuyến nghị cấu hình đủ 4 key ở môi trường chạy: `Gemini__ChatApiKey`, `Gemini__EmbedApiKey`, `Gemini__EmbedApiKey2`, `Gemini__AnalyzeApiKey`.
 
 ---
 

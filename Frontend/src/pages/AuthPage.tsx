@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, CheckCircle2, User, Github, BrainCircuit } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, CheckCircle2, User, BrainCircuit } from 'lucide-react';
+import { CredentialResponse, GoogleLogin } from '@react-oauth/google';
 import { authService, LoginData, RegisterData } from '../services/authService';
 
 const GoogleIcon = () => (
@@ -15,6 +16,7 @@ const GoogleIcon = () => (
 export default function AuthPage() {
     const navigate = useNavigate();
     const location = useLocation();
+    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
     const [mode, setMode] = useState<'login' | 'register'>(location.pathname === '/register' ? 'register' : 'login');
 
@@ -86,6 +88,32 @@ export default function AuthPage() {
             setLoading(false);
             setErrorMsg(error.response?.data?.message || 'Đăng ký thất bại. Vui lòng thử lại.');
         }
+    };
+
+    const handleGoogleLoginSuccess = async (credentialResponse: CredentialResponse) => {
+        const idToken = credentialResponse.credential;
+        if (!idToken) {
+            setErrorMsg('Không lấy được thông tin đăng nhập Google.');
+            return;
+        }
+
+        setLoading(true);
+        setErrorMsg('');
+        try {
+            const response = await authService.googleLogin({ idToken });
+            localStorage.setItem('token', response.accessToken);
+            if (response.refreshToken) {
+                localStorage.setItem('refreshToken', response.refreshToken);
+            }
+            navigate('/subscription');
+        } catch (error: any) {
+            setLoading(false);
+            setErrorMsg(error.response?.data?.message || 'Đăng nhập Google thất bại.');
+        }
+    };
+
+    const handleGoogleLoginError = () => {
+        setErrorMsg('Đăng nhập Google thất bại.');
     };
 
     // Premium styling variants for Inputs
@@ -254,13 +282,28 @@ export default function AuthPage() {
                             <span className="relative bg-[#121212] px-4 text-zinc-500 font-bold text-[11px] tracking-widest uppercase rounded-lg">HOẶC</span>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <button type="button" onClick={() => setErrorMsg('Chức năng đang cập nhật')} className="h-12 rounded-xl flex items-center justify-center gap-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-sm font-bold transition-all shadow-sm">
-                                <GoogleIcon /> Google
-                            </button>
-                            <button type="button" onClick={() => setErrorMsg('Chức năng đang cập nhật')} className="h-12 rounded-xl flex items-center justify-center gap-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-sm font-bold transition-all shadow-sm">
-                                <Github size={20} /> GitHub
-                            </button>
+                        <div className="grid grid-cols-1 gap-4">
+                            {googleClientId ? (
+                                <div className="h-12 rounded-xl overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center">
+                                    <GoogleLogin
+                                        onSuccess={handleGoogleLoginSuccess}
+                                        onError={handleGoogleLoginError}
+                                        text="signin_with"
+                                        shape="pill"
+                                        size="large"
+                                        width="360"
+                                        locale="vi"
+                                    />
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => setErrorMsg('Thiếu cấu hình VITE_GOOGLE_CLIENT_ID cho đăng nhập Google.')}
+                                    className="h-12 rounded-xl flex items-center justify-center gap-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-sm font-bold transition-all shadow-sm"
+                                >
+                                    <GoogleIcon /> Google
+                                </button>
+                            )}
                         </div>
                     </div>
 

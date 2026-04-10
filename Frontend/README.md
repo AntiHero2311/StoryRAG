@@ -132,12 +132,13 @@ Ctrl+S hoặc nút "Lưu"
 
 ```ts
 // src/services/api.ts
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5105/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5105/api';
 ```
 
 Tạo `.env.local` để override:
 ```
-VITE_API_URL=http://localhost:5105/api
+VITE_API_BASE_URL=http://localhost:5105/api
+VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 ```
 
 ---

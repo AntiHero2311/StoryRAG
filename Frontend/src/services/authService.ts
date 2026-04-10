@@ -11,6 +11,10 @@ export interface LoginData {
     password: string;
 }
 
+export interface GoogleLoginData {
+    idToken: string;
+}
+
 export interface ChangePasswordData {
     oldPassword: string;
     newPassword: string;
@@ -44,6 +48,12 @@ export const authService = {
     // Gọi API Đăng Nhập
     login: async (data: LoginData): Promise<AuthResponse> => {
         const response = await api.post<AuthResponse>('/Auth/login', data);
+        return response.data;
+    },
+
+    // Gọi API Đăng Nhập Google
+    googleLogin: async (data: GoogleLoginData): Promise<AuthResponse> => {
+        const response = await api.post<AuthResponse>('/Auth/google-login', data);
         return response.data;
     },
 

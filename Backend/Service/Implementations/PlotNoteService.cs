@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Pgvector;
 using Repository.Data;
 using Repository.Entities;
 using Service.Helpers;
@@ -16,11 +17,13 @@ namespace Service.Implementations
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
+        private readonly IEmbeddingService _embeddingService;
 
-        public PlotNoteService(AppDbContext context, IConfiguration config)
+        public PlotNoteService(AppDbContext context, IConfiguration config, IEmbeddingService embeddingService)
         {
             _context = context;
             _config = config;
+            _embeddingService = embeddingService;
         }
 
         public async Task<List<PlotNoteResponse>> GetEntriesByProjectIdAsync(Guid projectId, Guid userId)
@@ -61,11 +64,19 @@ namespace Service.Implementations
                 Type = request.Type, // Type is an enum/category usually, but we can encrypt if needed. It's safe leaving as clear text if it's just 'Arc', 'Twist'. Keeping it clear to allow querying/filtering.
                 Title = EncryptionHelper.EncryptWithMasterKey(request.Title, rawDek),
                 Content = EncryptionHelper.EncryptWithMasterKey(request.Content, rawDek),
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
             };
+
+            var embeddingVector = await EmbedDocumentAsync(
+                request.Type,
+                request.Title,
+                request.Content);
+            entry.Embedding = new Vector(embeddingVector);
+            entry.UpdatedAt = DateTime.UtcNow;
 
             _context.PlotNoteEntries.Add(entry);
             await _context.SaveChangesAsync();
+
             return MapToResponse(entry, rawDek);
         }
 
@@ -82,14 +93,20 @@ namespace Service.Implementations
             if (request.Title != null) entry.Title = EncryptionHelper.EncryptWithMasterKey(request.Title, rawDek);
             if (request.Content != null) entry.Content = EncryptionHelper.EncryptWithMasterKey(request.Content, rawDek);
 
-            entry.UpdatedAt = DateTime.UtcNow;
-
-            if (request.Type != null || request.Title != null || request.Content != null)
+            var shouldRegenerateEmbedding = request.Type != null || request.Title != null || request.Content != null;
+            if (shouldRegenerateEmbedding)
             {
-                entry.Embedding = null;
+                var type = request.Type ?? entry.Type;
+                var title = request.Title ?? EncryptionHelper.DecryptWithMasterKey(entry.Title, rawDek);
+                var content = request.Content ?? EncryptionHelper.DecryptWithMasterKey(entry.Content, rawDek);
+                var embeddingVector = await EmbedDocumentAsync(type, title, content);
+
+                entry.Embedding = new Vector(embeddingVector);
             }
 
+            entry.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
+
             return MapToResponse(entry, rawDek);
         }
 
@@ -104,10 +121,24 @@ namespace Service.Implementations
             return true;
         }
 
-        public async Task<bool> GenerateEmbeddingAsync(Guid id, Guid projectId, Guid userId)
+        public async Task<PlotNoteResponse> GenerateEmbeddingAsync(Guid id, Guid projectId, Guid userId)
         {
             await VerifyOwnershipAsync(projectId, userId);
-            throw new NotImplementedException();
+
+            var entry = await _context.PlotNoteEntries.FirstOrDefaultAsync(e => e.Id == id && e.ProjectId == projectId)
+                ?? throw new KeyNotFoundException("Plot note not found");
+
+            var user = await GetUserAsync(userId);
+            var rawDek = GetDek(user);
+            var title = EncryptionHelper.DecryptWithMasterKey(entry.Title, rawDek);
+            var content = EncryptionHelper.DecryptWithMasterKey(entry.Content, rawDek);
+            var embeddingVector = await EmbedDocumentAsync(entry.Type, title, content);
+
+            entry.Embedding = new Vector(embeddingVector);
+            entry.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return MapToResponse(entry, rawDek);
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────────
@@ -130,6 +161,12 @@ namespace Service.Implementations
             return EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
         }
 
+        private async Task<float[]> EmbedDocumentAsync(string type, string title, string content)
+        {
+            var text = $"search_document: {type}\n{title}\n{content}";
+            return await _embeddingService.GetEmbeddingAsync(text);
+        }
+
         private static PlotNoteResponse MapToResponse(PlotNoteEntry e, string rawDek) => new()
         {
             Id = e.Id,
@@ -137,6 +174,7 @@ namespace Service.Implementations
             Type = e.Type,
             Title = EncryptionHelper.DecryptWithMasterKey(e.Title, rawDek),
             Content = EncryptionHelper.DecryptWithMasterKey(e.Content, rawDek),
+            HasEmbedding = e.Embedding != null,
             CreatedAt = e.CreatedAt,
             UpdatedAt = e.UpdatedAt,
         };

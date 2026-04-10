@@ -1,8 +1,9 @@
 import { useState, useEffect, type ReactNode } from 'react';
-import { Clock, Loader2, Bot, Search, Sparkles } from 'lucide-react';
+import { Clock, Loader2, Bot, Search, Sparkles, Feather } from 'lucide-react';
 import { aiService, type ChatHistoryItem } from '../../services/aiService';
 
 const PAGE_SIZE = 15;
+const POLISH_PREFIX = '[Trau chuốt]';
 
 // ── Inline markdown renderer (shared with ChatPanel) ───────────────────────
 
@@ -85,10 +86,10 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
             <div className="px-4 pt-3 pb-2 shrink-0 border-b border-[var(--border-color)] flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <Clock className="w-3.5 h-3.5 text-[var(--accent-text)]" />
-                    <span className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">Lịch sử AI Chat</span>
+                    <span className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">Lịch sử AI</span>
                 </div>
                 <span className="text-[10px] text-[var(--text-secondary)] bg-[var(--bg-app)] border border-[var(--border-color)] px-2 py-0.5 rounded-full">
-                    {total} cuộc trò chuyện
+                    {total} mục
                 </span>
             </div>
 
@@ -102,19 +103,39 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
                 ) : items.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 gap-2 text-center">
                         <Bot className="w-8 h-8 text-[var(--text-secondary)] opacity-30" />
-                        <p className="text-xs text-[var(--text-secondary)]">Chưa có lịch sử chat nào.</p>
+                        <p className="text-xs text-[var(--text-secondary)]">Chưa có lịch sử AI nào.</p>
                     </div>
                 ) : (
                     <>
-                        {items.map(item => (
-                            <div key={item.id} className="rounded-xl overflow-hidden border border-[var(--border-color)]"
-                                style={{ background: 'var(--bg-app)' }}>
-                                {/* Question */}
-                                <div className="px-3 py-2 flex items-start gap-2"
-                                    style={{ background: 'rgba(139,92,246,0.06)', borderBottom: '1px solid var(--border-color)' }}>
-                                    <Search className="w-3 h-3 text-[var(--accent-text)] shrink-0 mt-0.5" />
-                                    <p className="text-xs text-[var(--text-primary)] leading-relaxed">{item.question}</p>
-                                </div>
+                        {items.map(item => {
+                            const isPolish = item.question.startsWith(POLISH_PREFIX);
+                            const questionText = isPolish
+                                ? item.question.slice(POLISH_PREFIX.length).trim()
+                                : item.question;
+                            return (
+                                <div key={item.id} className="rounded-xl overflow-hidden border border-[var(--border-color)]"
+                                    style={{ background: 'var(--bg-app)' }}>
+                                    {/* Question */}
+                                    <div className="px-3 py-2 flex items-start gap-2"
+                                        style={{
+                                            background: isPolish ? 'rgba(16,185,129,0.08)' : 'rgba(139,92,246,0.06)',
+                                            borderBottom: '1px solid var(--border-color)',
+                                        }}>
+                                        {isPolish
+                                            ? <Feather className="w-3 h-3 text-emerald-400 shrink-0 mt-0.5" />
+                                            : <Search className="w-3 h-3 text-[var(--accent-text)] shrink-0 mt-0.5" />}
+                                        <div className="min-w-0 flex-1">
+                                            <span
+                                                className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${
+                                                    isPolish
+                                                        ? 'text-emerald-400 bg-emerald-400/10'
+                                                        : 'text-[var(--accent-text)] bg-[var(--accent)]/10'
+                                                }`}>
+                                                {isPolish ? 'Trau chuốt' : 'AI Chat'}
+                                            </span>
+                                            <p className="text-xs text-[var(--text-primary)] leading-relaxed mt-1">{questionText}</p>
+                                        </div>
+                                    </div>
                                 {/* Answer */}
                                 <div className="px-3 py-2 flex items-start gap-2">
                                     <Sparkles className="w-3 h-3 text-[var(--accent-text)] shrink-0 mt-0.5" />
@@ -131,8 +152,9 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
                                         {item.totalTokens.toLocaleString()} tokens
                                     </span>
                                 </div>
-                            </div>
-                        ))}
+                                </div>
+                            );
+                        })}
 
                         {/* Load more */}
                         {items.length < total && (

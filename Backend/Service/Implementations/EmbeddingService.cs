@@ -7,6 +7,7 @@ using Service.Helpers;
 using Service.Interfaces;
 using System.Text.Json;
 using System.Net.Http.Json;
+using System.Text;
 
 namespace Service.Implementations
 {
@@ -16,17 +17,23 @@ namespace Service.Implementations
         private readonly IConfiguration _config;
         private readonly ILogger<EmbeddingService> _logger;
 
-        // LM Studio (fallback)
-        private readonly HttpClient _lmHttpClient;
-        private readonly string _lmBaseUrl;
-        private readonly string _lmModel;
-
-        // Gemini (primary)
+        // Gemini embeddings (required)
         private readonly HttpClient _geminiHttpClient;
-        private readonly string _geminiApiKey;
+        private readonly List<string> _geminiApiKeys;
         private readonly string _geminiModel;
         private readonly int _geminiEmbeddingDimensions;
+        private readonly int _targetEmbeddingTpm;
+        private readonly int _targetEmbeddingRpm;
+        private readonly int _maxBatchSize;
+        private readonly int _maxBatchEstimatedTokens;
+        private readonly int _interBatchDelayMs;
+        private readonly int _maxEmbeddingTextChars;
         private const string GeminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/models";
+        private static readonly SemaphoreSlim EmbeddingQuotaLock = new(1, 1);
+        private static DateTime _quotaWindowStartUtc = DateTime.UtcNow;
+        private static int _usedTokensInWindow;
+        private static int _usedRequestsInWindow;
+        private static int _nextEmbeddingKeyIndex;
 
         public EmbeddingService(AppDbContext context, IConfiguration config, ILogger<EmbeddingService> logger)
         {
@@ -34,18 +41,24 @@ namespace Service.Implementations
             _config = config;
             _logger = logger;
 
-            // LM Studio config
-            _lmBaseUrl = config["AI:BaseUrl"] ?? "http://localhost:1234/v1";
-            var lmApiKey = config["AI:ApiKey"] ?? "lm-studio";
-            _lmModel = config["AI:EmbeddingModel"] ?? "nomic-embed-text";
-            _lmHttpClient = new HttpClient();
-            _lmHttpClient.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", lmApiKey);
-
             // Gemini config
-            _geminiApiKey = config["Gemini:EmbedApiKey"] ?? string.Empty;
+            _geminiApiKeys = ReadApiKeys(
+                config,
+                "Gemini:EmbedApiKey",
+                "Gemini:EmbedApiKey2",
+                "Gemini:EmbedApiKeys");
             _geminiModel = config["Gemini:EmbeddingModel"] ?? "gemini-embedding-001";
             _geminiEmbeddingDimensions = int.TryParse(config["Gemini:EmbeddingDimensions"], out var dim) ? dim : 768;
+            var tpmLimit = ReadInt(config["Gemini:EmbeddingTpmLimit"], 30000, min: 1000);
+            var rpmLimit = ReadInt(config["Gemini:EmbeddingRpmLimit"], 100, min: 1);
+            var usageRatio = ReadDouble(config["Gemini:EmbeddingUsageRatio"], 0.7, min: 0.1, max: 1.0);
+            _targetEmbeddingTpm = Math.Max(1, (int)Math.Floor(tpmLimit * usageRatio));
+            _targetEmbeddingRpm = Math.Max(1, (int)Math.Floor(rpmLimit * usageRatio));
+            _maxBatchSize = ReadInt(config["Gemini:EmbeddingMaxBatchSize"], 20, min: 1, max: 100);
+            var configuredBatchTokens = ReadInt(config["Gemini:EmbeddingMaxBatchEstimatedTokens"], 6000, min: 500);
+            _maxBatchEstimatedTokens = Math.Min(configuredBatchTokens, _targetEmbeddingTpm);
+            _interBatchDelayMs = ReadInt(config["Gemini:EmbeddingInterBatchDelayMs"], 1200, min: 0);
+            _maxEmbeddingTextChars = ReadInt(config["Gemini:EmbeddingMaxTextChars"], 5000, min: 500);
             _geminiHttpClient = new HttpClient();
         }
 
@@ -87,9 +100,10 @@ namespace Service.Implementations
 
             var plainTexts = chunks
                 .Select(c => EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek))
+                .Select(t => EnsureEmbeddingPrefix(t, isDocument: true))
                 .ToList();
 
-            var embeddings = await GetEmbeddingsForTextsAsync(plainTexts, isDocument: true);
+            var embeddings = await GetEmbeddingsForTextsAsync(plainTexts);
 
             // Lưu embedding vào từng chunk
             for (int i = 0; i < chunks.Count; i++)
@@ -105,52 +119,41 @@ namespace Service.Implementations
 
         public async Task<float[]> GetEmbeddingAsync(string text)
         {
-            var res = await GetEmbeddingsForTextsAsync(new List<string> { text }, isDocument: false);
+            var prepared = EnsureEmbeddingPrefix(text, isDocument: false);
+            var res = await GetEmbeddingsForTextsAsync(new List<string> { prepared });
             return res.First();
         }
 
-        private async Task<List<float[]>> GetEmbeddingsForTextsAsync(List<string> texts, bool isDocument)
+        private async Task<List<float[]>> GetEmbeddingsForTextsAsync(List<string> texts)
         {
-            if (!string.IsNullOrEmpty(_geminiApiKey))
+            if (_geminiApiKeys.Count == 0)
             {
-                try
-                {
-                    return await GetGeminiEmbeddingsAsync(texts);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Gemini embedding thất bại. Không fallback vì vector space không tương thích với LM Studio.");
-                    throw;
-                }
+                throw new InvalidOperationException(
+                    "Thiếu Gemini embed key. Hãy set Gemini__EmbedApiKey (và tùy chọn Gemini__EmbedApiKey2) để dùng embedding.");
             }
 
-            // Không có Gemini key → dùng LM Studio với Nomic prefix
-            var prefixedTexts = texts
-                .Select(t => (isDocument ? "search_document: " : "search_query: ") + t)
-                .ToList();
-            return await GetLmStudioEmbeddingsAsync(prefixedTexts);
+            try
+            {
+                return await GetGeminiEmbeddingsAsync(texts);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Gemini embedding thất bại.");
+                throw;
+            }
         }
 
         private async Task<List<float[]>> GetGeminiEmbeddingsAsync(List<string> texts)
         {
-            // batchEmbedContents: toàn bộ chunks = 1 HTTP call duy nhất → tránh 429 free tier.
-            // Gemini giới hạn 100 items/batch → nếu nhiều hơn thì chia thành nhiều batch nhỏ
-            // với delay nhỏ giữa các batch để không vượt quota.
-            const int MaxBatchSize = 100;
-            const int DelayBetweenBatchesMs = 2000; // 2s — đủ an toàn cho free tier
-
+            var batches = BuildBatches(texts);
             var allEmbeddings = new List<float[]>(texts.Count);
 
-            for (int offset = 0; offset < texts.Count; offset += MaxBatchSize)
+            for (int batchIndex = 0; batchIndex < batches.Count; batchIndex++)
             {
-                var batch = texts.Skip(offset).Take(MaxBatchSize).ToList();
-
-                // Thêm delay giữa các batch (trừ batch đầu tiên)
-                if (offset > 0)
-                    await Task.Delay(DelayBetweenBatchesMs);
-
-                var batchUrl = $"{GeminiBaseUrl}/{_geminiModel}:batchEmbedContents?key={_geminiApiKey}";
-                var requests = batch.Select(text => new
+                var batch = batches[batchIndex];
+                var operationName = $"Gemini Embedding batch {batchIndex + 1}/{batches.Count}";
+                await ReserveEmbeddingQuotaAsync(batch.EstimatedTokens, operationName);
+                var requests = batch.Texts.Select(text => new
                 {
                     model = $"models/{_geminiModel}",
                     content = new { parts = new[] { new { text } } },
@@ -158,19 +161,7 @@ namespace Service.Implementations
                 }).ToArray();
 
                 var batchBody = new { requests };
-
-                var response = await GeminiRetryHelper.ExecuteAsync(
-                    () => _geminiHttpClient.PostAsJsonAsync(batchUrl, batchBody),
-                    _logger, $"Gemini Embedding batch {offset / MaxBatchSize + 1}/{(int)Math.Ceiling((double)texts.Count / MaxBatchSize)}");
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    var errorBody = await response.Content.ReadAsStringAsync();
-                    _logger.LogError("Gemini batchEmbedContents trả về {StatusCode}. URL: {Url}. Body: {Body}",
-                        (int)response.StatusCode, batchUrl.Replace(_geminiApiKey, "***"), errorBody);
-                    response.EnsureSuccessStatusCode();
-                }
-
+                using var response = await SendBatchWithKeyFailoverAsync(batchBody, operationName);
                 var json = await response.Content.ReadFromJsonAsync<JsonElement>();
                 var batchResult = json.GetProperty("embeddings")
                     .EnumerateArray()
@@ -180,23 +171,237 @@ namespace Service.Implementations
                         .ToArray())
                     .ToList();
 
+                if (batchResult.Count != batch.Texts.Count)
+                    throw new InvalidOperationException($"Gemini embedding trả về {batchResult.Count} vectors, expected {batch.Texts.Count}.");
+
                 allEmbeddings.AddRange(batchResult);
+
+                if (batchIndex < batches.Count - 1 && _interBatchDelayMs > 0)
+                    await Task.Delay(_interBatchDelayMs);
             }
 
             return allEmbeddings;
         }
 
-        private async Task<List<float[]>> GetLmStudioEmbeddingsAsync(List<string> texts)
+        private async Task<HttpResponseMessage> SendBatchWithKeyFailoverAsync(object batchBody, string operationName)
         {
-            var requestBody = new { model = _lmModel, input = texts };
-            var response = await _lmHttpClient.PostAsJsonAsync($"{_lmBaseUrl}/embeddings", requestBody);
-            response.EnsureSuccessStatusCode();
+            Exception? lastError = null;
+            var keys = GetRotatedKeys(_geminiApiKeys);
 
-            var jsonResult = await response.Content.ReadFromJsonAsync<JsonElement>();
-            return jsonResult.GetProperty("data")
-                .EnumerateArray()
-                .Select(item => item.GetProperty("embedding").EnumerateArray().Select(x => x.GetSingle()).ToArray())
+            for (var i = 0; i < keys.Count; i++)
+            {
+                var key = keys[i];
+                var keyLabel = $"key {i + 1}/{keys.Count}";
+                var batchUrl = $"{GeminiBaseUrl}/{_geminiModel}:batchEmbedContents?key={key}";
+
+                try
+                {
+                    var response = await GeminiRetryHelper.ExecuteAsync(
+                        () => _geminiHttpClient.PostAsJsonAsync(batchUrl, batchBody),
+                        _logger,
+                        $"{operationName} ({keyLabel})");
+
+                    if (response.IsSuccessStatusCode)
+                        return response;
+
+                    var errorBody = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning(
+                        "{Operation} thất bại với {KeyLabel}: {StatusCode}. Body: {Body}",
+                        operationName,
+                        keyLabel,
+                        (int)response.StatusCode,
+                        errorBody);
+
+                    response.Dispose();
+                    lastError = new HttpRequestException(
+                        $"Gemini embedding failed with status {(int)response.StatusCode}.",
+                        null,
+                        response.StatusCode);
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                    _logger.LogWarning(ex, "{Operation} lỗi với {KeyLabel}, thử key khác.", operationName, keyLabel);
+                }
+            }
+
+            throw lastError ?? new InvalidOperationException("Gemini embedding failed for all configured keys.");
+        }
+
+        private static List<string> GetRotatedKeys(IReadOnlyList<string> keys)
+        {
+            if (keys.Count <= 1)
+                return keys.ToList();
+
+            var start = Math.Abs(Interlocked.Increment(ref _nextEmbeddingKeyIndex));
+            var ordered = new List<string>(keys.Count);
+            for (var i = 0; i < keys.Count; i++)
+                ordered.Add(keys[(start + i) % keys.Count]);
+            return ordered;
+        }
+
+        private List<EmbeddingBatch> BuildBatches(List<string> texts)
+        {
+            var batches = new List<EmbeddingBatch>();
+            var currentTexts = new List<string>();
+            var currentEstimatedTokens = 0;
+
+            foreach (var rawText in texts)
+            {
+                var normalized = NormalizeEmbeddingText(rawText);
+                var estimatedTokens = EstimateTokens(normalized);
+                var isCurrentBatchFullByCount = currentTexts.Count >= _maxBatchSize;
+                var isCurrentBatchFullByTokens = currentEstimatedTokens + estimatedTokens > _maxBatchEstimatedTokens;
+
+                if (currentTexts.Count > 0 && (isCurrentBatchFullByCount || isCurrentBatchFullByTokens))
+                {
+                    batches.Add(new EmbeddingBatch(currentTexts, currentEstimatedTokens));
+                    currentTexts = new List<string>();
+                    currentEstimatedTokens = 0;
+                }
+
+                currentTexts.Add(normalized);
+                currentEstimatedTokens += estimatedTokens;
+            }
+
+            if (currentTexts.Count > 0)
+                batches.Add(new EmbeddingBatch(currentTexts, currentEstimatedTokens));
+
+            return batches;
+        }
+
+        private async Task ReserveEmbeddingQuotaAsync(int estimatedTokens, string operationName)
+        {
+            var tokensToReserve = Math.Max(1, estimatedTokens);
+
+            while (true)
+            {
+                TimeSpan waitDuration;
+                var reserved = false;
+
+                await EmbeddingQuotaLock.WaitAsync();
+                try
+                {
+                    var now = DateTime.UtcNow;
+                    var elapsed = now - _quotaWindowStartUtc;
+                    if (elapsed >= TimeSpan.FromMinutes(1))
+                    {
+                        _quotaWindowStartUtc = now;
+                        _usedTokensInWindow = 0;
+                        _usedRequestsInWindow = 0;
+                        elapsed = TimeSpan.Zero;
+                    }
+
+                    var canReserveTokens = _usedTokensInWindow + tokensToReserve <= _targetEmbeddingTpm;
+                    var canReserveRequest = _usedRequestsInWindow + 1 <= _targetEmbeddingRpm;
+                    if (canReserveTokens && canReserveRequest)
+                    {
+                        _usedTokensInWindow += tokensToReserve;
+                        _usedRequestsInWindow += 1;
+                        reserved = true;
+                        waitDuration = TimeSpan.Zero;
+                    }
+                    else
+                    {
+                        waitDuration = TimeSpan.FromMinutes(1) - elapsed + TimeSpan.FromMilliseconds(200);
+                    }
+                }
+                finally
+                {
+                    EmbeddingQuotaLock.Release();
+                }
+
+                if (reserved)
+                    return;
+
+                _logger.LogInformation(
+                    "{Operation} tạm dừng {DelayMs}ms để giữ dưới quota embed (target TPM {TargetTpm}, target RPM {TargetRpm}).",
+                    operationName,
+                    (int)waitDuration.TotalMilliseconds,
+                    _targetEmbeddingTpm,
+                    _targetEmbeddingRpm);
+                await Task.Delay(waitDuration);
+            }
+        }
+
+        private string NormalizeEmbeddingText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return string.Empty;
+
+            var normalized = text.Trim();
+            if (normalized.Length <= _maxEmbeddingTextChars)
+                return normalized;
+
+            _logger.LogWarning(
+                "Embedding input dài {CurrentLength} chars, cắt còn {MaxChars} chars để giảm TPM.",
+                normalized.Length,
+                _maxEmbeddingTextChars);
+            return normalized[.._maxEmbeddingTextChars];
+        }
+
+        private static string EnsureEmbeddingPrefix(string text, bool isDocument)
+        {
+            var trimmed = text.TrimStart();
+            if (trimmed.StartsWith("search_document:", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("search_query:", StringComparison.OrdinalIgnoreCase))
+            {
+                return text;
+            }
+
+            var prefix = isDocument ? "search_document: " : "search_query: ";
+            return $"{prefix}{text}";
+        }
+
+        private static int EstimateTokens(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return 1;
+
+            var bytes = Encoding.UTF8.GetByteCount(text);
+            return Math.Max(1, (int)Math.Ceiling(bytes / 3.0));
+        }
+
+        private static int ReadInt(string? raw, int fallback, int min, int? max = null)
+        {
+            if (!int.TryParse(raw, out var parsed))
+                parsed = fallback;
+
+            parsed = Math.Max(min, parsed);
+            if (max.HasValue)
+                parsed = Math.Min(max.Value, parsed);
+            return parsed;
+        }
+
+        private static double ReadDouble(string? raw, double fallback, double min, double max)
+        {
+            if (!double.TryParse(raw, out var parsed))
+                parsed = fallback;
+
+            if (parsed < min) return min;
+            if (parsed > max) return max;
+            return parsed;
+        }
+
+        private static List<string> ReadApiKeys(IConfiguration config, params string[] configPaths)
+        {
+            var results = new List<string>();
+            foreach (var path in configPaths)
+            {
+                var raw = config[path];
+                if (string.IsNullOrWhiteSpace(raw))
+                    continue;
+
+                results.AddRange(
+                    raw.Split([',', ';', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Where(k => !string.IsNullOrWhiteSpace(k)));
+            }
+
+            return results
+                .Distinct(StringComparer.Ordinal)
                 .ToList();
         }
+
+        private sealed record EmbeddingBatch(List<string> Texts, int EstimatedTokens);
     }
 }
