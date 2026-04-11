@@ -215,7 +215,7 @@ export default function AuthPage() {
                     {/* LOGIN FORM */}
                     <div className={`col-start-1 row-start-1 p-8 sm:p-10 transition-all duration-500 transform ${mode === 'login' ? 'opacity-100 translate-x-0 z-10' : 'opacity-0 -translate-x-12 pointer-events-none z-0'}`}>
                         <div className="mb-10 text-center sm:text-left">
-                            <h2 className="text-[2rem] font-black text-white mb-2 tracking-tight">Mừng bạn trở lại</h2>
+                            <h2 className="text-[2rem] font-black text-white mb-2 tracking-tight">Đăng nhập</h2>
                             <p className="text-zinc-400 text-[15px] font-medium">Tiếp tục hành trình sáng tác cùng StoryNest.</p>
                         </div>
 
@@ -320,7 +320,7 @@ export default function AuthPage() {
                         ) : (
                             <>
                                 <div className="mb-8 text-center sm:text-left">
-                                    <h2 className="text-[2rem] font-black text-white mb-2 tracking-tight">Khởi tạo</h2>
+                                    <h2 className="text-[2rem] font-black text-white mb-2 tracking-tight">Đăng ký</h2>
                                     <p className="text-zinc-400 text-[15px] font-medium">Bắt đầu hành trình sáng tác ngay hôm nay.</p>
                                 </div>
 
@@ -333,7 +333,7 @@ export default function AuthPage() {
 
                                 <form onSubmit={handleRegisterSubmit} className="space-y-4">
                                     <div>
-                                        <label className={labelCls}>Bút danh</label>
+                                        <label className={labelCls}>Họ và Tên</label>
                                         <div className="relative group/input">
                                             <input
                                                 ref={nameRegRef}
@@ -348,7 +348,7 @@ export default function AuthPage() {
                                     </div>
 
                                     <div>
-                                        <label className={labelCls}>Trạm thư (Email)</label>
+                                        <label className={labelCls}>Email</label>
                                         <div className="relative group/input">
                                             <input
                                                 type="email" required
@@ -363,7 +363,7 @@ export default function AuthPage() {
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className={labelCls}>Mật mã</label>
+                                            <label className={labelCls}>Password</label>
                                             <div className="relative group/input">
                                                 <input
                                                     type={showRegPass ? 'text' : 'password'}
@@ -410,7 +410,7 @@ export default function AuthPage() {
                                             />
                                         </div>
                                         <label htmlFor="terms" className="text-[13px] text-zinc-400 font-medium leading-relaxed cursor-pointer select-none">
-                                            Tôi chịu trách nhiệm với thế giới tôi tạo ra và tuân thủ <Link to="/privacy" className="text-white hover:text-indigo-400 font-bold underline decoration-white/30 decoration-2 underline-offset-2">Thiên Ý (Điều khoản)</Link>.
+                                            Tôi đã đọc và sẽ tuân thủ <Link to="/privacy" className="text-white hover:text-indigo-400 font-bold underline decoration-white/30 decoration-2 underline-offset-2">Các Điều khoản và Quyền riêng tư</Link>.
                                         </label>
                                     </div>
 
@@ -418,7 +418,7 @@ export default function AuthPage() {
                                         type="submit" disabled={loading}
                                         className="w-full h-[56px] rounded-xl bg-white hover:bg-zinc-200 text-[#121212] font-black text-[16px] shadow-[0_10px_30px_-10px_rgba(255,255,255,0.3)] hover:shadow-[0_10px_40px_-5px_rgba(255,255,255,0.4)] transform hover:-translate-y-0.5 transition-all duration-300 mt-6"
                                     >
-                                        {loading ? 'Đang tạo...' : 'Bắt Đầu Khởi Tạo'}
+                                        {loading ? 'Đang tạo...' : 'Đăng ký'}
                                     </button>
                                 </form>
                             </>
