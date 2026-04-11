@@ -151,9 +151,19 @@ export default function AuthPage() {
 
                 {/* Middle: Premium CSS Art / Glowing SVG */}
                 <div className="relative z-10 flex-1 flex items-center justify-center -my-8 pointer-events-none select-none">
-                    <div className="relative">
-                        <BrainCircuit size={320} strokeWidth={0.5} className="text-indigo-500/40 animate-pulse-slow drop-shadow-[0_0_50px_rgba(99,102,241,0.6)]" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#090514] via-transparent to-transparent" />
+                    <div className="relative auth-glow-wrap">
+                        <div className="auth-glow-orb auth-glow-orb--1" />
+                        <div className="auth-glow-orb auth-glow-orb--2" />
+                        <div className="auth-glow-ring auth-glow-ring--outer" />
+                        <div className="auth-glow-ring auth-glow-ring--inner" />
+
+                        <BrainCircuit
+                            size={320}
+                            strokeWidth={0.55}
+                            className="relative z-10 text-indigo-300/80 auth-brain-glow"
+                        />
+
+                        <div className="absolute inset-0 auth-glow-fade" />
                     </div>
                 </div>
 
@@ -430,6 +440,103 @@ export default function AuthPage() {
             <style>{`
                 input[type='password']::-ms-reveal,
                 input[type='password']::-ms-clear { display: none; }
+
+                .auth-glow-wrap {
+                    width: 360px;
+                    height: 360px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    isolation: isolate;
+                    border-radius: 9999px;
+                    overflow: hidden;
+                }
+
+                .auth-glow-fade {
+                    border-radius: 9999px;
+                    background: radial-gradient(
+                        circle at 50% 50%,
+                        rgba(9, 5, 20, 0) 42%,
+                        rgba(9, 5, 20, 0.2) 68%,
+                        rgba(9, 5, 20, 0.78) 100%
+                    );
+                    z-index: 2;
+                }
+
+                .auth-brain-glow {
+                    filter:
+                        drop-shadow(0 0 20px rgba(129, 140, 248, 0.6))
+                        drop-shadow(0 0 45px rgba(99, 102, 241, 0.5))
+                        drop-shadow(0 0 80px rgba(168, 85, 247, 0.35));
+                    animation: authPulseGlow 3.2s ease-in-out infinite;
+                }
+
+                .auth-glow-orb {
+                    position: absolute;
+                    border-radius: 9999px;
+                    filter: blur(30px);
+                    z-index: 0;
+                }
+
+                .auth-glow-orb--1 {
+                    width: 230px;
+                    height: 230px;
+                    background: radial-gradient(circle, rgba(129, 140, 248, 0.5), rgba(129, 140, 248, 0));
+                    animation: authOrbFloat1 6s ease-in-out infinite;
+                }
+
+                .auth-glow-orb--2 {
+                    width: 290px;
+                    height: 290px;
+                    background: radial-gradient(circle, rgba(168, 85, 247, 0.38), rgba(168, 85, 247, 0));
+                    animation: authOrbFloat2 7s ease-in-out infinite;
+                }
+
+                .auth-glow-ring {
+                    position: absolute;
+                    border-radius: 9999px;
+                    border: 1px solid rgba(129, 140, 248, 0.25);
+                    z-index: 1;
+                }
+
+                .auth-glow-ring--outer {
+                    width: 320px;
+                    height: 320px;
+                    animation: authRotate 20s linear infinite;
+                }
+
+                .auth-glow-ring--inner {
+                    width: 250px;
+                    height: 250px;
+                    border-style: dashed;
+                    border-color: rgba(236, 72, 153, 0.22);
+                    animation: authRotateReverse 14s linear infinite;
+                }
+
+                @keyframes authPulseGlow {
+                    0%, 100% { transform: scale(1); opacity: 0.95; }
+                    50% { transform: scale(1.035); opacity: 1; }
+                }
+
+                @keyframes authOrbFloat1 {
+                    0%, 100% { transform: translate(0, 0) scale(1); }
+                    50% { transform: translate(-12px, -8px) scale(1.08); }
+                }
+
+                @keyframes authOrbFloat2 {
+                    0%, 100% { transform: translate(0, 0) scale(1); }
+                    50% { transform: translate(10px, 12px) scale(0.95); }
+                }
+
+                @keyframes authRotate {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+
+                @keyframes authRotateReverse {
+                    from { transform: rotate(360deg); }
+                    to { transform: rotate(0deg); }
+                }
             `}</style>
         </div>
     );
