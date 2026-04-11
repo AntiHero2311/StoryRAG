@@ -374,34 +374,36 @@ const LandingPage = () => {
                 </motion.div>
 
                 {/* Stats Section */}
-                <motion.div 
-                    initial={{ opacity: 0, y: 40 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: "-100px" }}
-                    transition={{ duration: 0.7 }}
-                    className="w-full mb-32"
-                >
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                        {stats.map((stat, idx) => (
-                            <motion.div
-                                key={idx}
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                whileInView={{ opacity: 1, scale: 1 }}
-                                viewport={{ once: true }}
-                                transition={{ delay: idx * 0.1, duration: 0.5 }}
-                                className="glass-card p-6 rounded-2xl text-center group hover:scale-105 transition-transform"
-                            >
-                                <div className="flex justify-center mb-3">
-                                    <div className="p-3 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 text-indigo-500 group-hover:rotate-12 transition-transform">
-                                        {stat.icon}
+                {false && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: 40 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, margin: "-100px" }}
+                        transition={{ duration: 0.7 }}
+                        className="w-full mb-32"
+                    >
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                            {stats.map((stat, idx) => (
+                                <motion.div
+                                    key={idx}
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    whileInView={{ opacity: 1, scale: 1 }}
+                                    viewport={{ once: true }}
+                                    transition={{ delay: idx * 0.1, duration: 0.5 }}
+                                    className="glass-card p-6 rounded-2xl text-center group hover:scale-105 transition-transform"
+                                >
+                                    <div className="flex justify-center mb-3">
+                                        <div className="p-3 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 text-indigo-500 group-hover:rotate-12 transition-transform">
+                                            {stat.icon}
+                                        </div>
                                     </div>
-                                </div>
-                                <p className="text-3xl font-extrabold text-[var(--text-primary)] mb-1">{stat.value}</p>
-                                <p className="text-sm text-[var(--text-secondary)]">{stat.label}</p>
-                            </motion.div>
-                        ))}
-                    </div>
-                </motion.div>
+                                    <p className="text-3xl font-extrabold text-[var(--text-primary)] mb-1">{stat.value}</p>
+                                    <p className="text-sm text-[var(--text-secondary)]">{stat.label}</p>
+                                </motion.div>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
 
                 {/* Features Section with Interactive Cards */}
                 <motion.div 
@@ -476,67 +478,69 @@ const LandingPage = () => {
                 </motion.div>
 
                 {/* Testimonials with Enhanced Design */}
-                <motion.div 
-                    initial={{ opacity: 0, y: 50 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: "-100px" }}
-                    transition={{ duration: 0.7 }}
-                    className="w-full mb-32"
-                >
-                    <div className="text-center mb-16">
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            whileInView={{ opacity: 1, scale: 1 }}
-                            viewport={{ once: true }}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-card text-sm font-semibold text-amber-500 mb-6"
-                        >
-                            <Star className="w-4 h-4 fill-current" />
-                            Đánh giá từ người dùng
-                        </motion.div>
-                        <h2 className="text-4xl lg:text-5xl font-extrabold mb-6 text-[var(--text-primary)]">
-                            Được tin dùng bởi hàng nghìn tác giả
-                        </h2>
-                    </div>
-
-                    <div className="relative w-full overflow-hidden py-4 h-[620px]">
-                        <div className="absolute left-0 top-0 right-0 h-24 bg-gradient-to-b from-[var(--bg-app)] to-transparent z-10" />
-                        <div className="absolute left-0 bottom-0 right-0 h-24 bg-gradient-to-t from-[var(--bg-app)] to-transparent z-10" />
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
-                            {testimonialColumns.map((column, colIdx) => (
-                                <div key={colIdx} className="overflow-hidden relative">
-                                    <div className={`flex flex-col gap-6 ${colIdx === 1 ? 'vertical-marquee-down' : 'vertical-marquee-up'}`}>
-                                        {[...column, ...column, ...column].map((t, i) => (
-                                            <div
-                                                key={`${colIdx}-${i}`}
-                                                className="glass-card p-6 rounded-2xl flex flex-col hover:scale-[1.02] transition-transform group"
-                                            >
-                                                <div className="flex items-center gap-1 mb-4">
-                                                    {[...Array(t.rating)].map((_, idx) => (
-                                                        <Star key={idx} className="w-4 h-4 text-amber-500 fill-amber-500" />
-                                                    ))}
-                                                </div>
-                                                <Quote className="w-8 h-8 text-indigo-500/20 mb-3" />
-                                                <p className="text-[var(--text-primary)] font-medium mb-6 italic leading-relaxed flex-1">
-                                                    "{t.text}"
-                                                </p>
-                                                <div className="flex items-center gap-3 pt-4 border-t border-[var(--border-color)]">
-                                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shrink-0 group-hover:scale-110 transition-transform">
-                                                        {t.name.charAt(0)}
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <p className="font-bold text-sm text-[var(--text-primary)]">{t.name}</p>
-                                                        <p className="text-xs text-[var(--text-secondary)]">{t.role}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
+                {false && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: 50 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, margin: "-100px" }}
+                        transition={{ duration: 0.7 }}
+                        className="w-full mb-32"
+                    >
+                        <div className="text-center mb-16">
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                whileInView={{ opacity: 1, scale: 1 }}
+                                viewport={{ once: true }}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-card text-sm font-semibold text-amber-500 mb-6"
+                            >
+                                <Star className="w-4 h-4 fill-current" />
+                                Đánh giá từ người dùng
+                            </motion.div>
+                            <h2 className="text-4xl lg:text-5xl font-extrabold mb-6 text-[var(--text-primary)]">
+                                Được tin dùng bởi hàng nghìn tác giả
+                            </h2>
                         </div>
-                    </div>
-                </motion.div>
+
+                        <div className="relative w-full overflow-hidden py-4 h-[620px]">
+                            <div className="absolute left-0 top-0 right-0 h-24 bg-gradient-to-b from-[var(--bg-app)] to-transparent z-10" />
+                            <div className="absolute left-0 bottom-0 right-0 h-24 bg-gradient-to-t from-[var(--bg-app)] to-transparent z-10" />
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
+                                {testimonialColumns.map((column, colIdx) => (
+                                    <div key={colIdx} className="overflow-hidden relative">
+                                        <div className={`flex flex-col gap-6 ${colIdx === 1 ? 'vertical-marquee-down' : 'vertical-marquee-up'}`}>
+                                            {[...column, ...column, ...column].map((t, i) => (
+                                                <div
+                                                    key={`${colIdx}-${i}`}
+                                                    className="glass-card p-6 rounded-2xl flex flex-col hover:scale-[1.02] transition-transform group"
+                                                >
+                                                    <div className="flex items-center gap-1 mb-4">
+                                                        {[...Array(t.rating)].map((_, idx) => (
+                                                            <Star key={idx} className="w-4 h-4 text-amber-500 fill-amber-500" />
+                                                        ))}
+                                                    </div>
+                                                    <Quote className="w-8 h-8 text-indigo-500/20 mb-3" />
+                                                    <p className="text-[var(--text-primary)] font-medium mb-6 italic leading-relaxed flex-1">
+                                                        "{t.text}"
+                                                    </p>
+                                                    <div className="flex items-center gap-3 pt-4 border-t border-[var(--border-color)]">
+                                                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shrink-0 group-hover:scale-110 transition-transform">
+                                                            {t.name.charAt(0)}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <p className="font-bold text-sm text-[var(--text-primary)]">{t.name}</p>
+                                                            <p className="text-xs text-[var(--text-secondary)]">{t.role}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
 
                 {/* Pricing Section */}
                 <motion.div 
