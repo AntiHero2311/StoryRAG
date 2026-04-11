@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import {
@@ -9,7 +9,6 @@ import {
     Sparkles,
     ArrowRight,
     CheckCircle2,
-    BookOpen,
     Moon,
     Sun,
     BarChart3,
@@ -27,6 +26,7 @@ const LandingPage = () => {
     const [scrolled, setScrolled] = useState(false);
     const [darkMode, setDarkMode] = useState(false);
     const [activeFeature, setActiveFeature] = useState(0);
+    const [isYearly, setIsYearly] = useState(false);
     const { scrollY } = useScroll();
     
     // Parallax effects
@@ -83,8 +83,8 @@ const LandingPage = () => {
     const pricingPlans = [
         {
             name: "Miễn phí",
-            price: "0đ",
-            period: "/tháng",
+            monthlyPrice: "0đ",
+            yearlyPrice: "0đ",
             desc: "Hoàn hảo để bắt đầu",
             features: [
                 "1 dự án",
@@ -97,8 +97,8 @@ const LandingPage = () => {
         },
         {
             name: "Pro",
-            price: "99,000đ",
-            period: "/tháng",
+            monthlyPrice: "99,000đ",
+            yearlyPrice: "990,000đ",
             desc: "Cho tác giả chuyên nghiệp",
             features: [
                 "Không giới hạn dự án",
@@ -113,8 +113,8 @@ const LandingPage = () => {
         },
         {
             name: "Enterprise",
-            price: "Liên hệ",
-            period: "",
+            monthlyPrice: "Liên hệ",
+            yearlyPrice: "Liên hệ",
             desc: "Cho đội nhóm và tổ chức",
             features: [
                 "Tất cả tính năng Pro",
@@ -161,21 +161,45 @@ const LandingPage = () => {
         }
     };
 
+    const testimonialColumns = [
+        testimonials.filter((_, idx) => idx % 3 === 0),
+        testimonials.filter((_, idx) => idx % 3 === 1),
+        testimonials.filter((_, idx) => idx % 3 === 2),
+    ];
+
+    const handleFeatureMouseMove = (e: MouseEvent<HTMLDivElement>) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        e.currentTarget.style.setProperty('--spot-x', `${x}px`);
+        e.currentTarget.style.setProperty('--spot-y', `${y}px`);
+    };
+
+    const getPriceLabel = (plan: typeof pricingPlans[number]) => {
+        if (plan.name === 'Enterprise') return { price: 'Liên hệ', period: '' };
+        if (plan.name === 'Miễn phí') return { price: '0đ', period: '/tháng' };
+        return isYearly
+            ? { price: plan.yearlyPrice, period: '/năm' }
+            : { price: plan.monthlyPrice, period: '/tháng' };
+    };
+
     return (
-        <div className="min-h-screen flex flex-col items-center w-full bg-[var(--bg-app)] text-[var(--text-primary)] transition-colors duration-300 relative overflow-hidden">
+        <div className="min-h-screen flex flex-col items-center w-full bg-[var(--bg-app)] text-[var(--text-primary)] transition-colors duration-300 relative overflow-x-hidden">
             {/* Enhanced Background with Parallax */}
-            <motion.div 
-                style={{ y: y1 }} 
-                className="absolute top-[-15%] left-[-10%] w-[700px] h-[700px] bg-indigo-500/20 dark:bg-indigo-500/10 rounded-full blur-[150px] pointer-events-none"
-            />
-            <motion.div 
-                style={{ y: y2 }} 
-                className="absolute bottom-[-15%] right-[-10%] w-[800px] h-[800px] bg-purple-500/20 dark:bg-purple-500/10 rounded-full blur-[180px] pointer-events-none"
-            />
-            <motion.div 
-                style={{ y: y3 }} 
-                className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-500/15 dark:bg-blue-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse"
-            />
+            <div className="pointer-events-none absolute inset-0 overflow-hidden -z-10">
+                <motion.div
+                    style={{ y: y1 }}
+                    className="absolute top-[-15%] left-[-10%] w-[700px] h-[700px] bg-indigo-500/20 dark:bg-indigo-500/10 rounded-full blur-[150px]"
+                />
+                <motion.div
+                    style={{ y: y2 }}
+                    className="absolute top-[35%] right-[-12%] w-[800px] h-[800px] bg-purple-500/20 dark:bg-purple-500/10 rounded-full blur-[180px]"
+                />
+                <motion.div
+                    style={{ y: y3 }}
+                    className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-500/15 dark:bg-blue-500/10 rounded-full blur-[120px] animate-pulse"
+                />
+            </div>
 
             {/* Navbar with Glass Effect */}
             <nav className={`fixed top-0 w-full flex justify-center z-50 transition-all duration-300 ${
@@ -228,108 +252,124 @@ const LandingPage = () => {
             </nav>
 
             <main className="flex-1 w-full max-w-7xl px-6 flex flex-col items-center text-center relative z-10 pt-32 lg:pt-40">
-                {/* Hero Section with Enhanced Animations */}
-                <motion.div 
+                {/* Hero Section with Visual Anchor */}
+                <motion.div
                     initial={{ opacity: 0, y: 30 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.8, ease: "easeOut" }}
-                    className="flex flex-col items-center relative mb-32"
+                    className="w-full grid lg:grid-cols-2 gap-12 items-center mb-32"
                 >
-                    {/* Floating Stats */}
-                    <motion.div 
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.3, duration: 0.6 }}
-                        className="hidden lg:flex absolute -left-24 top-16 glass-card p-4 rounded-2xl items-center gap-3 text-sm font-semibold shadow-xl hover:scale-105 transition-transform group"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center group-hover:rotate-12 transition-transform">
-                            <BookOpen className="w-5 h-5 text-white" />
-                        </div>
-                        <div className="text-left">
-                            <p className="text-[var(--text-primary)] font-bold">50K+</p>
-                            <p className="text-[var(--text-secondary)] text-xs">Truyện đã viết</p>
-                        </div>
-                    </motion.div>
-
-                    <motion.div 
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.5, duration: 0.6 }}
-                        className="hidden lg:flex absolute -right-24 top-24 glass-card p-4 rounded-2xl items-center gap-3 text-sm font-semibold shadow-xl hover:scale-105 transition-transform group"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center group-hover:rotate-12 transition-transform">
-                            <CheckCircle2 className="w-5 h-5 text-white" />
-                        </div>
-                        <div className="text-left">
-                            <p className="text-[var(--text-primary)] font-bold">95%</p>
-                            <p className="text-[var(--text-secondary)] text-xs">Hài lòng</p>
-                        </div>
-                    </motion.div>
-
-                    {/* Badge */}
-                    <motion.div 
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                        className="inline-flex items-center gap-3 px-5 py-3 rounded-full glass-card text-[var(--text-primary)] font-medium text-sm mb-10 cursor-default group hover:scale-105 transition-transform"
-                    >
-                        <div className="flex items-center justify-center p-1.5 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full group-hover:rotate-180 transition-transform duration-500">
-                            <Sparkles className="w-4 h-4 text-white" />
-                        </div>
-                        <span>
-                            <span className="text-[var(--text-secondary)]">Giới thiệu:</span>{' '}
-                            <span className="font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
-                                AI Writer Assistant
+                    <div className="text-left">
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.2 }}
+                            className="inline-flex items-center gap-3 px-5 py-3 rounded-full glass-card text-[var(--text-primary)] font-medium text-sm mb-8 cursor-default group hover:scale-105 transition-transform"
+                        >
+                            <div className="flex items-center justify-center p-1.5 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full group-hover:rotate-180 transition-transform duration-500">
+                                <Sparkles className="w-4 h-4 text-white" />
+                            </div>
+                            <span>
+                                <span className="text-[var(--text-secondary)]">Giới thiệu:</span>{' '}
+                                <span className="font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
+                                    AI Writer Assistant
+                                </span>
                             </span>
-                        </span>
-                    </motion.div>
+                        </motion.div>
 
-                    {/* Main Heading */}
-                    <motion.h1 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3, duration: 0.8 }}
-                        className="text-5xl lg:text-7xl font-extrabold tracking-tight mb-8 max-w-5xl text-[var(--text-primary)] leading-[1.1]"
-                    >
-                        Khơi nguồn sáng tạo <br className="hidden md:block" />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-indigo-500 via-purple-500 to-pink-600 animate-gradient bg-[length:200%_auto]">
-                            Tuyệt Tác Văn Học
-                        </span>
-                    </motion.h1>
+                        <motion.h1
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.3, duration: 0.8 }}
+                            className="text-4xl lg:text-6xl font-extrabold tracking-tight mb-6 text-[var(--text-primary)] leading-[1.1]"
+                        >
+                            Khơi nguồn sáng tạo
+                            <br />
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-indigo-500 via-purple-500 to-pink-600 animate-gradient bg-[length:200%_auto]">
+                                Tuyệt Tác Văn Học
+                            </span>
+                        </motion.h1>
 
-                    {/* Subtitle */}
-                    <motion.p 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
+                        <motion.p
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.4, duration: 0.8 }}
+                            className="text-base lg:text-lg text-[var(--text-secondary)] mb-10 leading-relaxed font-medium max-w-xl"
+                        >
+                            Nền tảng viết truyện thông minh với AI, RAG vector search và phân tích cốt truyện tự động.
+                            Biến ý tưởng thành kiệt tác văn học chỉ trong vài giờ.
+                        </motion.p>
+
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.5, duration: 0.8 }}
+                            className="flex flex-col sm:flex-row gap-5"
+                        >
+                            <Link
+                                to="/register"
+                                className="shimmer-cta group flex items-center justify-center gap-3 px-10 py-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white rounded-full font-bold text-lg transition-all hover:scale-105 shadow-2xl hover:shadow-indigo-500/50 relative overflow-hidden"
+                            >
+                                <span className="relative z-10">Viết truyện ngay</span>
+                                <ArrowRight className="w-5 h-5 relative z-10 group-hover:translate-x-2 transition-transform" />
+                            </Link>
+                            <button
+                                onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
+                                className="flex items-center justify-center gap-2 px-10 py-5 glass-card border-2 border-[var(--border-color)] text-[var(--text-primary)] rounded-full font-bold text-lg transition-all hover:scale-105 hover:border-indigo-500/50 shadow-lg group"
+                            >
+                                <span>Khám phá tính năng</span>
+                                <Layers className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
+                            </button>
+                        </motion.div>
+                    </div>
+
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: 0.4, duration: 0.8 }}
-                        className="text-lg lg:text-xl text-[var(--text-secondary)] max-w-3xl mb-12 leading-relaxed font-medium"
+                        className="relative h-[420px] lg:h-[520px] flex items-center justify-center"
                     >
-                        Nền tảng viết truyện thông minh với AI, RAG vector search và phân tích cốt truyện tự động. 
-                        Biến ý tưởng thành kiệt tác văn học chỉ trong vài giờ.
-                    </motion.p>
+                        <div className="absolute inset-0 rounded-[2.5rem] bg-gradient-to-br from-indigo-500/20 via-purple-500/10 to-cyan-400/20 blur-2xl" />
+                        <div className="relative w-full h-full rounded-[2.5rem] border border-white/10 bg-white/[0.03] backdrop-blur-2xl overflow-hidden">
+                            <div className="absolute inset-0 network-grid opacity-30" />
+                            <motion.div
+                                animate={{ rotate: 360 }}
+                                transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
+                                className="absolute top-1/2 left-1/2 w-72 h-72 -translate-x-1/2 -translate-y-1/2 rounded-full border border-indigo-400/40"
+                            />
+                            <motion.div
+                                animate={{ rotate: -360 }}
+                                transition={{ duration: 26, repeat: Infinity, ease: "linear" }}
+                                className="absolute top-1/2 left-1/2 w-48 h-48 -translate-x-1/2 -translate-y-1/2 rounded-full border border-purple-400/40 border-dashed"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="w-28 h-28 rounded-3xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-[0_0_60px_rgba(99,102,241,0.5)] flex items-center justify-center">
+                                    <BrainCircuit className="w-14 h-14 text-white" />
+                                </div>
+                            </div>
 
-                    {/* CTA Buttons */}
-                    <motion.div 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.5, duration: 0.8 }}
-                        className="flex flex-col sm:flex-row gap-5 w-full sm:w-auto"
-                    >
-                        <Link 
-                            to="/register" 
-                            className="group flex items-center justify-center gap-3 px-10 py-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white rounded-full font-bold text-lg transition-all hover:scale-105 shadow-2xl hover:shadow-indigo-500/50 sm:w-auto w-full relative overflow-hidden"
-                        >
-                            <span className="absolute inset-0 bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            <span className="relative z-10">Viết truyện ngay</span>
-                            <ArrowRight className="w-5 h-5 relative z-10 group-hover:translate-x-2 transition-transform" />
-                        </Link>
-                        <button 
-                            onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} 
-                            className="flex items-center justify-center gap-2 px-10 py-5 glass-card border-2 border-[var(--border-color)] text-[var(--text-primary)] rounded-full font-bold text-lg transition-all hover:scale-105 hover:border-indigo-500/50 shadow-lg sm:w-auto w-full group"
-                        >
-                            <span>Khám phá tính năng</span>
-                            <Layers className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
-                        </button>
+                            <motion.div
+                                animate={{ y: [0, -8, 0] }}
+                                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                                className="absolute top-10 left-8 glass-card px-4 py-2 rounded-xl text-sm font-semibold text-[var(--text-primary)]"
+                            >
+                                RAG Context Active
+                            </motion.div>
+                            <motion.div
+                                animate={{ y: [0, 10, 0] }}
+                                transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
+                                className="absolute bottom-12 right-8 glass-card px-4 py-2 rounded-xl text-sm font-semibold text-[var(--text-primary)]"
+                            >
+                                AI Score: 4.6/5
+                            </motion.div>
+                            <motion.div
+                                animate={{ x: [0, 8, 0] }}
+                                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+                                className="absolute top-1/2 right-10 -translate-y-1/2 glass-card px-4 py-2 rounded-xl text-sm font-semibold text-[var(--text-primary)]"
+                            >
+                                768-dim Vector
+                            </motion.div>
+                        </div>
                     </motion.div>
                 </motion.div>
 
@@ -399,7 +439,8 @@ const LandingPage = () => {
                                 viewport={{ once: true }}
                                 transition={{ delay: idx * 0.1, duration: 0.6 }}
                                 onMouseEnter={() => setActiveFeature(idx)}
-                                className={`glass-card p-8 rounded-3xl group hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden ${
+                                onMouseMove={handleFeatureMouseMove}
+                                className={`spotlight-card glass-card p-8 rounded-3xl group hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden min-h-[260px] ${
                                     activeFeature === idx ? 'border-2 border-indigo-500/50 shadow-xl shadow-indigo-500/20' : 'border border-[var(--border-color)]'
                                 }`}
                             >
@@ -410,7 +451,7 @@ const LandingPage = () => {
                                     <div className={`w-16 h-16 rounded-2xl ${feature.bgColor} flex items-center justify-center mb-6 text-indigo-500 group-hover:scale-110 group-hover:rotate-3 transition-transform`}>
                                         {feature.icon}
                                     </div>
-                                    <h3 className="text-2xl font-bold mb-3 text-[var(--text-primary)] group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:${feature.color} transition-all">
+                                    <h3 className="text-2xl font-bold mb-3 text-[var(--text-primary)] transition-all">
                                         {feature.title}
                                     </h3>
                                     <p className="text-[var(--text-secondary)] leading-relaxed">
@@ -457,41 +498,39 @@ const LandingPage = () => {
                         </h2>
                     </div>
 
-                    <div className="relative w-full overflow-hidden py-4">
-                        {/* Gradient masks */}
-                        <div className="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-[var(--bg-app)] to-transparent z-10" />
-                        <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-[var(--bg-app)] to-transparent z-10" />
-                        
-                        <div className="flex gap-6 animate-marquee">
-                            {[...testimonials, ...testimonials].map((t, i) => (
-                                <div 
-                                    key={i} 
-                                    className="glass-card p-6 rounded-2xl w-[380px] flex flex-col shrink-0 hover:scale-105 transition-transform group"
-                                >
-                                    {/* Stars */}
-                                    <div className="flex items-center gap-1 mb-4">
-                                        {[...Array(t.rating)].map((_, idx) => (
-                                            <Star key={idx} className="w-4 h-4 text-amber-500 fill-amber-500" />
+                    <div className="relative w-full overflow-hidden py-4 h-[620px]">
+                        <div className="absolute left-0 top-0 right-0 h-24 bg-gradient-to-b from-[var(--bg-app)] to-transparent z-10" />
+                        <div className="absolute left-0 bottom-0 right-0 h-24 bg-gradient-to-t from-[var(--bg-app)] to-transparent z-10" />
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
+                            {testimonialColumns.map((column, colIdx) => (
+                                <div key={colIdx} className="overflow-hidden relative">
+                                    <div className={`flex flex-col gap-6 ${colIdx === 1 ? 'vertical-marquee-down' : 'vertical-marquee-up'}`}>
+                                        {[...column, ...column, ...column].map((t, i) => (
+                                            <div
+                                                key={`${colIdx}-${i}`}
+                                                className="glass-card p-6 rounded-2xl flex flex-col hover:scale-[1.02] transition-transform group"
+                                            >
+                                                <div className="flex items-center gap-1 mb-4">
+                                                    {[...Array(t.rating)].map((_, idx) => (
+                                                        <Star key={idx} className="w-4 h-4 text-amber-500 fill-amber-500" />
+                                                    ))}
+                                                </div>
+                                                <Quote className="w-8 h-8 text-indigo-500/20 mb-3" />
+                                                <p className="text-[var(--text-primary)] font-medium mb-6 italic leading-relaxed flex-1">
+                                                    "{t.text}"
+                                                </p>
+                                                <div className="flex items-center gap-3 pt-4 border-t border-[var(--border-color)]">
+                                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shrink-0 group-hover:scale-110 transition-transform">
+                                                        {t.name.charAt(0)}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="font-bold text-sm text-[var(--text-primary)]">{t.name}</p>
+                                                        <p className="text-xs text-[var(--text-secondary)]">{t.role}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         ))}
-                                    </div>
-                                    
-                                    {/* Quote icon */}
-                                    <Quote className="w-8 h-8 text-indigo-500/20 mb-3" />
-                                    
-                                    {/* Text */}
-                                    <p className="text-[var(--text-primary)] font-medium mb-6 italic leading-relaxed flex-1">
-                                        "{t.text}"
-                                    </p>
-                                    
-                                    {/* Author */}
-                                    <div className="flex items-center gap-3 pt-4 border-t border-[var(--border-color)]">
-                                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shrink-0 group-hover:scale-110 transition-transform">
-                                            {t.name.charAt(0)}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="font-bold text-sm text-[var(--text-primary)]">{t.name}</p>
-                                            <p className="text-xs text-[var(--text-secondary)]">{t.role}</p>
-                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -524,6 +563,21 @@ const LandingPage = () => {
                         <p className="text-[var(--text-secondary)] text-lg max-w-2xl mx-auto">
                             Bắt đầu miễn phí và nâng cấp khi cần. Không ràng buộc, hủy bất cứ lúc nào.
                         </p>
+                        <div className="inline-flex mt-8 p-1 rounded-full bg-[var(--bg-surface)] border border-[var(--border-color)]">
+                            <button
+                                onClick={() => setIsYearly(false)}
+                                className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all ${!isYearly ? 'bg-indigo-600 text-white shadow-lg' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                            >
+                                Hàng tháng
+                            </button>
+                            <button
+                                onClick={() => setIsYearly(true)}
+                                className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all ${isYearly ? 'bg-indigo-600 text-white shadow-lg' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                            >
+                                Hàng năm
+                                <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">-17%</span>
+                            </button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
@@ -536,7 +590,7 @@ const LandingPage = () => {
                                 transition={{ delay: idx * 0.1, duration: 0.6 }}
                                 className={`glass-card rounded-3xl p-8 flex flex-col relative overflow-hidden group hover:scale-105 transition-all ${
                                     plan.popular 
-                                        ? 'border-2 border-indigo-500 shadow-2xl shadow-indigo-500/30' 
+                                        ? 'border-2 border-indigo-500 shadow-2xl shadow-indigo-500/30 md:scale-105' 
                                         : 'border border-[var(--border-color)]'
                                 }`}
                             >
@@ -559,8 +613,11 @@ const LandingPage = () => {
 
                                     {/* Price */}
                                     <div className="mb-8">
-                                        <span className="text-5xl font-extrabold text-[var(--text-primary)]">{plan.price}</span>
-                                        {plan.period && <span className="text-[var(--text-secondary)] text-lg">{plan.period}</span>}
+                                        <span className="text-5xl font-extrabold text-[var(--text-primary)]">{getPriceLabel(plan).price}</span>
+                                        {getPriceLabel(plan).period && <span className="text-[var(--text-secondary)] text-lg">{getPriceLabel(plan).period}</span>}
+                                        {isYearly && plan.name === 'Pro' && (
+                                            <p className="text-xs text-emerald-400 mt-2 font-semibold">Tiết kiệm 2 tháng khi thanh toán theo năm</p>
+                                        )}
                                     </div>
 
                                     {/* Features */}
@@ -696,6 +753,70 @@ const LandingPage = () => {
                     </div>
                 </div>
             </footer>
+
+            <style>{`
+                .shimmer-cta::after {
+                    content: "";
+                    position: absolute;
+                    top: -120%;
+                    left: -40%;
+                    width: 28%;
+                    height: 320%;
+                    background: linear-gradient(to right, transparent, rgba(255,255,255,0.55), transparent);
+                    transform: rotate(20deg);
+                    animation: shimmerSweep 2.8s linear infinite;
+                }
+
+                .network-grid {
+                    background-image:
+                        radial-gradient(circle at 20% 20%, rgba(129,140,248,0.35) 1.5px, transparent 1.5px),
+                        radial-gradient(circle at 80% 30%, rgba(192,132,252,0.35) 1.5px, transparent 1.5px),
+                        linear-gradient(rgba(99,102,241,0.15) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(99,102,241,0.15) 1px, transparent 1px);
+                    background-size: 120px 120px, 160px 160px, 32px 32px, 32px 32px;
+                }
+
+                .spotlight-card::before {
+                    content: "";
+                    position: absolute;
+                    inset: 0;
+                    background: radial-gradient(
+                        260px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+                        rgba(99, 102, 241, 0.2),
+                        transparent 45%
+                    );
+                    opacity: 0;
+                    transition: opacity 0.25s ease;
+                    pointer-events: none;
+                }
+
+                .spotlight-card:hover::before {
+                    opacity: 1;
+                }
+
+                .vertical-marquee-up {
+                    animation: marqueeUp 28s linear infinite;
+                }
+
+                .vertical-marquee-down {
+                    animation: marqueeDown 32s linear infinite;
+                }
+
+                @keyframes shimmerSweep {
+                    0% { transform: translateX(-180%) rotate(20deg); }
+                    100% { transform: translateX(520%) rotate(20deg); }
+                }
+
+                @keyframes marqueeUp {
+                    0% { transform: translateY(0); }
+                    100% { transform: translateY(-50%); }
+                }
+
+                @keyframes marqueeDown {
+                    0% { transform: translateY(-50%); }
+                    100% { transform: translateY(0); }
+                }
+            `}</style>
         </div>
     );
 };

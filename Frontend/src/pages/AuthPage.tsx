@@ -151,9 +151,19 @@ export default function AuthPage() {
 
                 {/* Middle: Premium CSS Art / Glowing SVG */}
                 <div className="relative z-10 flex-1 flex items-center justify-center -my-8 pointer-events-none select-none">
-                    <div className="relative">
-                        <BrainCircuit size={320} strokeWidth={0.5} className="text-indigo-500/40 animate-pulse-slow drop-shadow-[0_0_50px_rgba(99,102,241,0.6)]" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#090514] via-transparent to-transparent" />
+                    <div className="relative auth-glow-wrap">
+                        <div className="auth-glow-orb auth-glow-orb--1" />
+                        <div className="auth-glow-orb auth-glow-orb--2" />
+                        <div className="auth-glow-ring auth-glow-ring--outer" />
+                        <div className="auth-glow-ring auth-glow-ring--inner" />
+
+                        <BrainCircuit
+                            size={320}
+                            strokeWidth={0.55}
+                            className="relative z-10 text-indigo-300/80 auth-brain-glow"
+                        />
+
+                        <div className="absolute inset-0 auth-glow-fade" />
                     </div>
                 </div>
 
@@ -215,7 +225,7 @@ export default function AuthPage() {
                     {/* LOGIN FORM */}
                     <div className={`col-start-1 row-start-1 p-8 sm:p-10 transition-all duration-500 transform ${mode === 'login' ? 'opacity-100 translate-x-0 z-10' : 'opacity-0 -translate-x-12 pointer-events-none z-0'}`}>
                         <div className="mb-10 text-center sm:text-left">
-                            <h2 className="text-[2rem] font-black text-white mb-2 tracking-tight">Mừng bạn trở lại</h2>
+                            <h2 className="text-[2rem] font-black text-white mb-2 tracking-tight">Đăng nhập</h2>
                             <p className="text-zinc-400 text-[15px] font-medium">Tiếp tục hành trình sáng tác cùng StoryNest.</p>
                         </div>
 
@@ -228,7 +238,7 @@ export default function AuthPage() {
 
                         <form onSubmit={handleLoginSubmit} className="space-y-5">
                             <div>
-                                <label className={labelCls}>Trạm thư (Email)</label>
+                                <label className={labelCls}>Email</label>
                                 <div className="relative group/input">
                                     <input
                                         ref={emailLoginRef}
@@ -244,7 +254,7 @@ export default function AuthPage() {
 
                             <div>
                                 <div className="flex justify-between items-center mb-2">
-                                    <label className={labelCls} style={{ marginBottom: 0 }}>Mật mã</label>
+                                    <label className={labelCls} style={{ marginBottom: 0 }}>Password</label>
                                     <Link to="/forgot-password" className="text-[13px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors bg-indigo-400/10 px-2 py-0.5 rounded">
                                         Quên mật mã?
                                     </Link>
@@ -320,7 +330,7 @@ export default function AuthPage() {
                         ) : (
                             <>
                                 <div className="mb-8 text-center sm:text-left">
-                                    <h2 className="text-[2rem] font-black text-white mb-2 tracking-tight">Khởi tạo</h2>
+                                    <h2 className="text-[2rem] font-black text-white mb-2 tracking-tight">Đăng ký</h2>
                                     <p className="text-zinc-400 text-[15px] font-medium">Bắt đầu hành trình sáng tác ngay hôm nay.</p>
                                 </div>
 
@@ -333,7 +343,7 @@ export default function AuthPage() {
 
                                 <form onSubmit={handleRegisterSubmit} className="space-y-4">
                                     <div>
-                                        <label className={labelCls}>Bút danh</label>
+                                        <label className={labelCls}>Họ và Tên</label>
                                         <div className="relative group/input">
                                             <input
                                                 ref={nameRegRef}
@@ -348,7 +358,7 @@ export default function AuthPage() {
                                     </div>
 
                                     <div>
-                                        <label className={labelCls}>Trạm thư (Email)</label>
+                                        <label className={labelCls}>Email</label>
                                         <div className="relative group/input">
                                             <input
                                                 type="email" required
@@ -363,7 +373,7 @@ export default function AuthPage() {
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className={labelCls}>Mật mã</label>
+                                            <label className={labelCls}>Password</label>
                                             <div className="relative group/input">
                                                 <input
                                                     type={showRegPass ? 'text' : 'password'}
@@ -410,7 +420,7 @@ export default function AuthPage() {
                                             />
                                         </div>
                                         <label htmlFor="terms" className="text-[13px] text-zinc-400 font-medium leading-relaxed cursor-pointer select-none">
-                                            Tôi chịu trách nhiệm với thế giới tôi tạo ra và tuân thủ <Link to="/privacy" className="text-white hover:text-indigo-400 font-bold underline decoration-white/30 decoration-2 underline-offset-2">Thiên Ý (Điều khoản)</Link>.
+                                            Tôi đã đọc và sẽ tuân thủ <Link to="/privacy" className="text-white hover:text-indigo-400 font-bold underline decoration-white/30 decoration-2 underline-offset-2">Các Điều khoản và Quyền riêng tư</Link>.
                                         </label>
                                     </div>
 
@@ -418,7 +428,7 @@ export default function AuthPage() {
                                         type="submit" disabled={loading}
                                         className="w-full h-[56px] rounded-xl bg-white hover:bg-zinc-200 text-[#121212] font-black text-[16px] shadow-[0_10px_30px_-10px_rgba(255,255,255,0.3)] hover:shadow-[0_10px_40px_-5px_rgba(255,255,255,0.4)] transform hover:-translate-y-0.5 transition-all duration-300 mt-6"
                                     >
-                                        {loading ? 'Đang tạo...' : 'Bắt Đầu Khởi Tạo'}
+                                        {loading ? 'Đang tạo...' : 'Đăng ký'}
                                     </button>
                                 </form>
                             </>
@@ -430,6 +440,103 @@ export default function AuthPage() {
             <style>{`
                 input[type='password']::-ms-reveal,
                 input[type='password']::-ms-clear { display: none; }
+
+                .auth-glow-wrap {
+                    width: 360px;
+                    height: 360px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    isolation: isolate;
+                    border-radius: 9999px;
+                    overflow: hidden;
+                }
+
+                .auth-glow-fade {
+                    border-radius: 9999px;
+                    background: radial-gradient(
+                        circle at 50% 50%,
+                        rgba(9, 5, 20, 0) 42%,
+                        rgba(9, 5, 20, 0.2) 68%,
+                        rgba(9, 5, 20, 0.78) 100%
+                    );
+                    z-index: 2;
+                }
+
+                .auth-brain-glow {
+                    filter:
+                        drop-shadow(0 0 20px rgba(129, 140, 248, 0.6))
+                        drop-shadow(0 0 45px rgba(99, 102, 241, 0.5))
+                        drop-shadow(0 0 80px rgba(168, 85, 247, 0.35));
+                    animation: authPulseGlow 3.2s ease-in-out infinite;
+                }
+
+                .auth-glow-orb {
+                    position: absolute;
+                    border-radius: 9999px;
+                    filter: blur(30px);
+                    z-index: 0;
+                }
+
+                .auth-glow-orb--1 {
+                    width: 230px;
+                    height: 230px;
+                    background: radial-gradient(circle, rgba(129, 140, 248, 0.5), rgba(129, 140, 248, 0));
+                    animation: authOrbFloat1 6s ease-in-out infinite;
+                }
+
+                .auth-glow-orb--2 {
+                    width: 290px;
+                    height: 290px;
+                    background: radial-gradient(circle, rgba(168, 85, 247, 0.38), rgba(168, 85, 247, 0));
+                    animation: authOrbFloat2 7s ease-in-out infinite;
+                }
+
+                .auth-glow-ring {
+                    position: absolute;
+                    border-radius: 9999px;
+                    border: 1px solid rgba(129, 140, 248, 0.25);
+                    z-index: 1;
+                }
+
+                .auth-glow-ring--outer {
+                    width: 320px;
+                    height: 320px;
+                    animation: authRotate 20s linear infinite;
+                }
+
+                .auth-glow-ring--inner {
+                    width: 250px;
+                    height: 250px;
+                    border-style: dashed;
+                    border-color: rgba(236, 72, 153, 0.22);
+                    animation: authRotateReverse 14s linear infinite;
+                }
+
+                @keyframes authPulseGlow {
+                    0%, 100% { transform: scale(1); opacity: 0.95; }
+                    50% { transform: scale(1.035); opacity: 1; }
+                }
+
+                @keyframes authOrbFloat1 {
+                    0%, 100% { transform: translate(0, 0) scale(1); }
+                    50% { transform: translate(-12px, -8px) scale(1.08); }
+                }
+
+                @keyframes authOrbFloat2 {
+                    0%, 100% { transform: translate(0, 0) scale(1); }
+                    50% { transform: translate(10px, 12px) scale(0.95); }
+                }
+
+                @keyframes authRotate {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+
+                @keyframes authRotateReverse {
+                    from { transform: rotate(360deg); }
+                    to { transform: rotate(0deg); }
+                }
             `}</style>
         </div>
     );
