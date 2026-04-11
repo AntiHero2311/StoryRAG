@@ -228,7 +228,7 @@ export default function AuthPage() {
 
                         <form onSubmit={handleLoginSubmit} className="space-y-5">
                             <div>
-                                <label className={labelCls}>Trạm thư (Email)</label>
+                                <label className={labelCls}>Email</label>
                                 <div className="relative group/input">
                                     <input
                                         ref={emailLoginRef}
@@ -244,7 +244,7 @@ export default function AuthPage() {
 
                             <div>
                                 <div className="flex justify-between items-center mb-2">
-                                    <label className={labelCls} style={{ marginBottom: 0 }}>Mật mã</label>
+                                    <label className={labelCls} style={{ marginBottom: 0 }}>Password</label>
                                     <Link to="/forgot-password" className="text-[13px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors bg-indigo-400/10 px-2 py-0.5 rounded">
                                         Quên mật mã?
                                     </Link>
