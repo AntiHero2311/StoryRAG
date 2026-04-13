@@ -141,6 +141,21 @@ namespace Api.Controllers
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
 
+        /// <summary>Lấy job phân tích đang chạy gần nhất của user.</summary>
+        [HttpGet("analyze/jobs/active")]
+        public async Task<IActionResult> GetActiveAnalyzeJob([FromQuery] Guid? projectId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var job = await _analysisJobService.GetActiveJobAsync(userId.Value, projectId, HttpContext.RequestAborted);
+                return Ok(job);
+            }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
         /// <summary>Lấy trạng thái xử lý của job phân tích.</summary>
         [HttpGet("{projectId:guid}/analyze/jobs/{jobId:guid}")]
         public async Task<IActionResult> GetAnalyzeJobStatus(Guid projectId, Guid jobId)

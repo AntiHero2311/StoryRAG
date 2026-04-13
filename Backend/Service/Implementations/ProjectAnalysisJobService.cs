@@ -50,25 +50,28 @@ namespace Service.Implementations
             await VerifyOwnershipAsync(projectId, userId, cancellationToken);
             await EnsureCanAnalyzeAsync(userId, cancellationToken);
 
-            var projectVersionHash = await BuildProjectVersionHashAsync(projectId, cancellationToken);
-
-            var existingJob = await _context.ProjectAnalysisJobs
+            var activeJob = await _context.ProjectAnalysisJobs
                 .Where(j =>
-                    j.ProjectId == projectId &&
                     j.UserId == userId &&
-                    j.ProjectVersionHash == projectVersionHash &&
                     (j.Status == StatusQueued || j.Status == StatusProcessing))
                 .OrderByDescending(j => j.CreatedAt)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            if (existingJob != null)
+            if (activeJob != null)
             {
-                if (existingJob.Status == StatusQueued)
-                    await _analysisJobQueue.EnqueueAsync(existingJob.Id, CancellationToken.None);
+                if (activeJob.ProjectId != projectId)
+                {
+                    throw new InvalidOperationException(
+                        "Bạn đang có một job phân tích khác đang chạy. Vui lòng đợi hoàn thành trước khi phân tích dự án mới.");
+                }
 
-                return ToResponse(existingJob, isExistingJob: true);
+                if (activeJob.Status == StatusQueued)
+                    await _analysisJobQueue.EnqueueAsync(activeJob.Id, CancellationToken.None);
+
+                return ToResponse(activeJob, isExistingJob: true);
             }
 
+            var projectVersionHash = await BuildProjectVersionHashAsync(projectId, cancellationToken);
             var job = new ProjectAnalysisJob
             {
                 Id = Guid.NewGuid(),
@@ -89,6 +92,27 @@ namespace Service.Implementations
             await _analysisJobQueue.EnqueueAsync(job.Id, CancellationToken.None);
 
             return ToResponse(job, isExistingJob: false);
+        }
+
+        public async Task<ProjectAnalysisJobResponse?> GetActiveJobAsync(
+            Guid userId,
+            Guid? projectId = null,
+            CancellationToken cancellationToken = default)
+        {
+            var query = _context.ProjectAnalysisJobs
+                .AsNoTracking()
+                .Where(j =>
+                    j.UserId == userId &&
+                    (j.Status == StatusQueued || j.Status == StatusProcessing));
+
+            if (projectId.HasValue)
+                query = query.Where(j => j.ProjectId == projectId.Value);
+
+            var job = await query
+                .OrderByDescending(j => j.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            return job == null ? null : ToResponse(job, isExistingJob: true);
         }
 
         public async Task<ProjectAnalysisJobResponse?> GetJobAsync(
@@ -183,11 +207,25 @@ namespace Service.Implementations
             try
             {
                 job.Stage = StageAnalyzing;
-                job.Progress = 45;
+                job.Progress = 20;
                 job.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync(cancellationToken);
 
-                var report = await _projectReportService.AnalyzeAsync(job.ProjectId, job.UserId);
+                var report = await _projectReportService.AnalyzeAsync(
+                    job.ProjectId,
+                    job.UserId,
+                    async (progress, _, token) =>
+                    {
+                        var safeProgress = Math.Clamp(progress, 20, 85);
+                        if (job.Progress == safeProgress)
+                            return;
+
+                        job.Stage = StageAnalyzing;
+                        job.Progress = safeProgress;
+                        job.UpdatedAt = DateTime.UtcNow;
+                        await _context.SaveChangesAsync(token);
+                    },
+                    cancellationToken);
 
                 job.Stage = StageSaving;
                 job.Progress = 90;

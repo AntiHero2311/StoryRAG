@@ -10,6 +10,8 @@ import { classifyColor, groupColor } from '../components/analysis/helpers';
 import DonutChart from '../components/analysis/DonutChart';
 import RadarChart from '../components/analysis/RadarChart';
 import GroupCard from '../components/analysis/GroupCard';
+import { useToast } from '../components/Toast';
+import { browserNotificationService } from '../services/browserNotificationService';
 
 // ─── Main content ─────────────────────────────────────────────────────────────
 function AnalysisContent() {
@@ -30,6 +32,25 @@ function AnalysisContent() {
     const [activeReportId, setActiveReportId] = useState<string | null>(null);
     const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const mountedRef = useRef(true);
+    const pollingJobRef = useRef<string | null>(null);
+    const notifiedJobRef = useRef<string | null>(null);
+    const toast = useToast();
+
+    const stopElapsedTimer = () => {
+        if (elapsedRef.current) {
+            clearInterval(elapsedRef.current);
+            elapsedRef.current = null;
+        }
+    };
+
+    const startElapsedTimer = (startedAt?: string | null) => {
+        stopElapsedTimer();
+        const baseElapsed = startedAt
+            ? Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000))
+            : 0;
+        setElapsed(baseElapsed);
+        elapsedRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
+    };
 
     // Load projects + subscription
     useEffect(() => {
@@ -42,10 +63,7 @@ function AnalysisContent() {
 
     useEffect(() => () => {
         mountedRef.current = false;
-        if (elapsedRef.current) {
-            clearInterval(elapsedRef.current);
-            elapsedRef.current = null;
-        }
+        stopElapsedTimer();
     }, []);
 
     // Load latest report + history when project changes
@@ -57,13 +75,29 @@ function AnalysisContent() {
         setAnalysisJob(null);
         setActiveReportId(null);
         setLoadingReport(true);
+
         Promise.all([
             reportService.getLatest(selectedId).catch(() => null),
             reportService.getAll(selectedId).catch(() => []),
-        ]).then(([latest, all]) => {
+            reportService.getActiveAnalyzeJob().catch(() => null),
+        ]).then(([latest, all, activeJob]) => {
+            if (!mountedRef.current) return;
             setReport(latest);
             setActiveReportId(latest?.id ?? null);
             setHistory(all);
+
+            if (activeJob && (activeJob.status === 'Queued' || activeJob.status === 'Processing')) {
+                if (activeJob.projectId !== selectedId) {
+                    setSelectedId(activeJob.projectId);
+                    return;
+                }
+
+                void runAnalyzeFlow(activeJob.projectId, activeJob);
+            } else {
+                setAnalyzing(false);
+                setAnalysisJob(null);
+                stopElapsedTimer();
+            }
         }).finally(() => setLoadingReport(false));
     }, [selectedId]);
 
@@ -89,36 +123,82 @@ function AnalysisContent() {
         }
     };
 
-    const handleAnalyze = async () => {
-        if (!selectedId) return;
-        setAnalyzing(true);
-        setElapsed(0);
-        setError(null);
-        setAnalysisJob(null);
-        elapsedRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
-        try {
-            const job = await reportService.enqueueAnalyzeJob(selectedId);
-            if (!mountedRef.current) return;
+    const runAnalyzeFlow = async (projectId: string, job: ProjectAnalysisJobResponse) => {
+        if (pollingJobRef.current === job.jobId) return;
 
-            setAnalysisJob(job);
-            const result = await pollAnalyzeJob(selectedId, job.jobId);
+        pollingJobRef.current = job.jobId;
+        setAnalyzing(true);
+        setAnalysisJob(job);
+        setError(null);
+        startElapsedTimer(job.startedAt ?? job.createdAt);
+
+        try {
+            const result = await pollAnalyzeJob(projectId, job.jobId);
             if (!result || !mountedRef.current) return;
 
             setReport(result);
             setActiveReportId(result.id);
-            const all = await reportService.getAll(selectedId).catch(() => []);
+            const all = await reportService.getAll(projectId).catch(() => []);
             setHistory(all);
             setExpandedGroups({});
-            // Refresh subscription usage
             subscriptionService.getMySubscription().then(setSubscription).catch(() => { });
+
+            if (notifiedJobRef.current !== job.jobId) {
+                notifiedJobRef.current = job.jobId;
+                toast.success(`Phân tích hoàn tất: ${result.totalScore.toFixed(1)} điểm (${result.classification}).`);
+                void browserNotificationService.notify(
+                    'Phân tích AI đã hoàn tất',
+                    `${result.projectTitle}: ${result.totalScore.toFixed(1)} điểm (${result.classification}).`,
+                    `analysis-complete-${job.jobId}`
+                );
+            }
         } catch (e: any) {
             const message = e?.response?.data?.message || e?.message || 'Phân tích thất bại. Vui lòng thử lại.';
-            setError(message === 'Job phân tích đã bị hủy.' ? null : message);
+            const isCancelled = message === 'Job phân tích đã bị hủy.';
+            setError(isCancelled ? null : message);
+
+            if (isCancelled) {
+                toast.warning('Job phân tích đã bị hủy.');
+            } else {
+                toast.error(message);
+                void browserNotificationService.notify(
+                    'Phân tích AI thất bại',
+                    message,
+                    `analysis-failed-${job.jobId}`
+                );
+            }
         } finally {
             if (!mountedRef.current) return;
+            if (pollingJobRef.current === job.jobId) pollingJobRef.current = null;
             setAnalyzing(false);
             setCancelingJob(false);
-            if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null; }
+            stopElapsedTimer();
+        }
+    };
+
+    const handleAnalyze = async () => {
+        if (!selectedId || analyzing) return;
+        setError(null);
+        setAnalysisJob(null);
+        try {
+            void browserNotificationService.ensurePermission();
+            const job = await reportService.enqueueAnalyzeJob(selectedId);
+            if (!mountedRef.current) return;
+            await runAnalyzeFlow(selectedId, job);
+        } catch (e: any) {
+            const message = e?.response?.data?.message || e?.message || 'Phân tích thất bại. Vui lòng thử lại.';
+            setError(message);
+            toast.error(message);
+
+            const activeJob = await reportService.getActiveAnalyzeJob().catch(() => null);
+            if (!activeJob || !mountedRef.current) return;
+
+            if (activeJob.projectId !== selectedId) {
+                setSelectedId(activeJob.projectId);
+                return;
+            }
+
+            await runAnalyzeFlow(activeJob.projectId, activeJob);
         }
     };
 
@@ -131,7 +211,7 @@ function AnalysisContent() {
             setAnalysisJob(cancelledJob);
             setError(null);
             setAnalyzing(false);
-            if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null; }
+            stopElapsedTimer();
         } catch (e: any) {
             setError(e?.response?.data?.message || 'Không thể hủy job phân tích lúc này.');
         } finally {
@@ -226,6 +306,11 @@ function AnalysisContent() {
                             )}
                         </button>
                     </div>
+                    {analyzing && analysisJob && (
+                        <p className="text-xs text-amber-400">
+                            Mỗi tài khoản chỉ chạy 1 bộ truyện mỗi lần. Vui lòng chờ job hiện tại hoàn tất trước khi phân tích truyện khác.
+                        </p>
+                    )}
                     {/* Subscription usage bar */}
                     {subscription && (
                         <div className="pt-2" style={{ borderTop: '1px solid var(--border-color)' }}>

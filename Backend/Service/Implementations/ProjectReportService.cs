@@ -20,7 +20,10 @@ namespace Service.Implementations
         private readonly IEmbeddingService _embeddingService;
         private readonly ILogger<ProjectReportService> _logger;
         private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
-        private const int TopK = 8;
+        private const int DefaultAnalyzeBatchSize = 8;
+        private const int DefaultAnalyzeRpmLimit = 12;
+        private static readonly SemaphoreSlim AnalyzeRpmLock = new(1, 1);
+        private static readonly Queue<DateTime> AnalyzeCallTimestamps = [];
 
         // ── Rubric definition (8 nhóm, 20 tiêu chí, 100 điểm) ──────────────────
         private static readonly List<(string Key, string Group, string Name, decimal Max)> Rubric = new()
@@ -69,23 +72,33 @@ namespace Service.Implementations
                 TimeSpan.FromMinutes(5));
         }
 
-        private Task<OpenAI.Chat.ChatCompletion> CompleteChatWithGeminiAsync(
-            IEnumerable<ChatMessage> messages, int maxTokens = 2500, float temperature = 0.7f)
+        private async Task<OpenAI.Chat.ChatCompletion> CompleteChatWithGeminiAsync(
+            IEnumerable<ChatMessage> messages,
+            int maxTokens = 2500,
+            float temperature = 0.7f,
+            CancellationToken cancellationToken = default)
         {
+            await WaitForAnalyzeRateSlotAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
             var options = new ChatCompletionOptions
             {
                 MaxOutputTokenCount = maxTokens,
                 Temperature = temperature,
             };
 
-            return _geminiChatExecutor.CompleteAsync(messages, options);
+            return await _geminiChatExecutor.CompleteAsync(messages, options);
         }
 
-        public async Task<ProjectReportResponse> AnalyzeAsync(Guid projectId, Guid userId)
+        public async Task<ProjectReportResponse> AnalyzeAsync(
+            Guid projectId,
+            Guid userId,
+            Func<int, string?, CancellationToken, Task>? progressCallback = null,
+            CancellationToken cancellationToken = default)
         {
             // 1. Verify ownership
             var project = await _context.Projects
-                .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted && p.AuthorId == userId)
+                .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted && p.AuthorId == userId, cancellationToken)
                 ?? throw new KeyNotFoundException("Dự án không tồn tại hoặc bạn không có quyền truy cập.");
 
             // 2. Check subscription
@@ -93,14 +106,16 @@ namespace Service.Implementations
                 .Include(s => s.Plan)
                 .Where(s => s.UserId == userId && s.Status == "Active" && s.EndDate >= DateTime.UtcNow)
                 .OrderByDescending(s => s.EndDate)
-                .FirstOrDefaultAsync()
+                .FirstOrDefaultAsync(cancellationToken)
                 ?? throw new InvalidOperationException("Bạn chưa có gói đăng ký hợp lệ. Vui lòng đăng ký gói để dùng tính năng này.");
 
             if (sub.UsedAnalysisCount >= sub.Plan.MaxAnalysisCount)
                 throw new InvalidOperationException($"Bạn đã dùng hết {sub.Plan.MaxAnalysisCount} lần phân tích trong kỳ này.");
 
             // 3. Decrypt user DEK
-            var user = await _context.Users.FindAsync(userId)!;
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken)
+                ?? throw new KeyNotFoundException("Không tìm thấy người dùng.");
             var masterKey = _config["Security:MasterKey"]!;
             var rawDek = EncryptionHelper.DecryptWithMasterKey(user!.DataEncryptionKey!, masterKey);
             var projectTitle = EncryptionHelper.DecryptWithMasterKey(project.Title, rawDek);
@@ -109,7 +124,7 @@ namespace Service.Implementations
             var chapters = await _context.Chapters
                 .Where(c => c.ProjectId == projectId && !c.IsDeleted)
                 .OrderBy(c => c.ChapterNumber)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             var chapterCount = chapters.Count;
             var totalWords = chapters.Sum(c => c.WordCount);
@@ -118,11 +133,11 @@ namespace Service.Implementations
             var activeVersionIds = await _context.Chapters
                 .Where(c => c.ProjectId == projectId && c.CurrentVersionId.HasValue)
                 .Select(c => c.CurrentVersionId!.Value)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             var chunks = await _context.ChapterChunks
                 .Where(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId))
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             if (chunks.Count == 0)
                 throw new InvalidOperationException("Dự án chưa có nội dung được nhúng (embed). Vui lòng chunk và embed các chương trong Workspace trước khi phân tích.");
@@ -134,7 +149,7 @@ namespace Service.Implementations
             // 5. Fetch Story Bible context (genres, summary, characters, worldbuilding)
             var projectFull = await _context.Projects
                 .Include(p => p.ProjectGenres).ThenInclude(pg => pg.Genre)
-                .FirstOrDefaultAsync(p => p.Id == projectId);
+                .FirstOrDefaultAsync(p => p.Id == projectId, cancellationToken);
 
             var genres = projectFull?.ProjectGenres.Select(pg => pg.Genre.Name).ToList() ?? new();
             var summary = !string.IsNullOrEmpty(project.Summary)
@@ -143,19 +158,19 @@ namespace Service.Implementations
 
             var characterEntries = await _context.CharacterEntries
                 .Where(c => c.ProjectId == projectId)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
             var worldEntries = await _context.WorldbuildingEntries
                 .Where(w => w.ProjectId == projectId)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
             var styleGuideEntries = await _context.StyleGuideEntries
                 .Where(s => s.ProjectId == projectId)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
             var themeEntries = await _context.ThemeEntries
                 .Where(t => t.ProjectId == projectId)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
             var plotNoteEntries = await _context.PlotNoteEntries
                 .Where(p => p.ProjectId == projectId)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             var bibleBuilder = new System.Text.StringBuilder();
             if (genres.Count > 0)
@@ -222,7 +237,15 @@ namespace Service.Implementations
                 ? EncryptionHelper.DecryptWithMasterKey(project.AiInstructions, rawDek)
                 : null;
 
-            var (criteria, warnings, overallFeedback, analyzeTokens) = await EvaluateWithAiAsync(projectTitle, decryptedChunks, storyBibleText, chapterCount, totalWords, aiInstructions);
+            var (criteria, warnings, overallFeedback, analyzeTokens) = await EvaluateWithAiAsync(
+                projectTitle,
+                decryptedChunks,
+                storyBibleText,
+                chapterCount,
+                totalWords,
+                aiInstructions,
+                progressCallback,
+                cancellationToken);
             var reportStatus = "Completed";
             var projectVersion = $"v1.{chapterCount}.{chunks.Count}";
 
@@ -246,7 +269,7 @@ namespace Service.Implementations
             // 7. Deduct usage — trừ cả analysis count và token
             sub.UsedAnalysisCount += 1;
             sub.UsedTokens += analyzeTokens;
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(cancellationToken);
 
             return BuildResponse(report.Id, projectId, projectTitle, reportStatus, total, criteria, warnings, overallFeedback, projectVersion);
         }
@@ -352,12 +375,15 @@ namespace Service.Implementations
 
         private async Task<(List<CriterionResult> Criteria, List<StoryWarning> Warnings, string OverallFeedback, int TokensUsed)> EvaluateWithAiAsync(
             string projectTitle, List<string> decryptedChunks, string? storyBibleText = null,
-            int chapterCount = 0, int totalWords = 0, string? aiInstructions = null)
+            int chapterCount = 0, int totalWords = 0, string? aiInstructions = null,
+            Func<int, string?, CancellationToken, Task>? progressCallback = null,
+            CancellationToken cancellationToken = default)
         {
-            // Use first TopK chunks as context (avoid token limit) — sanitize trước khi nhúng vào prompt
-            var contextText = string.Join("\n\n---\n\n",
-                decryptedChunks.Take(TopK)
-                    .Select((c, i) => $"[Đoạn {i + 1}]\n{PromptSanitizer.SanitizeUserContent(c)}"));
+            var (contextText, batchTokens) = await BuildAnalysisContextAsync(
+                projectTitle,
+                decryptedChunks,
+                progressCallback,
+                cancellationToken);
 
             // JSON gồm 2 phần: mảng criteria (20 mục) + mảng warnings (phát hiện tự động)
             var jsonTemplate = @"{
@@ -506,18 +532,14 @@ namespace Service.Implementations
                 ChatMessage.CreateUserMessage(prompt),
             };
 
-            var response = await CompleteChatWithGeminiAsync(messages, maxTokens: 8000, temperature: 0.1f);
-            var raw = response.Content[0].Text.Trim();
-
-            // Strip <think>...</think> reasoning blocks emitted by some models (e.g. Qwen3)
-            raw = System.Text.RegularExpressions.Regex.Replace(
-                raw, @"<think>[\s\S]*?</think>", string.Empty,
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
-
-            // Strip markdown code fences if present
-            if (raw.StartsWith("```")) raw = raw.Split('\n', 2)[1];
-            if (raw.EndsWith("```")) raw = raw[..^3];
-            raw = raw.Trim();
+            var response = await CompleteChatWithGeminiAsync(
+                messages,
+                maxTokens: 8000,
+                temperature: 0.1f,
+                cancellationToken: cancellationToken);
+            var raw = NormalizeAiText(response.Content.FirstOrDefault()?.Text ?? string.Empty);
+            if (string.IsNullOrWhiteSpace(raw))
+                raw = "{}";
 
             // Attempt to repair a truncated JSON array (AI hit token limit mid-response)
             raw = RepairTruncatedJsonArray(raw);
@@ -544,8 +566,225 @@ namespace Service.Implementations
                 warnings = new();
             }
 
-            var tokensUsed = response.Usage?.TotalTokenCount ?? 0;
+            var tokensUsed = batchTokens + (response.Usage?.TotalTokenCount ?? 0);
             return (MergeWithRubric(aiResults), warnings, overallFeedback, tokensUsed);
+        }
+
+        private async Task<(string ContextText, int TokensUsed)> BuildAnalysisContextAsync(
+            string projectTitle,
+            List<string> decryptedChunks,
+            Func<int, string?, CancellationToken, Task>? progressCallback,
+            CancellationToken cancellationToken)
+        {
+            var batchSize = ReadIntConfig("Gemini:AnalyzeBatchSize", DefaultAnalyzeBatchSize, 1, 30);
+            var maxSummaryBlocks = ReadIntConfig("Gemini:AnalyzeMaxSummaryBlocks", 16, 4, 40);
+            var totalBatches = (int)Math.Ceiling(decryptedChunks.Count / (double)batchSize);
+
+            var batchSummaries = new List<string>(totalBatches);
+            var tokensUsed = 0;
+
+            for (var batchIndex = 0; batchIndex < totalBatches; batchIndex++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var currentBatch = decryptedChunks
+                    .Skip(batchIndex * batchSize)
+                    .Take(batchSize)
+                    .ToList();
+
+                var batchText = string.Join(
+                    "\n\n---\n\n",
+                    currentBatch.Select((chunk, chunkIndex) =>
+                        $"[Đoạn {batchIndex * batchSize + chunkIndex + 1}]\n{PromptSanitizer.SanitizeUserContent(chunk)}"));
+
+                var summaryPrompt = $$"""
+                    Bạn là biên tập viên phân tích văn học.
+                    Đây là batch {{batchIndex + 1}}/{{totalBatches}} của tác phẩm "{{projectTitle}}".
+                    Hãy tóm tắt bằng chứng quan trọng để phục vụ chấm rubric cuối cùng.
+
+                    Yêu cầu đầu ra:
+                    - Dạng bullet, tiếng Việt, súc tích.
+                    - Tối đa 12 bullet.
+                    - Mỗi bullet <= 220 ký tự.
+                    - Ưu tiên nêu: xung đột chính, phát triển nhân vật, mâu thuẫn logic, dấu hiệu lặp, câu trích đáng chú ý.
+
+                    Nội dung batch:
+                    {{batchText}}
+                    """;
+
+                var summaryMessages = new List<ChatMessage>
+                {
+                    ChatMessage.CreateSystemMessage("Tóm tắt bằng chứng ngắn gọn, trung lập, không suy diễn ngoài nội dung."),
+                    ChatMessage.CreateUserMessage(summaryPrompt),
+                };
+
+                var summaryResponse = await CompleteChatWithGeminiAsync(
+                    summaryMessages,
+                    maxTokens: 1500,
+                    temperature: 0.1f,
+                    cancellationToken: cancellationToken);
+
+                var summaryText = NormalizeAiText(summaryResponse.Content.FirstOrDefault()?.Text ?? string.Empty);
+                if (string.IsNullOrWhiteSpace(summaryText))
+                    summaryText = "- Không trích xuất được bằng chứng từ batch này.";
+
+                batchSummaries.Add($"[Batch {batchIndex + 1}/{totalBatches}]\n{summaryText}");
+                tokensUsed += summaryResponse.Usage?.TotalTokenCount ?? 0;
+
+                if (progressCallback != null)
+                {
+                    var progress = 20 + (int)Math.Round(((batchIndex + 1d) / totalBatches) * 50d); // 20..70
+                    await progressCallback(Math.Clamp(progress, 20, 70), $"Batch {batchIndex + 1}/{totalBatches}", cancellationToken);
+                }
+            }
+
+            if (batchSummaries.Count > maxSummaryBlocks)
+            {
+                var reducedResult = await ReduceBatchSummariesAsync(
+                    batchSummaries,
+                    maxSummaryBlocks,
+                    cancellationToken);
+
+                batchSummaries = reducedResult.Summaries;
+                tokensUsed += reducedResult.TokensUsed;
+
+                if (progressCallback != null)
+                    await progressCallback(80, "Đang tổng hợp toàn bộ batch", cancellationToken);
+            }
+
+            return (string.Join("\n\n====================\n\n", batchSummaries), tokensUsed);
+        }
+
+        private async Task<(List<string> Summaries, int TokensUsed)> ReduceBatchSummariesAsync(
+            List<string> summaries,
+            int maxSummaryBlocks,
+            CancellationToken cancellationToken)
+        {
+            const int groupSize = 6;
+            var current = summaries;
+            var round = 1;
+            var tokensUsed = 0;
+
+            while (current.Count > maxSummaryBlocks)
+            {
+                var next = new List<string>();
+                var totalGroups = (int)Math.Ceiling(current.Count / (double)groupSize);
+
+                for (var groupIndex = 0; groupIndex < totalGroups; groupIndex++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var groupItems = current
+                        .Skip(groupIndex * groupSize)
+                        .Take(groupSize)
+                        .ToList();
+                    var groupText = string.Join("\n\n---\n\n", groupItems);
+
+                    var reducePrompt = $$"""
+                        Rút gọn các ghi chú phân tích sau thành bản tổng hợp ngắn gọn nhưng không mất ý quan trọng.
+                        Yêu cầu:
+                        - Tối đa 16 bullet.
+                        - Mỗi bullet <= 220 ký tự.
+                        - Giữ lại bằng chứng quan trọng về: nhân vật, cốt truyện, ngôn ngữ, mâu thuẫn, lặp lại, cảnh báo đặc biệt.
+
+                        Dữ liệu đầu vào:
+                        {{groupText}}
+                        """;
+
+                    var reduceMessages = new List<ChatMessage>
+                    {
+                        ChatMessage.CreateSystemMessage("Rút gọn nội dung phân tích theo dạng bullet súc tích, không thêm dữ kiện mới."),
+                        ChatMessage.CreateUserMessage(reducePrompt),
+                    };
+
+                    var reducedResponse = await CompleteChatWithGeminiAsync(
+                        reduceMessages,
+                        maxTokens: 1600,
+                        temperature: 0.1f,
+                        cancellationToken: cancellationToken);
+
+                    var reducedText = NormalizeAiText(reducedResponse.Content.FirstOrDefault()?.Text ?? string.Empty);
+                    if (string.IsNullOrWhiteSpace(reducedText))
+                        reducedText = "- Không rút gọn được nhóm dữ liệu này.";
+
+                    next.Add($"[R{round}-G{groupIndex + 1}/{totalGroups}]\n{reducedText}");
+                    tokensUsed += reducedResponse.Usage?.TotalTokenCount ?? 0;
+                }
+
+                current = next;
+                round++;
+            }
+
+            return (current, tokensUsed);
+        }
+
+        private async Task WaitForAnalyzeRateSlotAsync(CancellationToken cancellationToken)
+        {
+            var rpmLimit = ReadIntConfig("Gemini:AnalyzeRpmLimit", DefaultAnalyzeRpmLimit, 1, 120);
+            await AnalyzeRpmLock.WaitAsync(cancellationToken);
+            try
+            {
+                while (true)
+                {
+                    var now = DateTime.UtcNow;
+                    while (AnalyzeCallTimestamps.Count > 0 &&
+                           now - AnalyzeCallTimestamps.Peek() >= TimeSpan.FromMinutes(1))
+                    {
+                        AnalyzeCallTimestamps.Dequeue();
+                    }
+
+                    if (AnalyzeCallTimestamps.Count < rpmLimit)
+                    {
+                        AnalyzeCallTimestamps.Enqueue(now);
+                        return;
+                    }
+
+                    var wait = TimeSpan.FromMinutes(1) - (now - AnalyzeCallTimestamps.Peek());
+                    if (wait < TimeSpan.FromMilliseconds(200))
+                        wait = TimeSpan.FromMilliseconds(200);
+
+                    _logger.LogInformation(
+                        "Gemini analyze RPM gate waiting {WaitSeconds:F1}s (limit {RpmLimit}/minute).",
+                        wait.TotalSeconds,
+                        rpmLimit);
+
+                    await Task.Delay(wait, cancellationToken);
+                }
+            }
+            finally
+            {
+                AnalyzeRpmLock.Release();
+            }
+        }
+
+        private int ReadIntConfig(string key, int fallback, int min, int max)
+        {
+            if (int.TryParse(_config[key], out var parsed))
+                return Math.Clamp(parsed, min, max);
+
+            return Math.Clamp(fallback, min, max);
+        }
+
+        private static string NormalizeAiText(string raw)
+        {
+            var normalized = raw.Trim();
+
+            normalized = System.Text.RegularExpressions.Regex.Replace(
+                normalized,
+                @"<think>[\s\S]*?</think>",
+                string.Empty,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
+
+            if (normalized.StartsWith("```"))
+            {
+                var firstBreak = normalized.IndexOf('\n');
+                normalized = firstBreak >= 0 ? normalized[(firstBreak + 1)..] : string.Empty;
+            }
+
+            if (normalized.EndsWith("```"))
+                normalized = normalized[..^3];
+
+            return normalized.Trim();
         }
 
         private static string BuildCompletenessNote(int chapterCount, int totalWords)

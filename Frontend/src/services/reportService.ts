@@ -63,6 +63,14 @@ export interface ProjectAnalysisJobResponse {
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 export const reportService = {
+    getActiveAnalyzeJob: (projectId?: string) => {
+        const params = new URLSearchParams();
+        if (projectId) params.set('projectId', projectId);
+        const query = params.toString();
+        const url = query ? `/ai/analyze/jobs/active?${query}` : '/ai/analyze/jobs/active';
+        return api.get<ProjectAnalysisJobResponse | null>(url).then(r => r.data);
+    },
+
     enqueueAnalyzeJob: (projectId: string) =>
         api.post<ProjectAnalysisJobResponse>(`/ai/${projectId}/analyze/jobs`).then(r => r.data),
 

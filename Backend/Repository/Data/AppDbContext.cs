@@ -343,6 +343,10 @@ namespace Repository.Data
 
                 entity.HasIndex(e => new { e.ProjectId, e.UserId, e.CreatedAt });
                 entity.HasIndex(e => new { e.ProjectId, e.UserId, e.ProjectVersionHash, e.Status });
+                entity.HasIndex(e => e.UserId)
+                    .HasDatabaseName("IX_ProjectAnalysisJobs_UserId_Active")
+                    .IsUnique()
+                    .HasFilter("\"Status\" IN ('Queued','Processing')");
 
                 entity.HasOne(j => j.Project)
                       .WithMany()
