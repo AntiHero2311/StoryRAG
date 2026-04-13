@@ -1,13 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using OpenAI;
 using OpenAI.Chat;
 using Repository.Data;
 using Repository.Entities;
 using Service.Helpers;
 using Service.Interfaces;
-using System.ClientModel;
 
 namespace Service.Implementations
 {
@@ -16,66 +14,24 @@ namespace Service.Implementations
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
         private readonly ILogger<AiWritingService> _logger;
-        private readonly ChatClient _chatClient;
-        private readonly ChatClient? _geminiChatClient;
-        private readonly bool _geminiIsGemma;
+        private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
 
         public AiWritingService(AppDbContext context, IConfiguration config, ILogger<AiWritingService> logger)
         {
             _context = context;
             _config = config;
             _logger = logger;
-
-            var baseUrl = config["AI:BaseUrl"] ?? "http://localhost:1234/v1";
-            var apiKey = config["AI:ApiKey"] ?? "lm-studio";
-            var model = config["AI:ChatModel"] ?? "qwen/qwen3.5-9b";
-            var lmOptions = new OpenAIClientOptions { Endpoint = new Uri(baseUrl) };
-            _chatClient = new OpenAIClient(new ApiKeyCredential(apiKey), lmOptions).GetChatClient(model);
-
-            var geminiKey = config["Gemini:ChatApiKey"] ?? string.Empty;
-            if (!string.IsNullOrEmpty(geminiKey))
-            {
-                var geminiModel = config["Gemini:ChatModel"] ?? "gemma-3-27b-it";
-                _geminiIsGemma = geminiModel.StartsWith("gemma", StringComparison.OrdinalIgnoreCase);
-                var geminiOptions = new OpenAIClientOptions
-                {
-                    Endpoint = new Uri("https://generativelanguage.googleapis.com/v1beta/openai/"),
-                    NetworkTimeout = TimeSpan.FromMinutes(4),
-                };
-                _geminiChatClient = new OpenAIClient(new ApiKeyCredential(geminiKey), geminiOptions).GetChatClient(geminiModel);
-            }
+            _geminiChatExecutor = new GeminiChatFailoverExecutor(
+                config,
+                logger,
+                "Gemini AiWriting",
+                GeminiPrimaryKeyRole.Chat,
+                TimeSpan.FromMinutes(4));
         }
 
-        private async Task<OpenAI.Chat.ChatCompletion> CompleteChatWithFallbackAsync(IEnumerable<ChatMessage> messages)
+        private Task<OpenAI.Chat.ChatCompletion> CompleteChatWithGeminiAsync(IEnumerable<ChatMessage> messages)
         {
-            if (_geminiChatClient != null)
-            {
-                try
-                {
-                    var geminiMessages = _geminiIsGemma ? GeminiRetryHelper.FlattenSystemForGemma(messages) : messages;
-                    var geminiResult = await GeminiRetryHelper.ExecuteAsync(
-                         () => _geminiChatClient.CompleteChatAsync(geminiMessages),
-                         _logger, "Gemini AiWriting");
-                    return geminiResult.Value;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Gemini AiWriting thất bại, fallback về LM Studio.");
-                }
-            }
-            var lmMessages = messages.ToList();
-            var lastUser = lmMessages.LastOrDefault(m => m is UserChatMessage);
-            if (lastUser != null)
-            {
-                var originalText = lastUser.Content[0].Text;
-                if (!originalText.Contains("/no_think"))
-                {
-                    var idx = lmMessages.LastIndexOf(lastUser);
-                    lmMessages[idx] = ChatMessage.CreateUserMessage(originalText + " /no_think");
-                }
-            }
-            var result = await _chatClient.CompleteChatAsync(lmMessages);
-            return result.Value;
+            return _geminiChatExecutor.CompleteAsync(messages);
         }
 
         private async Task CheckAndDeductTokenAsync(Guid projectId, Guid userId)
@@ -134,7 +90,7 @@ namespace Service.Implementations
             var userMsg = $"Yêu cầu từ tác giả:\n<instruction>\n{PromptSanitizer.SanitizeAndWarn(instruction, _logger, "WriteNew")}\n</instruction>";
 
             var messages = new List<ChatMessage> { ChatMessage.CreateSystemMessage(systemPrompt), ChatMessage.CreateUserMessage(userMsg) };
-            var completion = await CompleteChatWithFallbackAsync(messages);
+            var completion = await CompleteChatWithGeminiAsync(messages);
 
             var text = LlmOutputValidator.ValidateRewriteResponse(completion.Content[0].Text.Trim(), _logger);
             var tokens = completion.Usage?.TotalTokenCount ?? 0;
@@ -155,7 +111,7 @@ namespace Service.Implementations
                           $"Hướng dẫn cho đoạn tiếp theo: {PromptSanitizer.SanitizeAndWarn(instruction, _logger, "Continue_Inst")}";
 
             var messages = new List<ChatMessage> { ChatMessage.CreateSystemMessage(systemPrompt), ChatMessage.CreateUserMessage(userMsg) };
-            var completion = await CompleteChatWithFallbackAsync(messages);
+            var completion = await CompleteChatWithGeminiAsync(messages);
 
             var text = LlmOutputValidator.ValidateRewriteResponse(completion.Content[0].Text.Trim(), _logger);
             var tokens = completion.Usage?.TotalTokenCount ?? 0;
@@ -177,7 +133,7 @@ namespace Service.Implementations
                           $"Nội dung gốc:\n<original_text>\n{PromptSanitizer.SanitizeAndWarn(originalText, _logger, "Polish_Text")}\n</original_text>";
 
             var messages = new List<ChatMessage> { ChatMessage.CreateSystemMessage(systemPrompt), ChatMessage.CreateUserMessage(userMsg) };
-            var completion = await CompleteChatWithFallbackAsync(messages);
+            var completion = await CompleteChatWithGeminiAsync(messages);
 
             var text = LlmOutputValidator.ValidateRewriteResponse(completion.Content[0].Text.Trim(), _logger);
             var inputTokens = completion.Usage?.InputTokenCount ?? 0;
@@ -215,7 +171,7 @@ namespace Service.Implementations
                           "Hãy đưa ra 3-5 gợi ý hấp dẫn dạng gạch đầu dòng và 1 đoạn nhận xét ngắn.";
 
             var messages = new List<ChatMessage> { ChatMessage.CreateSystemMessage(systemPrompt), ChatMessage.CreateUserMessage(userMsg) };
-            var completion = await CompleteChatWithFallbackAsync(messages);
+            var completion = await CompleteChatWithGeminiAsync(messages);
 
             var rawText = completion.Content[0].Text.Trim();
             var tokens = completion.Usage?.TotalTokenCount ?? 0;
@@ -239,7 +195,7 @@ namespace Service.Implementations
             var userMsg = $"Phân rã thành các Cảnh:\n<chapter>\n{safeContent[..Math.Min(15000, safeContent.Length)]}\n</chapter>";
 
             var messages = new List<ChatMessage> { ChatMessage.CreateSystemMessage(systemPrompt), ChatMessage.CreateUserMessage(userMsg) };
-            var completion = await CompleteChatWithFallbackAsync(messages);
+            var completion = await CompleteChatWithGeminiAsync(messages);
             var rawText = completion.Content[0].Text.Trim();
             var tokens = completion.Usage?.TotalTokenCount ?? 0;
             await DeductTokenAsync(userId, tokens);
@@ -285,7 +241,7 @@ namespace Service.Implementations
             var userMsg = $"Phân tích cấu trúc và Cliffhanger:\n<chapter>\n{safeContent[..Math.Min(15000, safeContent.Length)]}\n</chapter>";
 
             var messages = new List<ChatMessage> { ChatMessage.CreateSystemMessage(systemPrompt), ChatMessage.CreateUserMessage(userMsg) };
-            var completion = await CompleteChatWithFallbackAsync(messages);
+            var completion = await CompleteChatWithGeminiAsync(messages);
             var rawText = completion.Content[0].Text.Trim();
             var tokens = completion.Usage?.TotalTokenCount ?? 0;
             await DeductTokenAsync(userId, tokens);

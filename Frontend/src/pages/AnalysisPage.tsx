@@ -4,7 +4,7 @@ import { BarChart2, BrainCircuit, Loader2, AlertCircle, CheckCircle2, Sparkles, 
 import MainLayout from '../layouts/MainLayout';
 import { UserInfo } from '../utils/jwtHelper';
 import { projectService, ProjectResponse } from '../services/projectService';
-import { reportService, ProjectReportResponse, ProjectReportSummary } from '../services/reportService';
+import { reportService, ProjectAnalysisJobResponse, ProjectReportResponse, ProjectReportSummary } from '../services/reportService';
 import { subscriptionService, UserSubscription } from '../services/subscriptionService';
 import { classifyColor, groupColor } from '../components/analysis/helpers';
 import DonutChart from '../components/analysis/DonutChart';
@@ -25,8 +25,11 @@ function AnalysisContent() {
     const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({});
     const [elapsed, setElapsed] = useState(0);
     const [subscription, setSubscription] = useState<UserSubscription | null>(null);
+    const [analysisJob, setAnalysisJob] = useState<ProjectAnalysisJobResponse | null>(null);
+    const [cancelingJob, setCancelingJob] = useState(false);
     const [activeReportId, setActiveReportId] = useState<string | null>(null);
     const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const mountedRef = useRef(true);
 
     // Load projects + subscription
     useEffect(() => {
@@ -37,12 +40,21 @@ function AnalysisContent() {
         subscriptionService.getMySubscription().then(setSubscription).catch(() => { });
     }, []);
 
+    useEffect(() => () => {
+        mountedRef.current = false;
+        if (elapsedRef.current) {
+            clearInterval(elapsedRef.current);
+            elapsedRef.current = null;
+        }
+    }, []);
+
     // Load latest report + history when project changes
     useEffect(() => {
         if (!selectedId) return;
         setReport(null);
         setHistory([]);
         setError(null);
+        setAnalysisJob(null);
         setActiveReportId(null);
         setLoadingReport(true);
         Promise.all([
@@ -55,14 +67,43 @@ function AnalysisContent() {
         }).finally(() => setLoadingReport(false));
     }, [selectedId]);
 
+    const pollAnalyzeJob = async (projectId: string, jobId: string) => {
+        while (true) {
+            const job = await reportService.getAnalyzeJob(projectId, jobId);
+            if (!mountedRef.current) return null;
+
+            setAnalysisJob(job);
+
+            if (job.status === 'Completed') {
+                const result = await reportService.getAnalyzeJobResult(projectId, jobId);
+                return result;
+            }
+
+            if (job.status === 'Failed' || job.status === 'Cancelled') {
+                throw new Error(job.errorMessage || (job.status === 'Cancelled'
+                    ? 'Job phân tích đã bị hủy.'
+                    : 'Phân tích thất bại. Vui lòng thử lại.'));
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+    };
+
     const handleAnalyze = async () => {
         if (!selectedId) return;
         setAnalyzing(true);
         setElapsed(0);
         setError(null);
+        setAnalysisJob(null);
         elapsedRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
         try {
-            const result = await reportService.analyze(selectedId);
+            const job = await reportService.enqueueAnalyzeJob(selectedId);
+            if (!mountedRef.current) return;
+
+            setAnalysisJob(job);
+            const result = await pollAnalyzeJob(selectedId, job.jobId);
+            if (!result || !mountedRef.current) return;
+
             setReport(result);
             setActiveReportId(result.id);
             const all = await reportService.getAll(selectedId).catch(() => []);
@@ -71,10 +112,30 @@ function AnalysisContent() {
             // Refresh subscription usage
             subscriptionService.getMySubscription().then(setSubscription).catch(() => { });
         } catch (e: any) {
-            setError(e?.response?.data?.message || 'Phân tích thất bại. Vui lòng thử lại.');
+            const message = e?.response?.data?.message || e?.message || 'Phân tích thất bại. Vui lòng thử lại.';
+            setError(message === 'Job phân tích đã bị hủy.' ? null : message);
         } finally {
+            if (!mountedRef.current) return;
+            setAnalyzing(false);
+            setCancelingJob(false);
+            if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null; }
+        }
+    };
+
+    const handleCancelAnalyzeJob = async () => {
+        if (!selectedId || !analysisJob || analysisJob.status !== 'Queued' || cancelingJob) return;
+        setCancelingJob(true);
+        setError(null);
+        try {
+            const cancelledJob = await reportService.cancelAnalyzeJob(selectedId, analysisJob.jobId);
+            setAnalysisJob(cancelledJob);
+            setError(null);
             setAnalyzing(false);
             if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null; }
+        } catch (e: any) {
+            setError(e?.response?.data?.message || 'Không thể hủy job phân tích lúc này.');
+        } finally {
+            setCancelingJob(false);
         }
     };
 
@@ -101,6 +162,17 @@ function AnalysisContent() {
         setExpandedGroups(prev => ({ ...prev, [idx]: !prev[idx] }));
 
     const classColors = report ? classifyColor(report.classification) : null;
+    const stageLabelMap: Record<ProjectAnalysisJobResponse['stage'], string> = {
+        Queued: 'Đang xếp hàng',
+        Preparing: 'Chuẩn bị dữ liệu',
+        Analyzing: 'Đang phân tích bằng AI',
+        Saving: 'Đang lưu kết quả',
+        Completed: 'Hoàn thành',
+        Failed: 'Thất bại',
+        Cancelled: 'Đã hủy',
+    };
+    const currentStageLabel = analysisJob ? stageLabelMap[analysisJob.stage] : 'Đang khởi tạo';
+    const progressValue = Math.min(100, Math.max(analysisJob?.progress ?? 10, 8));
 
     return (
         <div className="flex-1 overflow-y-auto p-6 md:p-10">
@@ -132,6 +204,7 @@ function AnalysisContent() {
                                 <select
                                     value={selectedId}
                                     onChange={e => setSelectedId(e.target.value)}
+                                    disabled={analyzing}
                                     className="w-full h-10 px-3 rounded-xl text-sm text-[var(--text-primary)] outline-none"
                                     style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
                                     {projects.length === 0 && <option value="">— Chưa có dự án —</option>}
@@ -205,17 +278,31 @@ function AnalysisContent() {
                                         <BrainCircuit className="w-4 h-4 text-amber-400" />
                                     </div>
                                     <div className="flex-1">
-                                        <p className="text-[var(--text-primary)] font-semibold text-sm">AI đang phân tích toàn bộ dự án...</p>
+                                        <p className="text-[var(--text-primary)] font-semibold text-sm">
+                                            {analysisJob?.isExistingJob
+                                                ? 'Đang tiếp tục job phân tích hiện có...'
+                                                : 'AI đang xử lý job phân tích dự án...'}
+                                        </p>
                                         <p className="text-[var(--text-secondary)] text-xs mt-0.5">
-                                            Có thể mất vài phút · Đã chờ: <span className="text-amber-400 font-semibold">{elapsed}s</span>
+                                            Giai đoạn: <span className="text-amber-400 font-semibold">{currentStageLabel}</span>
+                                            {' · '}
+                                            Đã chờ: <span className="text-amber-400 font-semibold">{elapsed}s</span>
                                         </p>
                                     </div>
+                                    {analysisJob?.status === 'Queued' && (
+                                        <button
+                                            onClick={handleCancelAnalyzeJob}
+                                            disabled={cancelingJob}
+                                            className="h-8 px-3 rounded-lg text-xs font-semibold transition-opacity disabled:opacity-60"
+                                            style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}>
+                                            {cancelingJob ? 'Đang hủy...' : 'Hủy hàng chờ'}
+                                        </button>
+                                    )}
                                 </div>
                                 <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-hover)' }}>
-                                    <div className="h-full rounded-full animate-[analyzing_1.8s_ease-in-out_infinite]"
-                                        style={{ background: 'linear-gradient(90deg,transparent,#f5a623,transparent)', width: '40%' }} />
+                                    <div className="h-full rounded-full transition-all duration-500"
+                                        style={{ background: 'linear-gradient(90deg,#f5a623,#f97316)', width: `${progressValue}%` }} />
                                 </div>
-                                <style>{`@keyframes analyzing{0%{transform:translateX(-120%)}100%{transform:translateX(350%)}}`}</style>
                             </div>
                         )}
 

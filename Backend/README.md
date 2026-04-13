@@ -149,7 +149,11 @@ Authorization: Bearer <access_token>
 
 | Method | Route | Mô tả |
 |--------|-------|-------|
-| `POST` | `/ai/{projectId}/analyze` | Phân tích toàn bộ dự án (tốn quota) |
+| `POST` | `/ai/{projectId}/analyze/jobs` | Tạo job phân tích async (khuyến nghị) |
+| `GET` | `/ai/{projectId}/analyze/jobs/{jobId}` | Lấy trạng thái tiến độ job |
+| `GET` | `/ai/{projectId}/analyze/jobs/{jobId}/result` | Lấy kết quả report khi job hoàn tất |
+| `POST` | `/ai/{projectId}/analyze/jobs/{jobId}/cancel` | Hủy job đang chờ |
+| `POST` | `/ai/{projectId}/analyze` | Phân tích đồng bộ (tương thích ngược) |
 | `GET` | `/ai/{projectId}/reports` | Danh sách báo cáo phân tích |
 | `GET` | `/ai/{projectId}/reports/{reportId}` | Chi tiết báo cáo |
 
@@ -160,7 +164,7 @@ Authorization: Bearer <access_token>
 - `ThemeEntries` — Nhóm 7: Chủ đề tác phẩm
 - `PlotNoteEntries` — Nhóm 3 & 5: Cốt truyện & sự cuốn hút
 
-**Response `POST /analyze` (`200`)**
+**Response `GET /analyze/jobs/{jobId}/result` (`200`)**
 ```json
 {
   "totalScore": 78,
@@ -190,6 +194,18 @@ Authorization: Bearer <access_token>
       ]
     }
   ]
+}
+```
+
+**Response `POST /analyze/jobs` (`202`)**
+```json
+{
+  "jobId": "guid",
+  "projectId": "guid",
+  "status": "Queued",
+  "stage": "Queued",
+  "progress": 0,
+  "isExistingJob": false
 }
 ```
 
@@ -334,16 +350,17 @@ Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 
 | Service | Vai trò |
 |---------|---------|
-| `EmbeddingService` | `batchEmbedContents` với batch/token throttling (config qua `Gemini:Embedding*`), xoay key theo `Gemini:EmbedApiKey` + `Gemini:EmbedApiKey2` (hoặc `Gemini:EmbedApiKeys`), không fallback LM Studio |
-| `AiChatService` | Gemini → LM Studio fallback (chỉ lỗi non-429), lưu lịch sử |
-| `AiRewriteService` | Gemini → LM Studio fallback, lưu lịch sử |
+| `EmbeddingService` | `batchEmbedContents` với batch/token throttling (config qua `Gemini:Embedding*`), dùng 2 key cố định `Gemini:AnalyzeApiKey` + `Gemini:ChatApiKey` và fallback theo use-case (corpus/chat query) |
+| `AiChatService` | Gemini-only chat, lưu lịch sử |
+| `AiRewriteService` | Gemini-only rewrite, lưu lịch sử |
 | `ChunkingService` | 1500 ký tự, overlap 150, ưu tiên cắt tại `\n\n` → `.` → space |
 | `AiWritingService` | Viết mới, tiếp nối, rất trau chuốt — tích hợp kỹ thuật **Show Don't Tell** & **Pacing** |
-| `ProjectReportService` | Rubric **5 điểm** (1-Kém → 5-Xuất sắc), phát hiện **4 loại cảnh báo** (INCOMPLETE/REPETITION/PLAGIARISM\_RISK/INCONSISTENCY), **Zero Hallucination**, chấm theo **Thể loại**; phân tích ưu tiên `Gemini:AnalyzeApiKey`, fallback sang pool `Gemini:ChatApiKey`/`Gemini:ChatApiKeys`, cuối cùng mới về LM Studio |
+| `ProjectReportService` | Rubric **5 điểm** (1-Kém → 5-Xuất sắc), phát hiện **4 loại cảnh báo** (INCOMPLETE/REPETITION/PLAGIARISM\_RISK/INCONSISTENCY), **Zero Hallucination**, chấm theo **Thể loại**; phân tích ưu tiên Analyze key, fallback sang Chat key; model fallback `gemma-4-31b` -> `gemma-4-26b` |
+| `ProjectAnalysisJobService` | Điều phối queue async cho phân tích: enqueue/status/result/cancel, chống enqueue trùng theo `ProjectVersionHash` |
 | `GeminiRetryHelper` | Backoff [10s, 30s, 65s] cho 429; throw lỗi thân thiện sau 3 lần |
 | `EncryptionHelper` | AES-256 với user DEK + Master Key |
 
-> Khuyến nghị cấu hình đủ 4 key ở môi trường chạy: `Gemini__ChatApiKey`, `Gemini__EmbedApiKey`, `Gemini__EmbedApiKey2`, `Gemini__AnalyzeApiKey`.
+> Khuyến nghị cấu hình đủ 2 key ở môi trường chạy: `Gemini__AnalyzeApiKey`, `Gemini__ChatApiKey` (không dùng key legacy).
 
 ---
 

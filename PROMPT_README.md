@@ -204,11 +204,9 @@ Trả về JSON array (không có text nào ngoài JSON):
 
 | Tham số | Giá trị mặc định | Config key |
 |---------|-----------------|-----------|
-| Primary Chat model | `gemini-2.0-flash` | `Gemini:ChatModel` |
+| Chat models fallback | `gemma-4-31b,gemma-4-26b` | `Gemini:ChatModels` |
 | Primary Embedding model | `gemini-embedding-001` | `Gemini:EmbeddingModel` |
 | Embedding dimensions | `768` | `Gemini:EmbeddingDimensions` |
-| Fallback Base URL | `http://localhost:1234/v1` | `AI:BaseUrl` |
-| Fallback Chat model | tùy chọn | `AI:ChatModel` |
 | Max tokens (analysis) | `4000` | hardcoded trong `EvaluateWithAiAsync` |
 
 > Thay đổi model trong `appsettings.Development.json` — không cần sửa code.

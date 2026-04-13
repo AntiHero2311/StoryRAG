@@ -1,5 +1,11 @@
 namespace Service.Interfaces
 {
+    public enum EmbeddingUseCase
+    {
+        Corpus,
+        ChatQuery
+    }
+
     public interface IEmbeddingService
     {
         /// <summary>
@@ -8,8 +14,8 @@ namespace Service.Interfaces
         Task EmbedChapterAsync(Guid chapterId, Guid userId);
 
         /// <summary>
-        /// Lấy embedding vector cho một đoạn text (dùng để embed câu hỏi khi chat).
+        /// Lấy embedding vector cho một đoạn text theo use-case.
         /// </summary>
-        Task<float[]> GetEmbeddingAsync(string text);
+        Task<float[]> GetEmbeddingAsync(string text, EmbeddingUseCase useCase = EmbeddingUseCase.Corpus);
     }
 }

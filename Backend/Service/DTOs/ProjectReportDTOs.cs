@@ -84,4 +84,20 @@ namespace Service.DTOs
         public string ProjectVersion { get; set; } = "v1.0.0";
         public DateTime CreatedAt { get; set; }
     }
+
+    // ─── Async analysis job ──────────────────────────────────────────────────────
+    public class ProjectAnalysisJobResponse
+    {
+        public Guid JobId { get; set; }
+        public Guid ProjectId { get; set; }
+        public string Status { get; set; } = "Queued";
+        public string Stage { get; set; } = "Queued";
+        public int Progress { get; set; }
+        public Guid? ReportId { get; set; }
+        public string? ErrorMessage { get; set; }
+        public bool IsExistingJob { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime? StartedAt { get; set; }
+        public DateTime? CompletedAt { get; set; }
+    }
 }

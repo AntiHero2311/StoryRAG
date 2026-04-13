@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using OpenAI;
 using OpenAI.Chat;
 using Pgvector;
 using Pgvector.EntityFrameworkCore;
@@ -9,7 +8,6 @@ using Repository.Data;
 using Repository.Entities;
 using Service.Helpers;
 using Service.Interfaces;
-using System.ClientModel;
 
 namespace Service.Implementations
 {
@@ -19,9 +17,7 @@ namespace Service.Implementations
         private readonly IConfiguration _config;
         private readonly IEmbeddingService _embeddingService;
         private readonly ILogger<AiChatService> _logger;
-        private readonly ChatClient _chatClient;        // LM Studio (fallback)
-        private readonly ChatClient? _geminiChatClient; // Gemini (primary)
-        private readonly bool _geminiIsGemma;           // Gemma không hỗ trợ system role
+        private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
 
         // Số chunk context từ mỗi nguồn
         private const int TopKChunks = 3;
@@ -34,68 +30,17 @@ namespace Service.Implementations
             _config = config;
             _embeddingService = embeddingService;
             _logger = logger;
-
-            // LM Studio (fallback)
-            var baseUrl = config["AI:BaseUrl"] ?? "http://localhost:1234/v1";
-            var apiKey = config["AI:ApiKey"] ?? "lm-studio";
-            var model = config["AI:ChatModel"] ?? "qwen/qwen3.5-9b";
-            var lmOptions = new OpenAIClientOptions { Endpoint = new Uri(baseUrl) };
-            _chatClient = new OpenAIClient(new ApiKeyCredential(apiKey), lmOptions).GetChatClient(model);
-
-            // Gemini (primary)
-            var geminiKey = config["Gemini:ChatApiKey"] ?? string.Empty;
-            if (!string.IsNullOrEmpty(geminiKey))
-            {
-                var geminiModel = config["Gemini:ChatModel"] ?? "gemma-3-27b-it";
-                _geminiIsGemma = geminiModel.StartsWith("gemma", StringComparison.OrdinalIgnoreCase);
-                var geminiOptions = new OpenAIClientOptions
-                {
-                    Endpoint = new Uri("https://generativelanguage.googleapis.com/v1beta/openai/"),
-                    NetworkTimeout = TimeSpan.FromMinutes(3),
-                };
-                _geminiChatClient = new OpenAIClient(new ApiKeyCredential(geminiKey), geminiOptions).GetChatClient(geminiModel);
-            }
+            _geminiChatExecutor = new GeminiChatFailoverExecutor(
+                config,
+                logger,
+                "Gemini Chat",
+                GeminiPrimaryKeyRole.Chat,
+                TimeSpan.FromMinutes(3));
         }
 
-        private async Task<OpenAI.Chat.ChatCompletion> CompleteChatWithFallbackAsync(IEnumerable<ChatMessage> messages)
+        private Task<OpenAI.Chat.ChatCompletion> CompleteChatWithGeminiAsync(IEnumerable<ChatMessage> messages)
         {
-            if (_geminiChatClient != null)
-            {
-                try
-                {
-                    var geminiMessages = _geminiIsGemma
-                        ? GeminiRetryHelper.FlattenSystemForGemma(messages)
-                        : messages;
-                    var geminiResult = await GeminiRetryHelper.ExecuteAsync(
-                        () => _geminiChatClient.CompleteChatAsync(geminiMessages),
-                        _logger, "Gemini Chat");
-                    return geminiResult.Value;
-                }
-                catch (System.ClientModel.ClientResultException ex) when (ex.Status == 429)
-                {
-                    // Đã hết retry — không fallback về LM Studio (thường offline), trả lỗi thân thiện
-                    _logger.LogWarning("Gemini Chat vẫn 429 sau tất cả retry. Trả lỗi cho người dùng.");
-                    throw new InvalidOperationException("AI đang quá tải, vui lòng thử lại sau khoảng 1 phút.");
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Gemini chat thất bại (lỗi không phải 429), fallback về LM Studio.");
-                }
-            }
-
-            // LM Studio: thêm /no_think vào user message cuối để tắt Qwen3 thinking mode
-            var lmMessages = messages.ToList();
-            var lastUser = lmMessages.LastOrDefault(m => m is UserChatMessage);
-            if (lastUser != null)
-            {
-                var idx = lmMessages.LastIndexOf(lastUser);
-                var originalText = lastUser.Content[0].Text;
-                if (!originalText.Contains("/no_think"))
-                    lmMessages[idx] = ChatMessage.CreateUserMessage(originalText + " /no_think");
-            }
-
-            var result = await _chatClient.CompleteChatAsync(lmMessages);
-            return result.Value;
+            return _geminiChatExecutor.CompleteAsync(messages);
         }
 
         public async Task<AiChatResult> ChatAsync(Guid projectId, string question, Guid userId)
@@ -118,7 +63,7 @@ namespace Service.Implementations
             // Chat chỉ kiểm tra token, không tiêu hao lượt phân tích
 
             // 3. Embed câu hỏi
-            var questionEmbedding = await _embeddingService.GetEmbeddingAsync(question);
+            var questionEmbedding = await _embeddingService.GetEmbeddingAsync(question, EmbeddingUseCase.ChatQuery);
             var queryVector = new Vector(questionEmbedding);
 
             // 4. Vector search — lấy TopK từ 3 nguồn: chapter chunks, worldbuilding, characters
@@ -199,7 +144,7 @@ namespace Service.Implementations
                 ChatMessage.CreateUserMessage(sanitizedQuestion),
             };
 
-            var response = await CompleteChatWithFallbackAsync(messages);
+            var response = await CompleteChatWithGeminiAsync(messages);
             var completion = response;
 
             var rawAnswer = completion.Content[0].Text;

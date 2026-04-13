@@ -22,8 +22,6 @@ npm run dev
 
 > **Database:** Chạy `Backend/supabase_full_reset.sql` trên Supabase SQL Editor để khởi tạo toàn bộ schema + seed data. EF Migrations history đã được ghi sẵn, không cần chạy `dotnet ef database update`.
 
-> **LM Studio (tuỳ chọn):** Fallback khi Gemini gặp lỗi non-429. Tải model, bật server tại `http://localhost:1234`.
-
 ---
 
 ## 🛠️ Tech Stack
@@ -33,7 +31,7 @@ npm run dev
 | **Frontend** | React 19, TypeScript, Vite 7, TailwindCSS 4, Axios, Lucide React, React Router DOM 7 |
 | **Backend** | ASP.NET Core (.NET 8), Entity Framework Core 9 |
 | **Database** | PostgreSQL + pgvector (Supabase) |
-| **AI** | Google Gemini API (primary), LM Studio (fallback) |
+| **AI** | Google Gemini API |
 | **Auth** | JWT Bearer + Refresh Token |
 | **Security** | AES-256 encryption, Rate Limiting (SlidingWindow) |
 | **Email** | MailKit (Gmail SMTP) |

@@ -26,6 +26,7 @@ namespace Repository.Data
 
         // AI Reports
         public DbSet<ProjectReport> ProjectReports { get; set; }
+        public DbSet<ProjectAnalysisJob> ProjectAnalysisJobs { get; set; }
 
         // Chat History
         public DbSet<AiChatMessage> ChatMessages { get; set; }
@@ -238,7 +239,7 @@ namespace Repository.Data
                 entity.HasIndex(e => e.VersionId);
                 entity.HasIndex(e => e.ProjectId);
 
-                // Embedding vector(768) — nomic-embed-text-v1.5 (LM Studio)
+                // Embedding vector(768) — Gemini embedding
                 entity.Property(e => e.Embedding).HasColumnType("vector(768)");
 
                 // FK → ChapterVersions
@@ -319,6 +320,45 @@ namespace Repository.Data
                       .WithMany()
                       .HasForeignKey(r => r.UserId)
                       .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── ProjectAnalysisJob ────────────────────────────────────────────────
+            modelBuilder.Entity<ProjectAnalysisJob>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue("Queued");
+                entity.Property(e => e.Stage).IsRequired().HasMaxLength(30).HasDefaultValue("Queued");
+                entity.Property(e => e.Progress).HasDefaultValue(0);
+                entity.Property(e => e.ProjectVersionHash).IsRequired().HasMaxLength(128).HasDefaultValue(string.Empty);
+                entity.Property(e => e.ErrorMessage).HasMaxLength(2000);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("NOW()");
+                entity.ToTable(t =>
+                {
+                    t.HasCheckConstraint("CK_ProjectAnalysisJobs_Status", "\"Status\" IN ('Queued','Processing','Completed','Failed','Cancelled')");
+                    t.HasCheckConstraint("CK_ProjectAnalysisJobs_Stage", "\"Stage\" IN ('Queued','Preparing','Analyzing','Saving','Completed','Failed','Cancelled')");
+                    t.HasCheckConstraint("CK_ProjectAnalysisJobs_Progress", "\"Progress\" >= 0 AND \"Progress\" <= 100");
+                });
+
+                entity.HasIndex(e => new { e.ProjectId, e.UserId, e.CreatedAt });
+                entity.HasIndex(e => new { e.ProjectId, e.UserId, e.ProjectVersionHash, e.Status });
+
+                entity.HasOne(j => j.Project)
+                      .WithMany()
+                      .HasForeignKey(j => j.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(j => j.User)
+                      .WithMany()
+                      .HasForeignKey(j => j.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(j => j.Report)
+                      .WithMany()
+                      .HasForeignKey(j => j.ReportId)
+                      .OnDelete(DeleteBehavior.SetNull)
+                      .IsRequired(false);
             });
 
             // ── UserSettings ──────────────────────────────────────────────────────
