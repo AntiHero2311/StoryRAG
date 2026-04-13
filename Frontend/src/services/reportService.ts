@@ -47,8 +47,34 @@ export interface ProjectReportSummary {
     createdAt: string;
 }
 
+export interface ProjectAnalysisJobResponse {
+    jobId: string;
+    projectId: string;
+    status: 'Queued' | 'Processing' | 'Completed' | 'Failed' | 'Cancelled';
+    stage: 'Queued' | 'Preparing' | 'Analyzing' | 'Saving' | 'Completed' | 'Failed' | 'Cancelled';
+    progress: number;
+    reportId: string | null;
+    errorMessage: string | null;
+    isExistingJob: boolean;
+    createdAt: string;
+    startedAt: string | null;
+    completedAt: string | null;
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 export const reportService = {
+    enqueueAnalyzeJob: (projectId: string) =>
+        api.post<ProjectAnalysisJobResponse>(`/ai/${projectId}/analyze/jobs`).then(r => r.data),
+
+    getAnalyzeJob: (projectId: string, jobId: string) =>
+        api.get<ProjectAnalysisJobResponse>(`/ai/${projectId}/analyze/jobs/${jobId}`).then(r => r.data),
+
+    getAnalyzeJobResult: (projectId: string, jobId: string) =>
+        api.get<ProjectReportResponse>(`/ai/${projectId}/analyze/jobs/${jobId}/result`).then(r => r.data),
+
+    cancelAnalyzeJob: (projectId: string, jobId: string) =>
+        api.post<ProjectAnalysisJobResponse>(`/ai/${projectId}/analyze/jobs/${jobId}/cancel`).then(r => r.data),
+
     analyze: (projectId: string) =>
         api.post<ProjectReportResponse>(`/ai/${projectId}/analyze`).then(r => r.data),
 

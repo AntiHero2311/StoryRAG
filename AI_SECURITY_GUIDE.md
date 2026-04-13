@@ -120,7 +120,7 @@ Chỉ tìm kiếm trong:
   CharacterEntries (project của A)
        │
        ▼
-LLM (Gemini / LM Studio) — model chung, KHÔNG chứa dữ liệu riêng
+LLM (Gemini) — model chung, KHÔNG chứa dữ liệu riêng
        │
        ▼
 Câu trả lời dựa trên ngữ cảnh của A, không liên quan đến dữ liệu B

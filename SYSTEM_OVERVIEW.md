@@ -43,11 +43,9 @@
             ▼                                 ▼
 ┌─────────────────────────┐     ┌──────────────────────────────┐
 │  Supabase PostgreSQL    │     │   Google Gemini API          │
-│  + pgvector extension   │     │   (Primary LLM)              │
-│  (cloud, pooler:6543)   │     ├──────────────────────────────┤
-└─────────────────────────┘     │   LM Studio                  │
-                                │   (Fallback — localhost:1234)│
-                                └──────────────────────────────┘
+│  + pgvector extension   │     │   (LLM)                      │
+│  (cloud, pooler:6543)   │     └──────────────────────────────┘
+└─────────────────────────┘
 ```
 
 ---
@@ -63,7 +61,7 @@
 | ORM             | Entity Framework Core                       | 9.0       |
 | Database Driver | Npgsql                                      | 9.0.1     |
 | Vector Search   | Pgvector.EntityFrameworkCore                | 0.3.0     |
-| LLM Client      | OpenAI SDK (tương thích Gemini + LM Studio) | 2.1.0     |
+| LLM Client      | OpenAI SDK (tương thích Gemini) | 2.1.0     |
 | Authentication  | JWT Bearer                                  | 8.0.0     |
 | Email           | MailKit (SMTP / Gmail)                      | 4.9.0     |
 | API Docs        | Swagger / Swashbuckle                       | 6.6.2     |
@@ -290,13 +288,8 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 
 ```
 PRIMARY:  Google Gemini API
-  └─ Chat Model:      gemma-3-27b-it
+  └─ Chat Models:     gemma-4-31b -> gemma-4-26b (fallback)
   └─ Embed Model:     gemini-embedding-001 (768 chiều)
-
-FALLBACK: LM Studio (local, OpenAI-compatible)
-  └─ Chat Model:      qwen2.5-1.5b-instruct
-  └─ Embed Model:     nomic-embed-text-v1.5 (768 chiều)
-  └─ URL:             http://localhost:1234/v1
 ```
 
 ### 7.2 RAG Chat Flow
@@ -315,7 +308,7 @@ FALLBACK: LM Studio (local, OpenAI-compatible)
        ↓
 [5] Ghép context + system prompt + lịch sử chat gần nhất
        ↓
-[6] Gọi Gemini API → nếu lỗi → fallback LM Studio
+[6] Gọi Gemini API
        ↓
 [7] Lưu vào AiChatMessages (mã hóa AES-256)
        ↓
@@ -399,10 +392,10 @@ Allowed Origins:
 | `ConnectionStrings:DefaultConnection` | PostgreSQL connection string (Supabase) |
 | `Jwt:Key`                             | HMAC signing key cho JWT                |
 | `Security:MasterKey`                  | Key mã hóa DEK của user                 |
-| `Gemini:ChatApiKey`                   | Google Gemini API key (chat)            |
-| `Gemini:EmbedApiKey`                  | Google Gemini API key (embedding)       |
+| `Gemini:AnalyzeApiKey`                | Key ưu tiên cho phân tích + embed corpus |
+| `Gemini:ChatApiKey`                   | Key ưu tiên cho chatbot + embed query   |
+| `Gemini:ChatModels`                   | Thứ tự fallback model chat (`gemma-4-31b,gemma-4-26b`) |
 | `Email:Password`                      | Gmail app password                      |
-| `AI:BaseUrl`                          | LM Studio URL (fallback)                |
 
 ---
 
@@ -449,7 +442,7 @@ npm run dev
 | `ISubscriptionService`  | Quản lý gói dịch vụ                                                                                                                                                                                                                                              |
 | `IAiChatService`        | RAG chat, lưu lịch sử, deduct token only                                                                                                                                                                                                                         |
 | `IAiRewriteService`     | Rewrite theo instruction, lưu lịch sử                                                                                                                                                                                                                            |
-| `IEmbeddingService`     | Gọi Gemini/LM Studio lấy embedding vector                                                                                                                                                                                                                        |
+| `IEmbeddingService`     | Gọi Gemini lấy embedding vector                                                                                                                                                                                                                                  |
 | `IChunkingService`      | Chia text thành chunks với overlap                                                                                                                                                                                                                               |
 | `IAiWritingService`     | Viết mới từ dàn ý, tiếp nối mạch truyện, trau chuốt bản thảo — tích hợp kỹ thuật **Show Don't Tell**, **Pacing**                                                                                                                                                 |
 | `IProjectReportService` | Phân tích & chấm điểm theo **Rubric 5b điểm** (1-Kém → 5-Xuất sắc), **Zero Hallucination**, chấm theo **Thể loại**, phát hiện **4 cảnh báo** (INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY), sinh `OverallFeedback` tâm huyết, ghi `ProjectVersion` |

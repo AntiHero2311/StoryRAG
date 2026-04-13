@@ -7,7 +7,7 @@ namespace Service.Helpers
 {
     /// <summary>
     /// Retry helper cho Gemini free tier — xử lý 429 Too Many Requests với exponential backoff.
-    /// Free tier limits: gemma-3-27b-it ~30 RPM / 14.4K RPD, gemini-embedding-001 ~100 RPM / 1K RPD.
+    /// Free tier limits thay đổi theo model/tier. Helper này chỉ xử lý retry khi gặp 429.
     /// </summary>
     public static class GeminiRetryHelper
     {

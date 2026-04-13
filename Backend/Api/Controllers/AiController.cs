@@ -18,8 +18,16 @@ namespace Api.Controllers
         private readonly IAiRewriteService _rewriteService;
         private readonly IAiWritingService _writingService;
         private readonly IAiAnalysisHistoryService _historyService;
+        private readonly IProjectAnalysisJobService _analysisJobService;
 
-        public AiController(IEmbeddingService embeddingService, IAiChatService aiChatService, IProjectReportService reportService, IAiRewriteService rewriteService, IAiWritingService writingService, IAiAnalysisHistoryService historyService)
+        public AiController(
+            IEmbeddingService embeddingService,
+            IAiChatService aiChatService,
+            IProjectReportService reportService,
+            IAiRewriteService rewriteService,
+            IAiWritingService writingService,
+            IAiAnalysisHistoryService historyService,
+            IProjectAnalysisJobService analysisJobService)
         {
             _embeddingService = embeddingService;
             _aiChatService = aiChatService;
@@ -27,6 +35,7 @@ namespace Api.Controllers
             _rewriteService = rewriteService;
             _writingService = writingService;
             _historyService = historyService;
+            _analysisJobService = analysisJobService;
         }
 
         /// <summary>Embed tất cả chunks của current version của một chương.</summary>
@@ -110,6 +119,77 @@ namespace Api.Controllers
             catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
             catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
             catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
+        /// <summary>Tạo job phân tích bất đồng bộ cho dự án.</summary>
+        [HttpPost("{projectId:guid}/analyze/jobs")]
+        [EnableRateLimiting("AiAnalyze")]
+        public async Task<IActionResult> EnqueueAnalyzeJob(Guid projectId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var job = await _analysisJobService.EnqueueAsync(projectId, userId.Value, HttpContext.RequestAborted);
+                return AcceptedAtAction(nameof(GetAnalyzeJobStatus), new { projectId, jobId = job.JobId }, job);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
+            catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
+        /// <summary>Lấy trạng thái xử lý của job phân tích.</summary>
+        [HttpGet("{projectId:guid}/analyze/jobs/{jobId:guid}")]
+        public async Task<IActionResult> GetAnalyzeJobStatus(Guid projectId, Guid jobId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var job = await _analysisJobService.GetJobAsync(projectId, jobId, userId.Value, HttpContext.RequestAborted);
+                if (job == null) return NotFound(new { Message = "Không tìm thấy job phân tích." });
+
+                return Ok(job);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
+        /// <summary>Lấy kết quả cuối cùng của job phân tích khi đã hoàn thành.</summary>
+        [HttpGet("{projectId:guid}/analyze/jobs/{jobId:guid}/result")]
+        public async Task<IActionResult> GetAnalyzeJobResult(Guid projectId, Guid jobId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var result = await _analysisJobService.GetJobResultAsync(projectId, jobId, userId.Value, HttpContext.RequestAborted);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (InvalidOperationException ex) { return Conflict(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
+        /// <summary>Hủy job đang chờ xử lý.</summary>
+        [HttpPost("{projectId:guid}/analyze/jobs/{jobId:guid}/cancel")]
+        public async Task<IActionResult> CancelAnalyzeJob(Guid projectId, Guid jobId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var job = await _analysisJobService.CancelJobAsync(projectId, jobId, userId.Value, HttpContext.RequestAborted);
+                return Ok(job);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (InvalidOperationException ex) { return Conflict(new { Message = ex.Message }); }
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
 

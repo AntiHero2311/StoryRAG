@@ -1886,7 +1886,7 @@ function WorldbuildingPanel({ projectId }: { projectId: string }) {
         try {
             const updated = await worldbuildingService.embed(projectId, id);
             setEntries(prev => prev.map(e => e.id === id ? updated : e));
-        } catch { setError('Embed thất bại. Kiểm tra LM Studio.'); }
+        } catch { setError('Embed thất bại. Kiểm tra cấu hình Gemini.'); }
         finally { setEmbeddingId(null); }
     };
 
@@ -2170,7 +2170,7 @@ function CharactersPanel({ projectId }: { projectId: string }) {
         try {
             const updated = await characterService.embed(projectId, id);
             setEntries(prev => prev.map(e => e.id === id ? updated : e));
-        } catch { setError('Embed thất bại. Kiểm tra LM Studio.'); }
+        } catch { setError('Embed thất bại. Kiểm tra cấu hình Gemini.'); }
         finally { setEmbeddingId(null); }
     };
 
@@ -2776,7 +2776,7 @@ function StyleGuidePanel({ projectId }: { projectId: string }) {
         try {
             const updated = await styleGuideService.embed(projectId, id);
             setEntries(prev => prev.map(e => e.id === id ? updated : e));
-        } catch { setError('Embed thất bại. Kiểm tra LM Studio.'); }
+        } catch { setError('Embed thất bại. Kiểm tra cấu hình Gemini.'); }
         finally { setEmbeddingId(null); }
     };
 
@@ -3018,7 +3018,7 @@ function ThemePanel({ projectId }: { projectId: string }) {
         try {
             const updated = await themeService.embed(projectId, id);
             setEntries(prev => prev.map(e => e.id === id ? updated : e));
-        } catch { setError('Embed thất bại. Kiểm tra LM Studio.'); }
+        } catch { setError('Embed thất bại. Kiểm tra cấu hình Gemini.'); }
         finally { setEmbeddingId(null); }
     };
 

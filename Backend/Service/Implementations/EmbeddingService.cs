@@ -19,7 +19,8 @@ namespace Service.Implementations
 
         // Gemini embeddings (required)
         private readonly HttpClient _geminiHttpClient;
-        private readonly List<string> _geminiApiKeys;
+        private readonly string? _analyzeApiKey;
+        private readonly string? _chatApiKey;
         private readonly string _geminiModel;
         private readonly int _geminiEmbeddingDimensions;
         private readonly int _targetEmbeddingTpm;
@@ -33,7 +34,6 @@ namespace Service.Implementations
         private static DateTime _quotaWindowStartUtc = DateTime.UtcNow;
         private static int _usedTokensInWindow;
         private static int _usedRequestsInWindow;
-        private static int _nextEmbeddingKeyIndex;
 
         public EmbeddingService(AppDbContext context, IConfiguration config, ILogger<EmbeddingService> logger)
         {
@@ -42,11 +42,8 @@ namespace Service.Implementations
             _logger = logger;
 
             // Gemini config
-            _geminiApiKeys = ReadApiKeys(
-                config,
-                "Gemini:EmbedApiKey",
-                "Gemini:EmbedApiKey2",
-                "Gemini:EmbedApiKeys");
+            _analyzeApiKey = NormalizeKey(config["Gemini:AnalyzeApiKey"]);
+            _chatApiKey = NormalizeKey(config["Gemini:ChatApiKey"]);
             _geminiModel = config["Gemini:EmbeddingModel"] ?? "gemini-embedding-001";
             _geminiEmbeddingDimensions = int.TryParse(config["Gemini:EmbeddingDimensions"], out var dim) ? dim : 768;
             var tpmLimit = ReadInt(config["Gemini:EmbeddingTpmLimit"], 30000, min: 1000);
@@ -103,7 +100,7 @@ namespace Service.Implementations
                 .Select(t => EnsureEmbeddingPrefix(t, isDocument: true))
                 .ToList();
 
-            var embeddings = await GetEmbeddingsForTextsAsync(plainTexts);
+            var embeddings = await GetEmbeddingsForTextsAsync(plainTexts, EmbeddingUseCase.Corpus);
 
             // Lưu embedding vào từng chunk
             for (int i = 0; i < chunks.Count; i++)
@@ -117,24 +114,25 @@ namespace Service.Implementations
             await _context.SaveChangesAsync();
         }
 
-        public async Task<float[]> GetEmbeddingAsync(string text)
+        public async Task<float[]> GetEmbeddingAsync(string text, EmbeddingUseCase useCase = EmbeddingUseCase.Corpus)
         {
             var prepared = EnsureEmbeddingPrefix(text, isDocument: false);
-            var res = await GetEmbeddingsForTextsAsync(new List<string> { prepared });
+            var res = await GetEmbeddingsForTextsAsync(new List<string> { prepared }, useCase);
             return res.First();
         }
 
-        private async Task<List<float[]>> GetEmbeddingsForTextsAsync(List<string> texts)
+        private async Task<List<float[]>> GetEmbeddingsForTextsAsync(List<string> texts, EmbeddingUseCase useCase)
         {
-            if (_geminiApiKeys.Count == 0)
+            var orderedKeys = GetKeysForUseCase(useCase);
+            if (orderedKeys.Count == 0)
             {
                 throw new InvalidOperationException(
-                    "Thiếu Gemini embed key. Hãy set Gemini__EmbedApiKey (và tùy chọn Gemini__EmbedApiKey2) để dùng embedding.");
+                    "Thiếu Gemini embed key. Hãy set Gemini__AnalyzeApiKey và Gemini__ChatApiKey để dùng embedding.");
             }
 
             try
             {
-                return await GetGeminiEmbeddingsAsync(texts);
+                return await GetGeminiEmbeddingsAsync(texts, orderedKeys);
             }
             catch (Exception ex)
             {
@@ -143,7 +141,7 @@ namespace Service.Implementations
             }
         }
 
-        private async Task<List<float[]>> GetGeminiEmbeddingsAsync(List<string> texts)
+        private async Task<List<float[]>> GetGeminiEmbeddingsAsync(List<string> texts, IReadOnlyList<string> orderedKeys)
         {
             var batches = BuildBatches(texts);
             var allEmbeddings = new List<float[]>(texts.Count);
@@ -161,7 +159,7 @@ namespace Service.Implementations
                 }).ToArray();
 
                 var batchBody = new { requests };
-                using var response = await SendBatchWithKeyFailoverAsync(batchBody, operationName);
+                using var response = await SendBatchWithKeyFailoverAsync(batchBody, operationName, orderedKeys);
                 var json = await response.Content.ReadFromJsonAsync<JsonElement>();
                 var batchResult = json.GetProperty("embeddings")
                     .EnumerateArray()
@@ -183,10 +181,12 @@ namespace Service.Implementations
             return allEmbeddings;
         }
 
-        private async Task<HttpResponseMessage> SendBatchWithKeyFailoverAsync(object batchBody, string operationName)
+        private async Task<HttpResponseMessage> SendBatchWithKeyFailoverAsync(
+            object batchBody,
+            string operationName,
+            IReadOnlyList<string> keys)
         {
             Exception? lastError = null;
-            var keys = GetRotatedKeys(_geminiApiKeys);
 
             for (var i = 0; i < keys.Count; i++)
             {
@@ -226,18 +226,6 @@ namespace Service.Implementations
             }
 
             throw lastError ?? new InvalidOperationException("Gemini embedding failed for all configured keys.");
-        }
-
-        private static List<string> GetRotatedKeys(IReadOnlyList<string> keys)
-        {
-            if (keys.Count <= 1)
-                return keys.ToList();
-
-            var start = Math.Abs(Interlocked.Increment(ref _nextEmbeddingKeyIndex));
-            var ordered = new List<string>(keys.Count);
-            for (var i = 0; i < keys.Count; i++)
-                ordered.Add(keys[(start + i) % keys.Count]);
-            return ordered;
         }
 
         private List<EmbeddingBatch> BuildBatches(List<string> texts)
@@ -383,24 +371,21 @@ namespace Service.Implementations
             return parsed;
         }
 
-        private static List<string> ReadApiKeys(IConfiguration config, params string[] configPaths)
+        private List<string> GetKeysForUseCase(EmbeddingUseCase useCase)
         {
-            var results = new List<string>();
-            foreach (var path in configPaths)
-            {
-                var raw = config[path];
-                if (string.IsNullOrWhiteSpace(raw))
-                    continue;
+            var ordered = useCase == EmbeddingUseCase.ChatQuery
+                ? new[] { _chatApiKey, _analyzeApiKey }
+                : new[] { _analyzeApiKey, _chatApiKey };
 
-                results.AddRange(
-                    raw.Split([',', ';', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                        .Where(k => !string.IsNullOrWhiteSpace(k)));
-            }
-
-            return results
+            return ordered
+                .Where(k => !string.IsNullOrWhiteSpace(k))
+                .Select(k => k!)
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
         }
+
+        private static string? NormalizeKey(string? raw)
+            => string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
 
         private sealed record EmbeddingBatch(List<string> Texts, int EstimatedTokens);
     }
