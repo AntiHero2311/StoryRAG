@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.IdentityModel.Tokens;
 using Pgvector.EntityFrameworkCore;
 using Repository.Data;
@@ -22,6 +23,8 @@ builder.Configuration.Sources
 
 // Add services to the container.
 builder.Services.AddDbContext<AppDbContext>(options =>
+{
+    options.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
         npgsqlOptions =>
         {
@@ -30,7 +33,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
                 maxRetryDelay: TimeSpan.FromSeconds(5),
                 errorCodesToAdd: null);
             npgsqlOptions.UseVector();
-        }));
+        });
+});
 
 // Removed default OpenApi in favor of Swashbuckle
 builder.Services.AddControllers();
@@ -200,6 +204,22 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+// Apply pending EF Core migrations on startup so new tables (e.g. StaffFeedbacks) exist before handling requests.
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("StartupMigration");
+    try
+    {
+        dbContext.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to apply database migrations on startup.");
+        throw;
+    }
+}
 
 // Configure the HTTP request pipeline.
 app.UseSwagger();
