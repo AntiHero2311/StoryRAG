@@ -34,6 +34,7 @@ export interface ProjectReportResponse {
     totalScore: number;
     classification: 'Cần sửa lớn' | 'Trung bình' | 'Khá' | 'Xuất sắc';
     overallFeedback: string;
+    projectVersion: string;
     groups: GroupResult[];
     warnings: StoryWarning[];
     createdAt: string;
@@ -59,6 +60,50 @@ export interface ProjectAnalysisJobResponse {
     createdAt: string;
     startedAt: string | null;
     completedAt: string | null;
+}
+
+export interface PacingPoint {
+    segmentIndex: number;
+    chapterNumber: number;
+    score: number;
+}
+
+export interface EmotionPoint {
+    segmentIndex: number;
+    chapterNumber: number;
+    valence: number;
+    intensity: number;
+    dominantEmotion: string;
+}
+
+export interface CharacterFrequency {
+    characterName: string;
+    totalMentions: number;
+}
+
+export interface CharacterPresencePoint {
+    segmentIndex: number;
+    chapterNumber: number;
+    mentions: number;
+}
+
+export interface CharacterPresenceSeries {
+    characterName: string;
+    points: CharacterPresencePoint[];
+}
+
+export interface CharacterRelationshipEdge {
+    sourceCharacter: string;
+    targetCharacter: string;
+    weight: number;
+}
+
+export interface NarrativeChartsResponse {
+    pacing: PacingPoint[];
+    emotions: EmotionPoint[];
+    characterFrequencies: CharacterFrequency[];
+    characterPresence: CharacterPresenceSeries[];
+    characterRelationships: CharacterRelationshipEdge[];
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -94,4 +139,24 @@ export const reportService = {
 
     getById: (projectId: string, reportId: string) =>
         api.get<ProjectReportResponse>(`/ai/${projectId}/reports/${reportId}`).then(r => r.data),
+
+    getNarrativeCharts: (projectId: string, chapterId?: string) =>
+        api.get<NarrativeChartsResponse>(`/ai/${projectId}/narrative/charts`, {
+            params: chapterId ? { chapterId } : {},
+        }).then(r => r.data),
+
+    exportReportPdf: async (projectId: string, reportId: string): Promise<void> => {
+        const res = await api.get(`/ai/${projectId}/reports/${reportId}/export/pdf`, {
+            responseType: 'blob',
+        });
+
+        const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `AnalysisReport_${reportId}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+    },
 };

@@ -1,10 +1,19 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using DiffPlex;
+using DiffPlex.DiffBuilder;
+using DiffPlex.DiffBuilder.Model;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
 using Repository.Data;
 using Repository.Entities;
 using Service.DTOs;
 using Service.Helpers;
 using Service.Interfaces;
+using System.Net;
+using System.Text;
+using System.Text.RegularExpressions;
+using UglyToad.PdfPig;
 
 namespace Service.Implementations
 {
@@ -416,6 +425,102 @@ namespace Service.Implementations
             return EncryptionHelper.DecryptWithMasterKey(version.Content, rawDek);
         }
 
+        public async Task<ChapterVersionDiffResponse> CompareVersionsAsync(Guid chapterId, int fromVersionNumber, int toVersionNumber, Guid userId)
+        {
+            if (fromVersionNumber <= 0 || toVersionNumber <= 0)
+                throw new Exception("Số phiên bản phải lớn hơn 0.");
+
+            await GetChapterWithOwnerCheckAsync(chapterId, userId);
+            var rawDek = await GetRawDekAsync(userId);
+
+            var versions = await _context.ChapterVersions
+                .Where(v => v.ChapterId == chapterId &&
+                           (v.VersionNumber == fromVersionNumber || v.VersionNumber == toVersionNumber))
+                .ToListAsync();
+
+            var fromVersion = versions.FirstOrDefault(v => v.VersionNumber == fromVersionNumber)
+                ?? throw new Exception($"Phiên bản {fromVersionNumber} không tồn tại.");
+            var toVersion = versions.FirstOrDefault(v => v.VersionNumber == toVersionNumber)
+                ?? throw new Exception($"Phiên bản {toVersionNumber} không tồn tại.");
+
+            var fromContent = EncryptionHelper.DecryptWithMasterKey(fromVersion.Content, rawDek);
+            var toContent = EncryptionHelper.DecryptWithMasterKey(toVersion.Content, rawDek);
+
+            var diffResult = BuildUnifiedDiff(fromContent, toContent, fromVersionNumber, toVersionNumber);
+
+            return new ChapterVersionDiffResponse
+            {
+                FromVersionNumber = fromVersionNumber,
+                ToVersionNumber = toVersionNumber,
+                AddedLines = diffResult.AddedLines,
+                RemovedLines = diffResult.RemovedLines,
+                UnchangedLines = diffResult.UnchangedLines,
+                HasChanges = diffResult.AddedLines > 0 || diffResult.RemovedLines > 0,
+                UnifiedDiff = diffResult.UnifiedDiff,
+            };
+        }
+
+        public async Task<ManuscriptImportResponse> ImportManuscriptAsync(
+            Guid projectId,
+            Guid userId,
+            string fileName,
+            string? contentType,
+            byte[] fileBytes,
+            bool splitByHeadings = true)
+        {
+            if (fileBytes.Length == 0)
+                throw new Exception("File import rỗng.");
+
+            await ValidateProjectOwnershipAsync(projectId, userId);
+
+            var (detectedFormat, extractedText) = ExtractManuscriptText(fileName, contentType, fileBytes);
+            if (string.IsNullOrWhiteSpace(extractedText))
+                throw new Exception("Không trích xuất được nội dung từ file.");
+
+            var chapterParts = SplitIntoChapterParts(extractedText, splitByHeadings);
+            if (chapterParts.Count == 0)
+                throw new Exception("Không tìm thấy nội dung chương hợp lệ để import.");
+
+            var currentMaxChapterNumber = await _context.Chapters
+                .Where(c => c.ProjectId == projectId && !c.IsDeleted)
+                .MaxAsync(c => (int?)c.ChapterNumber) ?? 0;
+
+            var startingChapterNumber = currentMaxChapterNumber + 1;
+            var importedChapters = new List<ImportedChapterSummary>();
+
+            foreach (var part in chapterParts)
+            {
+                currentMaxChapterNumber++;
+                var defaultTitle = $"Imported Chapter {currentMaxChapterNumber}";
+                var title = string.IsNullOrWhiteSpace(part.Title) ? defaultTitle : part.Title.Trim();
+                if (title.Length > 255) title = title[..255];
+
+                var created = await CreateChapterAsync(projectId, userId, new CreateChapterRequest
+                {
+                    ChapterNumber = currentMaxChapterNumber,
+                    Title = title,
+                    Content = part.Content,
+                });
+
+                importedChapters.Add(new ImportedChapterSummary
+                {
+                    ChapterId = created.Id,
+                    ChapterNumber = created.ChapterNumber,
+                    Title = created.Title,
+                    WordCount = created.WordCount,
+                });
+            }
+
+            return new ManuscriptImportResponse
+            {
+                SourceFileName = fileName,
+                DetectedFormat = detectedFormat,
+                StartingChapterNumber = startingChapterNumber,
+                ImportedChapterCount = importedChapters.Count,
+                ImportedChapters = importedChapters,
+            };
+        }
+
         private async Task ValidateProjectOwnershipAsync(Guid projectId, Guid userId)
         {
             bool projectExists = await _context.Projects
@@ -455,6 +560,245 @@ namespace Service.Implementations
         {
             if (string.IsNullOrWhiteSpace(text)) return 0;
             return text.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+        }
+
+        private sealed class ManuscriptChapterPart
+        {
+            public string? Title { get; init; }
+            public string Content { get; init; } = string.Empty;
+        }
+
+        private static (string DetectedFormat, string Text) ExtractManuscriptText(string fileName, string? contentType, byte[] fileBytes)
+        {
+            var extension = Path.GetExtension(fileName)?.ToLowerInvariant();
+            var detectedFormat = extension switch
+            {
+                ".txt" => "txt",
+                ".docx" => "docx",
+                ".pdf" => "pdf",
+                _ when !string.IsNullOrWhiteSpace(contentType) && contentType.Contains("pdf", StringComparison.OrdinalIgnoreCase) => "pdf",
+                _ when !string.IsNullOrWhiteSpace(contentType) && contentType.Contains("wordprocessingml", StringComparison.OrdinalIgnoreCase) => "docx",
+                _ when !string.IsNullOrWhiteSpace(contentType) && contentType.Contains("text/plain", StringComparison.OrdinalIgnoreCase) => "txt",
+                _ => throw new Exception("Định dạng file không được hỗ trợ. Chỉ hỗ trợ .txt, .docx, .pdf."),
+            };
+
+            var text = detectedFormat switch
+            {
+                "txt" => Encoding.UTF8.GetString(fileBytes),
+                "docx" => ExtractDocxText(fileBytes),
+                "pdf" => ExtractPdfText(fileBytes),
+                _ => string.Empty,
+            };
+
+            return (detectedFormat, NormalizeImportedText(text));
+        }
+
+        private static string ExtractDocxText(byte[] fileBytes)
+        {
+            using var stream = new MemoryStream(fileBytes);
+            using var document = WordprocessingDocument.Open(stream, false);
+            var body = document.MainDocumentPart?.Document?.Body;
+            if (body == null) return string.Empty;
+
+            var paragraphs = body
+                .Descendants<Paragraph>()
+                .Select(p => p.InnerText?.Trim())
+                .Where(p => !string.IsNullOrWhiteSpace(p));
+
+            return string.Join("\n\n", paragraphs!);
+        }
+
+        private static string ExtractPdfText(byte[] fileBytes)
+        {
+            using var stream = new MemoryStream(fileBytes);
+            using var document = PdfDocument.Open(stream);
+            var builder = new StringBuilder();
+
+            foreach (var page in document.GetPages())
+            {
+                if (string.IsNullOrWhiteSpace(page.Text)) continue;
+                builder.AppendLine(page.Text.Trim());
+                builder.AppendLine();
+            }
+
+            return builder.ToString().Trim();
+        }
+
+        private static string NormalizeImportedText(string rawText)
+        {
+            if (string.IsNullOrWhiteSpace(rawText))
+                return string.Empty;
+
+            var normalized = rawText
+                .Replace("\uFEFF", string.Empty)
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n');
+
+            if (LooksLikeClipboardHtml(normalized))
+                normalized = ConvertHtmlToPlainText(normalized);
+
+            normalized = StripControlCharacters(normalized);
+            normalized = Regex.Replace(normalized, @"\n{3,}", "\n\n");
+
+            return normalized.Trim();
+        }
+
+        private static bool LooksLikeClipboardHtml(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+
+            if (!text.Contains('<') || !text.Contains('>'))
+                return false;
+
+            return text.Contains("<!--StartFragment", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("<!--EndFragment", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("docs-internal-guid", StringComparison.OrdinalIgnoreCase)
+                || Regex.IsMatch(text, @"(?is)<\s*(span|div|p|h[1-6]|br|meta|style|script)\b");
+        }
+
+        private static string ConvertHtmlToPlainText(string html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+                return string.Empty;
+
+            var text = Regex.Replace(html, @"(?is)<!--.*?-->", string.Empty);
+            text = Regex.Replace(text, @"(?is)<\s*(script|style)[^>]*>.*?<\s*/\s*\1\s*>", string.Empty);
+            text = Regex.Replace(text, @"(?is)<\s*br\s*/?\s*>", "\n");
+            text = Regex.Replace(text, @"(?is)</\s*(p|div|h[1-6]|li|tr|section|article)\s*>", "\n");
+            text = Regex.Replace(text, @"(?is)<\s*li[^>]*>", "- ");
+            text = Regex.Replace(text, @"(?is)<[^>]+>", string.Empty);
+            text = WebUtility.HtmlDecode(text).Replace('\u00A0', ' ');
+
+            return text;
+        }
+
+        private static string StripControlCharacters(string text)
+        {
+            var builder = new StringBuilder(text.Length);
+            foreach (var ch in text)
+            {
+                if (!char.IsControl(ch) || ch is '\n' or '\t')
+                    builder.Append(ch);
+            }
+
+            return builder.ToString();
+        }
+
+        private static List<ManuscriptChapterPart> SplitIntoChapterParts(string extractedText, bool splitByHeadings)
+        {
+            var normalized = extractedText
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n')
+                .Normalize(NormalizationForm.FormC)
+                .Trim();
+
+            if (string.IsNullOrWhiteSpace(normalized))
+                return new List<ManuscriptChapterPart>();
+
+            if (!splitByHeadings)
+            {
+                return new List<ManuscriptChapterPart>
+                {
+                    new() { Content = normalized }
+                };
+            }
+
+            var chapterHeadingRegex = new Regex(
+                @"(?im)^\s*(chapter|ch(?:u|ư)(?:o|ơ)ng)\s+([0-9ivxlcdm]+)\b(?:[^\n]*)$",
+                RegexOptions.Compiled);
+
+            var matches = chapterHeadingRegex.Matches(normalized);
+            if (matches.Count == 0)
+            {
+                return new List<ManuscriptChapterPart>
+                {
+                    new() { Content = normalized }
+                };
+            }
+
+            var chapterParts = new List<ManuscriptChapterPart>();
+            for (var i = 0; i < matches.Count; i++)
+            {
+                var currentMatch = matches[i];
+                var contentStart = currentMatch.Index + currentMatch.Length;
+                if (contentStart < normalized.Length && normalized[contentStart] == '\n')
+                    contentStart++;
+
+                var contentEnd = i + 1 < matches.Count ? matches[i + 1].Index : normalized.Length;
+                if (contentStart >= contentEnd) continue;
+
+                var content = normalized[contentStart..contentEnd].Trim();
+                if (string.IsNullOrWhiteSpace(content)) continue;
+
+                var headingTitle = currentMatch.Value.Trim();
+                if (headingTitle.Length > 255) headingTitle = headingTitle[..255];
+
+                chapterParts.Add(new ManuscriptChapterPart
+                {
+                    Title = headingTitle,
+                    Content = content,
+                });
+            }
+
+            if (chapterParts.Count == 0)
+            {
+                chapterParts.Add(new ManuscriptChapterPart
+                {
+                    Content = normalized,
+                });
+            }
+
+            return chapterParts;
+        }
+
+        private static (string UnifiedDiff, int AddedLines, int RemovedLines, int UnchangedLines) BuildUnifiedDiff(
+            string oldContent,
+            string newContent,
+            int fromVersionNumber,
+            int toVersionNumber)
+        {
+            var diffBuilder = new SideBySideDiffBuilder(new Differ());
+            var diffModel = diffBuilder.BuildDiffModel(oldContent ?? string.Empty, newContent ?? string.Empty);
+
+            var output = new List<string>
+            {
+                $"--- version {fromVersionNumber}",
+                $"+++ version {toVersionNumber}",
+                $"@@ -1,{Math.Max(1, diffModel.OldText.Lines.Count)} +1,{Math.Max(1, diffModel.NewText.Lines.Count)} @@",
+            };
+
+            var added = 0;
+            var removed = 0;
+            var unchanged = 0;
+            var lineCount = Math.Max(diffModel.OldText.Lines.Count, diffModel.NewText.Lines.Count);
+
+            for (var i = 0; i < lineCount; i++)
+            {
+                var oldLine = i < diffModel.OldText.Lines.Count ? diffModel.OldText.Lines[i] : null;
+                var newLine = i < diffModel.NewText.Lines.Count ? diffModel.NewText.Lines[i] : null;
+
+                if (oldLine?.Type == ChangeType.Unchanged && newLine?.Type == ChangeType.Unchanged)
+                {
+                    output.Add($" {(oldLine.Text ?? string.Empty)}");
+                    unchanged++;
+                    continue;
+                }
+
+                if (oldLine != null && oldLine.Type is ChangeType.Deleted or ChangeType.Modified)
+                {
+                    output.Add($"-{oldLine.Text ?? string.Empty}");
+                    removed++;
+                }
+
+                if (newLine != null && newLine.Type is ChangeType.Inserted or ChangeType.Modified)
+                {
+                    output.Add($"+{newLine.Text ?? string.Empty}");
+                    added++;
+                }
+            }
+
+            return (string.Join('\n', output), added, removed, unchanged);
         }
 
         // ── Mappers ────────────────────────────────────────────────────────────

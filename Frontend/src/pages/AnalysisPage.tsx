@@ -1,15 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart2, BrainCircuit, Loader2, AlertCircle, CheckCircle2, Sparkles, Clock, CreditCard } from 'lucide-react';
+import { BarChart2, BrainCircuit, Loader2, AlertCircle, CheckCircle2, Sparkles, Clock, CreditCard, Download } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { UserInfo } from '../utils/jwtHelper';
 import { projectService, ProjectResponse } from '../services/projectService';
-import { reportService, ProjectAnalysisJobResponse, ProjectReportResponse, ProjectReportSummary } from '../services/reportService';
+import { reportService, type ProjectAnalysisJobResponse, type ProjectReportResponse, type ProjectReportSummary, type NarrativeChartsResponse } from '../services/reportService';
 import { subscriptionService, UserSubscription } from '../services/subscriptionService';
+import { chapterService, type ChapterResponse } from '../services/chapterService';
 import { classifyColor, groupColor } from '../components/analysis/helpers';
 import DonutChart from '../components/analysis/DonutChart';
 import RadarChart from '../components/analysis/RadarChart';
 import GroupCard from '../components/analysis/GroupCard';
+import NarrativeChartsPanel from '../components/analysis/NarrativeChartsPanel';
 import { useToast } from '../components/Toast';
 import { browserNotificationService } from '../services/browserNotificationService';
 
@@ -19,9 +21,14 @@ function AnalysisContent() {
     const [selectedId, setSelectedId] = useState<string>('');
     const [report, setReport] = useState<ProjectReportResponse | null>(null);
     const [history, setHistory] = useState<ProjectReportSummary[]>([]);
+    const [projectChapters, setProjectChapters] = useState<ChapterResponse[]>([]);
+    const [chartChapterFilter, setChartChapterFilter] = useState<string>('all');
+    const [narrativeCharts, setNarrativeCharts] = useState<NarrativeChartsResponse | null>(null);
     const [loadingProjects, setLoadingProjects] = useState(true);
     const [analyzing, setAnalyzing] = useState(false);
     const [loadingReport, setLoadingReport] = useState(false);
+    const [loadingNarrativeCharts, setLoadingNarrativeCharts] = useState(false);
+    const [exportingPdf, setExportingPdf] = useState(false);
     const [loadingHistoryReport, setLoadingHistoryReport] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({});
@@ -66,11 +73,28 @@ function AnalysisContent() {
         stopElapsedTimer();
     }, []);
 
+    const loadNarrativeCharts = async (projectId: string, chapterId?: string) => {
+        setLoadingNarrativeCharts(true);
+        try {
+            const charts = await reportService.getNarrativeCharts(projectId, chapterId);
+            if (!mountedRef.current) return;
+            setNarrativeCharts(charts);
+        } catch {
+            if (!mountedRef.current) return;
+            setNarrativeCharts(null);
+        } finally {
+            if (mountedRef.current) setLoadingNarrativeCharts(false);
+        }
+    };
+
     // Load latest report + history when project changes
     useEffect(() => {
         if (!selectedId) return;
         setReport(null);
         setHistory([]);
+        setProjectChapters([]);
+        setChartChapterFilter('all');
+        setNarrativeCharts(null);
         setError(null);
         setAnalysisJob(null);
         setActiveReportId(null);
@@ -80,11 +104,13 @@ function AnalysisContent() {
             reportService.getLatest(selectedId).catch(() => null),
             reportService.getAll(selectedId).catch(() => []),
             reportService.getActiveAnalyzeJob().catch(() => null),
-        ]).then(([latest, all, activeJob]) => {
+            chapterService.getChapters(selectedId).catch(() => []),
+        ]).then(([latest, all, activeJob, chapters]) => {
             if (!mountedRef.current) return;
             setReport(latest);
             setActiveReportId(latest?.id ?? null);
             setHistory(all);
+            setProjectChapters(chapters);
 
             if (activeJob && (activeJob.status === 'Queued' || activeJob.status === 'Processing')) {
                 if (activeJob.projectId !== selectedId) {
@@ -100,6 +126,12 @@ function AnalysisContent() {
             }
         }).finally(() => setLoadingReport(false));
     }, [selectedId]);
+
+    useEffect(() => {
+        if (!selectedId) return;
+        const chapterId = chartChapterFilter === 'all' ? undefined : chartChapterFilter;
+        void loadNarrativeCharts(selectedId, chapterId);
+    }, [selectedId, chartChapterFilter]);
 
     const pollAnalyzeJob = async (projectId: string, jobId: string) => {
         while (true) {
@@ -141,6 +173,8 @@ function AnalysisContent() {
             const all = await reportService.getAll(projectId).catch(() => []);
             setHistory(all);
             setExpandedGroups({});
+            const chapterId = chartChapterFilter === 'all' ? undefined : chartChapterFilter;
+            await loadNarrativeCharts(projectId, chapterId);
             subscriptionService.getMySubscription().then(setSubscription).catch(() => { });
 
             if (notifiedJobRef.current !== job.jobId) {
@@ -238,6 +272,27 @@ function AnalysisContent() {
         }
     };
 
+    const handleExportReportPdf = async () => {
+        if (!selectedId || !activeReportId || exportingPdf) return;
+        setExportingPdf(true);
+        try {
+            await reportService.exportReportPdf(selectedId, activeReportId);
+            toast.success('Đã xuất PDF báo cáo phân tích.');
+        } catch (e: any) {
+            const message = e?.response?.data?.message || 'Không thể xuất PDF báo cáo.';
+            setError(message);
+            toast.error(message);
+        } finally {
+            setExportingPdf(false);
+        }
+    };
+
+    const handleRefreshNarrativeCharts = async () => {
+        if (!selectedId || loadingNarrativeCharts) return;
+        const chapterId = chartChapterFilter === 'all' ? undefined : chartChapterFilter;
+        await loadNarrativeCharts(selectedId, chapterId);
+    };
+
     const toggleGroup = (idx: number) =>
         setExpandedGroups(prev => ({ ...prev, [idx]: !prev[idx] }));
 
@@ -283,7 +338,10 @@ function AnalysisContent() {
                             ) : (
                                 <select
                                     value={selectedId}
-                                    onChange={e => setSelectedId(e.target.value)}
+                                    onChange={e => {
+                                        setSelectedId(e.target.value);
+                                        setChartChapterFilter('all');
+                                    }}
                                     disabled={analyzing}
                                     className="w-full h-10 px-3 rounded-xl text-sm text-[var(--text-primary)] outline-none"
                                     style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
@@ -407,12 +465,22 @@ function AnalysisContent() {
                                 <div className="flex items-center gap-2 mb-4">
                                     <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: classColors!.text }} />
                                     <span className="text-[var(--text-primary)] font-bold text-base truncate">{report.projectTitle}</span>
-                                    {report.status === 'MockData' && (
-                                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ml-auto shrink-0"
-                                            style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>
-                                            <AlertCircle className="w-3 h-3" /> Dữ liệu mẫu
-                                        </div>
-                                    )}
+                                    <div className="ml-auto flex items-center gap-2 shrink-0">
+                                        {report.status === 'MockData' && (
+                                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
+                                                style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>
+                                                <AlertCircle className="w-3 h-3" /> Dữ liệu mẫu
+                                            </div>
+                                        )}
+                                        <button
+                                            onClick={handleExportReportPdf}
+                                            disabled={exportingPdf}
+                                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-opacity disabled:opacity-50"
+                                            style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.25)' }}>
+                                            {exportingPdf ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                                            Xuất PDF
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Score Hero — 2 columns */}
@@ -493,6 +561,43 @@ function AnalysisContent() {
                                         )}
                                     </div>
                                 )}
+
+                                <div className="rounded-2xl mb-5 p-4 flex flex-col gap-3"
+                                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div>
+                                            <p className="text-[var(--text-primary)] text-sm font-semibold">Bộ lọc chart narrative</p>
+                                            <p className="text-[var(--text-secondary)] text-xs">Chọn phạm vi phân tích theo toàn bộ project hoặc từng chapter.</p>
+                                        </div>
+                                        <button
+                                            onClick={handleRefreshNarrativeCharts}
+                                            disabled={!selectedId || loadingNarrativeCharts}
+                                            className="h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-opacity disabled:opacity-50"
+                                            style={{ background: 'rgba(139,92,246,0.15)', color: '#c4b5fd', border: '1px solid rgba(139,92,246,0.35)' }}>
+                                            {loadingNarrativeCharts ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                            Làm mới chart
+                                        </button>
+                                    </div>
+                                    <div className="w-full sm:max-w-sm">
+                                        <label className="block text-[var(--text-secondary)] text-xs font-semibold mb-1.5 uppercase tracking-wider">
+                                            Phạm vi chart
+                                        </label>
+                                        <select
+                                            value={chartChapterFilter}
+                                            onChange={e => setChartChapterFilter(e.target.value)}
+                                            className="w-full h-10 px-3 rounded-xl text-sm text-[var(--text-primary)] outline-none"
+                                            style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
+                                            <option value="all">Toàn bộ project</option>
+                                            {projectChapters.map(ch => (
+                                                <option key={ch.id} value={ch.id}>
+                                                    {ch.title ?? `Chương ${ch.chapterNumber}`}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <NarrativeChartsPanel data={narrativeCharts} loading={loadingNarrativeCharts} />
 
                                 {/* Group breakdown */}
                                 <div className="space-y-3">

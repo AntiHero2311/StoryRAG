@@ -19,6 +19,8 @@ namespace Api.Controllers
         private readonly IAiWritingService _writingService;
         private readonly IAiAnalysisHistoryService _historyService;
         private readonly IProjectAnalysisJobService _analysisJobService;
+        private readonly INarrativeAnalyticsService _narrativeAnalyticsService;
+        private readonly IReportExportService _reportExportService;
 
         public AiController(
             IEmbeddingService embeddingService,
@@ -27,7 +29,9 @@ namespace Api.Controllers
             IAiRewriteService rewriteService,
             IAiWritingService writingService,
             IAiAnalysisHistoryService historyService,
-            IProjectAnalysisJobService analysisJobService)
+            IProjectAnalysisJobService analysisJobService,
+            INarrativeAnalyticsService narrativeAnalyticsService,
+            IReportExportService reportExportService)
         {
             _embeddingService = embeddingService;
             _aiChatService = aiChatService;
@@ -36,6 +40,8 @@ namespace Api.Controllers
             _writingService = writingService;
             _historyService = historyService;
             _analysisJobService = analysisJobService;
+            _narrativeAnalyticsService = narrativeAnalyticsService;
+            _reportExportService = reportExportService;
         }
 
         /// <summary>Embed tất cả chunks của current version của một chương.</summary>
@@ -253,6 +259,36 @@ namespace Api.Controllers
                 var result = await _reportService.GetByIdAsync(reportId, projectId, userId.Value);
                 if (result == null) return NotFound(new { Message = "Không tìm thấy báo cáo." });
                 return Ok(result);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
+        [HttpGet("{projectId:guid}/narrative/charts")]
+        public async Task<IActionResult> GetNarrativeCharts(Guid projectId, [FromQuery] Guid? chapterId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var result = await _narrativeAnalyticsService.GetNarrativeChartsAsync(projectId, userId.Value, chapterId);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
+        [HttpGet("{projectId:guid}/reports/{reportId:guid}/export/pdf")]
+        public async Task<IActionResult> ExportReportPdf(Guid projectId, Guid reportId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var bytes = await _reportExportService.ExportReportPdfAsync(projectId, reportId, userId.Value);
+                return File(bytes, "application/pdf", $"AnalysisReport_{reportId}.pdf");
             }
             catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }

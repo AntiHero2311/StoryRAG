@@ -279,6 +279,7 @@ namespace Service.Implementations
                 - Nếu thực sự không có thông tin liên quan trong context, hãy nói rõ "Nội dung được cung cấp chưa đề cập đến thông tin này."
                 - Trả lời bằng tiếng Việt, súc tích và chính xác.
                 - Không bịa đặt thông tin không có căn cứ trong context.
+                - Chỉ trả lời nội dung cuối cùng cho người dùng, không in phân tích nội bộ hoặc tag như <thought>, <story_context>, <story_summary>.
                 """;
         }
     }

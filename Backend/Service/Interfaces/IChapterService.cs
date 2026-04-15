@@ -39,6 +39,18 @@ namespace Service.Interfaces
         /// <summary>Lấy nội dung thuần của một version cụ thể để diff.</summary>
         Task<string> GetVersionContentAsync(Guid chapterId, int versionNumber, Guid userId);
 
+        /// <summary>So sánh 2 version và trả về unified diff + thống kê thay đổi.</summary>
+        Task<ChapterVersionDiffResponse> CompareVersionsAsync(Guid chapterId, int fromVersionNumber, int toVersionNumber, Guid userId);
+
+        /// <summary>Import manuscript (txt/docx/pdf) và tạo chapter mới tự động.</summary>
+        Task<ManuscriptImportResponse> ImportManuscriptAsync(
+            Guid projectId,
+            Guid userId,
+            string fileName,
+            string? contentType,
+            byte[] fileBytes,
+            bool splitByHeadings = true);
+
         // ── Chunking ───────────────────────────────────────────────────────────
         Task<ChapterVersionDetailResponse> ChunkVersionAsync(Guid chapterId, Guid userId);
     }
