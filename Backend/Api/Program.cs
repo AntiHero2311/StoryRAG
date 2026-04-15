@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Pgvector.EntityFrameworkCore;
 using Repository.Data;
+using Service.Configuration;
 using Service.Implementations;
 using Service.Interfaces;
 using System.Text;
@@ -164,12 +165,22 @@ builder.Services.AddScoped<ICharacterService, CharacterService>();
 builder.Services.AddScoped<IAiRewriteService, AiRewriteService>();
 builder.Services.AddScoped<IAiWritingService, AiWritingService>();
 builder.Services.AddScoped<IBugReportService, BugReportService>();
+builder.Services.AddScoped<IStaffService, StaffService>();
 builder.Services.AddScoped<IStyleGuideService, StyleGuideService>();
 builder.Services.AddScoped<IThemeService, ThemeService>();
 builder.Services.AddScoped<IPlotNoteService, PlotNoteService>();
 builder.Services.AddScoped<IAiAnalysisHistoryService, AiAnalysisHistoryService>();
 builder.Services.AddScoped<ITimelineEventService, TimelineEventService>();
 builder.Services.AddScoped<IExportService, ExportService>();
+builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection("PayOS"));
+builder.Services.AddHttpClient("PayOS", (sp, client) =>
+{
+    var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PayOsOptions>>().Value;
+    if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+    {
+        client.BaseAddress = new Uri(options.BaseUrl);
+    }
+});
 
 // Add Authentication Configuration
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

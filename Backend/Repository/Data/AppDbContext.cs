@@ -49,6 +49,9 @@ namespace Repository.Data
 
         // Bug Reports
         public DbSet<BugReport> BugReports { get; set; }
+        public DbSet<StaffFeedback> StaffFeedbacks { get; set; }
+        public DbSet<StaffKnowledgeBaseItem> StaffKnowledgeBaseItems { get; set; }
+        public DbSet<StaffAnalysisReview> StaffAnalysisReviews { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -557,6 +560,109 @@ namespace Repository.Data
                 entity.HasOne(b => b.ResolvedBy)
                       .WithMany()
                       .HasForeignKey(b => b.ResolvedById)
+                      .OnDelete(DeleteBehavior.SetNull)
+                      .IsRequired(false);
+            });
+
+            // ── StaffFeedback ──────────────────────────────────────────────────────
+            modelBuilder.Entity<StaffFeedback>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Content).IsRequired().HasMaxLength(3000);
+                entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue("Open");
+                entity.Property(e => e.StaffNote).HasMaxLength(3000);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+                entity.HasIndex(e => e.ProjectId);
+                entity.HasIndex(e => e.AuthorId);
+                entity.HasIndex(e => e.StaffId);
+                entity.ToTable(t => t.HasCheckConstraint("CK_StaffFeedback_Status", "\"Status\" IN ('Open','Resolved')"));
+
+                entity.HasOne(e => e.Project)
+                      .WithMany()
+                      .HasForeignKey(e => e.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Chapter)
+                      .WithMany()
+                      .HasForeignKey(e => e.ChapterId)
+                      .OnDelete(DeleteBehavior.SetNull)
+                      .IsRequired(false);
+
+                entity.HasOne(e => e.Author)
+                      .WithMany()
+                      .HasForeignKey(e => e.AuthorId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Staff)
+                      .WithMany()
+                      .HasForeignKey(e => e.StaffId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // ── StaffKnowledgeBaseItem ────────────────────────────────────────────
+            modelBuilder.Entity<StaffKnowledgeBaseItem>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Type).IsRequired().HasMaxLength(20).HasDefaultValue("FAQ");
+                entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Content).IsRequired().HasMaxLength(5000);
+                entity.Property(e => e.Tags).HasMaxLength(300);
+                entity.Property(e => e.IsPublished).HasDefaultValue(true);
+                entity.Property(e => e.SortOrder).HasDefaultValue(0);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+                entity.HasIndex(e => new { e.Type, e.IsPublished, e.SortOrder });
+                entity.ToTable(t => t.HasCheckConstraint("CK_StaffKnowledgeBaseItems_Type", "\"Type\" IN ('FAQ','WritingTip')"));
+
+                entity.HasOne(e => e.Creator)
+                      .WithMany()
+                      .HasForeignKey(e => e.CreatedBy)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Updater)
+                      .WithMany()
+                      .HasForeignKey(e => e.UpdatedBy)
+                      .OnDelete(DeleteBehavior.SetNull)
+                      .IsRequired(false);
+            });
+
+            // ── StaffAnalysisReview ───────────────────────────────────────────────
+            modelBuilder.Entity<StaffAnalysisReview>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Action).IsRequired().HasMaxLength(20).HasDefaultValue("Verified");
+                entity.Property(e => e.Note).HasMaxLength(2000);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+                entity.HasIndex(e => e.ProjectReportId).IsUnique();
+                entity.HasIndex(e => e.ProjectId);
+                entity.HasIndex(e => e.AuthorId);
+                entity.ToTable(t => t.HasCheckConstraint("CK_StaffAnalysisReview_Action", "\"Action\" IN ('Verified','Adjusted','RerunRequested')"));
+
+                entity.HasOne(e => e.ProjectReport)
+                      .WithMany()
+                      .HasForeignKey(e => e.ProjectReportId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Project)
+                      .WithMany()
+                      .HasForeignKey(e => e.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Author)
+                      .WithMany()
+                      .HasForeignKey(e => e.AuthorId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Reviewer)
+                      .WithMany()
+                      .HasForeignKey(e => e.ReviewedBy)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.RerunReport)
+                      .WithMany()
+                      .HasForeignKey(e => e.RerunReportId)
                       .OnDelete(DeleteBehavior.SetNull)
                       .IsRequired(false);
             });

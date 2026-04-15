@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Service.DTOs;
 using Service.Interfaces;
 using System.Security.Claims;
+using System.Text.Json;
 
 namespace Api.Controllers
 {
@@ -102,7 +103,7 @@ namespace Api.Controllers
         [HttpPut("{paymentId}/mark-completed")]
         public async Task<IActionResult> MarkAsCompleted(
             [FromRoute] Guid paymentId,
-            [FromBody] string? transactionId = null)
+            [FromQuery] string? transactionId = null)
         {
             try
             {
@@ -130,6 +131,62 @@ namespace Api.Controllers
             {
                 _logger.LogError($"Error refunding payment: {ex.Message}");
                 return BadRequest(new { success = false, error = ex.Message });
+            }
+        }
+
+        /// <summary>Tạo link checkout PayOS cho gói trả phí</summary>
+        [HttpPost("payos/create-link")]
+        public async Task<IActionResult> CreatePayOsLink([FromBody] CreatePayOsPaymentLinkRequest request)
+        {
+            try
+            {
+                var userId = GetUserId();
+                var result = await _paymentService.CreatePayOsPaymentLinkAsync(userId, request);
+                return Ok(new { success = true, data = result });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error creating PayOS link: {Message}", ex.Message);
+                return BadRequest(new { success = false, error = ex.Message });
+            }
+        }
+
+        /// <summary>Webhook callback từ PayOS</summary>
+        [AllowAnonymous]
+        [HttpPost("payos/webhook")]
+        public async Task<IActionResult> ReceivePayOsWebhook([FromBody] JsonElement payloadJson)
+        {
+            try
+            {
+                var payload = payloadJson.Deserialize<PayOsWebhookPayload>(new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                }) ?? throw new Exception("Webhook payload không hợp lệ.");
+
+                var result = await _paymentService.HandlePayOsWebhookAsync(payload);
+                return Ok(new { success = true, data = result });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error processing PayOS webhook: {Message}", ex.Message);
+                return BadRequest(new { success = false, error = ex.Message });
+            }
+        }
+
+        /// <summary>Lấy trạng thái đơn PayOS theo orderCode</summary>
+        [HttpGet("payos/order/{orderCode:long}")]
+        public async Task<IActionResult> GetPayOsOrderStatus([FromRoute] long orderCode)
+        {
+            try
+            {
+                var userId = GetUserId();
+                var result = await _paymentService.GetPayOsOrderStatusAsync(userId, orderCode);
+                return Ok(new { success = true, data = result });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error getting PayOS order status: {Message}", ex.Message);
+                return NotFound(new { success = false, error = ex.Message });
             }
         }
     }
