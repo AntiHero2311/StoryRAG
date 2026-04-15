@@ -213,11 +213,13 @@ const LandingPage = () => {
                         animate={{ opacity: 1, x: 0 }}
                         className="flex items-center gap-3 group cursor-pointer"
                     >
-                        <div className="relative flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 p-2.5 rounded-xl group-hover:scale-105 transition-transform shadow-lg">
-                            <Sparkles className="w-6 h-6 text-white" />
-                        </div>
-                        <span className="text-2xl font-black tracking-tight">
-                            Story<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">Nest</span>
+                        <img
+                            src="/logo.png"
+                            alt="StoryNest Logo"
+                            className="w-12 h-12 object-contain group-hover:scale-105 transition-transform"
+                        />
+                        <span className="text-2xl font-black tracking-tight text-white">
+                            Story<span className="text-white">Nest</span>
                         </span>
                     </motion.div>
 
@@ -714,11 +716,13 @@ const LandingPage = () => {
                         {/* Brand */}
                         <div className="col-span-1 md:col-span-2">
                             <div className="flex items-center gap-3 mb-4">
-                                <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl">
-                                    <Sparkles className="w-6 h-6 text-white" />
-                                </div>
-                                <span className="text-xl font-black">
-                                    Story<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-500">Nest</span>
+                                <img
+                                    src="/logo.png"
+                                    alt="StoryNest Logo"
+                                    className="w-10 h-10 object-contain"
+                                />
+                                <span className="text-xl font-black text-white">
+                                    Story<span className="text-white">Nest</span>
                                 </span>
                             </div>
                             <p className="text-[var(--text-secondary)] mb-4 max-w-md">

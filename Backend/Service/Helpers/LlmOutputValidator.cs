@@ -20,9 +20,7 @@ public static class LlmOutputValidator
         // Secrets & keys
         "MasterKey", "DataEncryptionKey", "Jwt:Key", "Jwt:Issuer",
         "ApiKey", "api_key", "API_KEY",
-        "Gemini:ChatApiKey", "Gemini:EmbedApiKey",
-        "Gemini:AnalyzeApiKey", "Gemini:EmbedApiKey2",
-        "Gemini:ChatApiKeys", "Gemini:EmbedApiKeys", "Gemini:AnalyzeApiKeys",
+        "Gemini:ChatApiKey", "Gemini:AnalyzeApiKey", "Gemini:ChatModels",
         "Security:MasterKey",
 
         // Email credentials

@@ -21,16 +21,12 @@ services:
         sync: false
       - key: Gemini__ChatApiKey
         sync: false
-      - key: Gemini__EmbedApiKey
-        sync: false
       - key: Gemini__AnalyzeApiKey
-        sync: false
-      - key: Gemini__EmbedApiKey2
         sync: false
       - key: Gemini__EmbeddingModel
         value: gemini-embedding-001
-      - key: Gemini__ChatModel
-        value: gemma-3-27b-it
+      - key: Gemini__ChatModels
+        value: gemma-4-31b,gemma-4-26b
       - key: Gemini__EmbeddingDimensions
         value: "768"
       - key: Email__SmtpHost

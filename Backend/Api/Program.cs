@@ -1,3 +1,4 @@
+using Api.Workers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -176,6 +177,9 @@ builder.Services.AddScoped<IPlotNoteService, PlotNoteService>();
 builder.Services.AddScoped<IAiAnalysisHistoryService, AiAnalysisHistoryService>();
 builder.Services.AddScoped<ITimelineEventService, TimelineEventService>();
 builder.Services.AddScoped<IExportService, ExportService>();
+builder.Services.AddScoped<IProjectAnalysisJobService, ProjectAnalysisJobService>();
+builder.Services.AddSingleton<IAnalysisJobQueue, AnalysisJobQueue>();
+builder.Services.AddHostedService<ProjectAnalysisJobWorker>();
 builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection("PayOS"));
 builder.Services.AddHttpClient("PayOS", (sp, client) =>
 {
