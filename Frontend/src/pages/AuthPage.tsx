@@ -302,7 +302,7 @@ export default function AuthPage() {
                                         shape="pill"
                                         size="large"
                                         width="360"
-                                        locale="vi"
+                                        // locale="vi"
                                     />
                                 </div>
                             ) : (
@@ -371,41 +371,39 @@ export default function AuthPage() {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className={labelCls}>Password</label>
-                                            <div className="relative group/input">
-                                                <input
-                                                    type={showRegPass ? 'text' : 'password'}
-                                                    required minLength={6}
-                                                    value={regPassword}
-                                                    onChange={e => { setRegPassword(e.target.value); setErrorMsg(''); }}
-                                                    placeholder="Tối thiểu 6 ký tự"
-                                                    className={`peer ${inputCls} pr-10`}
-                                                />
-                                                <Lock className={iconCls} />
-                                                <button type="button" onClick={() => setShowRegPass(!showRegPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors">
-                                                    {showRegPass ? <EyeOff className="w-[18px] h-[18px]" /> : <Eye className="w-[18px] h-[18px]" />}
-                                                </button>
-                                            </div>
+                                    <div>
+                                        <label className={labelCls}>Mật khẩu</label>
+                                        <div className="relative group/input">
+                                            <input
+                                                type={showRegPass ? 'text' : 'password'}
+                                                required minLength={6}
+                                                value={regPassword}
+                                                onChange={e => { setRegPassword(e.target.value); setErrorMsg(''); }}
+                                                placeholder="Tối thiểu 6 ký tự"
+                                                className={`peer ${inputCls} pr-10`}
+                                            />
+                                            <Lock className={iconCls} />
+                                            <button type="button" onClick={() => setShowRegPass(!showRegPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors">
+                                                {showRegPass ? <EyeOff className="w-[18px] h-[18px]" /> : <Eye className="w-[18px] h-[18px]" />}
+                                            </button>
                                         </div>
+                                    </div>
 
-                                        <div>
-                                            <label className={labelCls}>Xác nhận</label>
-                                            <div className="relative group/input">
-                                                <input
-                                                    type={showConfirmPass ? 'text' : 'password'}
-                                                    required
-                                                    value={confirmPassword}
-                                                    onChange={e => { setConfirmPassword(e.target.value); setErrorMsg(''); }}
-                                                    placeholder="Nhập lại..."
-                                                    className={`peer ${inputCls} pr-10`}
-                                                />
-                                                <Lock className={iconCls} />
-                                                <button type="button" onClick={() => setShowConfirmPass(!showConfirmPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors">
-                                                    {showConfirmPass ? <EyeOff className="w-[18px] h-[18px]" /> : <Eye className="w-[18px] h-[18px]" />}
-                                                </button>
-                                            </div>
+                                    <div>
+                                        <label className={labelCls}>Xác nhận</label>
+                                        <div className="relative group/input">
+                                            <input
+                                                type={showConfirmPass ? 'text' : 'password'}
+                                                required
+                                                value={confirmPassword}
+                                                onChange={e => { setConfirmPassword(e.target.value); setErrorMsg(''); }}
+                                                placeholder="Nhập lại mật khẩu"
+                                                className={`peer ${inputCls} pr-10`}
+                                            />
+                                            <Lock className={iconCls} />
+                                            <button type="button" onClick={() => setShowConfirmPass(!showConfirmPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors">
+                                                {showConfirmPass ? <EyeOff className="w-[18px] h-[18px]" /> : <Eye className="w-[18px] h-[18px]" />}
+                                            </button>
                                         </div>
                                     </div>
 
