@@ -65,7 +65,7 @@ export default function AuthPage() {
             const data: LoginData = { email: loginEmail, password: loginPassword };
             const response = await authService.login(data);
             localStorage.setItem('token', response.accessToken);
-            navigate('/subscription');
+            navigate('/home');
         } catch (error: any) {
             setLoading(false);
             setErrorMsg(error.response?.data?.message || 'Email hoặc mật khẩu không chính xác.');
@@ -83,7 +83,7 @@ export default function AuthPage() {
             const res = await authService.register(data);
             if (res.accessToken) localStorage.setItem('token', res.accessToken);
             setSuccess(true);
-            setTimeout(() => navigate('/subscription'), 1800);
+            setTimeout(() => navigate('/home'), 1800);
         } catch (error: any) {
             setLoading(false);
             setErrorMsg(error.response?.data?.message || 'Đăng ký thất bại. Vui lòng thử lại.');

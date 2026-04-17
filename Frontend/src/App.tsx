@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastProvider } from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
 import RouteGuard from './components/RouteGuard';
@@ -11,7 +11,6 @@ const AuthPage = lazy(() => import('./pages/AuthPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
-const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
 const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage'));
@@ -53,7 +52,7 @@ function App() {
             {/* Protected routes (requires authentication) */}
             <Route path="/home" element={<RouteGuard><HomePage /></RouteGuard>} />
             <Route path="/profile" element={<RouteGuard><ProfilePage /></RouteGuard>} />
-            <Route path="/projects" element={<RouteGuard><ProjectsPage /></RouteGuard>} />
+            <Route path="/projects" element={<RouteGuard><Navigate to="/home" replace /></RouteGuard>} />
             <Route path="/settings" element={<RouteGuard><SettingsPage /></RouteGuard>} />
             <Route path="/workspace/:projectId" element={<RouteGuard><WorkspacePage /></RouteGuard>} />
             <Route path="/subscription" element={<RouteGuard><SubscriptionPage /></RouteGuard>} />

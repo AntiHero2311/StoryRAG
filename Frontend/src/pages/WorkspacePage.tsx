@@ -956,7 +956,7 @@ export default function WorkspacePage() {
             {/* ── Top Nav ── */}
             <nav className="flex items-center gap-4 px-5 shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-topbar)]" style={{ height: '60px' }}>
                 <button
-                    onClick={() => navigate('/projects')}
+                    onClick={() => navigate('/home')}
                     className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors text-sm font-medium group shrink-0"
                 >
                     <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
