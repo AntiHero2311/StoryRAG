@@ -552,6 +552,13 @@ SELECT setval(pg_get_serial_sequence('"Genres"', 'Id'), 14);
 -- ────────────────────────────────────────────────────────────
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
-    ('20260313061741_InitialCreate', '9.0.2'),
-    ('20260313072231_AddContextTables', '9.0.2'),
-    ('20260323_AddTimelineEvents', '9.0.2');
+    ('20260313061741_InitialCreate', '9.0.0'),
+    ('20260313072231_AddContextTables', '9.0.0'),
+    ('20260323015637_AddTimelineEvents', '9.0.0'),
+    ('20260324071856_AddProjectVersionToReport', '9.0.0'),
+    ('20260407014557_AddAiAnalysisHistory', '9.0.0'),
+    ('20260411063213_AddProjectAnalysisJobs', '9.0.0'),
+    ('20260413072432_EnforceSingleActiveAnalysisJob', '9.0.0'),
+    ('20260413163500_AddStaffFunctions', '9.0.0'),
+    ('20260415083200_EnsureStaffFeedbackTable', '9.0.0'),
+    ('20260415084500_EnsureStaffKnowledgeAndReviewTables', '9.0.0');

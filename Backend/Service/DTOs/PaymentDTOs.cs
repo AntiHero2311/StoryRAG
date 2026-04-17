@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 
 namespace Service.DTOs
 {
@@ -32,6 +33,78 @@ namespace Service.DTOs
 
         [MaxLength(500)]
         public string? Notes { get; set; }
+    }
+
+    public class CreatePayOsPaymentLinkRequest
+    {
+        [Required]
+        public int PlanId { get; set; }
+    }
+
+    public class CreatePayOsPaymentLinkResponse
+    {
+        public Guid PaymentId { get; set; }
+        public long OrderCode { get; set; }
+        public string CheckoutUrl { get; set; } = string.Empty;
+        public string? QrCode { get; set; }
+        public decimal Amount { get; set; }
+        public string Description { get; set; } = string.Empty;
+    }
+
+    public class PayOsOrderStatusResponse
+    {
+        public long OrderCode { get; set; }
+        public string Status { get; set; } = "Pending";
+        public PaymentResponse Payment { get; set; } = new();
+    }
+
+    public class PayOsWebhookProcessResponse
+    {
+        public bool Processed { get; set; }
+        public bool IsSuccess { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public long OrderCode { get; set; }
+        public Guid PaymentId { get; set; }
+    }
+
+    public class PayOsWebhookPayload
+    {
+        public string Code { get; set; } = string.Empty;
+        public string? Desc { get; set; }
+        public bool Success { get; set; }
+        public JsonElement Data { get; set; }
+        public string Signature { get; set; } = string.Empty;
+    }
+
+    public class CreateVnPayPaymentUrlRequest
+    {
+        [Required]
+        public int PlanId { get; set; }
+    }
+
+    public class CreateVnPayPaymentUrlResponse
+    {
+        public Guid PaymentId { get; set; }
+        public string TxnRef { get; set; } = string.Empty;
+        public string CheckoutUrl { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public string Description { get; set; } = string.Empty;
+    }
+
+    public class VnPayOrderStatusResponse
+    {
+        public string TxnRef { get; set; } = string.Empty;
+        public string Status { get; set; } = "Pending";
+        public PaymentResponse Payment { get; set; } = new();
+    }
+
+    public class VnPayIpnProcessResponse
+    {
+        public bool Processed { get; set; }
+        public bool IsSuccess { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string TxnRef { get; set; } = string.Empty;
+        public Guid PaymentId { get; set; }
     }
 
     // ── Payment Responses ──────────────────────────────────────────────────

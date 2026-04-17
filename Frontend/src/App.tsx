@@ -16,6 +16,8 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
 const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage'));
 const PlansPage = lazy(() => import('./pages/PlansPage'));
+const PaymentSuccessPage = lazy(() => import('./pages/PaymentSuccessPage'));
+const PaymentCancelPage = lazy(() => import('./pages/PaymentCancelPage'));
 const AdminSubscriptionPage = lazy(() => import('./pages/AdminSubscriptionPage'));
 const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
 const StaffDashboardPage = lazy(() => import('./pages/StaffDashboardPage'));
@@ -45,6 +47,8 @@ function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/privacy" element={<PrivacyPolicyPage />} />
             <Route path="/plans" element={<PlansPage />} />
+            <Route path="/payment/success" element={<RouteGuard><PaymentSuccessPage /></RouteGuard>} />
+            <Route path="/payment/cancel" element={<RouteGuard><PaymentCancelPage /></RouteGuard>} />
 
             {/* Protected routes (requires authentication) */}
             <Route path="/home" element={<RouteGuard><HomePage /></RouteGuard>} />

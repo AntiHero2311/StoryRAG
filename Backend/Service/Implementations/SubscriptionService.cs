@@ -108,7 +108,7 @@ namespace Service.Implementations
             // 3. Chỉ hỗ trợ Free plan (Price == 0)
             if (plan.Price > 0)
                 throw new InvalidOperationException(
-                    "Gói trả phí chưa được hỗ trợ. Vui lòng liên hệ hỗ trợ.");
+                    "Gói trả phí cần thanh toán qua PayOS trước khi kích hoạt.");
 
             // 4. Hủy subscription active cũ (nếu có) trước khi tạo mới
             var oldSubs = await _db.UserSubscriptions
@@ -136,6 +136,73 @@ namespace Service.Implementations
             await _db.SaveChangesAsync();
 
             // Load navigation property
+            newSub.Plan = plan;
+            return MapSubscription(newSub);
+        }
+
+        public async Task<UserSubscriptionResponse> ActivatePaidSubscriptionAsync(Guid userId, int planId, Guid paymentId)
+        {
+            var plan = await _db.SubscriptionPlans.FindAsync(planId)
+                ?? throw new KeyNotFoundException($"Không tìm thấy plan ID={planId}.");
+
+            if (!plan.IsActive)
+                throw new InvalidOperationException("Plan này hiện không khả dụng.");
+
+            if (plan.Price <= 0)
+                throw new InvalidOperationException("Chỉ dùng API này cho gói trả phí.");
+
+            var existing = await _db.UserSubscriptions
+                .Include(s => s.Plan)
+                .FirstOrDefaultAsync(s =>
+                    s.UserId == userId &&
+                    s.PlanId == planId &&
+                    s.Status == "Active" &&
+                    s.EndDate >= DateTime.UtcNow);
+
+            if (existing != null)
+            {
+                var existingPayment = await _db.Payments.FindAsync(paymentId);
+                if (existingPayment != null && existingPayment.SubscriptionId == null)
+                {
+                    existingPayment.SubscriptionId = existing.Id;
+                    existingPayment.UpdatedAt = DateTime.UtcNow;
+                    await _db.SaveChangesAsync();
+                }
+
+                return MapSubscription(existing);
+            }
+
+            var oldSubs = await _db.UserSubscriptions
+                .Where(s => s.UserId == userId && s.Status == "Active")
+                .ToListAsync();
+
+            foreach (var old in oldSubs)
+                old.Status = "Cancelled";
+
+            var now = DateTime.UtcNow;
+            var newSub = new UserSubscription
+            {
+                UserId = userId,
+                PlanId = planId,
+                StartDate = now,
+                EndDate = now.AddMonths(1),
+                Status = "Active",
+                UsedAnalysisCount = 0,
+                UsedTokens = 0,
+                CreatedAt = now
+            };
+
+            _db.UserSubscriptions.Add(newSub);
+            await _db.SaveChangesAsync();
+
+            var payment = await _db.Payments.FindAsync(paymentId);
+            if (payment != null)
+            {
+                payment.SubscriptionId = newSub.Id;
+                payment.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+            }
+
             newSub.Plan = plan;
             return MapSubscription(newSub);
         }

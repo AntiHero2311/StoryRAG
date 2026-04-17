@@ -24,5 +24,8 @@ namespace Service.Interfaces
 
         /// <summary>Đăng ký plan cho user. Free plan (Price=0) tự động Active ngay.</summary>
         Task<UserSubscriptionResponse> SubscribeToPlanAsync(Guid userId, int planId);
+
+        /// <summary>Kích hoạt gói trả phí sau khi thanh toán thành công.</summary>
+        Task<UserSubscriptionResponse> ActivatePaidSubscriptionAsync(Guid userId, int planId, Guid paymentId);
     }
 }

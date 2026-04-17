@@ -16,6 +16,7 @@ Authorization: Bearer <access_token>
 - 🔒 Yêu cầu Bearer Token (mọi role)
 - 👑 Chỉ **Admin**
 - ✍️ Chỉ **Author**
+- 🧑‍💼 **Staff** hoặc **Admin**
 
 ---
 
@@ -346,6 +347,101 @@ Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 
 ---
 
+## 🧑‍💼 Staff Operations Guide — `/api/staff`
+
+> Tất cả endpoint dưới đây yêu cầu role **Staff** hoặc **Admin**.
+
+### 1) Xem manuscript bị gắn cờ
+
+| Method | Route | Mô tả |
+|--------|-------|-------|
+| `GET` | `/staff/manuscripts/flagged` | Danh sách bản thảo cần staff xử lý |
+
+**Query params:** `page=1&pageSize=20`
+
+---
+
+### 2) Feedback thủ công cho Author
+
+| Method | Route | Mô tả |
+|--------|-------|-------|
+| `GET` | `/staff/feedback` | Danh sách feedback (`?projectId=&page=&pageSize=`) |
+| `POST` | `/staff/feedback` | Tạo feedback mới cho project/chapter |
+| `PUT` | `/staff/feedback/{feedbackId}` | Cập nhật feedback |
+| `DELETE` | `/staff/feedback/{feedbackId}` | Xóa feedback |
+
+**Body `POST/PUT /staff/feedback`**
+```json
+{
+  "projectId": "guid",
+  "chapterId": "guid | null",
+  "content": "Nhận xét chi tiết cho tác giả...",
+  "staffNote": "Ghi chú nội bộ staff",
+  "status": "Open"
+}
+```
+
+`status`: `Open` | `Resolved`
+
+---
+
+### 3) Verify / Adjust / Re-run phân tích
+
+| Method | Route | Mô tả |
+|--------|-------|-------|
+| `GET` | `/staff/analyses/reviews` | Danh sách lịch sử review (`?projectId=&page=&pageSize=`) |
+| `POST` | `/staff/analyses/{reportId}/review` | Review một report |
+
+**Body `POST /staff/analyses/{reportId}/review`**
+```json
+{
+  "action": "Verified",
+  "note": "Kết quả đạt yêu cầu."
+}
+```
+
+`action`: `Verified` | `Adjusted` | `RerunRequested`  
+> `RerunRequested` chỉ áp dụng cho report chưa hoàn tất hoặc bị flag `INCOMPLETE`.
+
+---
+
+### 4) Quản lý FAQ / Writing Tips
+
+| Method | Route | Mô tả |
+|--------|-------|-------|
+| `GET` | `/staff/knowledge-base` | Danh sách FAQ/tips (`?type=&isPublished=&page=&pageSize=`) |
+| `POST` | `/staff/knowledge-base` | Tạo item mới |
+| `PUT` | `/staff/knowledge-base/{id}` | Cập nhật item |
+| `DELETE` | `/staff/knowledge-base/{id}` | Xóa item |
+
+**Body `POST/PUT /staff/knowledge-base`**
+```json
+{
+  "type": "FAQ",
+  "title": "Làm sao tăng pacing chương 1?",
+  "content": "Ưu tiên xung đột sớm, giảm đoạn mô tả dài...",
+  "tags": "pacing,chapter-1",
+  "isPublished": true,
+  "sortOrder": 10
+}
+```
+
+`type`: `FAQ` | `WritingTip`
+
+---
+
+### 5) Cập nhật DB (Supabase/EF)
+
+Sau khi pull code mới có Staff module, chạy:
+
+```bash
+dotnet ef database update --project Repository\Repository.csproj --startup-project Api\Api.csproj
+```
+
+Nếu bạn reset DB bằng `supabase_full_reset.sql`, cần đảm bảo migration mới `AddStaffFunctions` cũng được apply.
+
+---
+
 ## ⚙️ Services quan trọng
 
 | Service | Vai trò |
@@ -382,7 +478,10 @@ PlotNoteEntries         — uuid PK, FK→Projects, Type, Embedding vector(768)
 ChatMessages            — uuid PK, FK→Projects, FK→Users
 RewriteHistories        — uuid PK, FK→Projects, FK→Users
 ProjectReports          — uuid PK, FK→Projects, CriteriaJson (jsonb), ProjectVersion (text)
-
+StaffFeedbacks          — uuid PK, feedback staff cho author/project/chapter
+StaffKnowledgeBaseItems — uuid PK, FAQ/WritingTip do staff quản trị
+StaffAnalysisReviews    — uuid PK, thao tác review/rerun report của staff
+ 
 SubscriptionPlans       — int PK (seed: Free/Basic/Pro/Enterprise)
 UserSubscriptions       — int PK, FK→Users, FK→SubscriptionPlans
 Payments                — uuid PK, FK→Users, FK→SubscriptionPlans

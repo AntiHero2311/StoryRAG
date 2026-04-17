@@ -24,5 +24,23 @@ namespace Service.Interfaces
 
         /// <summary>Refund một payment</summary>
         Task<PaymentResponse> RefundPaymentAsync(Guid paymentId, Guid userId);
+
+        /// <summary>Tạo link thanh toán PayOS cho gói trả phí</summary>
+        Task<CreatePayOsPaymentLinkResponse> CreatePayOsPaymentLinkAsync(Guid userId, CreatePayOsPaymentLinkRequest request);
+
+        /// <summary>Xử lý webhook từ PayOS</summary>
+        Task<PayOsWebhookProcessResponse> HandlePayOsWebhookAsync(PayOsWebhookPayload payload);
+
+        /// <summary>Lấy trạng thái đơn hàng PayOS theo orderCode</summary>
+        Task<PayOsOrderStatusResponse> GetPayOsOrderStatusAsync(Guid userId, long orderCode);
+
+        /// <summary>Tạo URL thanh toán VNPay cho gói trả phí</summary>
+        Task<CreateVnPayPaymentUrlResponse> CreateVnPayPaymentUrlAsync(Guid userId, CreateVnPayPaymentUrlRequest request);
+
+        /// <summary>Xử lý callback IPN từ VNPay</summary>
+        Task<VnPayIpnProcessResponse> HandleVnPayIpnAsync(IReadOnlyDictionary<string, string?> queryParameters);
+
+        /// <summary>Lấy trạng thái đơn hàng VNPay theo txnRef</summary>
+        Task<VnPayOrderStatusResponse> GetVnPayOrderStatusAsync(Guid userId, string txnRef);
     }
 }

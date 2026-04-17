@@ -50,71 +50,75 @@ namespace Service.Implementations
             var day7ago  = now.AddDays(-7);
             var day30ago = now.AddDays(-30);
 
-            // Run all queries in parallel for performance
-            var totalUsersTask          = _context.Users.CountAsync();
-            var activeUsersTask         = _context.Users.CountAsync(u => u.IsActive);
-            var newUsers7Task           = _context.Users.CountAsync(u => u.CreatedAt >= day7ago);
-            var newUsers30Task          = _context.Users.CountAsync(u => u.CreatedAt >= day30ago);
-            var authorsTask             = _context.Users.CountAsync(u => u.Role == "Author");
-            var staffTask               = _context.Users.CountAsync(u => u.Role == "Staff");
-            var adminsTask              = _context.Users.CountAsync(u => u.Role == "Admin");
+            var totalUsers = await _context.Users.CountAsync();
+            var activeUsers = await _context.Users.CountAsync(u => u.IsActive);
+            var newUsers7 = await _context.Users.CountAsync(u => u.CreatedAt >= day7ago);
+            var newUsers30 = await _context.Users.CountAsync(u => u.CreatedAt >= day30ago);
+            var totalAuthors = await _context.Users.CountAsync(u => u.Role == "Author");
+            var totalStaff = await _context.Users.CountAsync(u => u.Role == "Staff");
+            var totalAdmins = await _context.Users.CountAsync(u => u.Role == "Admin");
 
-            var totalProjectsTask       = _context.Projects.CountAsync(p => !p.IsDeleted);
-            var totalChaptersTask       = _context.Chapters.CountAsync(c => !c.IsDeleted);
-            var totalWordCountTask      = _context.Chapters.Where(c => !c.IsDeleted).SumAsync(c => (long)c.WordCount);
-            var totalCharsTask          = _context.CharacterEntries.CountAsync();
-            var totalWorldTask          = _context.WorldbuildingEntries.CountAsync();
+            var totalProjects = await _context.Projects.CountAsync(p => !p.IsDeleted);
+            var totalChapters = await _context.Chapters.CountAsync(c => !c.IsDeleted);
+            var totalWordCount = await _context.Chapters.Where(c => !c.IsDeleted).SumAsync(c => (long)c.WordCount);
+            var totalCharacters = await _context.CharacterEntries.CountAsync();
+            var totalWorldbuildingEntries = await _context.WorldbuildingEntries.CountAsync();
 
-            var totalTokensTask         = _context.ChatMessages.SumAsync(m => (long)m.TotalTokens);
-            var totalChatMsgTask        = _context.ChatMessages.CountAsync();
-            var totalAnalysesTask       = _context.ProjectReports.CountAsync(r => r.Status == "Completed");
+            var totalAiTokens = await _context.ChatMessages.SumAsync(m => (long)m.TotalTokens);
+            var totalAiChatMessages = await _context.ChatMessages.CountAsync();
+            var totalAiAnalyses = await _context.ProjectReports.CountAsync(r => r.Status == "Completed");
 
-            var activeSubsTask          = _context.UserSubscriptions.CountAsync(s => s.Status == "Active" && s.EndDate >= now);
-            var expiredSubsTask         = _context.UserSubscriptions.CountAsync(s => s.Status == "Active" && s.EndDate < now);
-            var cancelledSubsTask       = _context.UserSubscriptions.CountAsync(s => s.Status == "Cancelled");
+            var activeSubscriptions = await _context.UserSubscriptions.CountAsync(s => s.Status == "Active" && s.EndDate >= now);
+            var expiredSubscriptions = await _context.UserSubscriptions.CountAsync(s => s.Status == "Active" && s.EndDate < now);
+            var cancelledSubscriptions = await _context.UserSubscriptions.CountAsync(s => s.Status == "Cancelled");
+            var successfulPayments = await _context.Payments.CountAsync(p => p.Status == "Completed");
+            var totalRevenue = await _context.Payments
+                .Where(p => p.Status == "Completed")
+                .SumAsync(p => (decimal?)p.Amount) ?? 0m;
+            var revenueLast7Days = await _context.Payments
+                .Where(p => p.Status == "Completed" && p.PaidAt.HasValue && p.PaidAt.Value >= day7ago)
+                .SumAsync(p => (decimal?)p.Amount) ?? 0m;
+            var revenueLast30Days = await _context.Payments
+                .Where(p => p.Status == "Completed" && p.PaidAt.HasValue && p.PaidAt.Value >= day30ago)
+                .SumAsync(p => (decimal?)p.Amount) ?? 0m;
 
-            var openBugsTask            = _context.BugReports.CountAsync(b => b.Status == "Open");
-            var inProgressBugsTask      = _context.BugReports.CountAsync(b => b.Status == "InProgress");
-            var resolvedBugsTask        = _context.BugReports.CountAsync(b => b.Status == "Resolved");
-            var highPriorityBugsTask    = _context.BugReports.CountAsync(b => b.Status == "Open" && b.Priority == "High");
-
-            await Task.WhenAll(
-                totalUsersTask, activeUsersTask, newUsers7Task, newUsers30Task,
-                authorsTask, staffTask, adminsTask,
-                totalProjectsTask, totalChaptersTask, totalWordCountTask, totalCharsTask, totalWorldTask,
-                totalTokensTask, totalChatMsgTask, totalAnalysesTask,
-                activeSubsTask, expiredSubsTask, cancelledSubsTask,
-                openBugsTask, inProgressBugsTask, resolvedBugsTask, highPriorityBugsTask
-            );
+            var openBugReports = await _context.BugReports.CountAsync(b => b.Status == "Open");
+            var inProgressBugReports = await _context.BugReports.CountAsync(b => b.Status == "InProgress");
+            var resolvedBugReports = await _context.BugReports.CountAsync(b => b.Status == "Resolved");
+            var highPriorityOpenBugs = await _context.BugReports.CountAsync(b => b.Status == "Open" && b.Priority == "High");
 
             return new AdminOverviewStats
             {
-                TotalUsers            = await totalUsersTask,
-                ActiveUsers           = await activeUsersTask,
-                NewUsersLast7Days     = await newUsers7Task,
-                NewUsersLast30Days    = await newUsers30Task,
-                TotalAuthors          = await authorsTask,
-                TotalStaff            = await staffTask,
-                TotalAdmins           = await adminsTask,
+                TotalUsers = totalUsers,
+                ActiveUsers = activeUsers,
+                NewUsersLast7Days = newUsers7,
+                NewUsersLast30Days = newUsers30,
+                TotalAuthors = totalAuthors,
+                TotalStaff = totalStaff,
+                TotalAdmins = totalAdmins,
 
-                TotalProjects              = await totalProjectsTask,
-                TotalChapters              = await totalChaptersTask,
-                TotalWordCount             = await totalWordCountTask,
-                TotalCharacters            = await totalCharsTask,
-                TotalWorldbuildingEntries  = await totalWorldTask,
+                TotalProjects = totalProjects,
+                TotalChapters = totalChapters,
+                TotalWordCount = totalWordCount,
+                TotalCharacters = totalCharacters,
+                TotalWorldbuildingEntries = totalWorldbuildingEntries,
 
-                TotalAiTokens         = await totalTokensTask,
-                TotalAiChatMessages   = await totalChatMsgTask,
-                TotalAiAnalyses       = await totalAnalysesTask,
+                TotalAiTokens = totalAiTokens,
+                TotalAiChatMessages = totalAiChatMessages,
+                TotalAiAnalyses = totalAiAnalyses,
 
-                ActiveSubscriptions   = await activeSubsTask,
-                ExpiredSubscriptions  = await expiredSubsTask,
-                CancelledSubscriptions = await cancelledSubsTask,
+                ActiveSubscriptions = activeSubscriptions,
+                ExpiredSubscriptions = expiredSubscriptions,
+                CancelledSubscriptions = cancelledSubscriptions,
+                SuccessfulPayments = successfulPayments,
+                TotalRevenue = totalRevenue,
+                RevenueLast7Days = revenueLast7Days,
+                RevenueLast30Days = revenueLast30Days,
 
-                OpenBugReports        = await openBugsTask,
-                InProgressBugReports  = await inProgressBugsTask,
-                ResolvedBugReports    = await resolvedBugsTask,
-                HighPriorityOpenBugs  = await highPriorityBugsTask,
+                OpenBugReports = openBugReports,
+                InProgressBugReports = inProgressBugReports,
+                ResolvedBugReports = resolvedBugReports,
+                HighPriorityOpenBugs = highPriorityOpenBugs,
             };
         }
     }

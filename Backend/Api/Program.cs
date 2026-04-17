@@ -2,9 +2,12 @@ using Api.Workers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 using Pgvector.EntityFrameworkCore;
 using Repository.Data;
+using Service.Configuration;
 using Service.Implementations;
 using Service.Interfaces;
 using System.Text;
@@ -22,6 +25,8 @@ builder.Configuration.Sources
 
 // Add services to the container.
 builder.Services.AddDbContext<AppDbContext>(options =>
+{
+    options.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
         npgsqlOptions =>
         {
@@ -30,7 +35,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
                 maxRetryDelay: TimeSpan.FromSeconds(5),
                 errorCodesToAdd: null);
             npgsqlOptions.UseVector();
-        }));
+        });
+});
 
 // Removed default OpenApi in favor of Swashbuckle
 builder.Services.AddControllers();
@@ -165,6 +171,7 @@ builder.Services.AddScoped<ICharacterService, CharacterService>();
 builder.Services.AddScoped<IAiRewriteService, AiRewriteService>();
 builder.Services.AddScoped<IAiWritingService, AiWritingService>();
 builder.Services.AddScoped<IBugReportService, BugReportService>();
+builder.Services.AddScoped<IStaffService, StaffService>();
 builder.Services.AddScoped<IStyleGuideService, StyleGuideService>();
 builder.Services.AddScoped<IThemeService, ThemeService>();
 builder.Services.AddScoped<IPlotNoteService, PlotNoteService>();
@@ -174,6 +181,16 @@ builder.Services.AddScoped<IExportService, ExportService>();
 builder.Services.AddScoped<IProjectAnalysisJobService, ProjectAnalysisJobService>();
 builder.Services.AddSingleton<IAnalysisJobQueue, AnalysisJobQueue>();
 builder.Services.AddHostedService<ProjectAnalysisJobWorker>();
+builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection("PayOS"));
+builder.Services.Configure<VnPayOptions>(builder.Configuration.GetSection("VNPay"));
+builder.Services.AddHttpClient("PayOS", (sp, client) =>
+{
+    var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PayOsOptions>>().Value;
+    if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+    {
+        client.BaseAddress = new Uri(options.BaseUrl);
+    }
+});
 
 // Add Authentication Configuration
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -193,6 +210,46 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+// Apply pending EF Core migrations on startup so new tables (e.g. StaffFeedbacks) exist before handling requests.
+var autoMigrateOnStartup = builder.Configuration.GetValue("Database:AutoMigrateOnStartup", !app.Environment.IsDevelopment());
+if (autoMigrateOnStartup)
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("StartupMigration");
+        try
+        {
+            dbContext.Database.Migrate();
+        }
+        catch (Exception ex) when (ContainsPostgresRelationExists(ex))
+        {
+            logger.LogWarning(ex,
+                "Skip startup migration because schema objects already exist but EF history is out of sync. " +
+                "Application will continue running.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to apply database migrations on startup.");
+            throw;
+        }
+    }
+}
+
+static bool ContainsPostgresRelationExists(Exception ex)
+{
+    Exception? current = ex;
+    while (current != null)
+    {
+        if (current is PostgresException pgEx && pgEx.SqlState == "42P07")
+            return true;
+
+        current = current.InnerException;
+    }
+
+    return false;
+}
 
 // Configure the HTTP request pipeline.
 app.UseSwagger();
