@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
@@ -22,6 +23,7 @@ namespace Service.Implementations
         private readonly ISubscriptionService _subscriptionService;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly PayOsOptions _payOsOptions;
+        private readonly VnPayOptions _vnPayOptions;
         private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
         public PaymentService(
@@ -29,13 +31,15 @@ namespace Service.Implementations
             ILogger<PaymentService> logger,
             ISubscriptionService subscriptionService,
             IHttpClientFactory httpClientFactory,
-            IOptions<PayOsOptions> payOsOptions)
+            IOptions<PayOsOptions> payOsOptions,
+            IOptions<VnPayOptions> vnPayOptions)
         {
             _context = context;
             _logger = logger;
             _subscriptionService = subscriptionService;
             _httpClientFactory = httpClientFactory;
             _payOsOptions = payOsOptions.Value;
+            _vnPayOptions = vnPayOptions.Value;
         }
 
         public async Task<PaymentResponse> CreatePaymentAsync(Guid userId, CreatePaymentRequest request)
@@ -264,6 +268,191 @@ namespace Service.Implementations
             };
         }
 
+        public async Task<CreateVnPayPaymentUrlResponse> CreateVnPayPaymentUrlAsync(Guid userId, CreateVnPayPaymentUrlRequest request)
+        {
+            EnsureVnPayConfigured();
+
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+                throw new Exception($"User {userId} not found");
+
+            var plan = await _context.SubscriptionPlans.FindAsync(request.PlanId);
+            if (plan == null)
+                throw new Exception($"Subscription Plan {request.PlanId} not found");
+
+            if (!plan.IsActive)
+                throw new Exception("Plan này hiện không khả dụng.");
+
+            if (plan.Price <= 0)
+                throw new Exception("Gói miễn phí không cần thanh toán VNPay.");
+
+            if (plan.Price != decimal.Truncate(plan.Price))
+                throw new Exception("Số tiền thanh toán phải là số nguyên VND.");
+
+            var txnRef = await GenerateUniqueTxnRefAsync();
+            var amount = (long)plan.Price;
+            var orderInfo = BuildVnPayOrderInfo(request.PlanId, userId);
+            var nowVn = ConvertUtcToVnTime(DateTime.UtcNow);
+            var expireVn = nowVn.AddMinutes(Math.Max(1, _vnPayOptions.ExpireMinutes));
+
+            var payment = new Payment
+            {
+                UserId = userId,
+                PlanId = request.PlanId,
+                Amount = plan.Price,
+                Currency = "VND",
+                PaymentMethod = "VNPay",
+                Status = "Pending",
+                TransactionId = txnRef,
+                Description = $"VNPay order {txnRef}",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Payments.Add(payment);
+            await _context.SaveChangesAsync();
+
+            var payload = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["vnp_Version"] = _vnPayOptions.Version,
+                ["vnp_Command"] = _vnPayOptions.Command,
+                ["vnp_TmnCode"] = _vnPayOptions.TmnCode,
+                ["vnp_Amount"] = (amount * 100).ToString(CultureInfo.InvariantCulture),
+                ["vnp_CreateDate"] = nowVn.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture),
+                ["vnp_CurrCode"] = _vnPayOptions.CurrCode,
+                ["vnp_IpAddr"] = string.IsNullOrWhiteSpace(_vnPayOptions.DefaultIpAddress) ? "127.0.0.1" : _vnPayOptions.DefaultIpAddress,
+                ["vnp_Locale"] = _vnPayOptions.Locale,
+                ["vnp_OrderInfo"] = orderInfo,
+                ["vnp_OrderType"] = _vnPayOptions.OrderType,
+                ["vnp_ReturnUrl"] = _vnPayOptions.ReturnUrl,
+                ["vnp_TxnRef"] = txnRef,
+                ["vnp_ExpireDate"] = expireVn.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture)
+            };
+
+            var hashData = BuildVnPayDataString(payload);
+            var secureHash = ComputeHmacSha512(_vnPayOptions.HashSecret, hashData);
+            var checkoutUrl = $"{_vnPayOptions.PaymentUrl}?{hashData}&vnp_SecureHashType=HmacSHA512&vnp_SecureHash={WebUtility.UrlEncode(secureHash)}";
+
+            _logger.LogInformation("Created VNPay URL for payment {PaymentId}, txnRef {TxnRef}", payment.Id, txnRef);
+
+            return new CreateVnPayPaymentUrlResponse
+            {
+                PaymentId = payment.Id,
+                TxnRef = txnRef,
+                CheckoutUrl = checkoutUrl,
+                Amount = payment.Amount,
+                Description = orderInfo
+            };
+        }
+
+        public async Task<VnPayIpnProcessResponse> HandleVnPayIpnAsync(IReadOnlyDictionary<string, string?> queryParameters)
+        {
+            EnsureVnPayConfigured();
+
+            if (!queryParameters.TryGetValue("vnp_SecureHash", out var secureHash) || string.IsNullOrWhiteSpace(secureHash))
+                throw new Exception("Thiếu chữ ký VNPay.");
+
+            var signedParams = queryParameters
+                .Where(kvp => kvp.Key.StartsWith("vnp_", StringComparison.Ordinal))
+                .Where(kvp => !string.Equals(kvp.Key, "vnp_SecureHash", StringComparison.OrdinalIgnoreCase)
+                           && !string.Equals(kvp.Key, "vnp_SecureHashType", StringComparison.OrdinalIgnoreCase))
+                .Where(kvp => !string.IsNullOrWhiteSpace(kvp.Value))
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value!, StringComparer.Ordinal);
+
+            var hashData = BuildVnPayDataString(signedParams);
+            var expectedHash = ComputeHmacSha512(_vnPayOptions.HashSecret, hashData);
+            if (!string.Equals(expectedHash, secureHash, StringComparison.OrdinalIgnoreCase))
+                throw new Exception("VNPay IPN signature không hợp lệ.");
+
+            if (!queryParameters.TryGetValue("vnp_TxnRef", out var txnRef) || string.IsNullOrWhiteSpace(txnRef))
+                throw new Exception("IPN thiếu vnp_TxnRef.");
+
+            var payment = await _context.Payments
+                .Include(p => p.Plan)
+                .FirstOrDefaultAsync(p => p.TransactionId == txnRef);
+
+            if (payment == null)
+                throw new Exception($"Không tìm thấy payment cho txnRef {txnRef}.");
+
+            if (payment.Status == "Completed")
+            {
+                return new VnPayIpnProcessResponse
+                {
+                    Processed = true,
+                    IsSuccess = true,
+                    Status = payment.Status,
+                    TxnRef = txnRef,
+                    PaymentId = payment.Id
+                };
+            }
+
+            if (!queryParameters.TryGetValue("vnp_Amount", out var amountText) || !long.TryParse(amountText, out var amountRaw))
+                throw new Exception("IPN thiếu hoặc sai vnp_Amount.");
+
+            var paidAmount = amountRaw / 100m;
+            if (payment.Amount != paidAmount)
+                throw new Exception($"Sai số tiền VNPay IPN. Local={payment.Amount}, ipn={paidAmount}.");
+
+            queryParameters.TryGetValue("vnp_ResponseCode", out var responseCode);
+            queryParameters.TryGetValue("vnp_TransactionStatus", out var transactionStatus);
+            var isSuccess = string.Equals(responseCode, "00", StringComparison.Ordinal)
+                && (string.IsNullOrWhiteSpace(transactionStatus) || string.Equals(transactionStatus, "00", StringComparison.Ordinal));
+
+            payment.UpdatedAt = DateTime.UtcNow;
+            if (isSuccess)
+            {
+                payment.Status = "Completed";
+                payment.PaidAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                await _subscriptionService.ActivatePaidSubscriptionAsync(payment.UserId, payment.PlanId, payment.Id);
+
+                _logger.LogInformation("VNPay IPN completed payment {PaymentId} (txnRef={TxnRef})", payment.Id, txnRef);
+                return new VnPayIpnProcessResponse
+                {
+                    Processed = true,
+                    IsSuccess = true,
+                    Status = payment.Status,
+                    TxnRef = txnRef,
+                    PaymentId = payment.Id
+                };
+            }
+
+            payment.Status = string.Equals(responseCode, "24", StringComparison.Ordinal)
+                ? "Cancelled"
+                : "Failed";
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("VNPay IPN set payment {PaymentId} to {Status} (txnRef={TxnRef})", payment.Id, payment.Status, txnRef);
+            return new VnPayIpnProcessResponse
+            {
+                Processed = true,
+                IsSuccess = false,
+                Status = payment.Status,
+                TxnRef = txnRef,
+                PaymentId = payment.Id
+            };
+        }
+
+        public async Task<VnPayOrderStatusResponse> GetVnPayOrderStatusAsync(Guid userId, string txnRef)
+        {
+            var normalizedTxnRef = txnRef?.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedTxnRef))
+                throw new Exception("txnRef không hợp lệ.");
+
+            var payment = await _context.Payments
+                .Include(p => p.Plan)
+                .FirstOrDefaultAsync(p => p.UserId == userId && p.TransactionId == normalizedTxnRef);
+
+            if (payment == null)
+                throw new Exception($"Không tìm thấy payment cho txnRef {normalizedTxnRef}.");
+
+            return new VnPayOrderStatusResponse
+            {
+                TxnRef = normalizedTxnRef,
+                Status = payment.Status,
+                Payment = MapToResponse(payment, payment.Plan.PlanName)
+            };
+        }
+
         public async Task<PaymentResponse> UpdatePaymentStatusAsync(Guid paymentId, Guid userId, UpdatePaymentStatusRequest request)
         {
             var payment = await _context.Payments
@@ -396,6 +585,17 @@ namespace Service.Implementations
             }
         }
 
+        private void EnsureVnPayConfigured()
+        {
+            if (string.IsNullOrWhiteSpace(_vnPayOptions.PaymentUrl)
+                || string.IsNullOrWhiteSpace(_vnPayOptions.TmnCode)
+                || string.IsNullOrWhiteSpace(_vnPayOptions.HashSecret)
+                || string.IsNullOrWhiteSpace(_vnPayOptions.ReturnUrl))
+            {
+                throw new Exception("Thiếu cấu hình VNPay (PaymentUrl/TmnCode/HashSecret/ReturnUrl).");
+            }
+        }
+
         private async Task<long> GenerateUniqueOrderCodeAsync()
         {
             for (var i = 0; i < 10; i++)
@@ -410,11 +610,32 @@ namespace Service.Implementations
             throw new Exception("Không tạo được orderCode duy nhất.");
         }
 
+        private async Task<string> GenerateUniqueTxnRefAsync()
+        {
+            for (var i = 0; i < 10; i++)
+            {
+                var candidate = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + Random.Shared.Next(100, 999))
+                    .ToString(CultureInfo.InvariantCulture);
+                var exists = await _context.Payments.AnyAsync(p => p.TransactionId == candidate);
+                if (!exists)
+                    return candidate;
+            }
+
+            throw new Exception("Không tạo được txnRef duy nhất.");
+        }
+
         private static string BuildPayOsDescription(int planId, Guid userId)
         {
             var suffix = userId.ToString("N")[..8].ToUpperInvariant();
             var description = $"PLAN{planId}-{suffix}";
             return description.Length <= 25 ? description : description[..25];
+        }
+
+        private static string BuildVnPayOrderInfo(int planId, Guid userId)
+        {
+            var suffix = userId.ToString("N")[..8].ToUpperInvariant();
+            var info = $"PLAN{planId}-{suffix}";
+            return info.Length <= 255 ? info : info[..255];
         }
 
         private static string ComputeHmacSha256(string key, string data)
@@ -433,6 +654,40 @@ namespace Service.Implementations
                 .OrderBy(p => p.Name, StringComparer.Ordinal)
                 .Select(p => $"{p.Name}={ConvertJsonValue(p.Value)}");
             return string.Join("&", pairs);
+        }
+
+        private static string BuildVnPayDataString(IReadOnlyDictionary<string, string> parameters)
+        {
+            var pairs = parameters
+                .OrderBy(kvp => kvp.Key, StringComparer.Ordinal)
+                .Select(kvp => $"{WebUtility.UrlEncode(kvp.Key)}={WebUtility.UrlEncode(kvp.Value)}");
+            return string.Join("&", pairs);
+        }
+
+        private static string ComputeHmacSha512(string key, string data)
+        {
+            var keyBytes = Encoding.UTF8.GetBytes(key);
+            var dataBytes = Encoding.UTF8.GetBytes(data);
+            using var hmac = new HMACSHA512(keyBytes);
+            var hash = hmac.ComputeHash(dataBytes);
+            return Convert.ToHexString(hash).ToUpperInvariant();
+        }
+
+        private DateTime ConvertUtcToVnTime(DateTime utcTime)
+        {
+            try
+            {
+                var timeZone = TimeZoneInfo.FindSystemTimeZoneById(_vnPayOptions.TimeZoneId);
+                return TimeZoneInfo.ConvertTimeFromUtc(utcTime, timeZone);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                return utcTime.AddHours(7);
+            }
+            catch (InvalidTimeZoneException)
+            {
+                return utcTime.AddHours(7);
+            }
         }
 
         private static string ConvertJsonValue(JsonElement value)

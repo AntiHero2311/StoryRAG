@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 using Pgvector.EntityFrameworkCore;
 using Repository.Data;
 using Service.Configuration;
@@ -181,6 +182,7 @@ builder.Services.AddScoped<IProjectAnalysisJobService, ProjectAnalysisJobService
 builder.Services.AddSingleton<IAnalysisJobQueue, AnalysisJobQueue>();
 builder.Services.AddHostedService<ProjectAnalysisJobWorker>();
 builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection("PayOS"));
+builder.Services.Configure<VnPayOptions>(builder.Configuration.GetSection("VNPay"));
 builder.Services.AddHttpClient("PayOS", (sp, client) =>
 {
     var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PayOsOptions>>().Value;
@@ -210,19 +212,43 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 // Apply pending EF Core migrations on startup so new tables (e.g. StaffFeedbacks) exist before handling requests.
-using (var scope = app.Services.CreateScope())
+var autoMigrateOnStartup = builder.Configuration.GetValue("Database:AutoMigrateOnStartup", !app.Environment.IsDevelopment());
+if (autoMigrateOnStartup)
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("StartupMigration");
-    try
+    using (var scope = app.Services.CreateScope())
     {
-        dbContext.Database.Migrate();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("StartupMigration");
+        try
+        {
+            dbContext.Database.Migrate();
+        }
+        catch (Exception ex) when (ContainsPostgresRelationExists(ex))
+        {
+            logger.LogWarning(ex,
+                "Skip startup migration because schema objects already exist but EF history is out of sync. " +
+                "Application will continue running.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to apply database migrations on startup.");
+            throw;
+        }
     }
-    catch (Exception ex)
+}
+
+static bool ContainsPostgresRelationExists(Exception ex)
+{
+    Exception? current = ex;
+    while (current != null)
     {
-        logger.LogError(ex, "Failed to apply database migrations on startup.");
-        throw;
+        if (current is PostgresException pgEx && pgEx.SqlState == "42P07")
+            return true;
+
+        current = current.InnerException;
     }
+
+    return false;
 }
 
 // Configure the HTTP request pipeline.

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
     LayoutDashboard, FolderOpen, BarChart2, User, Settings,
-    Users, CreditCard, ChevronLeft, ChevronRight,
+    Users, CreditCard, ChevronLeft, ChevronRight, Bug,
 } from 'lucide-react';
 
 const NAV_AUTHOR = [
@@ -16,8 +16,8 @@ const NAV_AUTHOR = [
 
 const NAV_STAFF = [
     { key: 'dashboard', label: 'Trang chủ', icon: LayoutDashboard, path: '/home' },
+    { key: 'staff-dashboard', label: 'Báo cáo lỗi', icon: Bug, path: '/staff' },
     { key: 'subscription', label: 'Gói dịch vụ', icon: CreditCard, path: '/subscription' },
-    { key: 'users', label: 'Người dùng', icon: Users, path: '/admin' },
     { key: 'profile', label: 'Hồ sơ', icon: User, path: '/profile' },
     { key: 'settings', label: 'Cài đặt', icon: Settings, path: '/settings' },
 ];
@@ -25,6 +25,7 @@ const NAV_STAFF = [
 const NAV_ADMIN = [
     { key: 'dashboard', label: 'Trang chủ', icon: LayoutDashboard, path: '/home' },
     { key: 'users', label: 'Người dùng', icon: Users, path: '/admin' },
+    { key: 'staff-dashboard', label: 'Báo cáo lỗi', icon: Bug, path: '/staff' },
     { key: 'sub-admin', label: 'Quản lý Plans', icon: CreditCard, path: '/admin/subscription' },
     { key: 'profile', label: 'Hồ sơ', icon: User, path: '/profile' },
     { key: 'settings', label: 'Cài đặt', icon: Settings, path: '/settings' },

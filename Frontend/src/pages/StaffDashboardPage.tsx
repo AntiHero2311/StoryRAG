@@ -174,11 +174,13 @@ export default function StaffDashboardPage() {
     const [reports, setReports] = useState<BugReportResponse[]>([]);
     const [stats, setStats] = useState({ total: 0, open: 0, inProgress: 0, resolved: 0, closed: 0 });
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [filterStatus, setFilterStatus] = useState<BugStatus | 'all'>('all');
     const [selected, setSelected] = useState<BugReportResponse | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
+        setError('');
         try {
             const [data, s] = await Promise.all([
                 bugReportService.getAll(filterStatus === 'all' ? undefined : filterStatus),
@@ -186,6 +188,11 @@ export default function StaffDashboardPage() {
             ]);
             setReports(data);
             setStats(s);
+        } catch (err: unknown) {
+            const message = (err as { response?: { data?: { message?: string; Message?: string } } })?.response?.data?.message
+                ?? (err as { response?: { data?: { message?: string; Message?: string } } })?.response?.data?.Message
+                ?? 'Không thể tải dữ liệu báo cáo lỗi.';
+            setError(message);
         } finally {
             setLoading(false);
         }
@@ -209,9 +216,16 @@ export default function StaffDashboardPage() {
 
     const handleDelete = async (id: string) => {
         if (!confirm('Xoá báo cáo này?')) return;
-        await bugReportService.delete(id);
-        setReports(prev => prev.filter(r => r.id !== id));
-        load();
+        try {
+            await bugReportService.delete(id);
+            setReports(prev => prev.filter(r => r.id !== id));
+            await load();
+        } catch (err: unknown) {
+            const message = (err as { response?: { data?: { message?: string; Message?: string } } })?.response?.data?.message
+                ?? (err as { response?: { data?: { message?: string; Message?: string } } })?.response?.data?.Message
+                ?? 'Xoá báo cáo thất bại.';
+            setError(message);
+        }
     };
 
     const filtered = filterStatus === 'all' ? reports : reports.filter(r => r.status === filterStatus);
@@ -274,6 +288,13 @@ export default function StaffDashboardPage() {
 
                     <p className="text-[var(--text-secondary)] text-sm ml-auto">{filtered.length} báo cáo</p>
                 </div>
+
+                {error && (
+                    <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-sm">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        {error}
+                    </div>
+                )}
 
                 {/* Table */}
                 {loading ? (

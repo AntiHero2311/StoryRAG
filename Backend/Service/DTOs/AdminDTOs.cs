@@ -51,6 +51,10 @@ namespace Service.DTOs
         public int ActiveSubscriptions { get; set; }
         public int ExpiredSubscriptions { get; set; }
         public int CancelledSubscriptions { get; set; }
+        public int SuccessfulPayments { get; set; }
+        public decimal TotalRevenue { get; set; }
+        public decimal RevenueLast7Days { get; set; }
+        public decimal RevenueLast30Days { get; set; }
 
         // ── Bug Reports ────────────────────────────────────────
         public int OpenBugReports { get; set; }

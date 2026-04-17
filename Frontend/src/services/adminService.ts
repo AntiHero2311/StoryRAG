@@ -42,6 +42,10 @@ export interface AdminOverviewStats {
     activeSubscriptions: number;
     expiredSubscriptions: number;
     cancelledSubscriptions: number;
+    successfulPayments: number;
+    totalRevenue: number;
+    revenueLast7Days: number;
+    revenueLast30Days: number;
     // Bugs
     openBugReports: number;
     inProgressBugReports: number;

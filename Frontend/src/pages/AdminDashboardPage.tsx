@@ -4,7 +4,7 @@ import {
     Users, UserCheck, UserX, Shield, BookOpen, Briefcase,
     RefreshCw, Search, ChevronUp, ChevronDown,
     FileText, AlignLeft, Sparkles,
-    CreditCard, Bug, Globe,
+    CreditCard, Bug, Globe, DollarSign,
 } from 'lucide-react';
 import { adminService, UserSummary, UserStatsResponse, AdminOverviewStats } from '../services/adminService';
 import MainLayout from '../layouts/MainLayout';
@@ -23,6 +23,14 @@ function fmtTokens(n: number | undefined) {
     if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
     if (v >= 1_000)     return `${(v / 1_000).toFixed(1)}K`;
     return String(v);
+}
+
+function fmtCurrency(n: number | undefined) {
+    return (n ?? 0).toLocaleString('vi-VN', {
+        style: 'currency',
+        currency: 'VND',
+        maximumFractionDigits: 0,
+    });
 }
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
@@ -120,8 +128,11 @@ function AdminDashboardContent() {
             ]);
             setOverview(ov);
             setStats(us);
-        } catch {
-            setError('Không có quyền truy cập hoặc không kết nối được server.');
+        } catch (err: unknown) {
+            const message = (err as { response?: { data?: { message?: string; Message?: string } } })?.response?.data?.message
+                ?? (err as { response?: { data?: { message?: string; Message?: string } } })?.response?.data?.Message
+                ?? 'Không có quyền truy cập hoặc không kết nối được server.';
+            setError(message);
         } finally {
             setLoading(false);
         }
@@ -191,16 +202,17 @@ function AdminDashboardContent() {
 
                 {ov && <>
                     {/* ── Row 1: Key metrics ─────────────────────────────── */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                         <StatCard icon={Users}      label="Tổng users"    value={ov.totalUsers}    color="border-[var(--border-color)] text-[var(--text-primary)]"  iconColor="bg-[var(--text-primary)]/8" />
                         <StatCard icon={FileText}   label="Dự án"         value={ov.totalProjects} color="border-indigo-500/20 text-indigo-300"   iconColor="bg-indigo-500/10" />
                         <StatCard icon={BookOpen}   label="Chương"        value={ov.totalChapters} color="border-sky-500/20 text-sky-300"         iconColor="bg-sky-500/10" />
                         <StatCard icon={AlignLeft}  label="Tổng từ"       value={fmtTokens(ov.totalWordCount)} color="border-emerald-500/20 text-emerald-300" iconColor="bg-emerald-500/10" />
                         <StatCard icon={Sparkles}   label="AI tokens dùng" value={fmtTokens(ov.totalAiTokens)} color="border-purple-500/20 text-purple-300" iconColor="bg-purple-500/10" />
+                        <StatCard icon={DollarSign} label="Doanh thu"      value={fmtCurrency(ov.totalRevenue)} color="border-amber-500/20 text-amber-300" iconColor="bg-amber-500/10" />
                     </div>
 
-                    {/* ── Row 2: Four sections ───────────────────────────── */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                    {/* ── Row 2: Five sections ───────────────────────────── */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
 
                         {/* Users */}
                         <Section title="Người dùng" icon={Users}>
@@ -267,6 +279,30 @@ function AdminDashboardContent() {
                                             {fmtNum(ov.activeSubscriptions + ov.expiredSubscriptions + ov.cancelledSubscriptions)}
                                         </span> giao dịch
                                     </p>
+                                </div>
+                            </div>
+                        </Section>
+
+                        {/* Revenue */}
+                        <Section title="Doanh thu" icon={DollarSign}>
+                            <div className="space-y-3">
+                                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3">
+                                    <p className="text-xs text-amber-200/80">Tổng doanh thu</p>
+                                    <p className="text-xl font-bold text-amber-300 mt-1">{fmtCurrency(ov.totalRevenue)}</p>
+                                </div>
+                                <div className="space-y-2 pt-1">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-[var(--text-secondary)]">30 ngày gần nhất</span>
+                                        <span className="font-semibold text-amber-300">{fmtCurrency(ov.revenueLast30Days)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-[var(--text-secondary)]">7 ngày gần nhất</span>
+                                        <span className="font-semibold text-amber-300">{fmtCurrency(ov.revenueLast7Days)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-[var(--text-secondary)]">Đơn thành công</span>
+                                        <span className="font-semibold text-[var(--text-primary)]">{fmtNum(ov.successfulPayments)}</span>
+                                    </div>
                                 </div>
                             </div>
                         </Section>

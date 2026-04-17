@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Service.DTOs;
 using Service.Interfaces;
+using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
 
@@ -186,6 +187,58 @@ namespace Api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError("Error getting PayOS order status: {Message}", ex.Message);
+                return NotFound(new { success = false, error = ex.Message });
+            }
+        }
+
+        /// <summary>Tạo URL checkout VNPay cho gói trả phí</summary>
+        [HttpPost("vnpay/create-url")]
+        public async Task<IActionResult> CreateVnPayUrl([FromBody] CreateVnPayPaymentUrlRequest request)
+        {
+            try
+            {
+                var userId = GetUserId();
+                var result = await _paymentService.CreateVnPayPaymentUrlAsync(userId, request);
+                return Ok(new { success = true, data = result });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error creating VNPay URL: {Message}", ex.Message);
+                return BadRequest(new { success = false, error = ex.Message });
+            }
+        }
+
+        /// <summary>IPN callback từ VNPay</summary>
+        [AllowAnonymous]
+        [HttpGet("vnpay/ipn")]
+        public async Task<IActionResult> ReceiveVnPayIpn()
+        {
+            try
+            {
+                var query = Request.Query.ToDictionary(kvp => kvp.Key, kvp => (string?)kvp.Value.ToString(), StringComparer.Ordinal);
+                await _paymentService.HandleVnPayIpnAsync(query);
+                return Ok(new { RspCode = "00", Message = "Confirm Success" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error processing VNPay IPN: {Message}", ex.Message);
+                return Ok(new { RspCode = "99", Message = ex.Message });
+            }
+        }
+
+        /// <summary>Lấy trạng thái đơn VNPay theo txnRef</summary>
+        [HttpGet("vnpay/order/{txnRef}")]
+        public async Task<IActionResult> GetVnPayOrderStatus([FromRoute] string txnRef)
+        {
+            try
+            {
+                var userId = GetUserId();
+                var result = await _paymentService.GetVnPayOrderStatusAsync(userId, txnRef);
+                return Ok(new { success = true, data = result });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error getting VNPay order status: {Message}", ex.Message);
                 return NotFound(new { success = false, error = ex.Message });
             }
         }

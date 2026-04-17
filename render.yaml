@@ -43,3 +43,11 @@ services:
         sync: false
       - key: Cors__AllowedOrigins
         sync: false
+      - key: VNPay__PaymentUrl
+        value: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+      - key: VNPay__TmnCode
+        sync: false
+      - key: VNPay__HashSecret
+        sync: false
+      - key: VNPay__ReturnUrl
+        sync: false

@@ -273,14 +273,14 @@ function PaidPlanModal({ plan, onClose }: { plan: SubscriptionPlan; onClose: () 
         setLoading(true);
         setError(null);
         try {
-            const data = await paymentService.createPayOsPaymentLink(plan.id);
+            const data = await paymentService.createVnPayPaymentUrl(plan.id);
             window.location.assign(data.checkoutUrl);
         } catch (err: any) {
             const status = err?.response?.status;
             if (status === 401) {
                 setError('Bạn cần đăng nhập để thanh toán gói này.');
             } else {
-                const msg = err?.response?.data?.error ?? err?.response?.data?.message ?? 'Không thể tạo link thanh toán PayOS.';
+                const msg = err?.response?.data?.error ?? err?.response?.data?.message ?? 'Không thể tạo link thanh toán VNPay.';
                 setError(msg);
             }
             setLoading(false);
@@ -315,7 +315,7 @@ function PaidPlanModal({ plan, onClose }: { plan: SubscriptionPlan; onClose: () 
                 <div className="p-8 space-y-6 text-center relative overflow-hidden">
                     <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-[#101010] to-transparent pointer-events-none opacity-50" />
                     <p className="text-zinc-300 text-[15px] leading-relaxed font-medium relative z-10 px-2">
-                        Bạn sẽ được chuyển sang cổng PayOS để hoàn tất thanh toán.
+                        Bạn sẽ được chuyển sang cổng VNPay để hoàn tất thanh toán.
                     </p>
                     {error && (
                         <div className="flex items-center gap-3 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[13px] font-medium shadow-inner relative z-10">
@@ -327,7 +327,7 @@ function PaidPlanModal({ plan, onClose }: { plan: SubscriptionPlan; onClose: () 
                         disabled={loading}
                         className={`w-full py-4 rounded-xl text-white text-[15px] font-bold transition-all bg-gradient-to-r ${cfg.gradient} hover:brightness-110 shadow-lg active:scale-95 relative z-10 disabled:opacity-60 flex items-center justify-center gap-2`}
                     >
-                        {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Đang tạo link...</> : 'Thanh toán với PayOS'}
+                        {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Đang tạo link...</> : 'Thanh toán với VNPay'}
                     </button>
                     <button
                         onClick={onClose}

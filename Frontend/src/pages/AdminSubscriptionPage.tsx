@@ -122,18 +122,42 @@ function PlanModal({ plan, onClose, onSaved }: {
 function AdminSubscriptionContent() {
     const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [togglingPlanId, setTogglingPlanId] = useState<number | null>(null);
     const [modal, setModal] = useState<'create' | SubscriptionPlan | null>(null);
 
-    const load = () => {
+    const load = async () => {
         setLoading(true);
-        subscriptionService.getPlans(true).then(setPlans).finally(() => setLoading(false));
+        setError('');
+        try {
+            const data = await subscriptionService.getPlans(true);
+            setPlans(data);
+        } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { message?: string; Message?: string } } })?.response?.data?.message
+                ?? (err as { response?: { data?: { message?: string; Message?: string } } })?.response?.data?.Message
+                ?? 'Không thể tải danh sách plan.';
+            setError(msg);
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => { load(); }, []);
 
     const toggleActive = async (plan: SubscriptionPlan) => {
-        await subscriptionService.updatePlan(plan.id, { isActive: !plan.isActive });
-        load();
+        setTogglingPlanId(plan.id);
+        setError('');
+        try {
+            await subscriptionService.updatePlan(plan.id, { isActive: !plan.isActive });
+            await load();
+        } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { message?: string; Message?: string } } })?.response?.data?.message
+                ?? (err as { response?: { data?: { message?: string; Message?: string } } })?.response?.data?.Message
+                ?? 'Không thể cập nhật trạng thái plan.';
+            setError(msg);
+        } finally {
+            setTogglingPlanId(null);
+        }
     };
 
     return (
@@ -156,6 +180,13 @@ function AdminSubscriptionContent() {
                 </div>
 
                 {/* Plan cards */}
+                {error && (
+                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm">
+                        <X className="w-4 h-4 shrink-0" />
+                        {error}
+                    </div>
+                )}
+
                 {loading ? (
                     <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#f5a623]" /></div>
                 ) : (
@@ -198,9 +229,14 @@ function AdminSubscriptionContent() {
                                             <Pencil className="w-3.5 h-3.5" />
                                         </button>
                                         <button onClick={() => toggleActive(plan)}
+                                            disabled={togglingPlanId === plan.id}
                                             title={plan.isActive ? 'Deactivate' : 'Activate'}
-                                            className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${plan.isActive ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400' : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400'}`}>
-                                            {plan.isActive ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
+                                            className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed ${plan.isActive ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400' : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400'}`}>
+                                            {togglingPlanId === plan.id
+                                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                : plan.isActive
+                                                    ? <PowerOff className="w-3.5 h-3.5" />
+                                                    : <Power className="w-3.5 h-3.5" />}
                                         </button>
                                     </div>
                                 </div>
@@ -211,10 +247,10 @@ function AdminSubscriptionContent() {
             </div>
 
             {modal === 'create' && (
-                <PlanModal onClose={() => setModal(null)} onSaved={() => { setModal(null); load(); }} />
+                <PlanModal onClose={() => setModal(null)} onSaved={() => { setModal(null); void load(); }} />
             )}
             {modal && modal !== 'create' && (
-                <PlanModal plan={modal as SubscriptionPlan} onClose={() => setModal(null)} onSaved={() => { setModal(null); load(); }} />
+                <PlanModal plan={modal as SubscriptionPlan} onClose={() => setModal(null)} onSaved={() => { setModal(null); void load(); }} />
             )}
         </div>
     );
