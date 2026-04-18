@@ -21,6 +21,7 @@ import {
     Star,
     Quote,
 } from 'lucide-react';
+import { applyThemeMode, resolveThemeMode } from '../utils/themeMode';
 
 const LandingPage = () => {
     const [scrolled, setScrolled] = useState(false);
@@ -130,9 +131,7 @@ const LandingPage = () => {
     ];
 
     useEffect(() => {
-        const saved = localStorage.getItem('theme');
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const isDark = saved === 'dark' || (!saved && prefersDark);
+        const isDark = resolveThemeMode() === 'dark';
         document.documentElement.classList.toggle('dark', isDark);
         setDarkMode(isDark);
 
@@ -149,16 +148,9 @@ const LandingPage = () => {
     }, [features.length]);
 
     const toggleDarkMode = () => {
-        const html = document.documentElement;
-        if (html.classList.contains('dark')) {
-            html.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-            setDarkMode(false);
-        } else {
-            html.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-            setDarkMode(true);
-        }
+        const nextMode = darkMode ? 'light' : 'dark';
+        applyThemeMode(nextMode);
+        setDarkMode(nextMode === 'dark');
     };
 
     const testimonialColumns = [

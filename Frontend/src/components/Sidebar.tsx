@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
-    LayoutDashboard, FolderOpen, BarChart2, User, Settings,
+    LayoutDashboard, BarChart2, User, Settings,
     Users, CreditCard, ChevronLeft, ChevronRight, Bug,
 } from 'lucide-react';
 
 const NAV_AUTHOR = [
     { key: 'dashboard', label: 'Trang chủ', icon: LayoutDashboard, path: '/home' },
-    { key: 'projects', label: 'Dự án', icon: FolderOpen, path: '/projects' },
     { key: 'analysis', label: 'Phân tích', icon: BarChart2, path: '/analysis' },
     { key: 'subscription', label: 'Gói dịch vụ', icon: CreditCard, path: '/subscription' },
     { key: 'profile', label: 'Hồ sơ', icon: User, path: '/profile' },

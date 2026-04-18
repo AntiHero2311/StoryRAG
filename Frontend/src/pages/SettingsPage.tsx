@@ -6,6 +6,7 @@ import {
 import { authService } from '../services/authService';
 import { getInitials, UserInfo } from '../utils/jwtHelper';
 import MainLayout from '../layouts/MainLayout';
+import { applyThemeMode, resolveThemeMode, type ThemeMode } from '../utils/themeMode';
 
 // ── Password strength ────────────────────────────────────────────────────────
 function getStrength(pw: string): { score: number; label: string; color: string } {
@@ -128,17 +129,12 @@ export default function SettingsPage() {
 
 function SettingsContent({ userInfo }: { userInfo: UserInfo }) {
     const navigate = useNavigate();
-    // Read current theme from the actual <html> class, not localStorage
-    // This avoids forcing a theme change just by visiting Settings
-    const [theme, setTheme] = useState<string>(() =>
-        document.documentElement.classList.contains('dark') ? 'dark' : 'light'
-    );
+    const [theme, setTheme] = useState<ThemeMode>(() => resolveThemeMode());
     const [showPassModal, setShowPassModal] = useState(false);
 
-    const toggleTheme = (newTheme: string) => {
+    const toggleTheme = (newTheme: ThemeMode) => {
         setTheme(newTheme);
-        localStorage.setItem('theme', newTheme);
-        document.documentElement.classList.toggle('dark', newTheme === 'dark');
+        applyThemeMode(newTheme);
     };
 
     return (
