@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Plus, FolderOpen, BookOpen, MessageSquare, TrendingUp, ShieldCheck
+    FolderOpen, BookOpen, MessageSquare, TrendingUp, ShieldCheck
 } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { UserInfo } from '../utils/jwtHelper';
@@ -15,7 +15,6 @@ function DashboardContent({ fullName, role, onNavigate }: { fullName: string; ro
         totalAnalysesUsed: 0,
         totalChatMessages: 0,
     });
-    const [createRequestToken, setCreateRequestToken] = useState(0);
 
     const handleProjectDataChange = useCallback((data: { projectCount: number; stats: ProjectStats }) => {
         setProjectCount(data.projectCount);
@@ -24,7 +23,7 @@ function DashboardContent({ fullName, role, onNavigate }: { fullName: string; ro
 
     return (
         <div className="p-6 space-y-6">
-            <div className="rounded-3xl p-7 flex items-center justify-between"
+            <div className="rounded-3xl p-7"
                 style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
                 <div>
                     <h2 className="text-[var(--text-primary)] font-bold text-xl mb-1">Chào mừng, {fullName}! 👋</h2>
@@ -36,14 +35,6 @@ function DashboardContent({ fullName, role, onNavigate }: { fullName: string; ro
                             : 'Theo dõi hoạt động hệ thống và quản lý người dùng từ dashboard.'}
                     </p>
                 </div>
-                <button
-                    onClick={() => canManageProjects ? setCreateRequestToken(t => t + 1) : onNavigate('/admin')}
-                    className="hidden sm:flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm text-white transition-all hover:scale-105 active:scale-95 shrink-0 ml-6"
-                    style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}
-                >
-                    {role === 'Admin' ? <ShieldCheck className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                    {role === 'Admin' ? 'Admin Panel' : 'Tạo dự án mới'}
-                </button>
             </div>
 
             {canManageProjects && (
@@ -74,7 +65,7 @@ function DashboardContent({ fullName, role, onNavigate }: { fullName: string; ro
             {canManageProjects && (
                 <MyProjectsSection
                     onNavigate={onNavigate}
-                    createRequestToken={createRequestToken}
+                    createRequestToken={0}
                     onProjectDataChange={handleProjectDataChange}
                 />
             )}
