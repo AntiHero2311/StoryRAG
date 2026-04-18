@@ -15,6 +15,15 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var isRailway = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("RAILWAY_PROJECT_ID")) ||
+                !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("RAILWAY_ENVIRONMENT"));
+var platformPort = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(platformPort) && int.TryParse(platformPort, out var parsedPort))
+{
+    // Railway cung cấp dynamic PORT, cần bind đúng để tránh healthcheck fail/restart loop.
+    builder.WebHost.UseUrls($"http://0.0.0.0:{parsedPort}");
+}
+
 // Tắt reloadOnChange cho config files để tránh lỗi inotify limit trên Linux (Render)
 // "The configured user limit (1024) on the number of inotify instances has been reached"
 // ASP.NET Core mặc định dùng FileSystemWatcher để watch appsettings.json → tốn inotify instances
@@ -214,7 +223,9 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 // Apply pending EF Core migrations on startup so new tables (e.g. StaffFeedbacks) exist before handling requests.
-var autoMigrateOnStartup = builder.Configuration.GetValue("Database:AutoMigrateOnStartup", !app.Environment.IsDevelopment());
+// Railway có thể restart liên tục khi DB chưa sẵn sàng ở lúc boot; mặc định tắt auto-migrate trên Railway.
+var autoMigrateDefault = !app.Environment.IsDevelopment() && !isRailway;
+var autoMigrateOnStartup = builder.Configuration.GetValue("Database:AutoMigrateOnStartup", autoMigrateDefault);
 if (autoMigrateOnStartup)
 {
     using (var scope = app.Services.CreateScope())
