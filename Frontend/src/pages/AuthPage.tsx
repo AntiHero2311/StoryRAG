@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, CheckCircle2, User, BrainCircuit } from 'lucide-react';
 import { CredentialResponse, GoogleLogin } from '@react-oauth/google';
 import { authService, LoginData, RegisterData } from '../services/authService';
+import { subscriptionService } from '../services/subscriptionService';
 
 const GoogleIcon = () => (
     <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
@@ -57,6 +58,14 @@ export default function AuthPage() {
         }
     }, [mode]);
 
+    const getPostLoginPath = async (role: string) => {
+        if (role === 'Admin') return '/admin';
+        if (role === 'Staff') return '/staff';
+
+        const activeSubscription = await subscriptionService.getMySubscription();
+        return activeSubscription ? '/home' : '/subscription';
+    };
+
     const handleLoginSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -65,7 +74,8 @@ export default function AuthPage() {
             const data: LoginData = { email: loginEmail, password: loginPassword };
             const response = await authService.login(data);
             localStorage.setItem('token', response.accessToken);
-            navigate('/subscription');
+            const postLoginPath = await getPostLoginPath(response.role);
+            navigate(postLoginPath);
         } catch (error: any) {
             setLoading(false);
             setErrorMsg(error.response?.data?.message || 'Email hoặc mật khẩu không chính xác.');
@@ -105,7 +115,8 @@ export default function AuthPage() {
             if (response.refreshToken) {
                 localStorage.setItem('refreshToken', response.refreshToken);
             }
-            navigate('/subscription');
+            const postLoginPath = await getPostLoginPath(response.role);
+            navigate(postLoginPath);
         } catch (error: any) {
             setLoading(false);
             setErrorMsg(error.response?.data?.message || 'Đăng nhập Google thất bại.');

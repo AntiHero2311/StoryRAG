@@ -15,7 +15,6 @@ import ChatPanel from '../components/workspace/ChatPanel';
 import ChatHistoryPanel from '../components/workspace/ChatHistoryPanel';
 import AiWriterPanel from '../components/workspace/AiWriterPanel';
 import TimelinePanel from '../components/workspace/TimelinePanel';
-import SceneCliffhangerPanel from '../components/workspace/SceneCliffhangerPanel';
 
 import {
     chapterService,
@@ -54,7 +53,7 @@ import { useDeleteConfirm } from '../hooks';
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
-type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotTimeline' | 'aiWriter' | 'sceneCliffhanger';
+type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotTimeline' | 'aiWriter';
 
 // ── Export Modal ───────────────────────────────────────────────────────────
 function ExportModal({
@@ -529,123 +528,6 @@ export default function WorkspacePage() {
         }
     };
 
-    // ── Highlighting logic (DOM Range API — không bị vỡ bởi HTML tags) ───────
-    const clearHighlights = useCallback(() => {
-        if (!editorRef.current) return;
-        const marks = Array.from(editorRef.current.querySelectorAll('mark.ai-highlight'));
-        if (marks.length === 0) return;
-        marks.forEach(mark => {
-            const parent = mark.parentNode;
-            if (!parent) return;
-            while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
-            parent.removeChild(mark);
-            parent.normalize();
-        });
-        setHighlightsVisible(true);
-    }, []);
-
-    const highlightScenes = useCallback((scenes: { quote: string, color: string }[]) => {
-        if (!editorRef.current) return;
-        clearHighlights();
-
-        // Thu thập tất cả text node bên trong editor
-        function collectTextNodes(root: HTMLElement): Text[] {
-            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-            const nodes: Text[] = [];
-            let n: Node | null;
-            while ((n = walker.nextNode())) nodes.push(n as Text);
-            return nodes;
-        }
-
-        // Bọc [start, end) của plaintext bằng <mark>
-        function wrapRange(root: HTMLElement, startIdx: number, endIdx: number, color: string): boolean {
-            const textNodes = collectTextNodes(root);
-            let offset = 0;
-            let startNode: Text | null = null, startOff = 0;
-            let endNode: Text | null = null, endOff = 0;
-
-            for (const tn of textNodes) {
-                const len = (tn.textContent ?? '').length;
-                if (!startNode && offset + len > startIdx) {
-                    startNode = tn;
-                    startOff = Math.max(0, startIdx - offset);
-                }
-                if (startNode && offset + len >= endIdx) {
-                    endNode = tn;
-                    endOff = Math.min(len, endIdx - offset);
-                    break;
-                }
-                offset += len;
-            }
-
-            if (!startNode || !endNode) return false;
-
-            try {
-                const range = document.createRange();
-                range.setStart(startNode, startOff);
-                range.setEnd(endNode, endOff);
-
-                const mark = document.createElement('mark');
-                mark.className = 'ai-highlight';
-                mark.style.cssText = `background-color: ${color}55; color: inherit; padding: 2px 0; border-radius: 4px; transition: background-color 0.2s;`;
-
-                const fragment = range.extractContents();
-                mark.appendChild(fragment);
-                range.insertNode(mark);
-                return true;
-            } catch (err) {
-                console.warn('[highlight] wrapRange failed:', err);
-                return false;
-            }
-        }
-
-        const fullText = editorRef.current.innerText ?? '';
-        let anyHighlighted = false;
-
-        for (const scene of scenes) {
-            if (!scene.quote || scene.quote.length < 5) continue;
-
-            const q = scene.quote.trim();
-
-            // Strategy 1: full exact quote
-            let idx = fullText.indexOf(q);
-            if (idx !== -1) {
-                if (wrapRange(editorRef.current, idx, idx + q.length, scene.color)) {
-                    anyHighlighted = true;
-                    continue;
-                }
-            }
-
-            // Strategy 2: first 100 chars
-            const p100 = q.substring(0, 100);
-            if (p100.length >= 10) {
-                idx = fullText.indexOf(p100);
-                if (idx !== -1 && wrapRange(editorRef.current, idx, idx + p100.length, scene.color)) {
-                    anyHighlighted = true;
-                    continue;
-                }
-            }
-
-            // Strategy 3: first 50 chars
-            const p50 = q.substring(0, 50);
-            if (p50.length >= 10) {
-                idx = fullText.indexOf(p50);
-                if (idx !== -1 && wrapRange(editorRef.current, idx, idx + p50.length, scene.color)) {
-                    anyHighlighted = true;
-                }
-            }
-        }
-
-        if (anyHighlighted) {
-            setHighlightsVisible(true);
-            setTimeout(() => {
-                const mark = editorRef.current?.querySelector('mark.ai-highlight');
-                if (mark) mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 80);
-        }
-    }, [clearHighlights]);
-
-
     // ── Save → background Chunk + Embed ──────────────────────────────────
     const doSave = useCallback(async (showFeedback = true) => {
         if (!projectId || !activeChapter || !editorRef.current) return;
@@ -863,20 +745,33 @@ export default function WorkspacePage() {
         setWordCount(getWordCount());
     };
 
-    const stripInlineColorsFromHtml = (rawHtml: string): string => {
+    const normalizePastedHtml = (rawHtml: string): string => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(rawHtml, 'text/html');
 
         doc.body.querySelectorAll('script,style,link,meta').forEach(node => node.remove());
 
+        doc.body.querySelectorAll('font').forEach(fontEl => {
+            const parent = fontEl.parentNode;
+            if (!parent) return;
+            while (fontEl.firstChild) parent.insertBefore(fontEl.firstChild, fontEl);
+            parent.removeChild(fontEl);
+        });
+
         doc.body.querySelectorAll<HTMLElement>('*').forEach(el => {
             el.removeAttribute('color');
+            el.removeAttribute('face');
+            el.removeAttribute('size');
 
             if (el.hasAttribute('style')) {
                 const style = el.style;
                 style.removeProperty('color');
                 style.removeProperty('background');
                 style.removeProperty('background-color');
+                style.removeProperty('font');
+                style.removeProperty('font-family');
+                style.removeProperty('font-size');
+                style.removeProperty('line-height');
                 style.removeProperty('text-shadow');
                 style.removeProperty('caret-color');
                 style.removeProperty('-webkit-text-fill-color');
@@ -894,7 +789,7 @@ export default function WorkspacePage() {
         const plain = e.clipboardData.getData('text/plain');
 
         if (html) {
-            const sanitizedHtml = stripInlineColorsFromHtml(html);
+            const sanitizedHtml = normalizePastedHtml(html);
             document.execCommand('insertHTML', false, sanitizedHtml);
         } else {
             document.execCommand('insertText', false, plain);
@@ -1237,7 +1132,6 @@ export default function WorkspacePage() {
                                         { tab: 'plotTimeline' as ActiveTab, label: 'Tuyến truyện', desc: 'Cấu trúc cốt truyện & trình tự sự kiện', icon: Map, color: '#f59e0b' },
                                         { tab: 'aiInstructions' as ActiveTab, label: 'Ghi chú AI', desc: 'Cung cấp bối cảnh đặc biệt để AI hiểu đúng ý', icon: Bot, color: '#34d399' },
                                         { tab: 'aiWriter' as ActiveTab, label: 'AI Writer', desc: 'Trợ lý AI giúp viết, trau chuốt và nảy ý tưởng', icon: Wand2, color: '#ec4899' },
-                                        { tab: 'sceneCliffhanger' as ActiveTab, label: 'Phân tích Cảnh', desc: 'Phân rã chương & phát hiện điểm rơi kịch tính', icon: Scissors, color: '#f97316' },
                                     ] as const).map(item => {
                                         const isActive = activeTab === item.tab && rightPanelOpen;
                                         const Icon = item.icon;
@@ -1466,7 +1360,7 @@ export default function WorkspacePage() {
                                                 suppressContentEditableWarning
                                                 onInput={() => { updateWordCount(); scheduleAutoSave(); setHighlightsVisible(false); }}
                                                 onPaste={handleEditorPaste}
-                                                className={`w-full min-h-[60vh] text-[var(--text-primary)] bg-transparent outline-none leading-[1.9] focus:outline-none ${!highlightsVisible ? 'hide-ai-highlights' : ''}`}
+                                                className={`workspace-editor-content w-full min-h-[60vh] text-[var(--text-primary)] bg-transparent outline-none leading-[1.9] focus:outline-none ${!highlightsVisible ? 'hide-ai-highlights' : ''}`}
                                                 style={{ fontFamily: `'${editorSettings.editorFont}', sans-serif`, fontSize: `${editorSettings.editorFontSize}px`, letterSpacing: '0.01em' }}
                                                 data-placeholder="Bắt đầu viết tác phẩm của bạn tại đây..."
                                             />
@@ -1506,7 +1400,7 @@ export default function WorkspacePage() {
                         {/* Panel header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] shrink-0 bg-[var(--bg-app)]">
                             <div className="flex items-center gap-2">
-                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotTimeline', 'aiWriter', 'sceneCliffhanger'] as ActiveTab[]).includes(activeTab) ? (
+                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotTimeline', 'aiWriter'] as ActiveTab[]).includes(activeTab) ? (
                                     <>
                                         <button onClick={() => setActiveTab('chat')} className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 transition-colors">
                                             <ArrowLeft className="w-3.5 h-3.5" />
@@ -1522,7 +1416,6 @@ export default function WorkspacePage() {
                                             {activeTab === 'plotTimeline' && 'Tuyến truyện'}
                                             {activeTab === 'aiInstructions' && 'Ghi chú AI'}
                                             {activeTab === 'aiWriter' && 'AI Writer'}
-                                            {activeTab === 'sceneCliffhanger' && 'Phân tích Cảnh'}
                                         </span>
                                     </>
                                 ) : (
@@ -1795,20 +1688,6 @@ export default function WorkspacePage() {
                                     }
                                 }}
                             />
-                        )}
-
-
-                        {/* ── Scene & Cliffhanger Analysis Tab ── */}
-                        {activeTab === 'sceneCliffhanger' && projectId && (
-                            <div className="flex-1 overflow-y-auto p-4">
-                                <SceneCliffhangerPanel
-                                    projectId={projectId}
-                                    chapterId={activeChapter?.id ?? null}
-                                    chapterContent={editorRef.current?.innerText ?? ''}
-                                    onHighlightScenes={highlightScenes}
-                                    onClearHighlights={clearHighlights}
-                                />
-                            </div>
                         )}
                     </div>
                 )}

@@ -162,6 +162,22 @@ namespace Api.Controllers
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
 
+        /// <summary>Lấy job phân tích gần nhất của user trong một dự án (kể cả đã hoàn thành).</summary>
+        [HttpGet("{projectId:guid}/analyze/jobs/latest")]
+        public async Task<IActionResult> GetLatestAnalyzeJob(Guid projectId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var job = await _analysisJobService.GetLatestJobAsync(projectId, userId.Value, HttpContext.RequestAborted);
+                return Ok(job);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
         /// <summary>Lấy trạng thái xử lý của job phân tích.</summary>
         [HttpGet("{projectId:guid}/analyze/jobs/{jobId:guid}")]
         public async Task<IActionResult> GetAnalyzeJobStatus(Guid projectId, Guid jobId)

@@ -122,6 +122,9 @@ export const reportService = {
     getAnalyzeJob: (projectId: string, jobId: string) =>
         api.get<ProjectAnalysisJobResponse>(`/ai/${projectId}/analyze/jobs/${jobId}`).then(r => r.data),
 
+    getLatestAnalyzeJob: (projectId: string) =>
+        api.get<ProjectAnalysisJobResponse | null>(`/ai/${projectId}/analyze/jobs/latest`).then(r => r.data),
+
     getAnalyzeJobResult: (projectId: string, jobId: string) =>
         api.get<ProjectReportResponse>(`/ai/${projectId}/analyze/jobs/${jobId}/result`).then(r => r.data),
 

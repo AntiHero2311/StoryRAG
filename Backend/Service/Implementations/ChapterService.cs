@@ -168,8 +168,39 @@ namespace Service.Implementations
         public async Task DeleteChapterAsync(Guid chapterId, Guid userId)
         {
             var chapter = await GetChapterWithOwnerCheckAsync(chapterId, userId);
-            chapter.IsDeleted = true;
-            chapter.UpdatedAt = DateTime.UtcNow;
+
+            // Xóa toàn bộ dữ liệu gắn trực tiếp với chapter để tránh rác RAG.
+            var versions = await _context.ChapterVersions
+                .Where(v => v.ChapterId == chapterId)
+                .ToListAsync();
+
+            if (versions.Count > 0)
+            {
+                var versionIds = versions.Select(v => v.Id).ToList();
+
+                var chunks = await _context.ChapterChunks
+                    .Where(c => versionIds.Contains(c.VersionId))
+                    .ToListAsync();
+
+                if (chunks.Count > 0)
+                    _context.ChapterChunks.RemoveRange(chunks);
+
+                _context.ChapterVersions.RemoveRange(versions);
+            }
+
+            var rewriteHistories = await _context.RewriteHistories
+                .Where(r => r.ChapterId == chapterId)
+                .ToListAsync();
+            if (rewriteHistories.Count > 0)
+                _context.RewriteHistories.RemoveRange(rewriteHistories);
+
+            var analysisHistories = await _context.AiAnalysisHistories
+                .Where(r => r.ChapterId == chapterId)
+                .ToListAsync();
+            if (analysisHistories.Count > 0)
+                _context.AiAnalysisHistories.RemoveRange(analysisHistories);
+
+            _context.Chapters.Remove(chapter);
             await _context.SaveChangesAsync();
         }
 
@@ -559,7 +590,15 @@ namespace Service.Implementations
         private static int CountWords(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return 0;
-            return text.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+
+            var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
+            if (LooksLikeClipboardHtml(normalized))
+                normalized = ConvertHtmlToPlainText(normalized);
+
+            normalized = StripControlCharacters(normalized).Trim();
+            if (string.IsNullOrWhiteSpace(normalized)) return 0;
+
+            return normalized.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
         }
 
         private sealed class ManuscriptChapterPart

@@ -26,16 +26,18 @@ function UsageCard({
     label,
     used,
     max,
+    treatAsUnlimited = false,
     icon: Icon,
     tone,
 }: {
     label: string;
     used: number;
     max: number;
+    treatAsUnlimited?: boolean;
     icon: React.ElementType;
     tone: UsageTone;
 }) {
-    const unlimited = max >= 9999;
+    const unlimited = treatAsUnlimited && max >= 9999;
     const pct = unlimited ? 12 : Math.min((used / Math.max(max, 1)) * 100, 100);
     const highUsage = !unlimited && pct >= 80;
 
@@ -226,8 +228,21 @@ function ActiveSubscription({ sub, onNavigate }: { sub: UserSubscription; onNavi
                     </h4>
 
                     <div className="space-y-4">
-                        <UsageCard label="Lượt phân tích" used={sub.usedAnalysisCount} max={sub.maxAnalysisCount} icon={BarChart2} tone="violet" />
-                        <UsageCard label="Token AI" used={sub.usedTokens} max={sub.maxTokenLimit} icon={MessageSquare} tone="amber" />
+                        <UsageCard
+                            label="Lượt phân tích"
+                            used={sub.usedAnalysisCount}
+                            max={sub.maxAnalysisCount}
+                            treatAsUnlimited
+                            icon={BarChart2}
+                            tone="violet"
+                        />
+                        <UsageCard
+                            label="Token AI"
+                            used={sub.usedTokens}
+                            max={sub.maxTokenLimit}
+                            icon={MessageSquare}
+                            tone="amber"
+                        />
                     </div>
                 </div>
 
