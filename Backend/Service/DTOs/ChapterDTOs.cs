@@ -97,6 +97,34 @@ namespace Service.DTOs
         public List<ChapterChunkResponse> Chunks { get; set; } = new();
     }
 
+    public class ChapterVersionDiffResponse
+    {
+        public int FromVersionNumber { get; set; }
+        public int ToVersionNumber { get; set; }
+        public int AddedLines { get; set; }
+        public int RemovedLines { get; set; }
+        public int UnchangedLines { get; set; }
+        public bool HasChanges { get; set; }
+        public string UnifiedDiff { get; set; } = string.Empty;
+    }
+
+    public class ManuscriptImportResponse
+    {
+        public string SourceFileName { get; set; } = string.Empty;
+        public string DetectedFormat { get; set; } = string.Empty;
+        public int StartingChapterNumber { get; set; }
+        public int ImportedChapterCount { get; set; }
+        public List<ImportedChapterSummary> ImportedChapters { get; set; } = new();
+    }
+
+    public class ImportedChapterSummary
+    {
+        public Guid ChapterId { get; set; }
+        public int ChapterNumber { get; set; }
+        public string? Title { get; set; }
+        public int WordCount { get; set; }
+    }
+
     // ── ChapterChunk Responses ─────────────────────────────────────────────────
 
     public class ChapterChunkResponse

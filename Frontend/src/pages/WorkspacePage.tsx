@@ -15,11 +15,11 @@ import ChatPanel from '../components/workspace/ChatPanel';
 import ChatHistoryPanel from '../components/workspace/ChatHistoryPanel';
 import AiWriterPanel from '../components/workspace/AiWriterPanel';
 import TimelinePanel from '../components/workspace/TimelinePanel';
-import SceneCliffhangerPanel from '../components/workspace/SceneCliffhangerPanel';
 
 import {
     chapterService,
     type ChapterDetailResponse,
+    type ChapterVersionDiffResponse,
 } from '../services/chapterService';
 import { aiService } from '../services/aiService';
 import { useEditorSettings, AVAILABLE_FONTS, AVAILABLE_SIZES } from '../hooks/useEditorSettings';
@@ -47,14 +47,13 @@ import { styleGuideService, type StyleGuideEntry, type CreateStyleGuideRequest, 
 import { themeService, type ThemeEntry, type CreateThemeRequest } from '../services/themeService';
 
 import { useToast } from '../components/Toast';
-import { diffWords } from 'diff';
 import { DeleteConfirmationModal } from '../components/ui';
 import { useDeleteConfirm } from '../hooks';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
-type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotTimeline' | 'aiWriter' | 'sceneCliffhanger';
+type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotTimeline' | 'aiWriter';
 
 // ── Export Modal ───────────────────────────────────────────────────────────
 function ExportModal({
@@ -115,21 +114,17 @@ function ExportModal({
 function DiffModal({
     currentVersionNum,
     compareVersionNum,
-    currentContent,
-    compareContent,
+    diff,
     onClose,
     onRestore,
 }: {
     currentVersionNum: number;
     compareVersionNum: number;
-    currentContent: string;
-    compareContent: string;
+    diff: ChapterVersionDiffResponse;
     onClose: () => void;
     onRestore: () => void;
 }) {
-    const diffs = diffWords(compareContent, currentContent);
-    const added = diffs.filter(d => d.added).reduce((s, d) => s + d.count!, 0);
-    const removed = diffs.filter(d => d.removed).reduce((s, d) => s + d.count!, 0);
+    const lines = diff.unifiedDiff.split('\n');
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
@@ -143,8 +138,9 @@ function DiffModal({
                         <span className="text-sm font-bold text-[var(--text-primary)]">
                             So sánh V{compareVersionNum} → V{currentVersionNum} (hiện tại)
                         </span>
-                        <span className="text-xs text-emerald-400 font-medium">+{added} từ</span>
-                        <span className="text-xs text-rose-400 font-medium">−{removed} từ</span>
+                        <span className="text-xs text-emerald-400 font-medium">+{diff.addedLines} dòng</span>
+                        <span className="text-xs text-rose-400 font-medium">−{diff.removedLines} dòng</span>
+                        <span className="text-xs text-slate-300 font-medium">={diff.unchangedLines} dòng</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <button onClick={onRestore}
@@ -171,20 +167,32 @@ function DiffModal({
                     </span>
                 </div>
                 {/* Diff content */}
-                <div className="flex-1 overflow-y-auto p-6 leading-[2] text-sm font-[var(--editor-font,serif)] scrollbar-thin"
-                    style={{ color: 'var(--text-primary)', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
-                    {diffs.map((part, i) => {
-                        if (part.added) return (
-                            <mark key={i} className="bg-emerald-500/20 text-emerald-300 rounded-sm px-[1px] not-italic">
-                                {part.value}
-                            </mark>
+                <div className="flex-1 overflow-y-auto p-4 text-xs font-mono scrollbar-thin"
+                    style={{ color: 'var(--text-primary)', whiteSpace: 'pre', lineHeight: 1.65 }}>
+                    {!diff.hasChanges && (
+                        <div className="mb-3 px-2 py-1 rounded-lg text-[11px]"
+                            style={{ background: 'rgba(16,185,129,0.12)', color: '#6ee7b7' }}>
+                            Hai phiên bản không có thay đổi nội dung.
+                        </div>
+                    )}
+                    {lines.map((line, i) => {
+                        const isHeader = line.startsWith('--- ') || line.startsWith('+++ ') || line.startsWith('@@ ');
+                        const isAdded = line.startsWith('+') && !line.startsWith('+++ ');
+                        const isRemoved = line.startsWith('-') && !line.startsWith('--- ');
+
+                        const style = isHeader
+                            ? { color: 'var(--text-secondary)', opacity: 0.85 }
+                            : isAdded
+                                ? { background: 'rgba(16,185,129,0.12)', color: '#6ee7b7' }
+                                : isRemoved
+                                    ? { background: 'rgba(239,68,68,0.12)', color: '#fca5a5' }
+                                    : { color: 'var(--text-primary)' };
+
+                        return (
+                            <div key={`${i}-${line}`} style={style} className="px-2 rounded-sm">
+                                {line || ' '}
+                            </div>
                         );
-                        if (part.removed) return (
-                            <del key={i} className="bg-rose-500/20 text-rose-300 rounded-sm px-[1px] no-underline line-through decoration-rose-400/60">
-                                {part.value}
-                            </del>
-                        );
-                        return <span key={i}>{part.value}</span>;
                     })}
                 </div>
             </div>
@@ -238,13 +246,13 @@ export default function WorkspacePage() {
     // ── Diff state ─────────────────────────────────────────────────────────
     const [diffModal, setDiffModal] = useState<{
         compareVersionNum: number;
-        currentContent: string;
-        compareContent: string;
+        diff: ChapterVersionDiffResponse;
     } | null>(null);
 
     // ── Export state ───────────────────────────────────────────────────────
     const [exportModal, setExportModal] = useState<{ open: boolean; target: 'project' | 'chapter' }>({ open: false, target: 'project' });
     const [isExporting, setIsExporting] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
 
     // ── Delete confirmation ────────────────────────────────────────────────
     const deleteConfirm = useDeleteConfirm();
@@ -286,15 +294,20 @@ export default function WorkspacePage() {
     }, [projectId]);
 
     // ── Load chapters ──────────────────────────────────────────────────────
-    const loadChapters = async () => {
+    const loadChapters = async (preferredChapterId?: string) => {
         if (!projectId) return;
         setIsLoadingChapters(true);
         try {
             const list = await chapterService.getChapters(projectId);
             // Load detail for each (or just first, rest lazily)
             if (list.length > 0) {
-                const detail = await chapterService.getChapterDetail(projectId, list[0].id);
-                const rest = list.slice(1).map(c => ({ ...c, content: null, versions: [] } as ChapterDetailResponse));
+                const selected = preferredChapterId
+                    ? list.find(c => c.id === preferredChapterId) ?? list[0]
+                    : list[0];
+                const detail = await chapterService.getChapterDetail(projectId, selected.id);
+                const rest = list
+                    .filter(c => c.id !== selected.id)
+                    .map(c => ({ ...c, content: null, versions: [] } as ChapterDetailResponse));
                 const all = [detail, ...rest];
                 setChapters(all);
                 setActiveChapter(detail);
@@ -305,6 +318,7 @@ export default function WorkspacePage() {
             } else {
                 setChapters([]);
                 setActiveChapter(null);
+                if (editorRef.current) editorRef.current.innerHTML = '';
             }
         } catch {
             // no chapters yet
@@ -451,25 +465,42 @@ export default function WorkspacePage() {
         }
     };
 
-    const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !editorRef.current) return;
-        if (!confirm('Nội dung hiện tại sẽ bị thay thế bằng nội dung từ file. Tiếp tục?')) {
+        if (!file || !projectId) return;
+
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        const allowedExt = new Set(['txt', 'docx', 'pdf']);
+        if (!ext || !allowedExt.has(ext)) {
+            toast.error('Định dạng không hỗ trợ. Vui lòng chọn file .txt, .docx hoặc .pdf.');
             e.target.value = '';
             return;
         }
-        const reader = new FileReader();
-        reader.onload = () => {
-            const text = reader.result as string;
-            if (editorRef.current) {
-                // If importing plain text, we can use innerText to safely escape HTML
-                editorRef.current.innerText = text;
-                updateWordCount();
-                scheduleAutoSave();
-            }
-        };
-        reader.readAsText(file, 'utf-8');
-        e.target.value = '';
+
+        const maxSize = 25 * 1024 * 1024;
+        if (file.size > maxSize) {
+            toast.error('File quá lớn. Vui lòng chọn file nhỏ hơn 25MB.');
+            e.target.value = '';
+            return;
+        }
+
+        if (!confirm(`Import manuscript "${file.name}" và tạo chapter mới tự động?`)) {
+            e.target.value = '';
+            return;
+        }
+
+        setIsImporting(true);
+        try {
+            const result = await chapterService.importManuscript(projectId, file, true);
+            const firstImportedChapterId = result.importedChapters[0]?.chapterId;
+            await loadChapters(firstImportedChapterId);
+            toast.success(`Đã import ${result.importedChapterCount} chapter từ file ${result.sourceFileName}.`);
+        } catch (e: any) {
+            toast.error(e?.response?.data?.message ?? 'Không thể import file manuscript.');
+        } finally {
+            setIsImporting(false);
+            e.target.value = '';
+        }
     };
 
     // ── Rename chapter ─────────────────────────────────────────────────────
@@ -496,123 +527,6 @@ export default function WorkspacePage() {
             setRenamingChapterId(null);
         }
     };
-
-    // ── Highlighting logic (DOM Range API — không bị vỡ bởi HTML tags) ───────
-    const clearHighlights = useCallback(() => {
-        if (!editorRef.current) return;
-        const marks = Array.from(editorRef.current.querySelectorAll('mark.ai-highlight'));
-        if (marks.length === 0) return;
-        marks.forEach(mark => {
-            const parent = mark.parentNode;
-            if (!parent) return;
-            while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
-            parent.removeChild(mark);
-            parent.normalize();
-        });
-        setHighlightsVisible(true);
-    }, []);
-
-    const highlightScenes = useCallback((scenes: { quote: string, color: string }[]) => {
-        if (!editorRef.current) return;
-        clearHighlights();
-
-        // Thu thập tất cả text node bên trong editor
-        function collectTextNodes(root: HTMLElement): Text[] {
-            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-            const nodes: Text[] = [];
-            let n: Node | null;
-            while ((n = walker.nextNode())) nodes.push(n as Text);
-            return nodes;
-        }
-
-        // Bọc [start, end) của plaintext bằng <mark>
-        function wrapRange(root: HTMLElement, startIdx: number, endIdx: number, color: string): boolean {
-            const textNodes = collectTextNodes(root);
-            let offset = 0;
-            let startNode: Text | null = null, startOff = 0;
-            let endNode: Text | null = null, endOff = 0;
-
-            for (const tn of textNodes) {
-                const len = (tn.textContent ?? '').length;
-                if (!startNode && offset + len > startIdx) {
-                    startNode = tn;
-                    startOff = Math.max(0, startIdx - offset);
-                }
-                if (startNode && offset + len >= endIdx) {
-                    endNode = tn;
-                    endOff = Math.min(len, endIdx - offset);
-                    break;
-                }
-                offset += len;
-            }
-
-            if (!startNode || !endNode) return false;
-
-            try {
-                const range = document.createRange();
-                range.setStart(startNode, startOff);
-                range.setEnd(endNode, endOff);
-
-                const mark = document.createElement('mark');
-                mark.className = 'ai-highlight';
-                mark.style.cssText = `background-color: ${color}55; color: inherit; padding: 2px 0; border-radius: 4px; transition: background-color 0.2s;`;
-
-                const fragment = range.extractContents();
-                mark.appendChild(fragment);
-                range.insertNode(mark);
-                return true;
-            } catch (err) {
-                console.warn('[highlight] wrapRange failed:', err);
-                return false;
-            }
-        }
-
-        const fullText = editorRef.current.innerText ?? '';
-        let anyHighlighted = false;
-
-        for (const scene of scenes) {
-            if (!scene.quote || scene.quote.length < 5) continue;
-
-            const q = scene.quote.trim();
-
-            // Strategy 1: full exact quote
-            let idx = fullText.indexOf(q);
-            if (idx !== -1) {
-                if (wrapRange(editorRef.current, idx, idx + q.length, scene.color)) {
-                    anyHighlighted = true;
-                    continue;
-                }
-            }
-
-            // Strategy 2: first 100 chars
-            const p100 = q.substring(0, 100);
-            if (p100.length >= 10) {
-                idx = fullText.indexOf(p100);
-                if (idx !== -1 && wrapRange(editorRef.current, idx, idx + p100.length, scene.color)) {
-                    anyHighlighted = true;
-                    continue;
-                }
-            }
-
-            // Strategy 3: first 50 chars
-            const p50 = q.substring(0, 50);
-            if (p50.length >= 10) {
-                idx = fullText.indexOf(p50);
-                if (idx !== -1 && wrapRange(editorRef.current, idx, idx + p50.length, scene.color)) {
-                    anyHighlighted = true;
-                }
-            }
-        }
-
-        if (anyHighlighted) {
-            setHighlightsVisible(true);
-            setTimeout(() => {
-                const mark = editorRef.current?.querySelector('mark.ai-highlight');
-                if (mark) mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 80);
-        }
-    }, [clearHighlights]);
-
 
     // ── Save → background Chunk + Embed ──────────────────────────────────
     const doSave = useCallback(async (showFeedback = true) => {
@@ -806,11 +720,15 @@ export default function WorkspacePage() {
     const doCompareVersion = async (versionNumber: number) => {
         if (!projectId || !activeChapter) return;
         try {
-            const currentContent = editorRef.current?.innerHTML ?? '';
-            const compareContent = await chapterService.getVersionContent(projectId, activeChapter.id, versionNumber);
-            setDiffModal({ compareVersionNum: versionNumber, currentContent, compareContent });
+            const diff = await chapterService.compareVersions(
+                projectId,
+                activeChapter.id,
+                versionNumber,
+                activeChapter.currentVersionNum
+            );
+            setDiffModal({ compareVersionNum: versionNumber, diff });
         } catch (e: any) {
-            toast.error('Không thể tải nội dung phiên bản.');
+            toast.error(e?.response?.data?.message ?? 'Không thể tải dữ liệu so sánh phiên bản.');
         }
     };
 
@@ -827,20 +745,33 @@ export default function WorkspacePage() {
         setWordCount(getWordCount());
     };
 
-    const stripInlineColorsFromHtml = (rawHtml: string): string => {
+    const normalizePastedHtml = (rawHtml: string): string => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(rawHtml, 'text/html');
 
         doc.body.querySelectorAll('script,style,link,meta').forEach(node => node.remove());
 
+        doc.body.querySelectorAll('font').forEach(fontEl => {
+            const parent = fontEl.parentNode;
+            if (!parent) return;
+            while (fontEl.firstChild) parent.insertBefore(fontEl.firstChild, fontEl);
+            parent.removeChild(fontEl);
+        });
+
         doc.body.querySelectorAll<HTMLElement>('*').forEach(el => {
             el.removeAttribute('color');
+            el.removeAttribute('face');
+            el.removeAttribute('size');
 
             if (el.hasAttribute('style')) {
                 const style = el.style;
                 style.removeProperty('color');
                 style.removeProperty('background');
                 style.removeProperty('background-color');
+                style.removeProperty('font');
+                style.removeProperty('font-family');
+                style.removeProperty('font-size');
+                style.removeProperty('line-height');
                 style.removeProperty('text-shadow');
                 style.removeProperty('caret-color');
                 style.removeProperty('-webkit-text-fill-color');
@@ -858,7 +789,7 @@ export default function WorkspacePage() {
         const plain = e.clipboardData.getData('text/plain');
 
         if (html) {
-            const sanitizedHtml = stripInlineColorsFromHtml(html);
+            const sanitizedHtml = normalizePastedHtml(html);
             document.execCommand('insertHTML', false, sanitizedHtml);
         } else {
             document.execCommand('insertText', false, plain);
@@ -927,6 +858,20 @@ export default function WorkspacePage() {
                     isLoading={isExporting}
                     onClose={() => setExportModal({ ...exportModal, open: false })}
                     onExport={doExport}
+                />
+            )}
+
+            {/* ── Diff Modal ── */}
+            {diffModal && activeChapter && (
+                <DiffModal
+                    currentVersionNum={activeChapter.currentVersionNum}
+                    compareVersionNum={diffModal.compareVersionNum}
+                    diff={diffModal.diff}
+                    onClose={() => setDiffModal(null)}
+                    onRestore={async () => {
+                        await doSwitchVersion(diffModal.compareVersionNum);
+                        setDiffModal(null);
+                    }}
                 />
             )}
 
@@ -1187,7 +1132,6 @@ export default function WorkspacePage() {
                                         { tab: 'plotTimeline' as ActiveTab, label: 'Tuyến truyện', desc: 'Cấu trúc cốt truyện & trình tự sự kiện', icon: Map, color: '#f59e0b' },
                                         { tab: 'aiInstructions' as ActiveTab, label: 'Ghi chú AI', desc: 'Cung cấp bối cảnh đặc biệt để AI hiểu đúng ý', icon: Bot, color: '#34d399' },
                                         { tab: 'aiWriter' as ActiveTab, label: 'AI Writer', desc: 'Trợ lý AI giúp viết, trau chuốt và nảy ý tưởng', icon: Wand2, color: '#ec4899' },
-                                        { tab: 'sceneCliffhanger' as ActiveTab, label: 'Phân tích Cảnh', desc: 'Phân rã chương & phát hiện điểm rơi kịch tính', icon: Scissors, color: '#f97316' },
                                     ] as const).map(item => {
                                         const isActive = activeTab === item.tab && rightPanelOpen;
                                         const Icon = item.icon;
@@ -1317,25 +1261,31 @@ export default function WorkspacePage() {
                                 <div className="flex-1" />
                                 <span className="text-[var(--text-secondary)] text-xs mr-2">{wordCount} từ</span>
                                 {activeChapter && (
+                                    <button
+                                        onClick={() => setExportModal({ open: true, target: 'chapter' })}
+                                        className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5"
+                                        title="Xuất chương"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                    </button>
+                                )}
+                                {projectId && (
                                     <>
-                                        <button
-                                            onClick={() => setExportModal({ open: true, target: 'chapter' })}
-                                            className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5"
-                                            title="Xuất chương"
-                                        >
-                                            <Download className="w-4 h-4" />
-                                        </button>
+                                        <span className="hidden xl:inline text-[10px] text-[var(--text-secondary)]">
+                                            {isImporting ? 'Đang import manuscript...' : 'Import .txt/.docx/.pdf'}
+                                        </span>
                                         <button
                                             onClick={() => importFileRef.current?.click()}
-                                            className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5"
-                                            title="Nhập chương từ file (.txt)"
+                                            disabled={isImporting}
+                                            className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 disabled:opacity-50"
+                                            title={isImporting ? 'Đang import manuscript...' : 'Nhập chapter từ file (.txt, .docx, .pdf), hệ thống tự tách theo heading nếu có'}
                                         >
-                                            <Upload className="w-4 h-4" />
+                                            {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                                         </button>
                                         <input
                                             ref={importFileRef}
                                             type="file"
-                                            accept=".txt"
+                                            accept=".txt,.docx,.pdf"
                                             className="hidden"
                                             onChange={handleImportFile}
                                         />
@@ -1410,7 +1360,7 @@ export default function WorkspacePage() {
                                                 suppressContentEditableWarning
                                                 onInput={() => { updateWordCount(); scheduleAutoSave(); setHighlightsVisible(false); }}
                                                 onPaste={handleEditorPaste}
-                                                className={`w-full min-h-[60vh] text-[var(--text-primary)] bg-transparent outline-none leading-[1.9] focus:outline-none ${!highlightsVisible ? 'hide-ai-highlights' : ''}`}
+                                                className={`workspace-editor-content w-full min-h-[60vh] text-[var(--text-primary)] bg-transparent outline-none leading-[1.9] focus:outline-none ${!highlightsVisible ? 'hide-ai-highlights' : ''}`}
                                                 style={{ fontFamily: `'${editorSettings.editorFont}', sans-serif`, fontSize: `${editorSettings.editorFontSize}px`, letterSpacing: '0.01em' }}
                                                 data-placeholder="Bắt đầu viết tác phẩm của bạn tại đây..."
                                             />
@@ -1450,7 +1400,7 @@ export default function WorkspacePage() {
                         {/* Panel header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] shrink-0 bg-[var(--bg-app)]">
                             <div className="flex items-center gap-2">
-                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotTimeline', 'aiWriter', 'sceneCliffhanger'] as ActiveTab[]).includes(activeTab) ? (
+                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotTimeline', 'aiWriter'] as ActiveTab[]).includes(activeTab) ? (
                                     <>
                                         <button onClick={() => setActiveTab('chat')} className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 transition-colors">
                                             <ArrowLeft className="w-3.5 h-3.5" />
@@ -1466,7 +1416,6 @@ export default function WorkspacePage() {
                                             {activeTab === 'plotTimeline' && 'Tuyến truyện'}
                                             {activeTab === 'aiInstructions' && 'Ghi chú AI'}
                                             {activeTab === 'aiWriter' && 'AI Writer'}
-                                            {activeTab === 'sceneCliffhanger' && 'Phân tích Cảnh'}
                                         </span>
                                     </>
                                 ) : (
@@ -1478,7 +1427,7 @@ export default function WorkspacePage() {
                                             <Sparkles className="w-3.5 h-3.5" /> AI Chat
                                         </TabBtn>
                                         <TabBtn active={activeTab === 'chatHistory'} onClick={() => { setActiveTab('chatHistory'); }}>
-                                            <Clock className="w-3.5 h-3.5" /> Chat cũ
+                                            <Clock className="w-3.5 h-3.5" /> Lịch sử chat
                                         </TabBtn>
                                     </div>
                                 )}
@@ -1739,20 +1688,6 @@ export default function WorkspacePage() {
                                     }
                                 }}
                             />
-                        )}
-
-
-                        {/* ── Scene & Cliffhanger Analysis Tab ── */}
-                        {activeTab === 'sceneCliffhanger' && projectId && (
-                            <div className="flex-1 overflow-y-auto p-4">
-                                <SceneCliffhangerPanel
-                                    projectId={projectId}
-                                    chapterId={activeChapter?.id ?? null}
-                                    chapterContent={editorRef.current?.innerText ?? ''}
-                                    onHighlightScenes={highlightScenes}
-                                    onClearHighlights={clearHighlights}
-                                />
-                            </div>
                         )}
                     </div>
                 )}

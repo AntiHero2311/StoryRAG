@@ -39,6 +39,31 @@ export interface ChapterVersionDetailResponse extends ChapterVersionSummary {
     chunks: ChapterChunkResponse[];
 }
 
+export interface ChapterVersionDiffResponse {
+    fromVersionNumber: number;
+    toVersionNumber: number;
+    addedLines: number;
+    removedLines: number;
+    unchangedLines: number;
+    hasChanges: boolean;
+    unifiedDiff: string;
+}
+
+export interface ImportedChapterSummary {
+    chapterId: string;
+    chapterNumber: number;
+    title: string | null;
+    wordCount: number;
+}
+
+export interface ManuscriptImportResponse {
+    sourceFileName: string;
+    detectedFormat: string;
+    startingChapterNumber: number;
+    importedChapterCount: number;
+    importedChapters: ImportedChapterSummary[];
+}
+
 export interface ChapterChunkResponse {
     id: string;
     chunkIndex: number;
@@ -124,6 +149,21 @@ export const chapterService = {
     /** Lấy nội dung thuần của version để so sánh diff. */
     getVersionContent: (projectId: string, chapterId: string, versionNumber: number) =>
         api.get<{ content: string }>(`/project/${projectId}/chapters/${chapterId}/versions/${versionNumber}/content`).then(r => r.data.content),
+
+    /** So sánh 2 phiên bản chapter từ backend (unified diff + stats). */
+    compareVersions: (projectId: string, chapterId: string, fromVersion: number, toVersion: number) =>
+        api.get<ChapterVersionDiffResponse>(`/project/${projectId}/chapters/${chapterId}/versions/compare`, {
+            params: { fromVersion, toVersion },
+        }).then(r => r.data),
+
+    /** Import manuscript file (.txt/.docx/.pdf) và tạo chapter mới tự động. */
+    importManuscript: (projectId: string, file: File, splitByHeadings = true) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('splitByHeadings', String(splitByHeadings));
+        return api.post<ManuscriptImportResponse>(`/project/${projectId}/chapters/import`, formData)
+            .then(r => r.data);
+    },
 
     // Chunking
     chunkChapter: (projectId: string, chapterId: string) =>

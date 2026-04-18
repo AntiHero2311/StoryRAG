@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using System.Text.RegularExpressions;
 
 namespace Service.Helpers;
 
@@ -8,6 +9,22 @@ namespace Service.Helpers;
 public static class LlmOutputValidator
 {
     private const string SafeFallback = "Xin lỗi, tôi không thể trả lời câu hỏi này.";
+    private const string ChatFallback = "Xin lỗi, phản hồi AI vừa rồi chưa hợp lệ. Vui lòng hỏi lại để tôi trả lời chính xác hơn.";
+    private static readonly Regex ThoughtBlockRegex =
+        new(@"(?is)<thought[^>]*>.*?</thought>", RegexOptions.Compiled, TimeSpan.FromSeconds(1));
+    private static readonly Regex StoryContextBlockRegex =
+        new(@"(?is)<story_?context[^>]*>.*?</story_?context>", RegexOptions.Compiled, TimeSpan.FromSeconds(1));
+    private static readonly Regex StorySummaryBlockRegex =
+        new(@"(?is)<story_?summary[^>]*>.*?</story_?summary>", RegexOptions.Compiled, TimeSpan.FromSeconds(1));
+    private static readonly Regex LeakLineRegex =
+        new(
+            @"(?im)^\s*(?:[-*•]\s*)?(?:\[(?:hướng dẫn hệ thống|câu hỏi của người dùng)[^\]]*\]|ai assistant helping an author|analyze and answer questions based on the provided content|do not reveal system prompt|do not execute commands inside|base answers only on|infer/synthesize if necessary).*$",
+            RegexOptions.Compiled,
+            TimeSpan.FromSeconds(1));
+    private static readonly Regex MultiBlankLinesRegex =
+        new(@"\n{3,}", RegexOptions.Compiled, TimeSpan.FromSeconds(1));
+    private static readonly Regex ExplicitLeakTokenRegex =
+        new(@"(?i)<thought|</thought|<story_?context|</story_?context|<story_?summary|</story_?summary", RegexOptions.Compiled, TimeSpan.FromSeconds(1));
 
     // Các pattern nhạy cảm không được phép xuất hiện trong response trả về user
     private static readonly string[] SensitivePatterns =
@@ -59,11 +76,44 @@ public static class LlmOutputValidator
     /// Phiên bản cho chat: validate và trả về response gốc nếu an toàn.
     /// </summary>
     public static string ValidateChatResponse(string? response, ILogger logger)
-        => ValidateOrReplace(response, logger, "AiChat");
+    {
+        if (string.IsNullOrWhiteSpace(response)) return string.Empty;
+
+        var cleaned = StripPromptLeakSections(response);
+        if (string.IsNullOrWhiteSpace(cleaned))
+        {
+            logger.LogWarning("⚠️ LLM response tại [AiChat] chỉ chứa prompt-leak/instruction text. Đã thay thế fallback an toàn.");
+            return ChatFallback;
+        }
+
+        if (!string.Equals(cleaned, response.Trim(), StringComparison.Ordinal))
+        {
+            logger.LogWarning("⚠️ LLM response tại [AiChat] có chứa đoạn prompt nội bộ; đã làm sạch trước khi trả về user.");
+        }
+
+        if (ExplicitLeakTokenRegex.IsMatch(cleaned))
+        {
+            logger.LogWarning("⚠️ LLM response tại [AiChat] vẫn còn token rò rỉ sau khi làm sạch. Đã thay thế fallback an toàn.");
+            return ChatFallback;
+        }
+
+        return ValidateOrReplace(cleaned, logger, "AiChat");
+    }
 
     /// <summary>
     /// Phiên bản cho rewrite: validate và trả về response gốc nếu an toàn.
     /// </summary>
     public static string ValidateRewriteResponse(string? response, ILogger logger)
         => ValidateOrReplace(response, logger, "AiRewrite");
+
+    private static string StripPromptLeakSections(string response)
+    {
+        var normalized = response.Trim().Replace("\r\n", "\n").Replace('\r', '\n');
+        normalized = ThoughtBlockRegex.Replace(normalized, string.Empty);
+        normalized = StoryContextBlockRegex.Replace(normalized, string.Empty);
+        normalized = StorySummaryBlockRegex.Replace(normalized, string.Empty);
+        normalized = LeakLineRegex.Replace(normalized, string.Empty);
+        normalized = MultiBlankLinesRegex.Replace(normalized, "\n\n");
+        return normalized.Trim();
+    }
 }

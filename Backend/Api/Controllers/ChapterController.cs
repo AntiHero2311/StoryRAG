@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Service.DTOs;
 using Service.Interfaces;
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 
 namespace Api.Controllers
@@ -57,6 +58,35 @@ namespace Api.Controllers
                 if (userId == null) return Unauthorized();
                 var chapter = await _chapterService.CreateChapterAsync(projectId, userId.Value, request);
                 return CreatedAtAction(nameof(GetChapterDetail), new { projectId, chapterId = chapter.Id }, chapter);
+            }
+            catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
+        }
+
+        [HttpPost("import")]
+        [RequestSizeLimit(25 * 1024 * 1024)]
+        public async Task<IActionResult> ImportManuscript(Guid projectId, [FromForm] ImportManuscriptFormRequest request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (request.File == null || request.File.Length == 0)
+                return BadRequest(new { Message = "Vui lòng chọn file để import." });
+
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized();
+
+                await using var stream = new MemoryStream();
+                await request.File.CopyToAsync(stream);
+
+                var result = await _chapterService.ImportManuscriptAsync(
+                    projectId,
+                    userId.Value,
+                    request.File.FileName,
+                    request.File.ContentType,
+                    stream.ToArray(),
+                    request.SplitByHeadings);
+
+                return Ok(result);
             }
             catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
         }
@@ -229,6 +259,28 @@ namespace Api.Controllers
             catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
         }
 
+        [HttpGet("{chapterId:guid}/versions/compare")]
+        public async Task<IActionResult> CompareVersions(
+            Guid projectId,
+            Guid chapterId,
+            [FromQuery] int fromVersion,
+            [FromQuery] int toVersion)
+        {
+            if (fromVersion <= 0 || toVersion <= 0)
+                return BadRequest(new { Message = "fromVersion và toVersion phải lớn hơn 0." });
+
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized();
+
+                var diff = await _chapterService.CompareVersionsAsync(chapterId, fromVersion, toVersion, userId.Value);
+                return Ok(diff);
+            }
+            catch (UnauthorizedAccessException) { return Forbid(); }
+            catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
+        }
+
         // ── Chunking ───────────────────────────────────────────────────────────
 
         [HttpPost("{chapterId:guid}/chunk")]
@@ -251,6 +303,14 @@ namespace Api.Controllers
         {
             var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             return Guid.TryParse(value, out var id) ? id : null;
+        }
+
+        public class ImportManuscriptFormRequest
+        {
+            [Required]
+            public IFormFile File { get; set; } = null!;
+
+            public bool SplitByHeadings { get; set; } = true;
         }
     }
 }

@@ -684,6 +684,102 @@ Cập nhật `sortOrder` của một mốc sự kiện.
 
 ---
 
+## 11. Manuscript Import, Version Compare, Narrative Charts, Report PDF
+
+### POST `/api/project/{projectId}/chapters/import`
+Import manuscript file và tự động tạo chapter mới.
+
+**Auth:** Bắt buộc.
+
+**Content-Type:** `multipart/form-data`
+
+**Form fields:**
+- `file`: `.txt | .docx | .pdf` (required)
+- `splitByHeadings`: `true | false` (optional, default `true`)
+
+**Response `200`:**
+```json
+{
+  "sourceFileName": "story.docx",
+  "detectedFormat": "docx",
+  "startingChapterNumber": 5,
+  "importedChapterCount": 3,
+  "importedChapters": [
+    {
+      "chapterId": "guid",
+      "chapterNumber": 5,
+      "title": "Chapter 1",
+      "wordCount": 1200
+    }
+  ]
+}
+```
+
+---
+
+### GET `/api/project/{projectId}/chapters/{chapterId}/versions/compare?fromVersion={a}&toVersion={b}`
+So sánh 2 version và trả về unified diff + thống kê thay đổi.
+
+**Auth:** Bắt buộc.
+
+**Response `200`:**
+```json
+{
+  "fromVersionNumber": 2,
+  "toVersionNumber": 5,
+  "addedLines": 14,
+  "removedLines": 9,
+  "unchangedLines": 201,
+  "hasChanges": true,
+  "unifiedDiff": "--- version 2\n+++ version 5\n@@ -1,210 +1,215 @@\n ..."
+}
+```
+
+---
+
+### GET `/api/ai/{projectId}/narrative/charts`
+Lấy dữ liệu chuyên biệt cho chart narrative analysis.
+
+**Auth:** Bắt buộc.
+
+**Query params (optional):**
+- `chapterId=guid` (lọc theo chapter)
+
+**Response `200`:**
+```json
+{
+  "pacing": [
+    { "segmentIndex": 0, "chapterNumber": 1, "score": 62.4 }
+  ],
+  "emotions": [
+    { "segmentIndex": 0, "chapterNumber": 1, "valence": 0.24, "intensity": 38.0, "dominantEmotion": "Joy" }
+  ],
+  "characterFrequencies": [
+    { "characterName": "A", "totalMentions": 35 }
+  ],
+  "characterPresence": [
+    {
+      "characterName": "A",
+      "points": [{ "segmentIndex": 0, "chapterNumber": 1, "mentions": 2 }]
+    }
+  ],
+  "characterRelationships": [
+    { "sourceCharacter": "A", "targetCharacter": "B", "weight": 8 }
+  ]
+}
+```
+
+---
+
+### GET `/api/ai/{projectId}/reports/{reportId}/export/pdf`
+Export một report phân tích ra PDF.
+
+**Auth:** Bắt buộc.
+
+**Response `200`:**
+- `Content-Type: application/pdf`
+- Attachment filename: `AnalysisReport_{reportId}.pdf`
+
 ## Error Response Format
 
 Tất cả lỗi trả về dạng:

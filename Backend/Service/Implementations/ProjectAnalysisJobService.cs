@@ -115,6 +115,25 @@ namespace Service.Implementations
             return job == null ? null : ToResponse(job, isExistingJob: true);
         }
 
+        public async Task<ProjectAnalysisJobResponse?> GetLatestJobAsync(
+            Guid projectId,
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            await VerifyOwnershipAsync(projectId, userId, cancellationToken);
+
+            var job = await _context.ProjectAnalysisJobs
+                .AsNoTracking()
+                .Where(j => j.ProjectId == projectId && j.UserId == userId)
+                .OrderByDescending(j => j.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (job == null) return null;
+
+            var isActive = job.Status == StatusQueued || job.Status == StatusProcessing;
+            return ToResponse(job, isExistingJob: isActive);
+        }
+
         public async Task<ProjectAnalysisJobResponse?> GetJobAsync(
             Guid projectId,
             Guid jobId,

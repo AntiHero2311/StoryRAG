@@ -69,7 +69,7 @@ namespace Service.Implementations
             // 4. Vector search — lấy TopK từ 3 nguồn: chapter chunks, worldbuilding, characters
             // Chỉ tìm trong chunks thuộc active version của mỗi chương (tránh lấy chunks của version cũ)
             var activeVersionIds = await _context.Chapters
-                .Where(c => c.ProjectId == projectId && c.CurrentVersionId.HasValue)
+                .Where(c => c.ProjectId == projectId && !c.IsDeleted && c.CurrentVersionId.HasValue)
                 .Select(c => c.CurrentVersionId!.Value)
                 .ToListAsync();
 
@@ -147,7 +147,7 @@ namespace Service.Implementations
             var response = await CompleteChatWithGeminiAsync(messages);
             var completion = response;
 
-            var rawAnswer = completion.Content[0].Text;
+            var rawAnswer = ExtractCompletionText(completion);
             var answer = LlmOutputValidator.ValidateChatResponse(rawAnswer, _logger);
             var inputTokens = completion.Usage.InputTokenCount;
             var outputTokens = completion.Usage.OutputTokenCount;
@@ -279,7 +279,23 @@ namespace Service.Implementations
                 - Nếu thực sự không có thông tin liên quan trong context, hãy nói rõ "Nội dung được cung cấp chưa đề cập đến thông tin này."
                 - Trả lời bằng tiếng Việt, súc tích và chính xác.
                 - Không bịa đặt thông tin không có căn cứ trong context.
+                - Chỉ trả lời nội dung cuối cùng cho người dùng, không in phân tích nội bộ hoặc tag như <thought>, <story_context>, <story_summary>.
                 """;
+        }
+
+        private static string ExtractCompletionText(OpenAI.Chat.ChatCompletion completion)
+        {
+            if (completion.Content.Count == 0)
+                return string.Empty;
+
+            var textParts = completion.Content
+                .Select(part => part.Text?.Trim())
+                .Where(text => !string.IsNullOrWhiteSpace(text))
+                .ToList();
+
+            return textParts.Count > 0
+                ? string.Join("\n\n", textParts)
+                : string.Empty;
         }
     }
 }

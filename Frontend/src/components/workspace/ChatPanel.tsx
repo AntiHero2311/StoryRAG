@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { Sparkles, Bot, Trash2, Send, Loader2 } from 'lucide-react';
 import { aiService } from '../../services/aiService';
+import { sanitizeAiResponseForDisplay } from '../../utils/aiResponseSanitizer';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -86,8 +87,9 @@ export default function ChatPanel({ projectId, isEmbedded }: ChatPanelProps) {
         scrollToBottom();
         try {
             const result = await aiService.chat(projectId, question);
+            const safeAnswer = sanitizeAiResponseForDisplay(result.answer);
             setMessages(prev => [...prev, {
-                role: 'assistant', content: result.answer, tokens: result.totalTokens,
+                role: 'assistant', content: safeAnswer, tokens: result.totalTokens,
             }]);
         } catch (e: any) {
             const msg = e?.response?.data?.message ?? 'AI Chat thất bại. Vui lòng thử lại.';

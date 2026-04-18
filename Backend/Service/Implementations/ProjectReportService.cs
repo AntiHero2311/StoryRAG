@@ -130,10 +130,10 @@ namespace Service.Implementations
             var totalWords = chapters.Sum(c => c.WordCount);
 
             // Chỉ lấy chunks thuộc active version của mỗi chương
-            var activeVersionIds = await _context.Chapters
-                .Where(c => c.ProjectId == projectId && c.CurrentVersionId.HasValue)
+            var activeVersionIds = chapters
+                .Where(c => c.CurrentVersionId.HasValue)
                 .Select(c => c.CurrentVersionId!.Value)
-                .ToListAsync(cancellationToken);
+                .ToList();
 
             var chunks = await _context.ChapterChunks
                 .Where(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId))
@@ -261,7 +261,7 @@ namespace Service.Implementations
                 Status = reportStatus,
                 ProjectVersion = projectVersion,
                 TotalScore = total,
-                CriteriaJson = JsonSerializer.Serialize(criteria),
+                CriteriaJson = BuildStoredCriteriaJson(criteria, warnings, overallFeedback),
                 CreatedAt = DateTime.UtcNow,
             };
             _context.ProjectReports.Add(report);
@@ -442,16 +442,16 @@ namespace Service.Implementations
                 QUY TẮC BẮT BUỘC — VI PHẠM SẼ BỊ HỦY:
                 1. CHỐNG ẢO GIÁC 100% (ZERO HALLUCINATION): TUYỆT ĐỐI KHÔNG SỬ DỤNG KIẾN THỨC BÊN NGOÀI. Nếu truyện mượn tên nhân vật nổi tiếng (vd: Tiểu Long Nữ), bạn CẤM tự suy diễn bối cảnh gốc của tác phẩm đó. Chỉ được phép phân tích dựa trên nội dung tác giả cung cấp trong "Nội dung tác phẩm".
                 2. TUỲ BIẾN THEO THỂ LOẠI: Tiêu chuẩn đánh giá phải dựa vào Thể loại của truyện (nếu có trong Tham chiếu nền). Ví dụ: Tiên hiệp ưu tiên tính logic của hệ thống tu luyện & thế giới quan; Ngôn tình ưu tiên chiều sâu cảm xúc & chemistry; Trinh thám ưu tiên tính logic của vụ án.
-                3. feedback: 2-3 câu nhận xét CỤ THỂ, có trích dẫn câu văn thực tế từ văn bản.
-                4. errors: TỐI THIỂU 3 lỗi/mục — nêu rõ vấn đề + ví dụ câu văn mắc lỗi.
-                5. suggestions: TỐI THIỂU 3 gợi ý/mục — nêu cách sửa cụ thể, không chung chung.
+                3. feedback: 1-2 câu nhận xét CỤ THỂ, có trích dẫn câu văn thực tế từ văn bản.
+                4. errors: 1-2 lỗi/mục — nêu rõ vấn đề + ví dụ câu văn mắc lỗi.
+                5. suggestions: 1-2 gợi ý/mục — nêu cách sửa cụ thể, không chung chung.
                 6. score: Chấm nghiêm khắc theo RUBRIC 5 ĐIỂM sau (không đánh giá ưu ái):
                    - 1 điểm: Kém / Lỗi nặng — Thô sơ, phá vỡ logic cơ bản, không đạt tiêu chuẩn.
                    - 2 điểm: Dưới trung bình — Có ý tưởng nhưng diễn đạt lúng túng, nhiều hạt sạn.
                    - 3 điểm: Cơ bản đạt — Đọc được, đúng quy tắc nhưng lặp lại, thiếu chiều sâu.
                    - 4 điểm: Khá tốt — Chuyên nghiệp, nhịp nhàng, có phong cách riêng.
                    - 5 điểm: Xuất sắc — Tinh tế, độc đáo, lôi cuốn ấn tượng, ngang tầm xuất bản.
-                7. Tất cả 20 mục phải có đủ feedback, errors, suggestions — KHÔNG được để mảng rỗng.
+                7. Tất cả 20 mục phải có đủ feedback, errors, suggestions — KHÔNG được để trống.
 
                 NHẬN XÉT TỔNG QUAN (overallFeedback):
                 Viết một đoạn nhận xét chung tâm huyết (khoảng 4-6 câu) dành cho tác giả: đúc kết những điểm mạnh nổi bật nhất, những điểm yếu lớn nhất cần khắc phục, và một lời động viên/nhận định tổng kết về tiềm năng của tác phẩm.
@@ -528,46 +528,150 @@ namespace Service.Implementations
 
             var messages = new List<ChatMessage>
             {
-                ChatMessage.CreateSystemMessage("Bạn là giám khảo văn học nghiêm khắc và chuyên sâu. Tuân thủ ZERO HALLUCINATION (chỉ dùng context, không chế cháo). Phân tích cụ thể, trích dẫn ví dụ thực tế. Điền đủ 20 tiêu chí với TỐI THIỂU 3 errors/suggestions mỗi mục. Viết thêm overallFeedback (4-6 câu tâm huyết). Trả về JSON thuần túy theo cấu trúc {\"criteria\":[...],\"warnings\":[...],\"overallFeedback\":\"...\"}."),
+                ChatMessage.CreateSystemMessage("Bạn là giám khảo văn học nghiêm khắc và chuyên sâu. Tuân thủ ZERO HALLUCINATION (chỉ dùng context, không chế cháo). Phân tích cụ thể, trích dẫn ví dụ thực tế. Điền đủ 20 tiêu chí với 1-2 errors/suggestions mỗi mục (ngắn gọn nhưng cụ thể). Viết thêm overallFeedback (4-6 câu tâm huyết). Trả về JSON thuần túy theo cấu trúc {\"criteria\":[...],\"warnings\":[...],\"overallFeedback\":\"...\"}."),
                 ChatMessage.CreateUserMessage(prompt),
             };
 
-            var response = await CompleteChatWithGeminiAsync(
-                messages,
-                maxTokens: 8000,
-                temperature: 0.1f,
-                cancellationToken: cancellationToken);
-            var raw = NormalizeAiText(response.Content.FirstOrDefault()?.Text ?? string.Empty);
-            if (string.IsNullOrWhiteSpace(raw))
-                raw = "{}";
+            var totalTokensUsed = batchTokens;
+            string? lastFailureReason = null;
 
-            // Attempt to repair a truncated JSON array (AI hit token limit mid-response)
-            raw = RepairTruncatedJsonArray(raw);
+            for (var attempt = 1; attempt <= 2; attempt++)
+            {
+                var attemptMessages = new List<ChatMessage>(messages);
+                if (attempt > 1)
+                {
+                    attemptMessages.Add(ChatMessage.CreateUserMessage(
+                        "Kết quả lần trước thiếu dữ liệu hoặc sai JSON. Hãy trả lại JSON NGẮN GỌN, hợp lệ, đủ đúng 20 key rubric, mỗi key có feedback/errors/suggestions không rỗng, và có overallFeedback 4-6 câu."));
+                }
 
-            // Parse JSON mới dạng {criteria:[...], warnings:[...]}
+                var response = await CompleteChatWithGeminiAsync(
+                    attemptMessages,
+                    maxTokens: 8000,
+                    temperature: 0.1f,
+                    cancellationToken: cancellationToken);
+
+                totalTokensUsed += response.Usage?.TotalTokenCount ?? 0;
+
+                var raw = NormalizeAiText(response.Content.FirstOrDefault()?.Text ?? string.Empty);
+                if (TryParseAiEvaluation(raw, out var aiResults, out var warnings, out var overallFeedback, out var parseReason))
+                {
+                    if (ValidateAiEvaluation(aiResults, overallFeedback, out var qualityReason))
+                        return (MergeWithRubric(aiResults), warnings, overallFeedback.Trim(), totalTokensUsed);
+
+                    lastFailureReason = qualityReason ?? "AI response quality invalid.";
+                }
+                else
+                {
+                    lastFailureReason = parseReason ?? "AI response parse invalid.";
+                }
+
+                _logger.LogWarning("Project analysis AI output invalid at attempt {Attempt}: {Reason}", attempt, lastFailureReason);
+            }
+
+            throw new InvalidOperationException($"AI trả về kết quả phân tích không hợp lệ sau nhiều lần thử. {lastFailureReason}");
+        }
+
+        private static bool TryParseAiEvaluation(
+            string raw,
+            out List<AiScoreItem> aiResults,
+            out List<StoryWarning> warnings,
+            out string overallFeedback,
+            out string? reason)
+        {
+            aiResults = new();
+            warnings = new();
+            overallFeedback = string.Empty;
+            reason = null;
+
+            var normalized = string.IsNullOrWhiteSpace(raw) ? "{}" : raw.Trim();
+            normalized = ExtractJsonPayload(normalized);
+            normalized = RepairTruncatedJsonArray(normalized);
+
             var jsonOpts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            List<AiScoreItem> aiResults;
-            List<StoryWarning> warnings;
-            string overallFeedback = "";
+
             try
             {
-                var parsed = JsonSerializer.Deserialize<AiFullResponse>(raw, jsonOpts)
-                    ?? throw new InvalidOperationException("Không thể parse kết quả từ AI.");
+                var parsed = JsonSerializer.Deserialize<AiFullResponse>(normalized, jsonOpts)
+                    ?? throw new InvalidOperationException("Deserialize trả về null.");
+
                 aiResults = parsed.Criteria ?? new();
                 warnings = (parsed.Warnings ?? new())
                     .Where(w => !string.IsNullOrWhiteSpace(w.Code))
                     .ToList();
-                overallFeedback = parsed.OverallFeedback ?? "";
+                overallFeedback = parsed.OverallFeedback ?? string.Empty;
+                return true;
             }
             catch
             {
-                // Fallback: thử parse dạng mảng cũ (tương thích ngược)
-                aiResults = JsonSerializer.Deserialize<List<AiScoreItem>>(raw, jsonOpts) ?? new();
-                warnings = new();
+                try
+                {
+                    aiResults = JsonSerializer.Deserialize<List<AiScoreItem>>(normalized, jsonOpts) ?? new();
+                    warnings = new();
+                    overallFeedback = string.Empty;
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    reason = $"Không parse được JSON từ AI: {ex.Message}";
+                    return false;
+                }
+            }
+        }
+
+        private static bool ValidateAiEvaluation(List<AiScoreItem> aiResults, string overallFeedback, out string? reason)
+        {
+            reason = null;
+
+            var rubricKeys = Rubric.Select(r => r.Key).ToHashSet(StringComparer.Ordinal);
+            var byKey = aiResults
+                .Where(x => !string.IsNullOrWhiteSpace(x.Key))
+                .GroupBy(x => x.Key.Trim(), StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+            var missingKeys = Rubric
+                .Select(r => r.Key)
+                .Where(k => !byKey.ContainsKey(k))
+                .ToList();
+            if (missingKeys.Count > 0)
+            {
+                reason = $"Thiếu tiêu chí: {string.Join(", ", missingKeys.Take(5))}{(missingKeys.Count > 5 ? "..." : "")}";
+                return false;
             }
 
-            var tokensUsed = batchTokens + (response.Usage?.TotalTokenCount ?? 0);
-            return (MergeWithRubric(aiResults), warnings, overallFeedback, tokensUsed);
+            var emptyFeedbackCount = byKey
+                .Where(x => rubricKeys.Contains(x.Key))
+                .Count(x => string.IsNullOrWhiteSpace(x.Value.Feedback));
+            if (emptyFeedbackCount > 0)
+            {
+                reason = $"Có {emptyFeedbackCount} tiêu chí thiếu feedback.";
+                return false;
+            }
+
+            var emptyErrorsCount = byKey
+                .Where(x => rubricKeys.Contains(x.Key))
+                .Count(x => x.Value.Errors == null || !x.Value.Errors.Any(e => !string.IsNullOrWhiteSpace(e)));
+            if (emptyErrorsCount > 0)
+            {
+                reason = $"Có {emptyErrorsCount} tiêu chí thiếu errors.";
+                return false;
+            }
+
+            var emptySuggestionsCount = byKey
+                .Where(x => rubricKeys.Contains(x.Key))
+                .Count(x => x.Value.Suggestions == null || !x.Value.Suggestions.Any(s => !string.IsNullOrWhiteSpace(s)));
+            if (emptySuggestionsCount > 0)
+            {
+                reason = $"Có {emptySuggestionsCount} tiêu chí thiếu suggestions.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(overallFeedback) || overallFeedback.Trim().Length < 20)
+            {
+                reason = "Thiếu overallFeedback có ý nghĩa.";
+                return false;
+            }
+
+            return true;
         }
 
         private async Task<(string ContextText, int TokensUsed)> BuildAnalysisContextAsync(
@@ -787,6 +891,24 @@ namespace Service.Implementations
             return normalized.Trim();
         }
 
+        private static string ExtractJsonPayload(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return text;
+
+            var objStart = text.IndexOf('{');
+            var objEnd = text.LastIndexOf('}');
+            if (objStart >= 0 && objEnd > objStart)
+                return text[objStart..(objEnd + 1)];
+
+            var arrStart = text.IndexOf('[');
+            var arrEnd = text.LastIndexOf(']');
+            if (arrStart >= 0 && arrEnd > arrStart)
+                return text[arrStart..(arrEnd + 1)];
+
+            return text;
+        }
+
         private static string BuildCompletenessNote(int chapterCount, int totalWords)
         {
             var completionLevel = chapterCount switch
@@ -848,6 +970,29 @@ namespace Service.Implementations
             {
                 return fallback;
             }
+        }
+
+        private static string BuildStoredCriteriaJson(
+            List<CriterionResult> criteria,
+            List<StoryWarning> warnings,
+            string overallFeedback)
+        {
+            var payload = new AiFullResponse
+            {
+                Criteria = criteria.Select(c => new AiScoreItem
+                {
+                    Key = c.Key,
+                    Score = c.Score,
+                    MaxScore = c.MaxScore,
+                    Feedback = c.Feedback,
+                    Errors = c.Errors ?? new(),
+                    Suggestions = c.Suggestions ?? new(),
+                }).ToList(),
+                Warnings = warnings ?? new(),
+                OverallFeedback = overallFeedback ?? string.Empty,
+            };
+
+            return JsonSerializer.Serialize(payload);
         }
 
 

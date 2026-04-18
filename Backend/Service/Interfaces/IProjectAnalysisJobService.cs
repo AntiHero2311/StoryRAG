@@ -6,6 +6,7 @@ namespace Service.Interfaces
     {
         Task<ProjectAnalysisJobResponse> EnqueueAsync(Guid projectId, Guid userId, CancellationToken cancellationToken = default);
         Task<ProjectAnalysisJobResponse?> GetActiveJobAsync(Guid userId, Guid? projectId = null, CancellationToken cancellationToken = default);
+        Task<ProjectAnalysisJobResponse?> GetLatestJobAsync(Guid projectId, Guid userId, CancellationToken cancellationToken = default);
         Task<ProjectAnalysisJobResponse?> GetJobAsync(Guid projectId, Guid jobId, Guid userId, CancellationToken cancellationToken = default);
         Task<ProjectReportResponse> GetJobResultAsync(Guid projectId, Guid jobId, Guid userId, CancellationToken cancellationToken = default);
         Task<ProjectAnalysisJobResponse> CancelJobAsync(Guid projectId, Guid jobId, Guid userId, CancellationToken cancellationToken = default);

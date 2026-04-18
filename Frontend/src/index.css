@@ -200,3 +200,9 @@
     background-color: transparent !important;
     color: inherit !important;
 }
+
+.workspace-editor-content * {
+    font-family: inherit !important;
+    font-size: inherit !important;
+    line-height: inherit !important;
+}
