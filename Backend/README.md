@@ -65,23 +65,23 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 🗂️ Project — `/api/project`
+## 🗂️ Project — `/api/projects`
 
 > Tất cả endpoint yêu cầu 🔒 ✍️
 
 | Method | Route | Mô tả |
 |--------|-------|-------|
-| `GET` | `/project` | Danh sách dự án |
-| `GET` | `/project/{id}` | Chi tiết dự án |
-| `POST` | `/project` | Tạo dự án mới |
-| `PUT` | `/project/{id}` | Cập nhật dự án |
-| `DELETE` | `/project/{id}` | Xóa mềm dự án |
-| `GET` | `/project/stats` | Thống kê dashboard |
-| `GET` | `/project/{id}/export` | Export dự án (JSON/TXT) |
+| `GET` | `/projects` | Danh sách dự án |
+| `GET` | `/projects/{id}` | Chi tiết dự án |
+| `POST` | `/projects` | Tạo dự án mới |
+| `PUT` | `/projects/{id}` | Cập nhật dự án |
+| `DELETE` | `/projects/{id}` | Xóa mềm dự án |
+| `GET` | `/projects/stats` | Thống kê dashboard |
+| `GET` | `/projects/{id}/export` | Export dự án (JSON/TXT) |
 
 ---
 
-## 📖 Chapter — `/api/project/{projectId}/chapters`
+## 📖 Chapter — `/api/projects/{projectId}/chapters`
 
 > Tất cả endpoint yêu cầu 🔒 ✍️
 
@@ -214,7 +214,7 @@ Authorization: Bearer <access_token>
 
 ## 📚 Story Bible — Context Tables
 
-> Tất cả endpoint yêu cầu 🔒 ✍️. Base: `/api/project/{projectId}`
+> Tất cả endpoint yêu cầu 🔒 ✍️. Base: `/api/projects/{projectId}`
 
 Các bảng này cung cấp **context tự động** cho AI khi phân tích — lưu vào là AI biết ngay, không cần thao tác thêm.
 

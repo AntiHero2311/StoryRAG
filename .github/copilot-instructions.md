@@ -27,7 +27,7 @@ Run from repository root unless noted.
   - `Backend/` is a .NET 8 solution with 3 layers/projects: `Api` (controllers + DI), `Service` (business/AI logic), `Repository` (EF Core entities + `AppDbContext` + migrations).
   - `Frontend/` is a React 19 + Vite + TypeScript SPA with page-level routing and API service modules in `src/services`.
 - Data path for writing and RAG:
-  1. In `WorkspacePage`, save updates the active chapter version in place (`PUT /project/{projectId}/chapters/{chapterId}`).
+  1. In `WorkspacePage`, save updates the active chapter version in place (`PUT /projects/{projectId}/chapters/{chapterId}`).
   2. After save, frontend triggers background chunking then embedding (`POST .../chunk` then `POST /ai/chapters/{chapterId}/embed`), and UI shows sync state (`syncing`/`ready`/`error`).
   3. AI chat embeds the question, retrieves nearest vectors from **active chapter versions** plus Story Bible tables, builds a guarded prompt, then calls Gemini.
 - Storage model combines encrypted text + vector search:
@@ -39,7 +39,7 @@ Run from repository root unless noted.
 
 ## Key conventions specific to this codebase
 
-- **Route prefixes are intentionally mixed**: some resources use `/api/project/{projectId}/...` while others use `/api/projects/{projectId}/...`. Follow existing controller/service pairs exactly instead of normalizing paths.
+- **Project-scoped routes use plural prefix**: use `/api/projects/{projectId}/...` for project resources.
 - **Project ownership is enforced in service layer** (`VerifyOwnershipAsync` / ownership queries) for project-scoped operations; do not rely on route params alone.
 - **Encryption/decryption is a first-class rule**: services encrypt before persistence and decrypt before returning DTOs. Keep enum-like metadata (category/role/type) in clear text only when query/filter semantics require it.
 - **Embedding input format is standardized**:

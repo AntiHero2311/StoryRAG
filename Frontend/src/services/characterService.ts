@@ -35,7 +35,7 @@ export interface UpdateCharacterRequest {
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
-const BASE = (projectId: string) => `/project/${projectId}/character`;
+const BASE = (projectId: string) => `/projects/${projectId}/character`;
 
 export const characterService = {
     getAll: (projectId: string) =>

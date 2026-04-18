@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart2, BrainCircuit, Loader2, AlertCircle, CheckCircle2, Sparkles, Clock, CreditCard, Download } from 'lucide-react';
+import { BarChart2, BrainCircuit, Loader2, AlertCircle, CheckCircle2, Sparkles, Clock, CreditCard, Download, ChevronDown, Check } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { UserInfo } from '../utils/jwtHelper';
 import { projectService, ProjectResponse } from '../services/projectService';
@@ -14,12 +14,17 @@ import GroupCard from '../components/analysis/GroupCard';
 import NarrativeChartsPanel from '../components/analysis/NarrativeChartsPanel';
 import { useToast } from '../components/Toast';
 import { browserNotificationService } from '../services/browserNotificationService';
+import { appNotificationService } from '../services/appNotificationService';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+
+const ANALYSIS_SELECTED_PROJECT_KEY = 'analysis:selectedProjectId';
 
 // ─── Main content ─────────────────────────────────────────────────────────────
 function AnalysisContent() {
     const [projects, setProjects] = useState<ProjectResponse[]>([]);
     const [selectedId, setSelectedId] = useState<string>('');
+    const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+    const [projectQuery, setProjectQuery] = useState('');
     const [report, setReport] = useState<ProjectReportResponse | null>(null);
     const [history, setHistory] = useState<ProjectReportSummary[]>([]);
     const [projectChapters, setProjectChapters] = useState<ChapterResponse[]>([]);
@@ -36,6 +41,7 @@ function AnalysisContent() {
     const [elapsed, setElapsed] = useState(0);
     const [subscription, setSubscription] = useState<UserSubscription | null>(null);
     const [analysisJob, setAnalysisJob] = useState<ProjectAnalysisJobResponse | null>(null);
+    const [analysisStatus, setAnalysisStatus] = useState<{ type: 'info' | 'success'; message: string } | null>(null);
     const [cancelingJob, setCancelingJob] = useState(false);
     const [activeReportId, setActiveReportId] = useState<string | null>(null);
     const [showAnalyzeConfirm, setShowAnalyzeConfirm] = useState(false);
@@ -43,7 +49,15 @@ function AnalysisContent() {
     const mountedRef = useRef(true);
     const pollingJobRef = useRef<string | null>(null);
     const notifiedJobRef = useRef<string | null>(null);
+    const interactiveJobRef = useRef<string | null>(null);
+    const processingAnnouncedRef = useRef<string | null>(null);
+    const projectPickerRef = useRef<HTMLDivElement | null>(null);
     const toast = useToast();
+    const getApiErrorMessage = (err: any, fallback: string) =>
+        err?.response?.data?.message
+        || err?.response?.data?.Message
+        || err?.message
+        || fallback;
 
     const stopElapsedTimer = () => {
         if (elapsedRef.current) {
@@ -64,10 +78,35 @@ function AnalysisContent() {
     // Load projects + subscription
     useEffect(() => {
         projectService.getProjects()
-            .then(data => { setProjects(data); if (data.length > 0) setSelectedId(data[0].id); })
+            .then(data => {
+                setProjects(data);
+                const savedProjectId = localStorage.getItem(ANALYSIS_SELECTED_PROJECT_KEY);
+                const initialProjectId = savedProjectId && data.some(p => p.id === savedProjectId)
+                    ? savedProjectId
+                    : (data[0]?.id ?? '');
+                setSelectedId(initialProjectId);
+            })
             .catch(() => setError('Không thể tải danh sách dự án.'))
             .finally(() => setLoadingProjects(false));
         subscriptionService.getMySubscription().then(setSubscription).catch(() => { });
+    }, []);
+
+    useEffect(() => {
+        if (!selectedId) return;
+        localStorage.setItem(ANALYSIS_SELECTED_PROJECT_KEY, selectedId);
+    }, [selectedId]);
+
+    useEffect(() => {
+        const onDocumentClick = (event: MouseEvent) => {
+            if (!projectPickerRef.current) return;
+            if (!projectPickerRef.current.contains(event.target as Node)) {
+                setProjectPickerOpen(false);
+                setProjectQuery('');
+            }
+        };
+
+        document.addEventListener('mousedown', onDocumentClick);
+        return () => document.removeEventListener('mousedown', onDocumentClick);
     }, []);
 
     useEffect(() => () => {
@@ -101,8 +140,11 @@ function AnalysisContent() {
         setNarrativeCharts(null);
         setError(null);
         setAnalysisJob(null);
+        setAnalysisStatus(null);
         setActiveReportId(null);
         setLoadingReport(true);
+        interactiveJobRef.current = null;
+        processingAnnouncedRef.current = null;
 
         const projectId = selectedId;
 
@@ -131,6 +173,17 @@ function AnalysisContent() {
                 }
             }
 
+            // Fallback path: latest endpoint lỗi/đồng bộ chậm nhưng danh sách lịch sử đã có.
+            if (!effectiveLatest && effectiveHistory.length > 0) {
+                const newestFromHistory = await reportService
+                    .getById(projectId, effectiveHistory[0].id)
+                    .catch(() => null);
+                if (newestFromHistory && mountedRef.current && !cancelled) {
+                    effectiveLatest = newestFromHistory;
+                    effectiveHistory = mergeHistory(all, newestFromHistory);
+                }
+            }
+
             setReport(effectiveLatest);
             setActiveReportId(effectiveLatest?.id ?? null);
             setHistory(effectiveHistory);
@@ -142,6 +195,10 @@ function AnalysisContent() {
                 setAnalyzing(false);
                 setAnalysisJob(null);
                 stopElapsedTimer();
+
+                if (!effectiveLatest && latestJob?.status === 'Failed' && latestJob.errorMessage) {
+                    setError(latestJob.errorMessage);
+                }
             }
         };
 
@@ -166,6 +223,16 @@ function AnalysisContent() {
             if (!mountedRef.current) return null;
 
             setAnalysisJob(job);
+
+            if (job.status === 'Queued' || job.stage === 'Queued' || job.stage === 'Preparing') {
+                setAnalysisStatus({ type: 'info', message: 'AI đã nhận được request. Job đang chờ xử lý...' });
+            } else if (job.status === 'Processing' || job.stage === 'Analyzing' || job.stage === 'Saving') {
+                setAnalysisStatus({ type: 'info', message: 'AI đang phân tích nội dung dự án...' });
+                if (interactiveJobRef.current === jobId && processingAnnouncedRef.current !== jobId) {
+                    processingAnnouncedRef.current = jobId;
+                    toast.info('AI đang phân tích nội dung dự án...');
+                }
+            }
 
             if (job.status === 'Completed') {
                 let lastResultError: any = null;
@@ -200,6 +267,12 @@ function AnalysisContent() {
         setAnalyzing(true);
         setAnalysisJob(job);
         setError(null);
+        setAnalysisStatus({
+            type: 'info',
+            message: job.isExistingJob
+                ? 'AI đã nhận được request trước đó. Đang tiếp tục job phân tích...'
+                : 'AI đã nhận được request. Đang khởi tạo job phân tích...',
+        });
         startElapsedTimer(job.startedAt ?? job.createdAt);
 
         try {
@@ -214,10 +287,17 @@ function AnalysisContent() {
             const chapterId = chartChapterFilter === 'all' ? undefined : chartChapterFilter;
             await loadNarrativeCharts(projectId, chapterId);
             subscriptionService.getMySubscription().then(setSubscription).catch(() => { });
+            setAnalysisStatus({ type: 'success', message: 'AI đã phân tích xong. Kết quả đã sẵn sàng bên dưới.' });
 
             if (notifiedJobRef.current !== job.jobId) {
                 notifiedJobRef.current = job.jobId;
                 toast.success(`Phân tích hoàn tất: ${result.totalScore.toFixed(1)} điểm (${result.classification}).`);
+                appNotificationService.add({
+                    type: 'success',
+                    title: 'Phân tích AI đã hoàn tất',
+                    message: `${result.projectTitle}: ${result.totalScore.toFixed(1)} điểm (${result.classification}).`,
+                    tag: `analysis-complete-${job.jobId}`,
+                });
                 void browserNotificationService.notify(
                     'Phân tích AI đã hoàn tất',
                     `${result.projectTitle}: ${result.totalScore.toFixed(1)} điểm (${result.classification}).`,
@@ -225,14 +305,27 @@ function AnalysisContent() {
                 );
             }
         } catch (e: any) {
-            const message = e?.response?.data?.message || e?.message || 'Phân tích thất bại. Vui lòng thử lại.';
+            const message = getApiErrorMessage(e, 'Phân tích thất bại. Vui lòng thử lại.');
             const isCancelled = message === 'Job phân tích đã bị hủy.';
             setError(isCancelled ? null : message);
+            setAnalysisStatus(null);
 
             if (isCancelled) {
                 toast.warning('Job phân tích đã bị hủy.');
+                appNotificationService.add({
+                    type: 'warning',
+                    title: 'Job phân tích đã bị hủy',
+                    message: 'Yêu cầu phân tích đã được dừng trước khi hoàn tất.',
+                    tag: `analysis-cancelled-${job.jobId}`,
+                });
             } else {
                 toast.error(message);
+                appNotificationService.add({
+                    type: 'error',
+                    title: 'Phân tích AI thất bại',
+                    message,
+                    tag: `analysis-failed-${job.jobId}`,
+                });
                 void browserNotificationService.notify(
                     'Phân tích AI thất bại',
                     message,
@@ -245,6 +338,7 @@ function AnalysisContent() {
             setAnalyzing(false);
             setCancelingJob(false);
             stopElapsedTimer();
+            interactiveJobRef.current = null;
         }
     };
 
@@ -252,15 +346,24 @@ function AnalysisContent() {
         if (!selectedId || analyzing) return;
         setError(null);
         setAnalysisJob(null);
+        setAnalyzing(true);
+        setAnalysisStatus({ type: 'info', message: 'AI đã nhận được request. Đang gửi yêu cầu phân tích...' });
+        startElapsedTimer();
         try {
             void browserNotificationService.ensurePermission();
             const job = await reportService.enqueueAnalyzeJob(selectedId);
             if (!mountedRef.current) return;
+            interactiveJobRef.current = job.jobId;
+            processingAnnouncedRef.current = null;
+            toast.info('AI đã nhận được request phân tích.');
             await runAnalyzeFlow(selectedId, job);
         } catch (e: any) {
-            const message = e?.response?.data?.message || e?.message || 'Phân tích thất bại. Vui lòng thử lại.';
+            const message = getApiErrorMessage(e, 'Phân tích thất bại. Vui lòng thử lại.');
             setError(message);
+            setAnalysisStatus(null);
             toast.error(message);
+            setAnalyzing(false);
+            stopElapsedTimer();
 
             const activeJob = await reportService.getActiveAnalyzeJob(selectedId).catch(() => null);
             if (!activeJob || !mountedRef.current) return;
@@ -290,7 +393,7 @@ function AnalysisContent() {
             setAnalyzing(false);
             stopElapsedTimer();
         } catch (e: any) {
-            setError(e?.response?.data?.message || 'Không thể hủy job phân tích lúc này.');
+            setError(getApiErrorMessage(e, 'Không thể hủy job phân tích lúc này.'));
         } finally {
             setCancelingJob(false);
         }
@@ -322,7 +425,7 @@ function AnalysisContent() {
             await reportService.exportReportPdf(selectedId, activeReportId);
             toast.success('Đã xuất PDF báo cáo phân tích.');
         } catch (e: any) {
-            const message = e?.response?.data?.message || 'Không thể xuất PDF báo cáo.';
+            const message = getApiErrorMessage(e, 'Không thể xuất PDF báo cáo.');
             setError(message);
             toast.error(message);
         } finally {
@@ -368,7 +471,10 @@ function AnalysisContent() {
     };
     const currentStageLabel = analysisJob ? stageLabelMap[analysisJob.stage] : 'Đang khởi tạo';
     const progressValue = Math.min(100, Math.max(analysisJob?.progress ?? 10, 8));
-    const selectedProjectTitle = projects.find(p => p.id === selectedId)?.title ?? 'Chưa chọn dự án';
+    const selectedProject = projects.find(p => p.id === selectedId) ?? null;
+    const selectedProjectTitle = selectedProject?.title ?? 'Chưa chọn dự án';
+    const filteredProjects = projects.filter(p =>
+        p.title.toLowerCase().includes(projectQuery.trim().toLowerCase()));
     const usagePercent = subscription && subscription.maxAnalysisCount > 0
         ? Math.min((subscription.usedAnalysisCount / subscription.maxAnalysisCount) * 100, 100)
         : 0;
@@ -427,22 +533,83 @@ function AnalysisContent() {
                             {loadingProjects ? (
                                 <div className="h-11 rounded-2xl animate-pulse" style={{ background: 'var(--bg-hover)' }} />
                             ) : (
-                                <select
-                                    value={selectedId}
-                                    onChange={e => {
-                                        setSelectedId(e.target.value);
-                                        setChartChapterFilter('all');
-                                    }}
-                                    disabled={analyzing}
-                                    className="w-full h-11 px-4 rounded-2xl text-sm text-[var(--text-primary)] outline-none"
-                                    style={{ background: 'var(--bg-hover)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                                    {projects.length === 0 && <option value="">— Chưa có dự án —</option>}
-                                    {projects.map(p => (
-                                        <option key={p.id} value={p.id}>{p.title}</option>
-                                    ))}
-                                </select>
+                                <div ref={projectPickerRef} className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (analyzing) return;
+                                            setProjectPickerOpen(prev => !prev);
+                                        }}
+                                        disabled={analyzing || projects.length === 0}
+                                        className="w-full h-11 px-4 rounded-2xl text-sm flex items-center gap-3 disabled:opacity-60"
+                                        style={{ background: 'var(--bg-hover)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-primary)' }}>
+                                        <span className="flex-1 text-left truncate">
+                                            {selectedProjectTitle}
+                                        </span>
+                                        <ChevronDown className={`w-4 h-4 transition-transform ${projectPickerOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    {projectPickerOpen && projects.length > 0 && (
+                                        <div
+                                            className="absolute z-30 mt-2 w-full rounded-2xl overflow-hidden"
+                                            style={{ background: 'var(--bg-dropdown)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-lg)' }}>
+                                            <div className="p-2 border-b" style={{ borderColor: 'var(--border-color)' }}>
+                                                <input
+                                                    value={projectQuery}
+                                                    onChange={e => setProjectQuery(e.target.value)}
+                                                    placeholder="Tìm tác phẩm..."
+                                                    className="w-full h-9 px-3 rounded-xl text-sm outline-none"
+                                                    style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                                                />
+                                            </div>
+                                            <div className="max-h-64 overflow-y-auto">
+                                                {filteredProjects.length === 0 ? (
+                                                    <div className="px-4 py-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                                                        Không tìm thấy tác phẩm phù hợp.
+                                                    </div>
+                                                ) : (
+                                                    filteredProjects.map(p => {
+                                                        const isActive = p.id === selectedId;
+                                                        return (
+                                                            <button
+                                                                key={p.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setSelectedId(p.id);
+                                                                    setChartChapterFilter('all');
+                                                                    setProjectPickerOpen(false);
+                                                                    setProjectQuery('');
+                                                                }}
+                                                                className="w-full px-4 py-2.5 text-left flex items-center gap-3"
+                                                                style={{
+                                                                    background: isActive ? 'var(--bg-hover)' : 'transparent',
+                                                                    color: 'var(--text-primary)',
+                                                                    borderBottom: '1px solid var(--border-subtle)',
+                                                                }}>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-sm font-medium truncate">{p.title}</p>
+                                                                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                                                                        Cập nhật: {new Date(p.updatedAt ?? p.createdAt).toLocaleString('vi-VN')}
+                                                                    </p>
+                                                                </div>
+                                                                {isActive && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}
+                                                            </button>
+                                                        );
+                                                    })
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             )}
-                            <p className="mt-2 text-xs text-[var(--text-secondary)] truncate">Dự án hiện tại: <span className="text-[var(--text-primary)] font-medium">{selectedProjectTitle}</span></p>
+                            <p className="mt-2 text-xs text-[var(--text-secondary)] truncate">
+                                Dự án hiện tại: <span className="text-[var(--text-primary)] font-medium">{selectedProjectTitle}</span>
+                                {selectedProject && (
+                                    <span className="ml-2 text-[var(--text-secondary)]">
+                                        · cập nhật {new Date(selectedProject.updatedAt ?? selectedProject.createdAt).toLocaleDateString('vi-VN')}
+                                    </span>
+                                )}
+                            </p>
                         </div>
                         <button
                             onClick={openAnalyzeConfirm}
@@ -495,6 +662,18 @@ function AnalysisContent() {
                     <div className="flex-1 min-w-0 space-y-5">
 
                         {/* Error */}
+                        {analysisStatus && !error && (
+                            <div className="flex items-center gap-3 p-4 rounded-2xl text-sm"
+                                style={analysisStatus.type === 'success'
+                                    ? { background: 'linear-gradient(135deg,rgba(34,197,94,0.14),rgba(34,197,94,0.05))', border: '1px solid rgba(34,197,94,0.3)', color: '#86efac' }
+                                    : { background: 'linear-gradient(135deg,rgba(59,130,246,0.14),rgba(59,130,246,0.05))', border: '1px solid rgba(59,130,246,0.3)', color: '#93c5fd' }}>
+                                {analysisStatus.type === 'success'
+                                    ? <CheckCircle2 className="w-4 h-4 shrink-0" />
+                                    : <BrainCircuit className="w-4 h-4 shrink-0" />}
+                                {analysisStatus.message}
+                            </div>
+                        )}
+
                         {error && (
                             <div className="flex items-center gap-3 p-4 rounded-2xl text-sm"
                                 style={{ background: 'linear-gradient(135deg,rgba(239,68,68,0.12),rgba(239,68,68,0.04))', border: '1px solid rgba(239,68,68,0.28)', color: '#f87171' }}>

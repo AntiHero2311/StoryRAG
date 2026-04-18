@@ -24,7 +24,7 @@ PUT    /profile                       # Cập nhật profile
 GET    /                              # Cài đặt editor hiện tại
 PUT    /                              # Cập nhật font, font size
 
-### ProjectController  /api/project  [Auth(Author)]
+### ProjectController  /api/projects  [Auth(Author)]
 GET    /                              # Danh sách projects của user
 GET    /stats                         # Thống kê cá nhân (projects, chapters, analysis, chat)
 GET    /{id}                          # Chi tiết project
@@ -33,7 +33,7 @@ PUT    /{id}                          # Cập nhật project
 DELETE /{id}                          # Xóa mềm project
 GET    /{id}/export                   # Export tất cả chương ra .txt
 
-### ChapterController  /api/project/{projectId}/chapters  [Auth]
+### ChapterController  /api/projects/{projectId}/chapters  [Auth]
 GET    /                              # Danh sách chương
 GET    /{chapterId}                   # Chi tiết chương + versions
 POST   /                              # Tạo chương mới
@@ -63,7 +63,7 @@ GET    /{projectId}/reports/{reportId}             # Báo cáo cụ thể
 POST   /{projectId}/rewrite                        # AI Rewrite đoạn văn
 GET    /{projectId}/rewrite/history                # Lịch sử rewrite (phân trang)
 
-### WorldbuildingController  /api/project/{projectId}/worldbuilding  [Auth]
+### WorldbuildingController  /api/projects/{projectId}/worldbuilding  [Auth]
 GET    /                              # Danh sách entries
 GET    /{id}                          # Chi tiết entry
 POST   /                              # Tạo entry mới (auto embed)
@@ -71,7 +71,7 @@ PUT    /{id}                          # Cập nhật entry (auto embed)
 DELETE /{id}                          # Xóa entry
 POST   /{id}/embed                    # Embed thủ công
 
-### CharacterController  /api/project/{projectId}/character  [Auth]
+### CharacterController  /api/projects/{projectId}/character  [Auth]
 GET    /                              # Danh sách nhân vật
 GET    /{id}                          # Chi tiết nhân vật
 POST   /                              # Tạo nhân vật mới (auto embed)
@@ -140,15 +140,15 @@ aiService.ts            # /api/ai — chat, analyze, rewrite, embed, history
 api.ts                  # Axios base instance + interceptors
 authService.ts          # /api/auth — login, register, forgot/reset password
 bugReportService.ts     # /api/bug-reports — CRUD, status update
-chapterService.ts       # /api/project/{id}/chapters — CRUD, versions, chunk, pin, diff
-characterService.ts     # /api/project/{id}/character — CRUD, embed
+chapterService.ts       # /api/projects/{id}/chapters — CRUD, versions, chunk, pin, diff
+characterService.ts     # /api/projects/{id}/character — CRUD, embed
 editorSettingsService.ts # /api/settings — font, font size
 genreService.ts         # /api/genre — list genres
-projectService.ts       # /api/project — CRUD, stats, export
+projectService.ts       # /api/projects — CRUD, stats, export
 reportService.ts        # /api/ai/{id}/reports — fetch analysis reports
 subscriptionService.ts  # /api/subscription — plans, subscribe, my plan
 userService.ts          # /api/user — profile
-worldbuildingService.ts # /api/project/{id}/worldbuilding — CRUD, embed
+worldbuildingService.ts # /api/projects/{id}/worldbuilding — CRUD, embed
 
 ## ============================================================
 ## KEY BUSINESS RULES

@@ -44,7 +44,7 @@ export interface UpdateWorldbuildingRequest {
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
-const BASE = (projectId: string) => `/project/${projectId}/worldbuilding`;
+const BASE = (projectId: string) => `/projects/${projectId}/worldbuilding`;
 
 export const worldbuildingService = {
     getAll: (projectId: string) =>

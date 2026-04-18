@@ -11,6 +11,9 @@ namespace Service.Implementations
 {
     public class ProjectAnalysisJobService : IProjectAnalysisJobService
     {
+        private const string MissingEmbeddedContentMessage =
+            "Dự án chưa có nội dung được nhúng (embed). Vui lòng chunk và embed các chương trong Workspace trước khi phân tích.";
+
         private const string StatusQueued = "Queued";
         private const string StatusProcessing = "Processing";
         private const string StatusCompleted = "Completed";
@@ -49,6 +52,7 @@ namespace Service.Implementations
         {
             await VerifyOwnershipAsync(projectId, userId, cancellationToken);
             await EnsureCanAnalyzeAsync(userId, cancellationToken);
+            await EnsureProjectHasEmbeddedContentAsync(projectId, cancellationToken);
 
             var activeJob = await _context.ProjectAnalysisJobs
                 .Where(j =>
@@ -303,6 +307,23 @@ namespace Service.Implementations
 
             if (sub.UsedAnalysisCount >= sub.Plan.MaxAnalysisCount)
                 throw new InvalidOperationException($"Bạn đã dùng hết {sub.Plan.MaxAnalysisCount} lần phân tích trong kỳ này.");
+        }
+
+        private async Task EnsureProjectHasEmbeddedContentAsync(Guid projectId, CancellationToken cancellationToken)
+        {
+            var activeVersionIds = await _context.Chapters
+                .Where(c => c.ProjectId == projectId && !c.IsDeleted && c.CurrentVersionId.HasValue)
+                .Select(c => c.CurrentVersionId!.Value)
+                .ToListAsync(cancellationToken);
+
+            if (activeVersionIds.Count == 0)
+                throw new InvalidOperationException(MissingEmbeddedContentMessage);
+
+            var hasEmbeddedChunks = await _context.ChapterChunks
+                .AnyAsync(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId), cancellationToken);
+
+            if (!hasEmbeddedChunks)
+                throw new InvalidOperationException(MissingEmbeddedContentMessage);
         }
 
         private async Task<string> BuildProjectVersionHashAsync(Guid projectId, CancellationToken cancellationToken)

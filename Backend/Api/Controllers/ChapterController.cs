@@ -7,7 +7,7 @@ using System.Security.Claims;
 
 namespace Api.Controllers
 {
-    [Route("api/project/{projectId:guid}/chapters")]
+    [Route("api/projects/{projectId:guid}/chapters")]
     [ApiController]
     [Authorize]
     public class ChapterController : ControllerBase

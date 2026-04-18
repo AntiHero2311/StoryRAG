@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { getInitials } from '../utils/jwtHelper';
 import { bugReportService, type BugCategory, type BugPriority } from '../services/bugReportService';
+import { appNotificationService, type AppNotificationItem } from '../services/appNotificationService';
 
 interface TopbarProps {
     fullName: string;
@@ -27,6 +28,27 @@ function getGreeting() {
     if (h < 12) return 'Chào buổi sáng';
     if (h < 18) return 'Chào buổi chiều';
     return 'Chào buổi tối';
+}
+
+function formatNotificationTime(iso: string) {
+    const then = new Date(iso).getTime();
+    const now = Date.now();
+    const diff = Math.max(0, now - then);
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'Vừa xong';
+    if (minutes < 60) return `${minutes} phút trước`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} giờ trước`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days} ngày trước`;
+    return new Date(iso).toLocaleDateString('vi-VN');
+}
+
+function getNotificationDot(type: AppNotificationItem['type']) {
+    if (type === 'success') return '#22c55e';
+    if (type === 'error') return '#f87171';
+    if (type === 'warning') return '#fbbf24';
+    return '#60a5fa';
 }
 
 // ── Bug Report Modal ───────────────────────────────────────────────────────────
@@ -174,9 +196,11 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
     const navigate = useNavigate();
     const [userOpen, setUserOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
+    const [notifications, setNotifications] = useState<AppNotificationItem[]>(() => appNotificationService.getAll());
     const [showWelcome, setShowWelcome] = useState(false);
     const [bugModalOpen, setBugModalOpen] = useState(false);
     const badge = getRoleBadge(role);
+    const unreadCount = notifications.filter(n => !n.isRead).length;
 
     // Welcome toast — once per session
     useEffect(() => {
@@ -189,6 +213,12 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
             return () => clearTimeout(t);
         }
     }, [fullName]);
+
+    useEffect(() => {
+        const sync = () => setNotifications(appNotificationService.getAll());
+        sync();
+        return appNotificationService.subscribe(sync);
+    }, []);
 
     return (
         <>
@@ -241,10 +271,22 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                     {/* ── Bell / Notification ── */}
                     <div className="relative">
                         <button
-                            onClick={() => { setNotifOpen(o => !o); setUserOpen(false); }}
+                            onClick={() => {
+                                const nextOpen = !notifOpen;
+                                setNotifOpen(nextOpen);
+                                setUserOpen(false);
+                                if (nextOpen) appNotificationService.markAllRead();
+                            }}
                             className="relative w-9 h-9 flex items-center justify-center rounded-xl bg-[var(--text-primary)]/5 hover:bg-[var(--text-primary)]/10 transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                         >
                             <Bell className="w-4 h-4" />
+                            {unreadCount > 0 && (
+                                <span
+                                    className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
+                                    style={{ background: '#ef4444' }}>
+                                    {unreadCount > 9 ? '9+' : unreadCount}
+                                </span>
+                            )}
                         </button>
 
                         {notifOpen && (
@@ -266,17 +308,45 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                                         </button>
                                     </div>
 
-                                    {/* Empty state */}
-                                    <div className="flex flex-col items-center justify-center py-10 px-4 gap-3 text-center">
-                                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                                            style={{ background: 'var(--input-bg)' }}>
-                                            <Bell className="w-6 h-6 text-[var(--text-secondary)] opacity-30" />
+                                    {notifications.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center py-10 px-4 gap-3 text-center">
+                                            <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
+                                                style={{ background: 'var(--input-bg)' }}>
+                                                <Bell className="w-6 h-6 text-[var(--text-secondary)] opacity-30" />
+                                            </div>
+                                            <p className="text-[var(--text-primary)] text-sm font-semibold">Chưa có thông báo</p>
+                                            <p className="text-[var(--text-secondary)] text-xs leading-relaxed max-w-[180px]">
+                                                Thông báo về phân tích AI và hoạt động dự án sẽ xuất hiện ở đây.
+                                            </p>
                                         </div>
-                                        <p className="text-[var(--text-primary)] text-sm font-semibold">Chưa có thông báo</p>
-                                        <p className="text-[var(--text-secondary)] text-xs leading-relaxed max-w-[180px]">
-                                            Thông báo về phân tích AI và hoạt động dự án sẽ xuất hiện ở đây.
-                                        </p>
-                                    </div>
+                                    ) : (
+                                        <div className="max-h-[320px] overflow-y-auto">
+                                            {notifications.slice(0, 12).map(item => (
+                                                <div
+                                                    key={item.id}
+                                                    className="px-4 py-3 border-b last:border-b-0"
+                                                    style={{ borderColor: 'var(--border-color)' }}>
+                                                    <div className="flex items-start gap-2.5">
+                                                        <span
+                                                            className="mt-1 w-2 h-2 rounded-full shrink-0"
+                                                            style={{ background: getNotificationDot(item.type) }}
+                                                        />
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="text-[var(--text-primary)] text-sm font-semibold leading-snug">
+                                                                {item.title}
+                                                            </p>
+                                                            <p className="text-[var(--text-secondary)] text-xs mt-1 leading-relaxed">
+                                                                {item.message}
+                                                            </p>
+                                                            <p className="text-[var(--text-secondary)] text-[11px] mt-1.5 opacity-80">
+                                                                {formatNotificationTime(item.createdAt)}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </>
                         )}

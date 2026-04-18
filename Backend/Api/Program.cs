@@ -54,7 +54,14 @@ builder.Services.AddControllers();
 var corsOrigins = builder.Configuration["Cors:AllowedOrigins"]
     ?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
     ?? [];
-var defaultOrigins = new[] { "http://localhost:5173", "http://localhost:5174", "http://localhost:3000" };
+var defaultOrigins = new[]
+{
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:3000",
+    "https://www.storynest.cloud",
+    "https://storynest.cloud"
+};
 var allOrigins = defaultOrigins.Union(corsOrigins).ToArray();
 
 builder.Services.AddCors(options =>
@@ -282,6 +289,18 @@ app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapGet("/", () => Results.Ok(new
+{
+    service = "StoryRAG API",
+    status = "ok"
+}));
+
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "healthy"
+}));
+
 app.MapControllers();
 
 app.Run();

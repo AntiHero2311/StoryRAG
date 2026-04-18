@@ -100,59 +100,59 @@ export interface RenameChapterRequest {
 export const chapterService = {
     // Chapter CRUD
     getChapters: (projectId: string) =>
-        api.get<ChapterResponse[]>(`/project/${projectId}/chapters`).then(r => r.data),
+        api.get<ChapterResponse[]>(`/projects/${projectId}/chapters`).then(r => r.data),
 
     getChapterDetail: (projectId: string, chapterId: string) =>
-        api.get<ChapterDetailResponse>(`/project/${projectId}/chapters/${chapterId}`).then(r => r.data),
+        api.get<ChapterDetailResponse>(`/projects/${projectId}/chapters/${chapterId}`).then(r => r.data),
 
     createChapter: (projectId: string, data: CreateChapterRequest) =>
-        api.post<ChapterDetailResponse>(`/project/${projectId}/chapters`, data).then(r => r.data),
+        api.post<ChapterDetailResponse>(`/projects/${projectId}/chapters`, data).then(r => r.data),
 
     /** Lưu in-place: cập nhật content của version đang active (không tạo version mới). */
     updateChapter: (projectId: string, chapterId: string, data: UpdateChapterRequest) =>
-        api.put<ChapterDetailResponse>(`/project/${projectId}/chapters/${chapterId}`, data).then(r => r.data),
+        api.put<ChapterDetailResponse>(`/projects/${projectId}/chapters/${chapterId}`, data).then(r => r.data),
 
     deleteChapter: (projectId: string, chapterId: string) =>
-        api.delete(`/project/${projectId}/chapters/${chapterId}`).then(r => r.data),
+        api.delete(`/projects/${projectId}/chapters/${chapterId}`).then(r => r.data),
 
     /** Đổi tên chương (chỉ title, không ảnh hưởng content hay version). */
     renameChapter: (projectId: string, chapterId: string, title: string) =>
-        api.patch<ChapterResponse>(`/project/${projectId}/chapters/${chapterId}/title`, { title }).then(r => r.data),
+        api.patch<ChapterResponse>(`/projects/${projectId}/chapters/${chapterId}/title`, { title }).then(r => r.data),
 
     // Version management
     getVersions: (projectId: string, chapterId: string) =>
-        api.get<ChapterVersionSummary[]>(`/project/${projectId}/chapters/${chapterId}/versions`).then(r => r.data),
+        api.get<ChapterVersionSummary[]>(`/projects/${projectId}/chapters/${chapterId}/versions`).then(r => r.data),
 
     getVersionDetail: (projectId: string, chapterId: string, versionNumber: number) =>
-        api.get<ChapterVersionDetailResponse>(`/project/${projectId}/chapters/${chapterId}/versions/${versionNumber}`).then(r => r.data),
+        api.get<ChapterVersionDetailResponse>(`/projects/${projectId}/chapters/${chapterId}/versions/${versionNumber}`).then(r => r.data),
 
     /** Tạo version trống mới (do người dùng chủ ý). */
     createNewVersion: (projectId: string, chapterId: string, data: CreateVersionRequest = {}) =>
-        api.post<ChapterDetailResponse>(`/project/${projectId}/chapters/${chapterId}/versions`, data).then(r => r.data),
+        api.post<ChapterDetailResponse>(`/projects/${projectId}/chapters/${chapterId}/versions`, data).then(r => r.data),
 
     /** Chuyển sang version khác (set làm active). */
     setActiveVersion: (projectId: string, chapterId: string, versionNumber: number) =>
-        api.patch<ChapterDetailResponse>(`/project/${projectId}/chapters/${chapterId}/versions/${versionNumber}/activate`).then(r => r.data),
+        api.patch<ChapterDetailResponse>(`/projects/${projectId}/chapters/${chapterId}/versions/${versionNumber}/activate`).then(r => r.data),
 
     /** Đổi tên version. */
     updateVersionTitle: (projectId: string, chapterId: string, versionNumber: number, title: string) =>
-        api.patch<ChapterVersionSummary>(`/project/${projectId}/chapters/${chapterId}/versions/${versionNumber}/title`, { title }).then(r => r.data),
+        api.patch<ChapterVersionSummary>(`/projects/${projectId}/chapters/${chapterId}/versions/${versionNumber}/title`, { title }).then(r => r.data),
 
     /** Xóa version (chỉ khi chapter có ≥2 version). */
     deleteVersion: (projectId: string, chapterId: string, versionNumber: number) =>
-        api.delete(`/project/${projectId}/chapters/${chapterId}/versions/${versionNumber}`).then(r => r.data),
+        api.delete(`/projects/${projectId}/chapters/${chapterId}/versions/${versionNumber}`).then(r => r.data),
 
     /** Toggle ghim version — version ghim không bị xóa tự động khi vượt giới hạn 20. */
     pinVersion: (projectId: string, chapterId: string, versionNumber: number) =>
-        api.put<ChapterVersionSummary>(`/project/${projectId}/chapters/${chapterId}/versions/${versionNumber}/pin`).then(r => r.data),
+        api.put<ChapterVersionSummary>(`/projects/${projectId}/chapters/${chapterId}/versions/${versionNumber}/pin`).then(r => r.data),
 
     /** Lấy nội dung thuần của version để so sánh diff. */
     getVersionContent: (projectId: string, chapterId: string, versionNumber: number) =>
-        api.get<{ content: string }>(`/project/${projectId}/chapters/${chapterId}/versions/${versionNumber}/content`).then(r => r.data.content),
+        api.get<{ content: string }>(`/projects/${projectId}/chapters/${chapterId}/versions/${versionNumber}/content`).then(r => r.data.content),
 
     /** So sánh 2 phiên bản chapter từ backend (unified diff + stats). */
     compareVersions: (projectId: string, chapterId: string, fromVersion: number, toVersion: number) =>
-        api.get<ChapterVersionDiffResponse>(`/project/${projectId}/chapters/${chapterId}/versions/compare`, {
+        api.get<ChapterVersionDiffResponse>(`/projects/${projectId}/chapters/${chapterId}/versions/compare`, {
             params: { fromVersion, toVersion },
         }).then(r => r.data),
 
@@ -161,11 +161,11 @@ export const chapterService = {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('splitByHeadings', String(splitByHeadings));
-        return api.post<ManuscriptImportResponse>(`/project/${projectId}/chapters/import`, formData)
+        return api.post<ManuscriptImportResponse>(`/manuscript/${projectId}/upload`, formData)
             .then(r => r.data);
     },
 
     // Chunking
     chunkChapter: (projectId: string, chapterId: string) =>
-        api.post<ChapterVersionDetailResponse>(`/project/${projectId}/chapters/${chapterId}/chunk`).then(r => r.data),
+        api.post<ChapterVersionDetailResponse>(`/projects/${projectId}/chapters/${chapterId}/chunk`).then(r => r.data),
 };

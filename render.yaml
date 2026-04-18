@@ -6,6 +6,7 @@ services:
     dockerContext: ./Backend
     region: singapore
     plan: free
+    healthCheckPath: /health
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production

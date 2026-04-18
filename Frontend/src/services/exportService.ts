@@ -3,7 +3,7 @@ import { api } from './api';
 export const exportService = {
     /** Export toàn bộ dự án dưới dạng file (docx, html, md, txt). */
     exportProject: async (projectId: string, format: string = 'docx'): Promise<void> => {
-        const res = await api.get(`/export/${projectId}`, {
+        const res = await api.get(`/manuscript/${projectId}/export`, {
             params: { format },
             responseType: 'blob',
         });
@@ -35,7 +35,7 @@ export const exportService = {
 
     /** Export 1 chương truyện. */
     exportChapter: async (projectId: string, chapterId: string, format: string = 'docx'): Promise<void> => {
-        const res = await api.get(`/export/${projectId}/chapters/${chapterId}`, {
+        const res = await api.get(`/manuscript/${projectId}/chapters/${chapterId}/export`, {
             params: { format },
             responseType: 'blob',
         });

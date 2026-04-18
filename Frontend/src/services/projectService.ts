@@ -39,22 +39,22 @@ export interface UpdateProjectRequest {
 
 export const projectService = {
     getProjects: () =>
-        api.get<ProjectResponse[]>('/project').then(r => r.data),
+        api.get<ProjectResponse[]>('/projects').then(r => r.data),
 
     getProject: (id: string) =>
-        api.get<ProjectResponse>(`/project/${id}`).then(r => r.data),
+        api.get<ProjectResponse>(`/projects/${id}`).then(r => r.data),
 
     createProject: (data: CreateProjectRequest) =>
-        api.post<ProjectResponse>('/project', data).then(r => r.data),
+        api.post<ProjectResponse>('/projects', data).then(r => r.data),
 
     updateProject: (id: string, data: UpdateProjectRequest) =>
-        api.put<ProjectResponse>(`/project/${id}`, data).then(r => r.data),
+        api.put<ProjectResponse>(`/projects/${id}`, data).then(r => r.data),
 
     deleteProject: (id: string) =>
-        api.delete(`/project/${id}`).then(r => r.data),
+        api.delete(`/projects/${id}`).then(r => r.data),
 
     exportProject: async (id: string, title: string) => {
-        const response = await api.get(`/project/${id}/export`, { responseType: 'blob' });
+        const response = await api.get(`/projects/${id}/export`, { responseType: 'blob' });
         const url = URL.createObjectURL(new Blob([response.data], { type: 'text/plain;charset=utf-8' }));
         const a = document.createElement('a');
         a.href = url;
@@ -66,5 +66,5 @@ export const projectService = {
     },
 
     getStats: () =>
-        api.get<{ totalChapters: number; totalAnalysesUsed: number; totalChatMessages: number }>('/project/stats').then(r => r.data),
+        api.get<{ totalChapters: number; totalAnalysesUsed: number; totalChatMessages: number }>('/projects/stats').then(r => r.data),
 };

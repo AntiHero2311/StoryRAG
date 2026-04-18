@@ -179,7 +179,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | POST   | `/forgot-password` | Yêu cầu link reset qua email         |
 | POST   | `/reset-password`  | Đặt mật khẩu mới bằng token từ email |
 
-### 6.2 Projects — `/api/project`
+### 6.2 Projects — `/api/projects`
 
 | Method | Endpoint       | Mô tả                                              |
 | ------ | -------------- | -------------------------------------------------- |
@@ -191,7 +191,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | DELETE | `/{id}`        | Xóa mềm project                                    |
 | GET    | `/{id}/export` | Export toàn bộ chương ra file `.txt`               |
 
-### 6.3 Chapters — `/api/project/{projectId}/chapters`
+### 6.3 Chapters — `/api/projects/{projectId}/chapters`
 
 | Method | Endpoint                        | Mô tả                                        |
 | ------ | ------------------------------- | -------------------------------------------- |
@@ -229,12 +229,12 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 
 | Route                                                      | Mô tả                |
 | ---------------------------------------------------------- | -------------------- |
-| `GET/POST /api/project/{id}/worldbuilding`                 | Danh sách / Tạo mới  |
-| `GET/PUT/DELETE /api/project/{id}/worldbuilding/{entryId}` | Chi tiết / Sửa / Xóa |
-| `POST /api/project/{id}/worldbuilding/{entryId}/embed`     | Embed entry          |
-| `GET/POST /api/project/{id}/character`                     | Danh sách / Tạo mới  |
-| `GET/PUT/DELETE /api/project/{id}/character/{entryId}`     | Chi tiết / Sửa / Xóa |
-| `POST /api/project/{id}/character/{entryId}/embed`         | Embed character      |
+| `GET/POST /api/projects/{id}/worldbuilding`                 | Danh sách / Tạo mới  |
+| `GET/PUT/DELETE /api/projects/{id}/worldbuilding/{entryId}` | Chi tiết / Sửa / Xóa |
+| `POST /api/projects/{id}/worldbuilding/{entryId}/embed`     | Embed entry          |
+| `GET/POST /api/projects/{id}/character`                     | Danh sách / Tạo mới  |
+| `GET/PUT/DELETE /api/projects/{id}/character/{entryId}`     | Chi tiết / Sửa / Xóa |
+| `POST /api/projects/{id}/character/{entryId}/embed`         | Embed character      |
 
 ### 6.6 Bug Reports — `/api/bug-reports`
 

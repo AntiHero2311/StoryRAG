@@ -6,7 +6,7 @@ using System.Security.Claims;
 
 namespace Api.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/projects")]
     [ApiController]
     [Authorize(Roles = "Author")]
     public class ProjectController : ControllerBase

@@ -6,7 +6,7 @@ using System.Security.Claims;
 
 namespace Api.Controllers
 {
-    [Route("api/project/{projectId:guid}/worldbuilding")]
+    [Route("api/projects/{projectId:guid}/worldbuilding")]
     [ApiController]
     [Authorize]
     public class WorldbuildingController : ControllerBase

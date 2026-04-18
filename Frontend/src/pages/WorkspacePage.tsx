@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, type ClipboardEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type ClipboardEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     ArrowLeft, Plus, Sparkles, History, Bold,
@@ -227,11 +227,13 @@ export default function WorkspacePage() {
     const [chapters, setChapters] = useState<ChapterDetailResponse[]>([]);
     const [activeChapter, setActiveChapter] = useState<ChapterDetailResponse | null>(null);
     const [chapterTitle, setChapterTitle] = useState('');
+    const [chapterSearch, setChapterSearch] = useState('');
     const [isLoadingChapters, setIsLoadingChapters] = useState(true);
     const [isCreatingChapter, setIsCreatingChapter] = useState(false);
 
     // ── Save/chunk state ───────────────────────────────────────────────────
     const [savedState, setSavedState] = useState<SavedState>('idle');
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [wordCount, setWordCount] = useState(0);
     type AiSyncState = 'idle' | 'syncing' | 'ready' | 'error';
     const [aiSyncState, setAiSyncState] = useState<AiSyncState>('idle');
@@ -312,12 +314,14 @@ export default function WorkspacePage() {
                 setChapters(all);
                 setActiveChapter(detail);
                 setChapterTitle(detail.title ?? `Chương ${detail.chapterNumber}`);
+                setHasUnsavedChanges(false);
                 if (editorRef.current) {
                     editorRef.current.innerHTML = detail.content ?? '';
                 }
             } else {
                 setChapters([]);
                 setActiveChapter(null);
+                setHasUnsavedChanges(false);
                 if (editorRef.current) editorRef.current.innerHTML = '';
             }
         } catch {
@@ -367,6 +371,7 @@ export default function WorkspacePage() {
         }
         setActiveChapter(detail);
         setChapterTitle(detail.title ?? `Chương ${detail.chapterNumber}`);
+        setHasUnsavedChanges(false);
         if (editorRef.current) {
             editorRef.current.innerHTML = detail.content ?? '';
             setWordCount((editorRef.current.innerText ?? '').trim().split(/\s+/).filter(Boolean).length);
@@ -407,6 +412,7 @@ export default function WorkspacePage() {
                         else {
                             setActiveChapter(null);
                             setChapterTitle('');
+                            setHasUnsavedChanges(false);
                             activeChapterIdRef.current = null;
                             if (editorRef.current) editorRef.current.innerText = '';
                         }
@@ -455,8 +461,7 @@ export default function WorkspacePage() {
                 // Ensure there is some spacing before appending
                 let textToAppend = res.generatedText;
                 editorRef.current.innerHTML += `<br><br>${textToAppend.replace(/\n/g, '<br>')}`;
-                updateWordCount();
-                scheduleAutoSave();
+                markEditorDirty();
             }
         } catch (e: any) {
             toast.error(e?.response?.data?.message ?? 'AI không thể viết tiếp lúc này. Hãy thử lại.');
@@ -551,6 +556,7 @@ export default function WorkspacePage() {
             });
             setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
             setActiveChapter(updated);
+            setHasUnsavedChanges(false);
             if (showFeedback) {
                 setSavedState('saved');
                 setTimeout(() => setSavedState('idle'), 2000);
@@ -648,6 +654,7 @@ export default function WorkspacePage() {
             setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
             setActiveChapter(updated);
             if (editorRef.current) editorRef.current.innerHTML = '';
+            setHasUnsavedChanges(false);
         } catch (e: any) {
             toast.error(e?.response?.data?.message ?? 'Không thể tạo phiên bản mới.');
         } finally {
@@ -667,6 +674,7 @@ export default function WorkspacePage() {
             setActiveChapter(updated);
             if (editorRef.current) editorRef.current.innerHTML = updated.content ?? '';
             setWordCount((editorRef.current?.innerText ?? '').trim().split(/\s+/).filter(Boolean).length);
+            setHasUnsavedChanges(false);
         } catch (e: any) {
             toast.error(e?.response?.data?.message ?? 'Không thể chuyển phiên bản.');
         }
@@ -745,6 +753,13 @@ export default function WorkspacePage() {
         setWordCount(getWordCount());
     };
 
+    const markEditorDirty = () => {
+        setHasUnsavedChanges(true);
+        setHighlightsVisible(false);
+        updateWordCount();
+        scheduleAutoSave();
+    };
+
     const normalizePastedHtml = (rawHtml: string): string => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(rawHtml, 'text/html');
@@ -795,10 +810,44 @@ export default function WorkspacePage() {
             document.execCommand('insertText', false, plain);
         }
 
-        updateWordCount();
-        scheduleAutoSave();
-        setHighlightsVisible(false);
+        markEditorDirty();
     };
+
+    const chapterSearchNormalized = chapterSearch.trim().toLowerCase();
+    const filteredChapters = useMemo(() => {
+        if (!chapterSearchNormalized) return chapters;
+        return chapters.filter(ch => {
+            const title = (ch.title ?? `Chương ${ch.chapterNumber}`).toLowerCase();
+            return title.includes(chapterSearchNormalized) || String(ch.chapterNumber).includes(chapterSearchNormalized);
+        });
+    }, [chapters, chapterSearchNormalized]);
+
+    const activeChapterIndex = activeChapter ? chapters.findIndex(c => c.id === activeChapter.id) : -1;
+    const previousChapter = activeChapterIndex > 0 ? chapters[activeChapterIndex - 1] : null;
+    const nextChapter = activeChapterIndex >= 0 && activeChapterIndex < chapters.length - 1
+        ? chapters[activeChapterIndex + 1]
+        : null;
+
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (!e.altKey || !projectId) return;
+            const target = e.target as HTMLElement | null;
+            const tagName = target?.tagName;
+            const isTypingTarget = !!target && (target.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT');
+            if (isTypingTarget) return;
+
+            if (e.key === 'ArrowUp' && previousChapter) {
+                e.preventDefault();
+                void selectChapter(previousChapter);
+            } else if (e.key === 'ArrowDown' && nextChapter) {
+                e.preventDefault();
+                void selectChapter(nextChapter);
+            }
+        };
+
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [projectId, previousChapter, nextChapter, selectChapter]);
 
     // ── Render ─────────────────────────────────────────────────────────────
     return (
@@ -891,8 +940,7 @@ export default function WorkspacePage() {
                             range.insertNode(document.createTextNode(rewritten));
                             sel.removeAllRanges();
                         }
-                        updateWordCount();
-                        scheduleAutoSave();
+                        markEditorDirty();
                     }}
                     onClose={() => setRewritePanelOpen(false)}
                 />
@@ -956,12 +1004,18 @@ export default function WorkspacePage() {
                     {savedState === 'saving' && <><Loader2 className="w-3.5 h-3.5 animate-spin" /> <span>Đang lưu...</span></>}
                     {savedState === 'saved' && <><Check className="w-4 h-4 text-emerald-400" /><span className="text-emerald-400 font-medium">Đã lưu</span></>}
                     {savedState === 'error' && <><AlertCircle className="w-4 h-4 text-rose-400" /><span className="text-rose-400 font-medium">Lưu thất bại</span></>}
+                    {savedState === 'idle' && hasUnsavedChanges && activeChapter && (
+                        <span className="flex items-center gap-1.5 text-amber-300">
+                            <span className="w-2 h-2 rounded-full bg-amber-300" />
+                            Chưa lưu
+                        </span>
+                    )}
                     {savedState === 'idle' && activeChapter && (
                         <button
                             onClick={() => doSave(true)}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium bg-[var(--accent)]/10 text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-all hover:scale-105 active:scale-95"
                         >
-                            <Save className="w-3.5 h-3.5" /> Lưu ngay
+                            <Save className="w-3.5 h-3.5" /> Lưu ngay (Ctrl+S)
                         </button>
                     )}
                 </div>
@@ -990,6 +1044,35 @@ export default function WorkspacePage() {
                         </button>
                     </div>
 
+                    {chapters.length > 0 && (
+                        <div className="px-3 pb-2 shrink-0">
+                            <div className="relative">
+                                <Search className="w-3.5 h-3.5 text-[var(--text-secondary)] absolute left-2.5 top-1/2 -translate-y-1/2 opacity-70" />
+                                <input
+                                    type="text"
+                                    value={chapterSearch}
+                                    onChange={e => setChapterSearch(e.target.value)}
+                                    placeholder="Tìm chương..."
+                                    className="w-full h-8 pl-8 pr-8 rounded-lg text-xs text-[var(--text-primary)] bg-[var(--bg-app)] border border-[var(--border-color)] outline-none focus:border-[var(--accent)]/35"
+                                />
+                                {chapterSearch && (
+                                    <button
+                                        onClick={() => setChapterSearch('')}
+                                        className="w-5 h-5 absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10"
+                                        title="Xóa tìm kiếm"
+                                    >
+                                        <X className="w-3 h-3 mx-auto" />
+                                    </button>
+                                )}
+                            </div>
+                            {chapterSearchNormalized && (
+                                <p className="mt-1 text-[10px] text-[var(--text-secondary)]">
+                                    {filteredChapters.length}/{chapters.length} chương
+                                </p>
+                            )}
+                        </div>
+                    )}
+
                     <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2 scrollbar-thin">
                         {isLoadingChapters ? (
                             <div className="flex justify-center py-6">
@@ -1000,8 +1083,13 @@ export default function WorkspacePage() {
                                 <FileText className="w-8 h-8 text-[var(--text-secondary)]" />
                                 <p className="text-center text-[var(--text-secondary)] text-sm font-medium">Chưa có chương nào</p>
                             </div>
+                        ) : filteredChapters.length === 0 ? (
+                            <div className="flex flex-col items-center py-8 gap-2 opacity-70">
+                                <Search className="w-6 h-6 text-[var(--text-secondary)]" />
+                                <p className="text-center text-[var(--text-secondary)] text-xs font-medium">Không tìm thấy chương phù hợp</p>
+                            </div>
                         ) : (
-                            chapters.map((ch) => {
+                            filteredChapters.map((ch) => {
                                 const isActive = activeChapter?.id === ch.id;
                                 return (
                                     <div
@@ -1323,6 +1411,24 @@ export default function WorkspacePage() {
                                             />
                                             {/* Meta bar */}
                                             <div className="flex items-center gap-3 mb-8">
+                                                <div className="flex items-center gap-1 rounded-md bg-[var(--bg-app)] border border-[var(--border-color)] p-0.5">
+                                                    <button
+                                                        onClick={() => previousChapter && selectChapter(previousChapter)}
+                                                        disabled={!previousChapter}
+                                                        className="w-6 h-6 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                        title="Chương trước (Alt+↑)"
+                                                    >
+                                                        <ArrowLeft className="w-3.5 h-3.5 mx-auto" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => nextChapter && selectChapter(nextChapter)}
+                                                        disabled={!nextChapter}
+                                                        className="w-6 h-6 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                        title="Chương sau (Alt+↓)"
+                                                    >
+                                                        <ArrowLeft className="w-3.5 h-3.5 mx-auto rotate-180" />
+                                                    </button>
+                                                </div>
                                                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[var(--bg-app)] border border-[var(--border-color)]">
                                                     <span className="w-2 h-2 rounded-full bg-emerald-400" />
                                                     <span className="text-[11px] font-bold text-[var(--text-secondary)]">V{activeChapter.currentVersionNum}</span>
@@ -1352,13 +1458,14 @@ export default function WorkspacePage() {
                                                     {isContinuingWriting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bot className="w-3.5 h-3.5" />}
                                                     AI Viết tiếp
                                                 </button>
+                                                <span className="hidden xl:inline text-[10px] text-[var(--text-secondary)] opacity-60">Alt+↑/↓ chuyển nhanh chương</span>
                                             </div>
                                             {/* Editor */}
                                             <div
                                                 ref={editorRef}
                                                 contentEditable
                                                 suppressContentEditableWarning
-                                                onInput={() => { updateWordCount(); scheduleAutoSave(); setHighlightsVisible(false); }}
+                                                onInput={markEditorDirty}
                                                 onPaste={handleEditorPaste}
                                                 className={`workspace-editor-content w-full min-h-[60vh] text-[var(--text-primary)] bg-transparent outline-none leading-[1.9] focus:outline-none ${!highlightsVisible ? 'hide-ai-highlights' : ''}`}
                                                 style={{ fontFamily: `'${editorSettings.editorFont}', sans-serif`, fontSize: `${editorSettings.editorFontSize}px`, letterSpacing: '0.01em' }}
@@ -1683,8 +1790,7 @@ export default function WorkspacePage() {
                                 onApplyContent={(content) => {
                                     if (editorRef.current) {
                                         editorRef.current.innerHTML += (editorRef.current.innerHTML.endsWith('<br>') ? '' : '<br><br>') + content.replace(/\n/g, '<br>');
-                                        updateWordCount();
-                                        scheduleAutoSave();
+                                        markEditorDirty();
                                     }
                                 }}
                             />

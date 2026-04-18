@@ -131,11 +131,11 @@ Cập nhật profile (tên, avatar).
 
 ---
 
-## 3. Project — `/api/project`
+## 3. Project — `/api/projects`
 
 > Role yêu cầu: `Author`
 
-### GET `/api/project`
+### GET `/api/projects`
 Lấy danh sách tất cả dự án của user.
 
 **Auth:** Bắt buộc (Author).
@@ -157,7 +157,7 @@ Lấy danh sách tất cả dự án của user.
 
 ---
 
-### GET `/api/project/{id}`
+### GET `/api/projects/{id}`
 Lấy chi tiết một dự án.
 
 **Auth:** Bắt buộc (Author).
@@ -168,7 +168,7 @@ Lấy chi tiết một dự án.
 
 ---
 
-### POST `/api/project`
+### POST `/api/projects`
 Tạo dự án mới.
 
 **Auth:** Bắt buộc (Author).
@@ -186,7 +186,7 @@ Tạo dự án mới.
 
 ---
 
-### PUT `/api/project/{id}`
+### PUT `/api/projects/{id}`
 Cập nhật dự án.
 
 **Auth:** Bắt buộc (Author).
@@ -205,7 +205,7 @@ Cập nhật dự án.
 
 ---
 
-### DELETE `/api/project/{id}`
+### DELETE `/api/projects/{id}`
 Xóa mềm dự án (`IsDeleted = true`).
 
 **Auth:** Bắt buộc (Author).
@@ -214,9 +214,9 @@ Xóa mềm dự án (`IsDeleted = true`).
 
 ---
 
-## 4. Chapter — `/api/project/{projectId}/chapters`
+## 4. Chapter — `/api/projects/{projectId}/chapters`
 
-### GET `/api/project/{projectId}/chapters`
+### GET `/api/projects/{projectId}/chapters`
 Lấy danh sách chương của dự án.
 
 **Auth:** Bắt buộc.
@@ -241,7 +241,7 @@ Lấy danh sách chương của dự án.
 
 ---
 
-### GET `/api/project/{projectId}/chapters/{chapterId}`
+### GET `/api/projects/{projectId}/chapters/{chapterId}`
 Lấy chi tiết chương (kèm nội dung đã decrypt và danh sách versions).
 
 **Auth:** Bắt buộc.
@@ -266,7 +266,7 @@ Lấy chi tiết chương (kèm nội dung đã decrypt và danh sách versions)
 
 ---
 
-### POST `/api/project/{projectId}/chapters`
+### POST `/api/projects/{projectId}/chapters`
 Tạo chương mới (tự động tạo Version 1).
 
 **Auth:** Bắt buộc.
@@ -287,7 +287,7 @@ Tạo chương mới (tự động tạo Version 1).
 
 ---
 
-### PUT `/api/project/{projectId}/chapters/{chapterId}`
+### PUT `/api/projects/{projectId}/chapters/{chapterId}`
 Cập nhật chương (tự động tạo version mới).
 
 **Auth:** Bắt buộc.
@@ -305,7 +305,7 @@ Cập nhật chương (tự động tạo version mới).
 
 ---
 
-### DELETE `/api/project/{projectId}/chapters/{chapterId}`
+### DELETE `/api/projects/{projectId}/chapters/{chapterId}`
 Xóa mềm chương.
 
 **Auth:** Bắt buộc.
@@ -314,9 +314,9 @@ Xóa mềm chương.
 
 ---
 
-## 5. Chapter Versions — `/api/project/{projectId}/chapters/{chapterId}/versions`
+## 5. Chapter Versions — `/api/projects/{projectId}/chapters/{chapterId}/versions`
 
-### GET `/api/project/{projectId}/chapters/{chapterId}/versions`
+### GET `/api/projects/{projectId}/chapters/{chapterId}/versions`
 Lấy tất cả versions của chương.
 
 **Auth:** Bắt buộc.
@@ -340,7 +340,7 @@ Lấy tất cả versions của chương.
 
 ---
 
-### GET `/api/project/{projectId}/chapters/{chapterId}/versions/{versionNumber}`
+### GET `/api/projects/{projectId}/chapters/{chapterId}/versions/{versionNumber}`
 Xem nội dung một version cụ thể (kèm danh sách chunks nếu có).
 
 **Auth:** Bắt buộc.
@@ -372,7 +372,7 @@ Xem nội dung một version cụ thể (kèm danh sách chunks nếu có).
 
 ---
 
-### POST `/api/project/{projectId}/chapters/{chapterId}/versions`
+### POST `/api/projects/{projectId}/chapters/{chapterId}/versions`
 Lưu version mới thủ công (snapshot).
 
 **Auth:** Bắt buộc.
@@ -389,7 +389,7 @@ Lưu version mới thủ công (snapshot).
 
 ---
 
-### POST `/api/project/{projectId}/chapters/{chapterId}/versions/{versionNumber}/restore`
+### POST `/api/projects/{projectId}/chapters/{chapterId}/versions/{versionNumber}/restore`
 Phục hồi về version cũ (tạo version mới với nội dung cũ).
 
 **Auth:** Bắt buộc.
@@ -398,9 +398,9 @@ Phục hồi về version cũ (tạo version mới với nội dung cũ).
 
 ---
 
-## 6. Chapter Chunking — `/api/project/{projectId}/chapters/{chapterId}/chunk`
+## 6. Chapter Chunking — `/api/projects/{projectId}/chapters/{chapterId}/chunk`
 
-### POST `/api/project/{projectId}/chapters/{chapterId}/chunk`
+### POST `/api/projects/{projectId}/chapters/{chapterId}/chunk`
 Chunk version hiện tại của chương (chuẩn bị cho AI embedding).
 
 **Auth:** Bắt buộc.
@@ -686,7 +686,62 @@ Cập nhật `sortOrder` của một mốc sự kiện.
 
 ## 11. Manuscript Import, Version Compare, Narrative Charts, Report PDF
 
-### POST `/api/project/{projectId}/chapters/import`
+### POST `/api/manuscript/{projectId}/upload`
+Upload manuscript qua API (không cần thao tác UI), tự tạo chapter mới.
+
+**Auth:** Bắt buộc.
+
+**Content-Type:** `multipart/form-data`
+
+**Form fields:**
+- `file`: `.txt | .docx | .pdf` (required)
+- `splitByHeadings`: `true | false` (optional, default `true`)
+
+**Response `200`:**
+```json
+{
+  "sourceFileName": "story.docx",
+  "detectedFormat": "docx",
+  "startingChapterNumber": 5,
+  "importedChapterCount": 3,
+  "importedChapters": [
+    {
+      "chapterId": "guid",
+      "chapterNumber": 5,
+      "title": "Chapter 1",
+      "wordCount": 1200
+    }
+  ]
+}
+```
+
+---
+
+### GET `/api/manuscript/{projectId}/export?format=docx|html|md|txt`
+Export toàn bộ dự án qua API.
+
+**Auth:** Bắt buộc.
+
+**Response `200`:**
+- Trả file binary
+- `Content-Type` theo format
+- Attachment filename: `Project_{projectId}.{ext}`
+
+---
+
+### GET `/api/manuscript/{projectId}/chapters/{chapterId}/export?format=docx|html|md|txt`
+Export 1 chapter qua API.
+
+**Auth:** Bắt buộc.
+
+**Response `200`:**
+- Trả file binary
+- `Content-Type` theo format
+- Attachment filename: `Chapter_{chapterId}.{ext}`
+
+---
+
+### POST `/api/manuscript/{projectId}/upload`
 Import manuscript file và tự động tạo chapter mới.
 
 **Auth:** Bắt buộc.
@@ -717,7 +772,7 @@ Import manuscript file và tự động tạo chapter mới.
 
 ---
 
-### GET `/api/project/{projectId}/chapters/{chapterId}/versions/compare?fromVersion={a}&toVersion={b}`
+### GET `/api/projects/{projectId}/chapters/{chapterId}/versions/compare?fromVersion={a}&toVersion={b}`
 So sánh 2 version và trả về unified diff + thống kê thay đổi.
 
 **Auth:** Bắt buộc.
