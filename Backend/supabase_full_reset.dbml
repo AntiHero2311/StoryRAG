@@ -1,0 +1,381 @@
+Project StoryRAG {
+  database_type: "PostgreSQL"
+  Note: "Generated from Backend/supabase_full_reset.sql"
+}
+
+Table __EFMigrationsHistory {
+  MigrationId varchar(150) [pk]
+  ProductVersion varchar(32)
+}
+
+Table Users {
+  Id uuid [pk]
+  FullName varchar(100)
+  Email varchar(100)
+  PasswordHash text
+  PasswordSalt text
+  AvatarURL varchar(500)
+  Role varchar(20)
+  IsActive bool
+  DataEncryptionKey text
+  CreatedAt timestamptz
+  RefreshToken text
+  RefreshTokenExpiryTime timestamptz
+  PasswordResetToken text
+  PasswordResetTokenExpiryTime timestamptz
+}
+
+Table SubscriptionPlans {
+  Id int [pk]
+  PlanName varchar(50)
+  Price decimal(18,2)
+  MaxAnalysisCount int
+  MaxTokenLimit bigint
+  Description text
+  IsActive bool
+}
+
+Table Genres {
+  Id int [pk]
+  Name varchar(100)
+  Slug varchar(100)
+  Color varchar(20)
+  Description varchar(500)
+}
+
+Table Projects {
+  Id uuid [pk]
+  AuthorId uuid
+  Title text
+  Summary text
+  AiInstructions text
+  SummaryEmbedding vector(768)
+  CoverImageURL varchar(500)
+  Status varchar(20)
+  IsDeleted bool
+  CreatedAt timestamptz
+  UpdatedAt timestamptz
+}
+
+Table UserSubscriptions {
+  Id int [pk]
+  UserId uuid
+  PlanId int
+  StartDate timestamptz
+  EndDate timestamptz
+  Status varchar(20)
+  UsedAnalysisCount int
+  UsedTokens bigint
+  CreatedAt timestamptz
+}
+
+Table ProjectGenres {
+  ProjectId uuid
+  GenreId int
+
+  indexes {
+    (ProjectId, GenreId) [pk]
+  }
+}
+
+Table ChapterVersions {
+  Id uuid [pk]
+  ChapterId uuid
+  VersionNumber int
+  Content text
+  ChangeNote text
+  WordCount int
+  TokenCount int
+  CreatedBy uuid
+  IsChunked bool
+  IsEmbedded bool
+  IsPinned bool
+  Title varchar(255)
+  UpdatedAt timestamptz
+  CreatedAt timestamptz
+}
+
+Table Chapters {
+  Id uuid [pk]
+  ProjectId uuid
+  ChapterNumber int
+  Title varchar(255)
+  WordCount int
+  Status varchar(20)
+  CurrentVersionId uuid
+  CurrentVersionNum int
+  IsDeleted bool
+  DraftContent text
+  DraftSavedAt timestamptz
+  CreatedAt timestamptz
+  UpdatedAt timestamptz
+}
+
+Table ChapterChunks {
+  Id uuid [pk]
+  VersionId uuid
+  ProjectId uuid
+  ChunkIndex int
+  Content text
+  TokenCount int
+  Embedding vector(768)
+  CreatedAt timestamptz
+}
+
+Table UserSettings {
+  UserId uuid [pk]
+  EditorFont varchar(100)
+  EditorFontSize int
+}
+
+Table ProjectReports {
+  Id uuid [pk]
+  ProjectId uuid
+  UserId uuid
+  Status varchar(20)
+  TotalScore decimal(5,2)
+  CriteriaJson jsonb
+  ProjectVersion varchar(50)
+  CreatedAt timestamptz
+  UpdatedAt timestamptz
+}
+
+Table ProjectAnalysisJobs {
+  Id uuid [pk]
+  ProjectId uuid
+  UserId uuid
+  Status varchar(20)
+  Stage varchar(30)
+  Progress int
+  ProjectVersionHash varchar(128)
+  ReportId uuid
+  ErrorMessage varchar(2000)
+  CreatedAt timestamptz
+  StartedAt timestamptz
+  CompletedAt timestamptz
+  UpdatedAt timestamptz
+}
+
+Table WorldbuildingEntries {
+  Id uuid [pk]
+  ProjectId uuid
+  Title text
+  Content text
+  Category varchar(50)
+  Embedding vector(768)
+  CreatedAt timestamptz
+  UpdatedAt timestamptz
+}
+
+Table CharacterEntries {
+  Id uuid [pk]
+  ProjectId uuid
+  Name text
+  Role varchar(50)
+  Description text
+  Background text
+  Notes text
+  Embedding vector(768)
+  CreatedAt timestamptz
+  UpdatedAt timestamptz
+}
+
+Table StyleGuideEntries {
+  Id uuid [pk]
+  ProjectId uuid
+  Aspect varchar(50)
+  Content text
+  Embedding vector(768)
+  CreatedAt timestamptz
+  UpdatedAt timestamptz
+}
+
+Table ThemeEntries {
+  Id uuid [pk]
+  ProjectId uuid
+  Title text
+  Description text
+  Notes text
+  Embedding vector(768)
+  CreatedAt timestamptz
+  UpdatedAt timestamptz
+}
+
+Table PlotNoteEntries {
+  Id uuid [pk]
+  ProjectId uuid
+  Type varchar(50)
+  Title text
+  Content text
+  Embedding vector(768)
+  CreatedAt timestamptz
+  UpdatedAt timestamptz
+}
+
+Table TimelineEvents {
+  Id uuid [pk]
+  ProjectId uuid
+  Category varchar(50)
+  Title text
+  Description text
+  TimeLabel varchar(100)
+  SortOrder int
+  Importance varchar(20)
+  CreatedAt timestamptz
+  UpdatedAt timestamptz
+}
+
+Table ChatMessages {
+  Id uuid [pk]
+  ProjectId uuid
+  UserId uuid
+  Question text
+  Answer text
+  InputTokens int
+  OutputTokens int
+  TotalTokens int
+  CreatedAt timestamptz
+}
+
+Table RewriteHistories {
+  Id uuid [pk]
+  ProjectId uuid
+  ChapterId uuid
+  UserId uuid
+  OriginalText text
+  RewrittenText text
+  Instruction text
+  TotalTokens int
+  CreatedAt timestamptz
+}
+
+Table AiAnalysisHistories {
+  Id uuid [pk]
+  ProjectId uuid
+  ChapterId uuid
+  UserId uuid
+  AnalysisType varchar(50)
+  EncryptedContext text
+  EncryptedResult text
+  TotalTokens int
+  CreatedAt timestamptz
+}
+
+Table BugReports {
+  Id uuid [pk]
+  UserId uuid
+  Title varchar(200)
+  Description text
+  Category varchar(30)
+  Priority varchar(20)
+  Status varchar(20)
+  StaffNote varchar(1000)
+  ResolvedById uuid
+  CreatedAt timestamptz
+  UpdatedAt timestamptz
+}
+
+Table StaffFeedbacks {
+  Id uuid [pk]
+  ProjectId uuid
+  ChapterId uuid
+  AuthorId uuid
+  StaffId uuid
+  Content varchar(3000)
+  Status varchar(20)
+  StaffNote varchar(3000)
+  CreatedAt timestamptz
+  UpdatedAt timestamptz
+}
+
+Table StaffKnowledgeBaseItems {
+  Id uuid [pk]
+  Type varchar(20)
+  Title varchar(200)
+  Content varchar(5000)
+  Tags varchar(300)
+  IsPublished bool
+  SortOrder int
+  CreatedBy uuid
+  UpdatedBy uuid
+  CreatedAt timestamptz
+  UpdatedAt timestamptz
+}
+
+Table StaffAnalysisReviews {
+  Id uuid [pk]
+  ProjectReportId uuid
+  ProjectId uuid
+  AuthorId uuid
+  ReviewedBy uuid
+  Action varchar(20)
+  Note varchar(2000)
+  RerunReportId uuid
+  CreatedAt timestamptz
+  UpdatedAt timestamptz
+}
+
+Table Payments {
+  Id uuid [pk]
+  UserId uuid
+  SubscriptionId int
+  PlanId int
+  Amount decimal(18,2)
+  Currency varchar(10)
+  PaymentMethod varchar(50)
+  Status varchar(20)
+  TransactionId varchar(255)
+  Description text
+  PaidAt timestamptz
+  RefundedAt timestamptz
+  CreatedAt timestamptz
+  UpdatedAt timestamptz
+}
+
+Ref: Projects.AuthorId > Users.Id
+Ref: UserSubscriptions.UserId > Users.Id
+Ref: UserSubscriptions.PlanId > SubscriptionPlans.Id
+Ref: ProjectGenres.ProjectId > Projects.Id
+Ref: ProjectGenres.GenreId > Genres.Id
+Ref: ChapterVersions.CreatedBy > Users.Id
+Ref: ChapterVersions.ChapterId > Chapters.Id
+Ref: Chapters.ProjectId > Projects.Id
+Ref: Chapters.CurrentVersionId > ChapterVersions.Id
+Ref: ChapterChunks.VersionId > ChapterVersions.Id
+Ref: ChapterChunks.ProjectId > Projects.Id
+Ref: UserSettings.UserId > Users.Id
+Ref: ProjectReports.ProjectId > Projects.Id
+Ref: ProjectReports.UserId > Users.Id
+Ref: ProjectAnalysisJobs.ProjectId > Projects.Id
+Ref: ProjectAnalysisJobs.UserId > Users.Id
+Ref: ProjectAnalysisJobs.ReportId > ProjectReports.Id
+Ref: WorldbuildingEntries.ProjectId > Projects.Id
+Ref: CharacterEntries.ProjectId > Projects.Id
+Ref: StyleGuideEntries.ProjectId > Projects.Id
+Ref: ThemeEntries.ProjectId > Projects.Id
+Ref: PlotNoteEntries.ProjectId > Projects.Id
+Ref: TimelineEvents.ProjectId > Projects.Id
+Ref: ChatMessages.ProjectId > Projects.Id
+Ref: ChatMessages.UserId > Users.Id
+Ref: RewriteHistories.ProjectId > Projects.Id
+Ref: RewriteHistories.ChapterId > Chapters.Id
+Ref: RewriteHistories.UserId > Users.Id
+Ref: AiAnalysisHistories.ProjectId > Projects.Id
+Ref: AiAnalysisHistories.ChapterId > Chapters.Id
+Ref: AiAnalysisHistories.UserId > Users.Id
+Ref: BugReports.UserId > Users.Id
+Ref: BugReports.ResolvedById > Users.Id
+Ref: StaffFeedbacks.ProjectId > Projects.Id
+Ref: StaffFeedbacks.ChapterId > Chapters.Id
+Ref: StaffFeedbacks.AuthorId > Users.Id
+Ref: StaffFeedbacks.StaffId > Users.Id
+Ref: StaffKnowledgeBaseItems.CreatedBy > Users.Id
+Ref: StaffKnowledgeBaseItems.UpdatedBy > Users.Id
+Ref: StaffAnalysisReviews.ProjectReportId > ProjectReports.Id
+Ref: StaffAnalysisReviews.ProjectId > Projects.Id
+Ref: StaffAnalysisReviews.AuthorId > Users.Id
+Ref: StaffAnalysisReviews.ReviewedBy > Users.Id
+Ref: StaffAnalysisReviews.RerunReportId > ProjectReports.Id
+Ref: Payments.UserId > Users.Id
+Ref: Payments.PlanId > SubscriptionPlans.Id
+Ref: Payments.SubscriptionId > UserSubscriptions.Id

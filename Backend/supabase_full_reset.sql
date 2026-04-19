@@ -10,6 +10,9 @@
 -- ────────────────────────────────────────────────────────────
 
 DROP TABLE IF EXISTS "Payments"              CASCADE;
+DROP TABLE IF EXISTS "StaffAnalysisReviews"  CASCADE;
+DROP TABLE IF EXISTS "StaffKnowledgeBaseItems" CASCADE;
+DROP TABLE IF EXISTS "StaffFeedbacks"        CASCADE;
 DROP TABLE IF EXISTS "TimelineEvents"       CASCADE;
 DROP TABLE IF EXISTS "RewriteHistories"      CASCADE;
 DROP TABLE IF EXISTS "AiAnalysisHistories"   CASCADE;
@@ -20,6 +23,7 @@ DROP TABLE IF EXISTS "ThemeEntries"          CASCADE;
 DROP TABLE IF EXISTS "StyleGuideEntries"     CASCADE;
 DROP TABLE IF EXISTS "CharacterEntries"      CASCADE;
 DROP TABLE IF EXISTS "UserSettings"          CASCADE;
+DROP TABLE IF EXISTS "ProjectAnalysisJobs"   CASCADE;
 DROP TABLE IF EXISTS "ProjectReports"        CASCADE;
 DROP TABLE IF EXISTS "ProjectGenres"         CASCADE;
 DROP TABLE IF EXISTS "ChapterChunks"         CASCADE;
@@ -264,6 +268,42 @@ CREATE TABLE "ProjectReports" (
     CONSTRAINT "FK_ProjectReports_Users"    FOREIGN KEY ("UserId")    REFERENCES "Users"    ("Id") ON DELETE CASCADE
 );
 
+-- ── ProjectAnalysisJobs ────────────────────────────────────────
+CREATE TABLE "ProjectAnalysisJobs" (
+    "Id"                 uuid                     NOT NULL DEFAULT uuid_generate_v4(),
+    "ProjectId"          uuid                     NOT NULL,
+    "UserId"             uuid                     NOT NULL,
+    "Status"             character varying(20)    NOT NULL DEFAULT 'Queued',
+    "Stage"              character varying(30)    NOT NULL DEFAULT 'Queued',
+    "Progress"           integer                  NOT NULL DEFAULT 0,
+    "ProjectVersionHash" character varying(128)   NOT NULL DEFAULT '',
+    "ReportId"           uuid,
+    "ErrorMessage"       character varying(2000),
+    "CreatedAt"          timestamp with time zone NOT NULL DEFAULT NOW(),
+    "StartedAt"          timestamp with time zone,
+    "CompletedAt"        timestamp with time zone,
+    "UpdatedAt"          timestamp with time zone DEFAULT NOW(),
+    CONSTRAINT "PK_ProjectAnalysisJobs" PRIMARY KEY ("Id"),
+    CONSTRAINT "CK_ProjectAnalysisJobs_Progress" CHECK ("Progress" >= 0 AND "Progress" <= 100),
+    CONSTRAINT "CK_ProjectAnalysisJobs_Stage" CHECK ("Stage" IN ('Queued','Preparing','Analyzing','Saving','Completed','Failed','Cancelled')),
+    CONSTRAINT "CK_ProjectAnalysisJobs_Status" CHECK ("Status" IN ('Queued','Processing','Completed','Failed','Cancelled')),
+    CONSTRAINT "FK_ProjectAnalysisJobs_ProjectReports_ReportId" FOREIGN KEY ("ReportId")
+        REFERENCES "ProjectReports" ("Id") ON DELETE SET NULL,
+    CONSTRAINT "FK_ProjectAnalysisJobs_Projects_ProjectId" FOREIGN KEY ("ProjectId")
+        REFERENCES "Projects" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_ProjectAnalysisJobs_Users_UserId" FOREIGN KEY ("UserId")
+        REFERENCES "Users" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_ProjectAnalysisJobs_ProjectId_UserId_CreatedAt"
+    ON "ProjectAnalysisJobs" ("ProjectId", "UserId", "CreatedAt");
+CREATE INDEX "IX_ProjectAnalysisJobs_ProjectId_UserId_ProjectVersionHash_Sta~"
+    ON "ProjectAnalysisJobs" ("ProjectId", "UserId", "ProjectVersionHash", "Status");
+CREATE INDEX "IX_ProjectAnalysisJobs_ReportId" ON "ProjectAnalysisJobs" ("ReportId");
+CREATE UNIQUE INDEX "IX_ProjectAnalysisJobs_UserId_Active"
+    ON "ProjectAnalysisJobs" ("UserId")
+    WHERE "Status" IN ('Queued','Processing');
+
 -- ── WorldbuildingEntries ──────────────────────────────────────
 -- Valid Category values:
 --   Primary: Setting (Bối cảnh), Location (Địa điểm), Rules (Quy tắc thế giới),
@@ -476,6 +516,99 @@ CREATE TABLE "BugReports" (
 );
 CREATE INDEX "IX_BugReports_Status" ON "BugReports" ("Status");
 CREATE INDEX "IX_BugReports_UserId" ON "BugReports" ("UserId");
+
+-- ────────────────────────────────────────────────────────────
+-- StaffFeedbacks table
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE "StaffFeedbacks" (
+    "Id"        uuid                     NOT NULL DEFAULT uuid_generate_v4(),
+    "ProjectId" uuid                     NOT NULL,
+    "ChapterId" uuid,
+    "AuthorId"  uuid                     NOT NULL,
+    "StaffId"   uuid                     NOT NULL,
+    "Content"   character varying(3000)  NOT NULL,
+    "Status"    character varying(20)    NOT NULL DEFAULT 'Open',
+    "StaffNote" character varying(3000),
+    "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
+    "UpdatedAt" timestamp with time zone,
+    CONSTRAINT "PK_StaffFeedbacks" PRIMARY KEY ("Id"),
+    CONSTRAINT "CK_StaffFeedback_Status" CHECK ("Status" IN ('Open','Resolved')),
+    CONSTRAINT "FK_StaffFeedbacks_Chapters_ChapterId" FOREIGN KEY ("ChapterId")
+        REFERENCES "Chapters" ("Id") ON DELETE SET NULL,
+    CONSTRAINT "FK_StaffFeedbacks_Projects_ProjectId" FOREIGN KEY ("ProjectId")
+        REFERENCES "Projects" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_StaffFeedbacks_Users_AuthorId" FOREIGN KEY ("AuthorId")
+        REFERENCES "Users" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_StaffFeedbacks_Users_StaffId" FOREIGN KEY ("StaffId")
+        REFERENCES "Users" ("Id") ON DELETE RESTRICT
+);
+
+CREATE INDEX "IX_StaffFeedbacks_AuthorId" ON "StaffFeedbacks" ("AuthorId");
+CREATE INDEX "IX_StaffFeedbacks_ChapterId" ON "StaffFeedbacks" ("ChapterId");
+CREATE INDEX "IX_StaffFeedbacks_ProjectId" ON "StaffFeedbacks" ("ProjectId");
+CREATE INDEX "IX_StaffFeedbacks_StaffId" ON "StaffFeedbacks" ("StaffId");
+
+-- ────────────────────────────────────────────────────────────
+-- StaffKnowledgeBaseItems table
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE "StaffKnowledgeBaseItems" (
+    "Id"          uuid                     NOT NULL DEFAULT uuid_generate_v4(),
+    "Type"        character varying(20)    NOT NULL DEFAULT 'FAQ',
+    "Title"       character varying(200)   NOT NULL,
+    "Content"     character varying(5000)  NOT NULL,
+    "Tags"        character varying(300),
+    "IsPublished" boolean                  NOT NULL DEFAULT TRUE,
+    "SortOrder"   integer                  NOT NULL DEFAULT 0,
+    "CreatedBy"   uuid                     NOT NULL,
+    "UpdatedBy"   uuid,
+    "CreatedAt"   timestamp with time zone NOT NULL DEFAULT NOW(),
+    "UpdatedAt"   timestamp with time zone,
+    CONSTRAINT "PK_StaffKnowledgeBaseItems" PRIMARY KEY ("Id"),
+    CONSTRAINT "CK_StaffKnowledgeBaseItems_Type" CHECK ("Type" IN ('FAQ','WritingTip')),
+    CONSTRAINT "FK_StaffKnowledgeBaseItems_Users_CreatedBy" FOREIGN KEY ("CreatedBy")
+        REFERENCES "Users" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_StaffKnowledgeBaseItems_Users_UpdatedBy" FOREIGN KEY ("UpdatedBy")
+        REFERENCES "Users" ("Id") ON DELETE SET NULL
+);
+
+CREATE INDEX "IX_StaffKnowledgeBaseItems_CreatedBy" ON "StaffKnowledgeBaseItems" ("CreatedBy");
+CREATE INDEX "IX_StaffKnowledgeBaseItems_UpdatedBy" ON "StaffKnowledgeBaseItems" ("UpdatedBy");
+CREATE INDEX "IX_StaffKnowledgeBaseItems_Type_IsPublished_SortOrder"
+    ON "StaffKnowledgeBaseItems" ("Type", "IsPublished", "SortOrder");
+
+-- ────────────────────────────────────────────────────────────
+-- StaffAnalysisReviews table
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE "StaffAnalysisReviews" (
+    "Id"              uuid                     NOT NULL DEFAULT uuid_generate_v4(),
+    "ProjectReportId" uuid                     NOT NULL,
+    "ProjectId"       uuid                     NOT NULL,
+    "AuthorId"        uuid                     NOT NULL,
+    "ReviewedBy"      uuid                     NOT NULL,
+    "Action"          character varying(20)    NOT NULL DEFAULT 'Verified',
+    "Note"            character varying(2000),
+    "RerunReportId"   uuid,
+    "CreatedAt"       timestamp with time zone NOT NULL DEFAULT NOW(),
+    "UpdatedAt"       timestamp with time zone,
+    CONSTRAINT "PK_StaffAnalysisReviews" PRIMARY KEY ("Id"),
+    CONSTRAINT "CK_StaffAnalysisReview_Action" CHECK ("Action" IN ('Verified','Adjusted','RerunRequested')),
+    CONSTRAINT "FK_StaffAnalysisReviews_Projects_ProjectId" FOREIGN KEY ("ProjectId")
+        REFERENCES "Projects" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_StaffAnalysisReviews_ProjectReports_ProjectReportId" FOREIGN KEY ("ProjectReportId")
+        REFERENCES "ProjectReports" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_StaffAnalysisReviews_ProjectReports_RerunReportId" FOREIGN KEY ("RerunReportId")
+        REFERENCES "ProjectReports" ("Id") ON DELETE SET NULL,
+    CONSTRAINT "FK_StaffAnalysisReviews_Users_AuthorId" FOREIGN KEY ("AuthorId")
+        REFERENCES "Users" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_StaffAnalysisReviews_Users_ReviewedBy" FOREIGN KEY ("ReviewedBy")
+        REFERENCES "Users" ("Id") ON DELETE RESTRICT
+);
+
+CREATE INDEX "IX_StaffAnalysisReviews_AuthorId" ON "StaffAnalysisReviews" ("AuthorId");
+CREATE INDEX "IX_StaffAnalysisReviews_ProjectId" ON "StaffAnalysisReviews" ("ProjectId");
+CREATE UNIQUE INDEX "IX_StaffAnalysisReviews_ProjectReportId" ON "StaffAnalysisReviews" ("ProjectReportId");
+CREATE INDEX "IX_StaffAnalysisReviews_RerunReportId" ON "StaffAnalysisReviews" ("RerunReportId");
+CREATE INDEX "IX_StaffAnalysisReviews_ReviewedBy" ON "StaffAnalysisReviews" ("ReviewedBy");
 
 -- ────────────────────────────────────────────────────────────
 -- Payments table
