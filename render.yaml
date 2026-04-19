@@ -24,6 +24,8 @@ services:
         sync: false
       - key: Gemini__AnalyzeApiKey
         sync: false
+      - key: Gemini__EmbeddingApiKey
+        sync: false
       - key: Gemini__EmbeddingModel
         value: gemini-embedding-001
       - key: Gemini__ChatModels

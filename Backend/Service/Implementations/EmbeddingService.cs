@@ -19,6 +19,7 @@ namespace Service.Implementations
 
         // Gemini embeddings (required)
         private readonly HttpClient _geminiHttpClient;
+        private readonly string? _embeddingApiKey;
         private readonly string? _analyzeApiKey;
         private readonly string? _chatApiKey;
         private readonly string _geminiModel;
@@ -42,6 +43,7 @@ namespace Service.Implementations
             _logger = logger;
 
             // Gemini config
+            _embeddingApiKey = NormalizeKey(config["Gemini:EmbeddingApiKey"]);
             _analyzeApiKey = NormalizeKey(config["Gemini:AnalyzeApiKey"]);
             _chatApiKey = NormalizeKey(config["Gemini:ChatApiKey"]);
             _geminiModel = config["Gemini:EmbeddingModel"] ?? "gemini-embedding-001";
@@ -127,7 +129,7 @@ namespace Service.Implementations
             if (orderedKeys.Count == 0)
             {
                 throw new InvalidOperationException(
-                    "Thiếu Gemini embed key. Hãy set Gemini__AnalyzeApiKey và Gemini__ChatApiKey để dùng embedding.");
+                    "Thiếu Gemini embed key. Hãy set Gemini__EmbeddingApiKey (khuyến nghị) hoặc Gemini__AnalyzeApiKey/Gemini__ChatApiKey.");
             }
 
             try
@@ -373,6 +375,12 @@ namespace Service.Implementations
 
         private List<string> GetKeysForUseCase(EmbeddingUseCase useCase)
         {
+            if (!string.IsNullOrWhiteSpace(_embeddingApiKey))
+            {
+                // Khi có key chuyên biệt cho embedding, chỉ dùng key này cho mọi tác vụ embed.
+                return new List<string> { _embeddingApiKey! };
+            }
+
             var ordered = useCase == EmbeddingUseCase.ChatQuery
                 ? new[] { _chatApiKey, _analyzeApiKey }
                 : new[] { _analyzeApiKey, _chatApiKey };

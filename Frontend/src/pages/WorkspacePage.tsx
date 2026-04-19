@@ -54,6 +54,8 @@ import { useDeleteConfirm } from '../hooks';
 
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
 type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotTimeline' | 'aiWriter';
+const EMBED_COOLDOWN_MS = 60_000;
+const AUTO_EMBED_DELAY_MS = 45_000;
 
 // ── Export Modal ───────────────────────────────────────────────────────────
 function ExportModal({
@@ -279,9 +281,12 @@ export default function WorkspacePage() {
     const editorRef = useRef<HTMLDivElement>(null);
     const importFileRef = useRef<HTMLInputElement>(null);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const embedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // Tracks last time chunk+embed ran — Ctrl+S cooldown to avoid spam
     const lastEmbedRef = useRef<number>(0);
     const isEmbeddingRef = useRef<boolean>(false);
+    const pendingEmbedChapterIdRef = useRef<string | null>(null);
+    const pendingEmbedForceRef = useRef<boolean>(false);
     // Tracks which chapter is currently active to prevent stale async callbacks from overwriting it
     const activeChapterIdRef = useRef<string | null>(null);
 
@@ -533,8 +538,81 @@ export default function WorkspacePage() {
         }
     };
 
+    const runEmbedSync = useCallback(async (embeddingChapterId: string) => {
+        if (!projectId) return;
+        isEmbeddingRef.current = true;
+        setAiSyncState('syncing');
+        try {
+            await chapterService.chunkChapter(projectId, embeddingChapterId);
+            await aiService.embedChapter(embeddingChapterId);
+            lastEmbedRef.current = Date.now();
+            const embedded = await chapterService.getChapterDetail(projectId, embeddingChapterId);
+            setChapters(prev => prev.map(c => c.id === embedded.id ? embedded : c));
+            if (activeChapterIdRef.current === embeddingChapterId) {
+                setActiveChapter(embedded);
+            }
+            setAiSyncState('ready');
+            setTimeout(() => setAiSyncState('idle'), 30_000);
+        } catch {
+            setAiSyncState('error');
+            setTimeout(() => setAiSyncState('idle'), 10_000);
+        } finally {
+            isEmbeddingRef.current = false;
+        }
+    }, [projectId]);
+
+    const flushEmbedQueue = useCallback(async () => {
+        if (!projectId || isEmbeddingRef.current) return;
+        const chapterId = pendingEmbedChapterIdRef.current;
+        if (!chapterId) return;
+        pendingEmbedChapterIdRef.current = null;
+        pendingEmbedForceRef.current = false;
+        await runEmbedSync(chapterId);
+        if (pendingEmbedChapterIdRef.current) {
+            const nextForced = pendingEmbedForceRef.current;
+            const elapsed = Date.now() - lastEmbedRef.current;
+            const delay = nextForced ? 0 : Math.max(10_000, EMBED_COOLDOWN_MS - elapsed);
+            if (embedTimerRef.current) clearTimeout(embedTimerRef.current);
+            if (delay <= 0) {
+                void flushEmbedQueue();
+            } else {
+                embedTimerRef.current = setTimeout(() => { void flushEmbedQueue(); }, delay);
+            }
+        }
+    }, [projectId, runEmbedSync]);
+
+    const queueEmbedSync = useCallback((chapterId: string, immediate: boolean, force = false) => {
+        pendingEmbedChapterIdRef.current = chapterId;
+        if (force) pendingEmbedForceRef.current = true;
+        if (isEmbeddingRef.current) return;
+
+        if (embedTimerRef.current) {
+            clearTimeout(embedTimerRef.current);
+            embedTimerRef.current = null;
+        }
+
+        if (force) {
+            void flushEmbedQueue();
+            return;
+        }
+
+        const elapsed = Date.now() - lastEmbedRef.current;
+        const cooldownWait = Math.max(0, EMBED_COOLDOWN_MS - elapsed);
+        const baseDelay = immediate ? 0 : AUTO_EMBED_DELAY_MS;
+        const delay = Math.max(baseDelay, cooldownWait);
+
+        if (delay <= 0) {
+            void flushEmbedQueue();
+            return;
+        }
+
+        embedTimerRef.current = setTimeout(() => {
+            void flushEmbedQueue();
+        }, delay);
+    }, [flushEmbedQueue]);
+
     // ── Save → background Chunk + Embed ──────────────────────────────────
-    const doSave = useCallback(async (showFeedback = true) => {
+    const doSave = useCallback(async (showFeedback = true, queueEmbed = true) => {
         if (!projectId || !activeChapter || !editorRef.current) return;
         if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
         // Strip highlighting marks before saving (unwrap DOM nodes, then read innerHTML)
@@ -561,45 +639,40 @@ export default function WorkspacePage() {
                 setSavedState('saved');
                 setTimeout(() => setSavedState('idle'), 2000);
             }
-            // Background chunk + embed (skip if already in progress)
-            if (!isEmbeddingRef.current) {
-                isEmbeddingRef.current = true;
-                const embeddingChapterId = updated.id;
-                setAiSyncState('syncing');
-                (async () => {
-                    try {
-                        await chapterService.chunkChapter(projectId, embeddingChapterId);
-                        await aiService.embedChapter(embeddingChapterId);
-                        lastEmbedRef.current = Date.now();
-                        const embedded = await chapterService.getChapterDetail(projectId, embeddingChapterId);
-                        setChapters(prev => prev.map(c => c.id === embedded.id ? embedded : c));
-                        // Only update active chapter if user hasn't switched away
-                        if (activeChapterIdRef.current === embeddingChapterId) {
-                            setActiveChapter(embedded);
-                        }
-                        setAiSyncState('ready');
-                        // Auto-reset to idle after 30s
-                        setTimeout(() => setAiSyncState('idle'), 30_000);
-                    } catch {
-                        setAiSyncState('error');
-                        setTimeout(() => setAiSyncState('idle'), 10_000);
-                    } finally {
-                        isEmbeddingRef.current = false;
-                    }
-                })();
+            if (queueEmbed) {
+                // Save luôn chạy ngay; embed được xếp hàng + cooldown để tránh đốt token khi autosave dồn dập.
+                queueEmbedSync(updated.id, showFeedback);
             }
             return updated;
         } catch {
             if (showFeedback) setSavedState('error');
             return null;
         }
-    }, [projectId, activeChapter, chapterTitle]);
+    }, [projectId, activeChapter, chapterTitle, queueEmbedSync]);
+
+    const doForceEmbedNow = useCallback(async () => {
+        if (!activeChapter) return;
+        if (hasUnsavedChanges) {
+            const updated = await doSave(true, false);
+            if (!updated) return;
+            queueEmbedSync(updated.id, true, true);
+            return;
+        }
+        queueEmbedSync(activeChapter.id, true, true);
+    }, [activeChapter, hasUnsavedChanges, queueEmbedSync, doSave]);
 
     // ── Debounced auto-save (in-place) ─────────────────────────────────────
     const scheduleAutoSave = useCallback(() => {
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => { doSave(false); }, 4000);
     }, [doSave]);
+
+    useEffect(() => {
+        return () => {
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+            if (embedTimerRef.current) clearTimeout(embedTimerRef.current);
+        };
+    }, []);
 
     // ── Ctrl+S shortcut ────────────────────────────────────────────────────
     useEffect(() => {
@@ -1011,12 +1084,21 @@ export default function WorkspacePage() {
                         </span>
                     )}
                     {savedState === 'idle' && activeChapter && (
-                        <button
-                            onClick={() => doSave(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium bg-[var(--accent)]/10 text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-all hover:scale-105 active:scale-95"
-                        >
-                            <Save className="w-3.5 h-3.5" /> Lưu ngay (Ctrl+S)
-                        </button>
+                        <>
+                            <button
+                                onClick={() => doSave(true)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium bg-[var(--accent)]/10 text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-all hover:scale-105 active:scale-95"
+                            >
+                                <Save className="w-3.5 h-3.5" /> Lưu ngay (Ctrl+S)
+                            </button>
+                            <button
+                                onClick={doForceEmbedNow}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all hover:scale-105 active:scale-95"
+                                title="Đồng bộ AI ngay (bỏ qua cooldown)"
+                            >
+                                <Zap className="w-3.5 h-3.5" /> Embed ngay
+                            </button>
+                        </>
                     )}
                 </div>
             </nav>

@@ -446,7 +446,7 @@ Nếu bạn reset DB bằng `supabase_full_reset.sql`, cần đảm bảo migrat
 
 | Service | Vai trò |
 |---------|---------|
-| `EmbeddingService` | `batchEmbedContents` với batch/token throttling (config qua `Gemini:Embedding*`), dùng 2 key cố định `Gemini:AnalyzeApiKey` + `Gemini:ChatApiKey` và fallback theo use-case (corpus/chat query) |
+| `EmbeddingService` | `batchEmbedContents` với batch/token throttling (config qua `Gemini:Embedding*`), ưu tiên key chuyên embed `Gemini:EmbeddingApiKey`; nếu không có thì fallback theo use-case giữa `Gemini:AnalyzeApiKey` và `Gemini:ChatApiKey` |
 | `AiChatService` | Gemini-only chat, lưu lịch sử |
 | `AiRewriteService` | Gemini-only rewrite, lưu lịch sử |
 | `ChunkingService` | 1500 ký tự, overlap 150, ưu tiên cắt tại `\n\n` → `.` → space |
@@ -456,7 +456,7 @@ Nếu bạn reset DB bằng `supabase_full_reset.sql`, cần đảm bảo migrat
 | `GeminiRetryHelper` | Backoff [10s, 30s, 65s] cho 429; throw lỗi thân thiện sau 3 lần |
 | `EncryptionHelper` | AES-256 với user DEK + Master Key |
 
-> Khuyến nghị cấu hình đủ 2 key ở môi trường chạy: `Gemini__AnalyzeApiKey`, `Gemini__ChatApiKey` (không dùng key legacy).
+> Khuyến nghị cấu hình key chuyên embed `Gemini__EmbeddingApiKey`. Nếu chưa tách key, cấu hình tối thiểu `Gemini__AnalyzeApiKey` + `Gemini__ChatApiKey`.
 
 ---
 

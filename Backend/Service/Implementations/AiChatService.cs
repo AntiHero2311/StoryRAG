@@ -8,6 +8,9 @@ using Repository.Data;
 using Repository.Entities;
 using Service.Helpers;
 using Service.Interfaces;
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Service.Implementations
 {
@@ -19,10 +22,30 @@ namespace Service.Implementations
         private readonly ILogger<AiChatService> _logger;
         private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
 
-        // Số chunk context từ mỗi nguồn
-        private const int TopKChunks = 3;
-        private const int TopKWorldbuilding = 2;
-        private const int TopKCharacters = 2;
+        // TopK mặc định (câu hỏi cần ngữ cảnh sâu)
+        private const int TopKChunks = 5;
+        private const int TopKWorldbuilding = 3;
+        private const int TopKCharacters = 3;
+
+        // TopK rút gọn (câu hỏi đơn giản để tiết kiệm token)
+        private const int SimpleTopKChunks = 2;
+        private const int SimpleTopKWorldbuilding = 1;
+        private const int SimpleTopKCharacters = 1;
+
+        private static readonly string[] SimpleQuestionStarters =
+        [
+            "ai", "ai la", "ten gi", "la gi", "la ai",
+            "o dau", "khi nao", "bao nhieu",
+            "co phai", "co khong",
+            "nhan vat nao", "chuong nao", "doan nao"
+        ];
+
+        private static readonly string[] ComplexQuestionCues =
+        [
+            "tai sao", "vi sao", "phan tich", "so sanh",
+            "danh gia", "tam ly", "chu de", "thong diep",
+            "du doan", "mau thuan", "logic", "xung dot"
+        ];
 
         public AiChatService(AppDbContext context, IConfiguration config, IEmbeddingService embeddingService, ILogger<AiChatService> logger)
         {
@@ -65,6 +88,7 @@ namespace Service.Implementations
             // 3. Embed câu hỏi
             var questionEmbedding = await _embeddingService.GetEmbeddingAsync(question, EmbeddingUseCase.ChatQuery);
             var queryVector = new Vector(questionEmbedding);
+            var contextProfile = BuildContextProfile(question);
 
             // 4. Vector search — lấy TopK từ 3 nguồn: chapter chunks, worldbuilding, characters
             // Chỉ tìm trong chunks thuộc active version của mỗi chương (tránh lấy chunks của version cũ)
@@ -76,19 +100,19 @@ namespace Service.Implementations
             var topChunks = await _context.ChapterChunks
                 .Where(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId))
                 .OrderBy(c => c.Embedding!.CosineDistance(queryVector))
-                .Take(TopKChunks)
+                .Take(contextProfile.ChunkTopK)
                 .ToListAsync();
 
             var topWorldbuilding = await _context.WorldbuildingEntries
                 .Where(w => w.ProjectId == projectId && w.Embedding != null)
                 .OrderBy(w => w.Embedding!.CosineDistance(queryVector))
-                .Take(TopKWorldbuilding)
+                .Take(contextProfile.WorldbuildingTopK)
                 .ToListAsync();
 
             var topCharacters = await _context.CharacterEntries
                 .Where(c => c.ProjectId == projectId && c.Embedding != null)
                 .OrderBy(c => c.Embedding!.CosineDistance(queryVector))
-                .Take(TopKCharacters)
+                .Take(contextProfile.CharacterTopK)
                 .ToListAsync();
 
             if (topChunks.Count == 0 && topWorldbuilding.Count == 0 && topCharacters.Count == 0)
@@ -100,27 +124,40 @@ namespace Service.Implementations
             var rawDek = EncryptionHelper.DecryptWithMasterKey(user!.DataEncryptionKey!, masterKey);
 
             // Decrypt project summary and AI instructions (always included as context)
-            var projectSummary = !string.IsNullOrEmpty(project.Summary)
+            var projectSummary = contextProfile.IncludeSummary && !string.IsNullOrEmpty(project.Summary)
                 ? EncryptionHelper.DecryptWithMasterKey(project.Summary, rawDek)
                 : null;
-            var aiInstructions = !string.IsNullOrEmpty(project.AiInstructions)
+            var aiInstructions = contextProfile.IncludeInstructions && !string.IsNullOrEmpty(project.AiInstructions)
                 ? EncryptionHelper.DecryptWithMasterKey(project.AiInstructions, rawDek)
                 : null;
 
             var contextTexts = topChunks
-                .Select(c => EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek))
+                .Select(c => TruncateForContext(
+                    EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek),
+                    contextProfile.MaxChunkChars))
                 .ToList();
 
             var worldbuildingTexts = topWorldbuilding
-                .Select(w => $"{EncryptionHelper.DecryptWithMasterKey(w.Title, rawDek)} ({w.Category})\n{EncryptionHelper.DecryptWithMasterKey(w.Content, rawDek)}")
+                .Select(w =>
+                {
+                    var title = EncryptionHelper.DecryptWithMasterKey(w.Title, rawDek);
+                    var content = TruncateForContext(
+                        EncryptionHelper.DecryptWithMasterKey(w.Content, rawDek),
+                        contextProfile.MaxWorldChars);
+                    return $"{title} ({w.Category})\n{content}";
+                })
                 .ToList();
 
             var characterTexts = topCharacters
                 .Select(c =>
                 {
                     var name = EncryptionHelper.DecryptWithMasterKey(c.Name, rawDek);
-                    var desc = EncryptionHelper.DecryptWithMasterKey(c.Description, rawDek);
-                    var bg = c.Background != null ? EncryptionHelper.DecryptWithMasterKey(c.Background, rawDek) : string.Empty;
+                    var desc = TruncateForContext(
+                        EncryptionHelper.DecryptWithMasterKey(c.Description, rawDek),
+                        contextProfile.MaxCharacterChars);
+                    var bg = c.Background != null
+                        ? TruncateForContext(EncryptionHelper.DecryptWithMasterKey(c.Background, rawDek), contextProfile.MaxCharacterChars)
+                        : string.Empty;
                     return $"{name} [{c.Role}]\n{desc}" + (string.IsNullOrWhiteSpace(bg) ? "" : $"\nBối cảnh: {bg}");
                 })
                 .ToList();
@@ -133,8 +170,10 @@ namespace Service.Implementations
             var sanitizedContextTexts = contextTexts.Select(t => PromptSanitizer.SanitizeUserContent(t)).ToList();
             var sanitizedWorldTexts = worldbuildingTexts.Select(t => PromptSanitizer.SanitizeUserContent(t)).ToList();
             var sanitizedCharTexts = characterTexts.Select(t => PromptSanitizer.SanitizeUserContent(t)).ToList();
-            var sanitizedSummary = PromptSanitizer.SanitizeUserContent(projectSummary);
-            var sanitizedInstructions = PromptSanitizer.SanitizeUserContent(aiInstructions);
+            var sanitizedSummary = PromptSanitizer.SanitizeUserContent(
+                TruncateForContext(projectSummary, contextProfile.MaxSummaryChars));
+            var sanitizedInstructions = PromptSanitizer.SanitizeUserContent(
+                TruncateForContext(aiInstructions, contextProfile.MaxInstructionsChars));
 
             var systemPrompt = BuildSystemPrompt(projectTitle, sanitizedSummary, sanitizedInstructions, sanitizedContextTexts, sanitizedWorldTexts, sanitizedCharTexts);
 
@@ -182,7 +221,7 @@ namespace Service.Implementations
                 InputTokens = inputTokens,
                 OutputTokens = outputTokens,
                 TotalTokens = totalTokens,
-                ContextChunks = contextTexts,
+                ContextChunks = sanitizedContextTexts,
             };
         }
 
@@ -297,5 +336,92 @@ namespace Service.Implementations
                 ? string.Join("\n\n", textParts)
                 : string.Empty;
         }
+
+        private static ChatContextProfile BuildContextProfile(string question)
+        {
+            var simple = IsSimpleQuestion(question);
+            if (simple)
+            {
+                return new ChatContextProfile(
+                    ChunkTopK: SimpleTopKChunks,
+                    WorldbuildingTopK: SimpleTopKWorldbuilding,
+                    CharacterTopK: SimpleTopKCharacters,
+                    MaxChunkChars: 650,
+                    MaxWorldChars: 320,
+                    MaxCharacterChars: 320,
+                    MaxSummaryChars: 0,
+                    MaxInstructionsChars: 0,
+                    IncludeSummary: false,
+                    IncludeInstructions: false);
+            }
+
+            return new ChatContextProfile(
+                ChunkTopK: TopKChunks,
+                WorldbuildingTopK: TopKWorldbuilding,
+                CharacterTopK: TopKCharacters,
+                MaxChunkChars: 1400,
+                MaxWorldChars: 900,
+                MaxCharacterChars: 900,
+                MaxSummaryChars: 500,
+                MaxInstructionsChars: 800,
+                IncludeSummary: true,
+                IncludeInstructions: true);
+        }
+
+        private static bool IsSimpleQuestion(string question)
+        {
+            var normalized = NormalizeQuestionForHeuristics(question);
+            if (string.IsNullOrWhiteSpace(normalized))
+                return true;
+
+            var words = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length <= 4)
+                return true;
+
+            var startsSimple = SimpleQuestionStarters.Any(prefix => normalized.StartsWith(prefix, StringComparison.Ordinal));
+            var hasComplexCue = ComplexQuestionCues.Any(cue => normalized.Contains(cue, StringComparison.Ordinal));
+            return words.Length <= 10 && startsSimple && !hasComplexCue;
+        }
+
+        private static string NormalizeQuestionForHeuristics(string text)
+        {
+            var normalized = (text ?? string.Empty).Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+            var sb = new StringBuilder(normalized.Length);
+
+            foreach (var ch in normalized)
+            {
+                var category = CharUnicodeInfo.GetUnicodeCategory(ch);
+                if (category == UnicodeCategory.NonSpacingMark)
+                    continue;
+
+                sb.Append(char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch) ? ch : ' ');
+            }
+
+            return Regex.Replace(sb.ToString(), @"\s+", " ").Trim();
+        }
+
+        private static string TruncateForContext(string? text, int maxChars)
+        {
+            if (string.IsNullOrWhiteSpace(text) || maxChars <= 0)
+                return string.Empty;
+
+            var trimmed = text.Trim();
+            if (trimmed.Length <= maxChars)
+                return trimmed;
+
+            return $"{trimmed[..maxChars].TrimEnd()}...";
+        }
+
+        private sealed record ChatContextProfile(
+            int ChunkTopK,
+            int WorldbuildingTopK,
+            int CharacterTopK,
+            int MaxChunkChars,
+            int MaxWorldChars,
+            int MaxCharacterChars,
+            int MaxSummaryChars,
+            int MaxInstructionsChars,
+            bool IncludeSummary,
+            bool IncludeInstructions);
     }
 }

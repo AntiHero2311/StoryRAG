@@ -392,8 +392,9 @@ Allowed Origins:
 | `ConnectionStrings:DefaultConnection` | PostgreSQL connection string (Supabase) |
 | `Jwt:Key`                             | HMAC signing key cho JWT                |
 | `Security:MasterKey`                  | Key mã hóa DEK của user                 |
-| `Gemini:AnalyzeApiKey`                | Key ưu tiên cho phân tích + embed corpus |
-| `Gemini:ChatApiKey`                   | Key ưu tiên cho chatbot + embed query   |
+| `Gemini:EmbeddingApiKey`              | Key chuyên cho embedding (ưu tiên nếu được cấu hình) |
+| `Gemini:AnalyzeApiKey`                | Key ưu tiên cho phân tích (và fallback embedding) |
+| `Gemini:ChatApiKey`                   | Key ưu tiên cho chatbot (và fallback embedding)   |
 | `Gemini:ChatModels`                   | Thứ tự fallback model chat (`gemma-4-31b,gemma-4-26b`) |
 | `Email:Password`                      | Gmail app password                      |
 
