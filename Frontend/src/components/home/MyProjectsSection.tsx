@@ -12,6 +12,8 @@ import {
 } from '../../services/projectService';
 import { genreService } from '../../services/genreService';
 
+const PROJECT_SUMMARY_MAX_LENGTH = 2000;
+
 export interface ProjectStats {
     totalChapters: number;
     totalAnalysesUsed: number;
@@ -62,6 +64,7 @@ function ProjectFormModal({ initial, onSubmit, onClose, loading, title, genres }
     const [genreSearch, setGenreSearch] = useState('');
     const [isGenreOpen, setIsGenreOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const summaryLength = form.summary.length;
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
@@ -196,13 +199,20 @@ function ProjectFormModal({ initial, onSubmit, onClose, loading, title, genres }
                             value={form.summary}
                             onChange={e => setForm(f => ({ ...f, summary: e.target.value }))}
                             placeholder="Mô tả ngắn gọn cốt truyện, bối cảnh, hoặc mục tiêu sáng tác của dự án..."
+                            maxLength={PROJECT_SUMMARY_MAX_LENGTH}
                             rows={5}
-                            className="w-full px-5 py-3.5 bg-black/20 border border-white/10 rounded-xl text-white text-[15px] placeholder-white/30 outline-none focus:ring-2 focus:ring-indigo-500/50 shadow-inner resize-y leading-relaxed"
+                            className="w-full px-5 py-3.5 bg-black/20 border border-white/10 rounded-xl text-white text-[15px] placeholder-white/30 outline-none focus:ring-2 focus:ring-indigo-500/50 shadow-inner resize-none leading-relaxed min-h-[140px] max-h-[220px] overflow-y-auto"
                         />
+                        <div className="mt-2 flex items-center justify-between text-xs">
+                            <span className="text-zinc-500">Nên tóm tắt ngắn gọn để dễ theo dõi dự án.</span>
+                            <span className={summaryLength > PROJECT_SUMMARY_MAX_LENGTH * 0.9 ? 'text-amber-400' : 'text-zinc-500'}>
+                                {summaryLength}/{PROJECT_SUMMARY_MAX_LENGTH} ký tự
+                            </span>
+                        </div>
                     </div>
 
-                    <div>
-                        <label className="block text-zinc-400 text-[13px] font-bold uppercase tracking-wider mb-2">Trạng thái</label>
+                    <div hidden >
+                        <label className="block text-zinc-400 text-[13px] font-bold uppercase tracking-wider mb-2" >Trạng thái</label>
                         <div className="relative">
                             <select
                                 value={form.status}
@@ -232,7 +242,7 @@ function ProjectFormModal({ initial, onSubmit, onClose, loading, title, genres }
                             className="flex-[2] py-3.5 rounded-xl text-[15px] font-bold text-white transition-all hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg"
                             style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6, #c084fc)' }}>
                             {loading && <Loader2 className="w-5 h-5 animate-spin" />}
-                            Lưu cấu hình
+                            Xác Nhận
                         </button>
                     </div>
                 </form>
@@ -383,7 +393,7 @@ function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
     const color = hashColor(project.id);
     const createdDate = new Date(project.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const [menuOpen, setMenuOpen] = useState(false);
-    const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+    const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
     const menuBtnRef = useRef<HTMLButtonElement>(null);
     const [isHovered, setIsHovered] = useState(false);
     const BOOK_W = 195;
@@ -465,7 +475,18 @@ function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
                                     onClick={() => {
                                         if (!menuOpen && menuBtnRef.current) {
                                             const rect = menuBtnRef.current.getBoundingClientRect();
-                                            setMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+                                            const MENU_WIDTH = 144;
+                                            const MENU_HEIGHT = 168;
+                                            const EDGE_PADDING = 8;
+                                            const MENU_GAP = 6;
+                                            const top = rect.bottom + MENU_GAP + MENU_HEIGHT > window.innerHeight - EDGE_PADDING
+                                                ? Math.max(EDGE_PADDING, rect.top - MENU_HEIGHT - MENU_GAP)
+                                                : rect.bottom + MENU_GAP;
+                                            const left = Math.min(
+                                                Math.max(EDGE_PADDING, rect.right - MENU_WIDTH),
+                                                window.innerWidth - MENU_WIDTH - EDGE_PADDING
+                                            );
+                                            setMenuPos({ top, left });
                                         }
                                         setMenuOpen(v => !v);
                                     }}
@@ -478,7 +499,7 @@ function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
                                         <div className="fixed inset-0 z-[200]" onClick={() => setMenuOpen(false)} />
                                         <div
                                             className="fixed w-36 rounded-xl shadow-2xl overflow-hidden z-[201]"
-                                            style={{ top: menuPos.top, right: menuPos.right, background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
+                                            style={{ top: menuPos.top, left: menuPos.left, background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
                                         >
                                             <button onClick={() => { onInfo(project); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
                                                 <Info className="w-3.5 h-3.5" /> Thông tin

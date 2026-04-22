@@ -262,7 +262,7 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
             {/* ── Header ────────────────────────────────────────────────── */}
             <header
                 style={{ background: 'var(--bg-topbar)', borderBottom: '1px solid var(--border-color)' }}
-                className="h-[68px] flex items-center px-6 gap-4 shrink-0 relative z-20"
+                className="h-[68px] flex items-center px-6 py-5 gap-4 shrink-0 relative z-20"
             >
                 {pageTitle && <h1 className="text-[var(--text-primary)] font-bold text-lg">{pageTitle}</h1>}
                 <div className="flex-1" />

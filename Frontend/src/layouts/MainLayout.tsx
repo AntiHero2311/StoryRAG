@@ -44,7 +44,7 @@ export default function MainLayout({ children, pageTitle, onSettings }: MainLayo
                     onLogout={handleLogout}
                     onSettings={onSettings}
                 />
-                <main className="flex-1 overflow-y-auto">
+                <main className="flex-1 overflow-y-auto pt-6">
                     {typeof children === 'function' ? children(userInfo) : children}
                 </main>
             </div>

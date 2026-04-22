@@ -280,7 +280,7 @@ namespace Service.Implementations
 
             var report = await _context.ProjectReports
                 .Include(r => r.Project)
-                .Where(r => r.ProjectId == projectId && r.UserId == userId)
+                .Where(r => r.ProjectId == projectId)
                 .OrderByDescending(r => r.CreatedAt)
                 .FirstOrDefaultAsync();
 
@@ -314,19 +314,28 @@ namespace Service.Implementations
         {
             await VerifyOwnershipAsync(projectId, userId);
 
-            return await _context.ProjectReports
-                .Where(r => r.ProjectId == projectId && r.UserId == userId)
+            var reports = await _context.ProjectReports
+                .Where(r => r.ProjectId == projectId)
                 .OrderByDescending(r => r.CreatedAt)
-                .Select(r => new ProjectReportSummary
+                .Select(r => new
                 {
-                    Id = r.Id,
-                    Status = r.Status,
-                    TotalScore = r.TotalScore,
-                    Classification = Classify(r.TotalScore),
-                    ProjectVersion = r.ProjectVersion,
-                    CreatedAt = r.CreatedAt,
+                    r.Id,
+                    r.Status,
+                    r.TotalScore,
+                    r.ProjectVersion,
+                    r.CreatedAt
                 })
                 .ToListAsync();
+
+            return reports.Select(r => new ProjectReportSummary
+            {
+                Id = r.Id,
+                Status = r.Status,
+                TotalScore = r.TotalScore,
+                Classification = Classify(r.TotalScore),
+                ProjectVersion = r.ProjectVersion,
+                CreatedAt = r.CreatedAt,
+            }).ToList();
         }
 
         public async Task<ProjectReportResponse?> GetByIdAsync(Guid reportId, Guid projectId, Guid userId)
@@ -335,7 +344,7 @@ namespace Service.Implementations
 
             var report = await _context.ProjectReports
                 .Include(r => r.Project)
-                .FirstOrDefaultAsync(r => r.Id == reportId && r.ProjectId == projectId && r.UserId == userId);
+                .FirstOrDefaultAsync(r => r.Id == reportId && r.ProjectId == projectId);
 
             if (report == null) return null;
 

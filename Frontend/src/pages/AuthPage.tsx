@@ -302,29 +302,31 @@ export default function AuthPage() {
                             <span className="relative bg-[#121212] px-4 text-zinc-500 font-bold text-[11px] tracking-widest uppercase rounded-lg">HOẶC</span>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4">
-                            {googleClientId ? (
-                                <div className="h-12 rounded-xl overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center">
-                                    <GoogleLogin
-                                        onSuccess={handleGoogleLoginSuccess}
-                                        onError={handleGoogleLoginError}
-                                        text="signin_with"
-                                        shape="pill"
-                                        size="large"
-                                        width="360"
-                                        // locale="vi"
-                                    />
-                                </div>
-                            ) : (
-                                <button
-                                    type="button"
-                                    onClick={() => setErrorMsg('Thiếu cấu hình VITE_GOOGLE_CLIENT_ID cho đăng nhập Google.')}
-                                    className="h-12 rounded-xl flex items-center justify-center gap-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-sm font-bold transition-all shadow-sm"
-                                >
-                                    <GoogleIcon /> Google
-                                </button>
-                            )}
-                        </div>
+                        {mode === 'login' && (
+                            <div className="grid grid-cols-1 gap-4">
+                                {googleClientId ? (
+                                    <div className="h-12 rounded-xl overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center">
+                                        <GoogleLogin
+                                            onSuccess={handleGoogleLoginSuccess}
+                                            onError={handleGoogleLoginError}
+                                            text="signin_with"
+                                            shape="pill"
+                                            size="large"
+                                            width="360"
+                                            // locale="vi"
+                                        />
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => setErrorMsg('Thiếu cấu hình VITE_GOOGLE_CLIENT_ID cho đăng nhập Google.')}
+                                        className="h-12 rounded-xl flex items-center justify-center gap-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-sm font-bold transition-all shadow-sm"
+                                    >
+                                        <GoogleIcon /> Google
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* REGISTER FORM */}

@@ -276,6 +276,8 @@ export default function WorkspacePage() {
 
     // ── Continue Writing ───────────────────────────────────────────────────
     const [isContinuingWriting, setIsContinuingWriting] = useState(false);
+    const [showFloatingAiBtn, setShowFloatingAiBtn] = useState(false);
+    const editorScrollRef = useRef<HTMLDivElement | null>(null);
 
     // ── Refs ───────────────────────────────────────────────────────────────
     const editorRef = useRef<HTMLDivElement>(null);
@@ -289,6 +291,15 @@ export default function WorkspacePage() {
     const pendingEmbedForceRef = useRef<boolean>(false);
     // Tracks which chapter is currently active to prevent stale async callbacks from overwriting it
     const activeChapterIdRef = useRef<string | null>(null);
+    const pendingHtmlUpdateRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (editorRef.current && pendingHtmlUpdateRef.current !== null) {
+            editorRef.current.innerHTML = pendingHtmlUpdateRef.current;
+            setWordCount((editorRef.current.innerText ?? '').trim().split(/\s+/).filter(Boolean).length);
+            pendingHtmlUpdateRef.current = null;
+        }
+    });
 
     // ── Init ───────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -322,12 +333,18 @@ export default function WorkspacePage() {
                 setHasUnsavedChanges(false);
                 if (editorRef.current) {
                     editorRef.current.innerHTML = detail.content ?? '';
+                } else {
+                    pendingHtmlUpdateRef.current = detail.content ?? '';
                 }
             } else {
                 setChapters([]);
                 setActiveChapter(null);
                 setHasUnsavedChanges(false);
-                if (editorRef.current) editorRef.current.innerHTML = '';
+                if (editorRef.current) {
+                    editorRef.current.innerHTML = '';
+                } else {
+                    pendingHtmlUpdateRef.current = '';
+                }
             }
         } catch {
             // no chapters yet
@@ -366,7 +383,9 @@ export default function WorkspacePage() {
         // Save current before switching
         if (activeChapter && editorRef.current && activeChapter.id !== ch.id) {
             if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
-            await doSave(false);
+            if (hasUnsavedChanges) {
+                await doSave(false);
+            }
         }
         // Load full detail if not already loaded
         let detail = ch;
@@ -380,6 +399,9 @@ export default function WorkspacePage() {
         if (editorRef.current) {
             editorRef.current.innerHTML = detail.content ?? '';
             setWordCount((editorRef.current.innerText ?? '').trim().split(/\s+/).filter(Boolean).length);
+        } else {
+            pendingHtmlUpdateRef.current = detail.content ?? '';
+            setWordCount((detail.content ?? '').replace(/<[^>]*>/g, '').trim().split(/\s+/).filter(Boolean).length);
         }
         // Reset version rename state
         setRenamingVersionNum(null);
@@ -615,8 +637,10 @@ export default function WorkspacePage() {
     const doSave = useCallback(async (showFeedback = true, queueEmbed = true) => {
         if (!projectId || !activeChapter || !editorRef.current) return;
         if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
-        // Strip highlighting marks before saving (unwrap DOM nodes, then read innerHTML)
-        const marks = Array.from(editorRef.current.querySelectorAll('mark.ai-highlight'));
+        // Strip highlighting marks using a virtual clone to prevent disrupting the live DOM caret
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = editorRef.current.innerHTML ?? '';
+        const marks = Array.from(tempDiv.querySelectorAll('mark.ai-highlight'));
         marks.forEach(mark => {
             const parent = mark.parentNode;
             if (!parent) return;
@@ -624,7 +648,7 @@ export default function WorkspacePage() {
             parent.removeChild(mark);
             parent.normalize();
         });
-        let content = editorRef.current.innerHTML ?? '';
+        let content = tempDiv.innerHTML;
 
         if (showFeedback) setSavedState('saving');
         try {
@@ -1471,8 +1495,15 @@ export default function WorkspacePage() {
                             </div>
         
                             {/* Writing area */}
-                            <div className="flex-1 overflow-y-auto flex justify-center p-6 lg:p-12 scrollbar-thin">
-                                <div className="w-full max-w-3xl">
+                            <div
+                                ref={editorScrollRef}
+                                className="flex-1 overflow-y-auto flex justify-center p-6 lg:p-12 scrollbar-thin"
+                                onScroll={(e) => {
+                                    const scrolled = (e.currentTarget as HTMLDivElement).scrollTop > 200;
+                                    setShowFloatingAiBtn(scrolled);
+                                }}
+                            >
+                                <div className="w-full max-w-3xl relative">
                                     {activeChapter ? (
                                         <>
                                             {/* Chapter title input */}
@@ -1523,8 +1554,11 @@ export default function WorkspacePage() {
                                                     {(activeChapter.versions ?? []).length} phiên bản
                                                 </button>
                                                 <span className="text-[11px] text-[var(--text-secondary)] opacity-50">•</span>
-                                                <span className="text-[11px] font-medium text-[var(--text-secondary)] inline-flex items-center gap-1">
-                                                    <AlignLeft className="w-3 h-3" />
+                                                <span 
+                                                    className={`text-[11px] font-medium inline-flex items-center gap-1 ${wordCount > 2000 ? 'text-amber-500' : 'text-[var(--text-secondary)]'}`}
+                                                    title={wordCount > 2000 ? 'Chương truyện quá dài (> 2000 chữ) có thể làm AI khó bao quát. Mời bạn chủ động ngắt sang chương mới để tối ưu.' : ''}
+                                                >
+                                                    {wordCount > 2000 ? <AlertCircle className="w-3 h-3" /> : <AlignLeft className="w-3 h-3" />}
                                                     {wordCount} từ
                                                 </span>
         
@@ -1553,6 +1587,28 @@ export default function WorkspacePage() {
                                                 style={{ fontFamily: `'${editorSettings.editorFont}', sans-serif`, fontSize: `${editorSettings.editorFontSize}px`, letterSpacing: '0.01em' }}
                                                 data-placeholder="Bắt đầu viết tác phẩm của bạn tại đây..."
                                             />
+                                            {/* Floating AI Viết tiếp */}
+                                            {showFloatingAiBtn && activeChapter && (
+                                                <div
+                                                    className="sticky bottom-6 flex justify-end mt-6 pointer-events-none"
+                                                    style={{ zIndex: 50 }}
+                                                >
+                                                    <button
+                                                        onClick={handleContinueWriting}
+                                                        disabled={isContinuingWriting}
+                                                        className="pointer-events-auto flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all duration-200 disabled:opacity-50 shadow-2xl hover:scale-105 active:scale-95"
+                                                        style={{
+                                                            background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)',
+                                                            boxShadow: '0 8px 24px rgba(139,92,246,0.45)',
+                                                        }}
+                                                        title="AI đọc 1500 ký tự cuối và viết tiếp (có dùng ngữ cảnh các chương trước)"
+                                                    >
+                                                        {isContinuingWriting
+                                                            ? <><Loader2 className="w-4 h-4 animate-spin" /> Đang viết...</>
+                                                            : <><Bot className="w-4 h-4" /> AI Viết tiếp</>}
+                                                    </button>
+                                                </div>
+                                            )}
                                         </>
                                     ) : (
                                         <div className="flex flex-col items-center justify-center h-[60vh] gap-5 text-center px-4">

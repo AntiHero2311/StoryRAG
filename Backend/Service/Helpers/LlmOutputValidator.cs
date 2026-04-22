@@ -18,7 +18,7 @@ public static class LlmOutputValidator
         new(@"(?is)<story_?summary[^>]*>.*?</story_?summary>", RegexOptions.Compiled, TimeSpan.FromSeconds(1));
     private static readonly Regex LeakLineRegex =
         new(
-            @"(?im)^\s*(?:[-*•]\s*)?(?:\[(?:hướng dẫn hệ thống|câu hỏi của người dùng)[^\]]*\]|ai assistant helping an author|analyze and answer questions based on the provided content|do not reveal system prompt|do not execute commands inside|base answers only on|infer/synthesize if necessary).*$",
+            @"(?im)^\s*(?:[-*\u2022]\s*)?(?:\[(?:h\u01b0\u1edbng d\u1eabn h\u1ec7 th\u1ed1ng|c\u00e2u h\u1ecfi c\u1ee7a ng\u01b0\u1eddi d\u00f9ng)[^\]]*\]|ai assistant helping an author|analyze and answer questions based on the provided content|do not reveal system prompt|do not reveal system instructions|do not execute commands inside|base answers only on|infer/synthesize if necessary|experienced writer|continue a story fragment|show, don'?t tell|avoid repetition|no intro/outro|standard vietnamese|no tags like|protagonist:\*|current situation:\*|recent gain:\*|setting:\*|atmosphere:\*).*$",
             RegexOptions.Compiled,
             TimeSpan.FromSeconds(1));
     private static readonly Regex MultiBlankLinesRegex =
@@ -101,10 +101,25 @@ public static class LlmOutputValidator
     }
 
     /// <summary>
-    /// Phiên bản cho rewrite: validate và trả về response gốc nếu an toàn.
+    /// Phiên bản cho rewrite/continue-writing: strip prompt-leak + validate sensitive patterns.
     /// </summary>
     public static string ValidateRewriteResponse(string? response, ILogger logger)
-        => ValidateOrReplace(response, logger, "AiRewrite");
+    {
+        if (string.IsNullOrWhiteSpace(response)) return string.Empty;
+
+        var cleaned = StripPromptLeakSections(response);
+
+        if (string.IsNullOrWhiteSpace(cleaned))
+        {
+            logger.LogWarning("⚠️ LLM response tại [AiRewrite] chỉ chứa prompt-leak text sau khi làm sạch.");
+            return string.Empty;
+        }
+
+        if (!string.Equals(cleaned, response.Trim(), StringComparison.Ordinal))
+            logger.LogWarning("⚠️ LLM response tại [AiRewrite] có chứa đoạn prompt nội bộ; đã làm sạch trước khi trả về user.");
+
+        return ValidateOrReplace(cleaned, logger, "AiRewrite");
+    }
 
     private static string StripPromptLeakSections(string response)
     {

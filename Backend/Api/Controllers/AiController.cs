@@ -21,6 +21,8 @@ namespace Api.Controllers
         private readonly IProjectAnalysisJobService _analysisJobService;
         private readonly INarrativeAnalyticsService _narrativeAnalyticsService;
         private readonly IReportExportService _reportExportService;
+        private readonly ISubscriptionService _subscriptionService;
+        private readonly IServiceScopeFactory _scopeFactory;
 
         public AiController(
             IEmbeddingService embeddingService,
@@ -31,7 +33,9 @@ namespace Api.Controllers
             IAiAnalysisHistoryService historyService,
             IProjectAnalysisJobService analysisJobService,
             INarrativeAnalyticsService narrativeAnalyticsService,
-            IReportExportService reportExportService)
+            IReportExportService reportExportService,
+            ISubscriptionService subscriptionService,
+            IServiceScopeFactory scopeFactory)
         {
             _embeddingService = embeddingService;
             _aiChatService = aiChatService;
@@ -42,6 +46,8 @@ namespace Api.Controllers
             _analysisJobService = analysisJobService;
             _narrativeAnalyticsService = narrativeAnalyticsService;
             _reportExportService = reportExportService;
+            _subscriptionService = subscriptionService;
+            _scopeFactory = scopeFactory;
         }
 
         /// <summary>Embed tất cả chunks của current version của một chương.</summary>
@@ -54,8 +60,23 @@ namespace Api.Controllers
                 var userId = GetUserId();
                 if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
 
-                await _embeddingService.EmbedChapterAsync(chapterId, userId.Value);
-                return Ok(new { Message = "Embedding hoàn tất." });
+                // Chạy nhúng dữ liệu trong background (Fire-and-forget) để tránh Request Timeout
+                _ = Task.Run(async () =>
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var bgEmbeddingService = scope.ServiceProvider.GetRequiredService<IEmbeddingService>();
+                    try
+                    {
+                        await bgEmbeddingService.EmbedChapterAsync(chapterId, userId.Value);
+                    }
+                    catch (Exception ex)
+                    {
+                        var logger = scope.ServiceProvider.GetRequiredService<ILogger<AiController>>();
+                        logger.LogError(ex, "Lỗi khi chạy EmbedChapterAsync ngầm cho chương {ChapterId}", chapterId);
+                    }
+                });
+
+                return Accepted(new { Message = "Đã đưa vào tiến trình nhúng dữ liệu ngầm." });
             }
             catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
             catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
@@ -302,6 +323,10 @@ namespace Api.Controllers
             {
                 var userId = GetUserId();
                 if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var subscription = await _subscriptionService.GetMySubscriptionAsync(userId.Value);
+                if (subscription == null || subscription.Price <= 0)
+                    return StatusCode(403, new { Message = "Xuất PDF chỉ khả dụng cho gói trả phí. Vui lòng nâng cấp gói dịch vụ." });
 
                 var bytes = await _reportExportService.ExportReportPdfAsync(projectId, reportId, userId.Value);
                 return File(bytes, "application/pdf", $"AnalysisReport_{reportId}.pdf");

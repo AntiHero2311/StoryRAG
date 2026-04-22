@@ -11,6 +11,7 @@ const PLAN_CONFIG: Record<string, {
     gradient: string;
     accentColor: string;
     borderGlow: string;
+    shortDesc: string;
     popular?: boolean;
 }> = {
     Free: {
@@ -18,18 +19,21 @@ const PLAN_CONFIG: Record<string, {
         gradient: 'from-slate-600 via-slate-700 to-slate-800',
         accentColor: 'text-slate-400',
         borderGlow: 'hover:shadow-[0_0_30px_-10px_rgba(148,163,184,0.3)]',
+        shortDesc: 'Khởi đầu miễn phí để trải nghiệm các tính năng cốt lõi.',
     },
     Basic: {
         emoji: '⚡',
         gradient: 'from-blue-500 via-indigo-600 to-blue-700',
         accentColor: 'text-blue-400',
         borderGlow: 'hover:shadow-[0_0_30px_-10px_rgba(59,130,246,0.4)]',
+        shortDesc: 'Phù hợp cho tác giả viết đều đặn và cần phân tích thường xuyên.',
     },
     Pro: {
         emoji: '🚀',
         gradient: 'from-fuchsia-500 via-purple-600 to-indigo-700',
         accentColor: 'text-purple-400',
         borderGlow: 'shadow-[0_0_30px_-10px_rgba(168,85,247,0.4)] ring-1 ring-purple-500/50 hover:shadow-[0_0_40px_-5px_rgba(168,85,247,0.5)]',
+        shortDesc: 'Tối ưu cho người sáng tác chuyên sâu với nhu cầu AI cao.',
         popular: true,
     },
     Enterprise: {
@@ -37,6 +41,7 @@ const PLAN_CONFIG: Record<string, {
         gradient: 'from-amber-400 via-orange-500 to-rose-600',
         accentColor: 'text-amber-400',
         borderGlow: 'hover:shadow-[0_0_30px_-10px_rgba(245,158,11,0.4)]',
+        shortDesc: 'Giải pháp toàn diện cho team, studio và vận hành quy mô lớn.',
     },
 };
 
@@ -79,9 +84,10 @@ function PlanCard({
     const features = getFeatures(plan);
     const { main, sub } = formatPrice(plan.price);
     const isFree = plan.price === 0;
+    const description = cfg.shortDesc || plan.description || '';
 
     return (
-        <div className={`relative flex flex-col rounded-[2rem] glass-card border border-white/10 overflow-hidden transition-all duration-300 transform hover:-translate-y-2 ${cfg.borderGlow}`}>
+        <div className={`relative flex flex-col rounded-[2rem] glass-card border border-white/10 overflow-hidden transition-all duration-300 transform hover:-translate-y-1.5 ${cfg.borderGlow}`}>
             
             {/* Popular badge */}
             {cfg.popular && (
@@ -94,39 +100,49 @@ function PlanCard({
             )}
 
             {/* Header */}
-            <div className="p-8 relative overflow-hidden text-center">
+            <div className="px-6 pt-7 pb-5 relative overflow-hidden text-center">
                 <div className="relative z-10">
                     <div className="text-4xl mb-3 drop-shadow-md">{cfg.emoji}</div>
-                    <h3 className="text-white font-black text-xl uppercase tracking-widest mb-4 opacity-90 drop-shadow-sm">{plan.planName}</h3>
+                    <h3 className="text-white font-black text-[30px] uppercase tracking-wide mb-3 opacity-95 drop-shadow-sm">{plan.planName}</h3>
                     
                     <div className="flex items-end justify-center gap-1 mb-2">
                         <span className="font-black text-5xl leading-none text-transparent bg-clip-text bg-gradient-to-br from-white to-zinc-400 drop-shadow-sm">{main}</span>
                         <span className="text-zinc-500 text-sm font-semibold mb-1">{sub}</span>
                     </div>
-                    {plan.description && (
-                        <p className="text-zinc-400 text-xs mt-4 leading-relaxed font-medium px-2">{plan.description}</p>
+                    {description && (
+                        <p
+                            className="text-zinc-400 text-[13px] mt-3 leading-relaxed font-medium px-2 min-h-[40px]"
+                            style={{
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                            }}
+                        >
+                            {description}
+                        </p>
                     )}
                 </div>
             </div>
 
-            <div className="px-8 flex-1 flex flex-col justify-end">
+            <div className="px-6 flex-1 flex flex-col">
                 {/* Features */}
-                <div className="space-y-4 py-6 border-t border-white/5">
+                <div className="space-y-3 py-5 border-t border-white/5">
                     {features.map(f => (
                         <div key={f} className="flex items-center gap-3">
                             <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-white/5 border border-white/10 shadow-inner">
                                 <Check className={`w-3 h-3 ${cfg.accentColor}`} />
                             </div>
-                            <span className="text-zinc-300 text-sm font-medium">{f}</span>
+                            <span className="text-zinc-300 text-[15px] font-semibold">{f}</span>
                         </div>
                     ))}
                 </div>
             </div>
 
             {/* CTA */}
-            <div className="p-8 pt-0 mt-auto">
+            <div className="p-6 pt-2 mt-auto">
                 {isCurrent ? (
-                    <div className="w-full py-4 rounded-xl text-center text-[15px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-inner">
+                    <div className="w-full py-3.5 rounded-xl text-center text-[15px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-inner">
                         ✓ Đang sử dụng
                     </div>
                 ) : (
@@ -134,7 +150,7 @@ function PlanCard({
                         id={`plan-select-${plan.id}`}
                         onClick={() => onSelect(plan)}
                         disabled={subscribing}
-                        className={`w-full py-4 rounded-xl text-white text-[15px] font-bold transition-all duration-300 flex items-center justify-center gap-2 
+                        className={`w-full py-3.5 rounded-xl text-white text-[15px] font-bold transition-all duration-300 flex items-center justify-center gap-2 
                         bg-gradient-to-r ${cfg.gradient} 
                         hover:brightness-110 hover:shadow-lg active:scale-95 disabled:opacity-50 shadow-inner`}
                     >
@@ -403,7 +419,7 @@ function PlansContent() {
                 </div>
 
                 {/* Cards grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 max-w-[1300px] mx-auto auto-rows-fr">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 max-w-[1300px] mx-auto">
                     {plans.map(plan => (
                         <PlanCard
                             key={plan.id}
@@ -418,7 +434,7 @@ function PlansContent() {
                 {/* FAQ note */}
                 <div className="text-center mt-20 pb-10 text-zinc-500 text-sm font-medium">
                     Bạn cần tư vấn thêm? Liên hệ với chúng tôi tại{' '}
-                    <a href="mailto:support@storynest.vn" className="text-indigo-400 font-bold hover:text-indigo-300 hover:underline transition-colors">support@storynest.vn</a>
+                    <a href="mailto:storynestrag@gmail.com" className="text-indigo-400 font-bold hover:text-indigo-300 hover:underline transition-colors">storynestrag@gmail.com</a>
                 </div>
             </div>
 

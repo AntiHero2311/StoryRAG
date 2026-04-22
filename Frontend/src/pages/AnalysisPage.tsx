@@ -38,6 +38,7 @@ function AnalysisContent() {
     const [loadingHistoryReport, setLoadingHistoryReport] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({});
+    const [activeTab, setActiveTab] = useState<'overall' | 'charts'>('overall');
     const [elapsed, setElapsed] = useState(0);
     const [subscription, setSubscription] = useState<UserSubscription | null>(null);
     const [analysisJob, setAnalysisJob] = useState<ProjectAnalysisJobResponse | null>(null);
@@ -148,19 +149,67 @@ function AnalysisContent() {
 
         const projectId = selectedId;
 
+        void chapterService.getChapters(projectId)
+            .then(chapters => {
+                if (!mountedRef.current || cancelled) return;
+                setProjectChapters(chapters);
+            })
+            .catch(() => {
+                if (!mountedRef.current || cancelled) return;
+                setProjectChapters([]);
+            });
+
         const loadProjectAnalysis = async () => {
-            const [latest, all, activeJob, latestJob, chapters] = await Promise.all([
-                reportService.getLatest(projectId).catch(() => null),
-                reportService.getAll(projectId).catch(() => []),
-                reportService.getActiveAnalyzeJob(projectId).catch(() => null),
-                reportService.getLatestAnalyzeJob(projectId).catch(() => null),
-                chapterService.getChapters(projectId).catch(() => []),
+            const [latestResult, allResult, activeJobResult, latestJobResult, globalActiveJobResult] = await Promise.allSettled([
+                reportService.getLatest(projectId),
+                reportService.getAll(projectId),
+                reportService.getActiveAnalyzeJob(projectId),
+                reportService.getLatestAnalyzeJob(projectId),
+                reportService.getActiveAnalyzeJob(),
             ]);
 
             if (!mountedRef.current || cancelled) return;
 
+            const latest = latestResult.status === 'fulfilled' ? latestResult.value : null;
+            const all = allResult.status === 'fulfilled' ? allResult.value : [];
+            const activeJob = activeJobResult.status === 'fulfilled' ? activeJobResult.value : null;
+            const latestJob = latestJobResult.status === 'fulfilled' ? latestJobResult.value : null;
+            const globalActiveJob = globalActiveJobResult.status === 'fulfilled' ? globalActiveJobResult.value : null;
+            const resumableSelectedJob = activeJob
+                ?? (globalActiveJob?.projectId === projectId ? globalActiveJob : null);
+
+            if (!resumableSelectedJob
+                && globalActiveJob
+                && (globalActiveJob.status === 'Queued' || globalActiveJob.status === 'Processing')
+                && globalActiveJob.projectId !== projectId) {
+                setAnalysisStatus({
+                    type: 'info',
+                    message: 'Đã phát hiện job đang chạy ở dự án khác. Đang chuyển về đúng dự án để khôi phục tiến trình...',
+                });
+                setSelectedId(globalActiveJob.projectId);
+                return;
+            }
+
+            const reportReadFailed =
+                latestResult.status === 'rejected' &&
+                allResult.status === 'rejected';
+            if (reportReadFailed) {
+                const firstError = latestResult.reason ?? allResult.reason;
+                setError(getApiErrorMessage(firstError, 'Không thể tải dữ liệu phân tích. Vui lòng tải lại trang.'));
+            }
+
             let effectiveLatest = latest;
             let effectiveHistory = mergeHistory(all, latest);
+
+            if (!effectiveLatest && effectiveHistory.length === 0 && latestJob?.reportId) {
+                const recoveredByReportId = await reportService
+                    .getById(projectId, latestJob.reportId)
+                    .catch(() => null);
+                if (recoveredByReportId && mountedRef.current && !cancelled) {
+                    effectiveLatest = recoveredByReportId;
+                    effectiveHistory = mergeHistory(all, recoveredByReportId);
+                }
+            }
 
             // Recovery path: report/job đã hoàn tất nhưng endpoint lịch sử/latest chưa đồng bộ kịp.
             if (!effectiveLatest && effectiveHistory.length === 0 && latestJob?.status === 'Completed') {
@@ -187,10 +236,9 @@ function AnalysisContent() {
             setReport(effectiveLatest);
             setActiveReportId(effectiveLatest?.id ?? null);
             setHistory(effectiveHistory);
-            setProjectChapters(chapters);
 
-            if (activeJob && (activeJob.status === 'Queued' || activeJob.status === 'Processing')) {
-                void runAnalyzeFlow(activeJob.projectId, activeJob);
+            if (resumableSelectedJob && (resumableSelectedJob.status === 'Queued' || resumableSelectedJob.status === 'Processing')) {
+                void runAnalyzeFlow(resumableSelectedJob.projectId, resumableSelectedJob);
             } else {
                 setAnalyzing(false);
                 setAnalysisJob(null);
@@ -271,7 +319,7 @@ function AnalysisContent() {
             type: 'info',
             message: job.isExistingJob
                 ? 'AI đã nhận được request trước đó. Đang tiếp tục job phân tích...'
-                : 'AI đã nhận được request. Đang khởi tạo job phân tích...',
+                : 'AI đã nhận được request. Đang khởi tạo job phân tích. Vui lòng chờ trong ít phút...',
         });
         startElapsedTimer(job.startedAt ?? job.createdAt);
 
@@ -347,7 +395,7 @@ function AnalysisContent() {
         setError(null);
         setAnalysisJob(null);
         setAnalyzing(true);
-        setAnalysisStatus({ type: 'info', message: 'AI đã nhận được request. Đang gửi yêu cầu phân tích...' });
+        setAnalysisStatus({ type: 'info', message: 'AI đã nhận được request. Đang gửi yêu cầu phân tích. Vui lòng chờ trong ít phút...' });
         startElapsedTimer();
         try {
             void browserNotificationService.ensurePermission();
@@ -365,8 +413,18 @@ function AnalysisContent() {
             setAnalyzing(false);
             stopElapsedTimer();
 
-            const activeJob = await reportService.getActiveAnalyzeJob(selectedId).catch(() => null);
+            const activeJob = await reportService.getActiveAnalyzeJob(selectedId).catch(() => null)
+                ?? await reportService.getActiveAnalyzeJob().catch(() => null);
             if (!activeJob || !mountedRef.current) return;
+
+            if (activeJob.projectId !== selectedId) {
+                setAnalysisStatus({
+                    type: 'info',
+                    message: 'Bạn đang có job phân tích ở dự án khác. Đang chuyển đến dự án đó để tiếp tục theo dõi tiến trình...',
+                });
+                setSelectedId(activeJob.projectId);
+                return;
+            }
 
             await runAnalyzeFlow(activeJob.projectId, activeJob);
         }
@@ -420,6 +478,12 @@ function AnalysisContent() {
 
     const handleExportReportPdf = async () => {
         if (!selectedId || !activeReportId || exportingPdf) return;
+        if (subscription?.price === 0) {
+            const message = 'Gói Free không hỗ trợ xuất PDF. Vui lòng nâng cấp để sử dụng tính năng này.';
+            setError(message);
+            toast.error(message);
+            return;
+        }
         setExportingPdf(true);
         try {
             await reportService.exportReportPdf(selectedId, activeReportId);
@@ -478,6 +542,7 @@ function AnalysisContent() {
     const usagePercent = subscription && subscription.maxAnalysisCount > 0
         ? Math.min((subscription.usedAnalysisCount / subscription.maxAnalysisCount) * 100, 100)
         : 0;
+    const canExportReportPdf = subscription?.price !== 0;
 
     return (
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
@@ -745,139 +810,173 @@ function AnalysisContent() {
                                         )}
                                         <button
                                             onClick={handleExportReportPdf}
-                                            disabled={exportingPdf}
+                                            disabled={exportingPdf || !canExportReportPdf}
                                             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-opacity disabled:opacity-50"
-                                            style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.25)' }}>
-                                            {exportingPdf ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-                                            Xuất PDF
+                                            style={canExportReportPdf
+                                                ? { background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.25)' }
+                                                : { background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)' }}
+                                            title={canExportReportPdf ? 'Xuất báo cáo PDF' : 'Nâng cấp gói để xuất PDF'}>
+                                            {exportingPdf
+                                                ? <Loader2 className="w-3 h-3 animate-spin" />
+                                                : canExportReportPdf ? <Download className="w-3 h-3" /> : <CreditCard className="w-3 h-3" />}
+                                            {canExportReportPdf ? 'Xuất PDF' : 'Nâng cấp để xuất PDF'}
                                         </button>
                                     </div>
                                 </div>
-
-                                {/* Score Hero — 2 columns */}
-                                <div className="rounded-2xl mb-5 overflow-hidden"
-                                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-color)]">
-                                        {/* Left: Donut */}
-                                        <div className="flex flex-col items-center justify-center p-8 gap-1">
-                                            <p className="text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-3">
-                                                Tổng điểm
-                                            </p>
-                                            <DonutChart score={report.totalScore} classification={report.classification} />
-                                        </div>
-                                        {/* Right: Radar */}
-                                        <div className="flex flex-col items-center justify-center p-6">
-                                            <p className="text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-2">
-                                                Phân bố điểm
-                                            </p>
-                                            <RadarChart groups={report.groups} />
-                                            {/* Mini legend */}
-                                            <div className="flex flex-col gap-1.5 w-full max-w-[200px] mt-2">
-                                                {report.groups.map((g, i) => (
-                                                    <div key={g.name} className="flex items-center gap-2">
-                                                        <div className="w-2 h-2 rounded-full shrink-0" style={{ background: groupColor(i) }} />
-                                                        <span className="text-[var(--text-secondary)] text-xs truncate flex-1">{g.name}</span>
-                                                        <span className="text-[var(--text-primary)] text-xs font-bold shrink-0">
-                                                            {g.score.toFixed(0)}<span className="text-[var(--text-secondary)] font-normal">/{g.maxScore}</span>
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
+                                {/* Tabs */}
+                                <div className="flex items-center gap-4 border-b mb-5 px-2" style={{ borderColor: 'var(--border-color)' }}>
+                                    <button
+                                        onClick={() => setActiveTab('overall')}
+                                        className={`pb-3 text-sm font-bold relative transition-colors ${activeTab === 'overall' ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                                    >
+                                        Tổng quan
+                                        {activeTab === 'overall' && (
+                                            <div className="absolute bottom-0 left-0 w-full h-0.5 rounded-t-full bg-amber-500" />
+                                        )}
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('charts')}
+                                        className={`pb-3 text-sm font-bold relative transition-colors ${activeTab === 'charts' ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                                    >
+                                        Biểu đồ chuyên sâu
+                                        {activeTab === 'charts' && (
+                                            <div className="absolute bottom-0 left-0 w-full h-0.5 rounded-t-full bg-amber-500" />
+                                        )}
+                                    </button>
                                 </div>
 
-                                {/* Overall Feedback & Warnings */}
-                                {(report.overallFeedback || (report.warnings && report.warnings.length > 0)) && (
-                                    <div className="rounded-2xl mb-5 p-6"
-                                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-                                        
-                                        {/* Nhận xét tổng quan */}
-                                        {report.overallFeedback && (
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-3">
-                                                    <Sparkles className="w-5 h-5 text-amber-500" />
-                                                    <h3 className="text-[var(--text-primary)] font-bold text-lg">Nhận xét tổng quan</h3>
+                                {activeTab === 'overall' && (
+                                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        {/* Score Hero — 2 columns */}
+                                        <div className="rounded-2xl mb-5 overflow-hidden"
+                                            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-color)]">
+                                                {/* Left: Donut */}
+                                                <div className="flex flex-col items-center justify-center p-8 gap-1">
+                                                    <p className="text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-3">
+                                                        Tổng điểm
+                                                    </p>
+                                                    <DonutChart score={report.totalScore} classification={report.classification} />
                                                 </div>
-                                                <p className="text-[var(--text-secondary)] text-sm leading-relaxed whitespace-pre-line">
-                                                    {report.overallFeedback}
-                                                </p>
+                                                {/* Right: Radar */}
+                                                <div className="flex flex-col items-center justify-center p-6">
+                                                    <p className="text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-2">
+                                                        Phân bố điểm
+                                                    </p>
+                                                    <RadarChart groups={report.groups} />
+                                                    {/* Mini legend */}
+                                                    <div className="flex flex-col gap-1.5 w-full max-w-[200px] mt-2">
+                                                        {report.groups.map((g, i) => (
+                                                            <div key={g.name} className="flex items-center gap-2">
+                                                                <div className="w-2 h-2 rounded-full shrink-0" style={{ background: groupColor(i) }} />
+                                                                <span className="text-[var(--text-secondary)] text-xs truncate flex-1">{g.name}</span>
+                                                                <span className="text-[var(--text-primary)] text-xs font-bold shrink-0">
+                                                                    {g.score.toFixed(0)}<span className="text-[var(--text-secondary)] font-normal">/{g.maxScore}</span>
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Overall Feedback & Warnings */}
+                                        {(report.overallFeedback || (report.warnings && report.warnings.length > 0)) && (
+                                            <div className="rounded-2xl mb-5 p-6"
+                                                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                                                
+                                                {/* Nhận xét tổng quan */}
+                                                {report.overallFeedback && (
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-3">
+                                                            <Sparkles className="w-5 h-5 text-amber-500" />
+                                                            <h3 className="text-[var(--text-primary)] font-bold text-lg">Nhận xét tổng quan</h3>
+                                                        </div>
+                                                        <p className="text-[var(--text-secondary)] text-sm leading-relaxed whitespace-pre-line">
+                                                            {report.overallFeedback}
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {/* Cảnh báo đặc biệt */}
+                                                {report.warnings && report.warnings.length > 0 && (
+                                                    <div className={`flex flex-col gap-3 ${report.overallFeedback ? 'mt-5 pt-5' : ''}`} 
+                                                        style={report.overallFeedback ? { borderTop: '1px solid var(--border-color)' } : {}}>
+                                                        {report.warnings.map(w => (
+                                                            <div key={w.code} className="flex gap-3 p-4 rounded-xl"
+                                                                style={{
+                                                                    background: w.severity === 'CRITICAL' ? 'rgba(239,68,68,0.08)' : 'rgba(245,166,35,0.08)',
+                                                                    border: `1px solid ${w.severity === 'CRITICAL' ? 'rgba(239,68,68,0.2)' : 'rgba(245,166,35,0.2)'}`
+                                                                }}>
+                                                                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5"
+                                                                    style={{ color: w.severity === 'CRITICAL' ? '#ef4444' : '#f5a623' }} />
+                                                                <div>
+                                                                    <p className="font-bold text-sm mb-1"
+                                                                        style={{ color: w.severity === 'CRITICAL' ? '#ef4444' : '#f5a623' }}>
+                                                                        {w.title}
+                                                                    </p>
+                                                                    <p className="text-[var(--text-secondary)] text-xs leading-relaxed whitespace-pre-line">
+                                                                        {w.detail}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
 
-                                        {/* Cảnh báo đặc biệt */}
-                                        {report.warnings && report.warnings.length > 0 && (
-                                            <div className={`flex flex-col gap-3 ${report.overallFeedback ? 'mt-5 pt-5' : ''}`} 
-                                                style={report.overallFeedback ? { borderTop: '1px solid var(--border-color)' } : {}}>
-                                                {report.warnings.map(w => (
-                                                    <div key={w.code} className="flex gap-3 p-4 rounded-xl"
-                                                        style={{
-                                                            background: w.severity === 'CRITICAL' ? 'rgba(239,68,68,0.08)' : 'rgba(245,166,35,0.08)',
-                                                            border: `1px solid ${w.severity === 'CRITICAL' ? 'rgba(239,68,68,0.2)' : 'rgba(245,166,35,0.2)'}`
-                                                        }}>
-                                                        <AlertCircle className="w-5 h-5 shrink-0 mt-0.5"
-                                                            style={{ color: w.severity === 'CRITICAL' ? '#ef4444' : '#f5a623' }} />
-                                                        <div>
-                                                            <p className="font-bold text-sm mb-1"
-                                                                style={{ color: w.severity === 'CRITICAL' ? '#ef4444' : '#f5a623' }}>
-                                                                {w.title}
-                                                            </p>
-                                                            <p className="text-[var(--text-secondary)] text-xs leading-relaxed whitespace-pre-line">
-                                                                {w.detail}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
+                                        {/* Group breakdown */}
+                                        <div className="space-y-3">
+                                            {report.groups.map((g, i) => (
+                                                <GroupCard key={g.name} group={g} idx={i}
+                                                    expanded={!!expandedGroups[i]}
+                                                    onToggle={() => toggleGroup(i)} />
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
 
-                                <div className="rounded-2xl mb-5 p-4 flex flex-col gap-3"
-                                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div>
-                                            <p className="text-[var(--text-primary)] text-sm font-semibold">Bộ lọc chart narrative</p>
-                                            <p className="text-[var(--text-secondary)] text-xs">Chọn phạm vi phân tích theo toàn bộ project hoặc từng chapter.</p>
+                                {activeTab === 'charts' && (
+                                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        <div className="rounded-2xl mb-5 p-4 flex flex-col gap-3"
+                                            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div>
+                                                    <p className="text-[var(--text-primary)] text-sm font-semibold">Bộ lọc chart narrative</p>
+                                                    <p className="text-[var(--text-secondary)] text-xs">Chọn phạm vi phân tích theo toàn bộ project hoặc từng chapter.</p>
+                                                </div>
+                                                <button
+                                                    onClick={handleRefreshNarrativeCharts}
+                                                    disabled={!selectedId || loadingNarrativeCharts}
+                                                    className="h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-opacity disabled:opacity-50"
+                                                    style={{ background: 'rgba(139,92,246,0.15)', color: '#c4b5fd', border: '1px solid rgba(139,92,246,0.35)' }}>
+                                                    {loadingNarrativeCharts ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                                    Làm mới chart
+                                                </button>
+                                            </div>
+                                            <div className="w-full sm:max-w-sm">
+                                                <label className="block text-[var(--text-secondary)] text-xs font-semibold mb-1.5 uppercase tracking-wider">
+                                                    Phạm vi chart
+                                                </label>
+                                                <select
+                                                    value={chartChapterFilter}
+                                                    onChange={e => setChartChapterFilter(e.target.value)}
+                                                    className="w-full h-10 px-3 rounded-xl text-sm text-[var(--text-primary)] outline-none"
+                                                    style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
+                                                    <option value="all">Toàn bộ project</option>
+                                                    {projectChapters.map(ch => (
+                                                        <option key={ch.id} value={ch.id}>
+                                                            {ch.title ?? `Chương ${ch.chapterNumber}`}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
                                         </div>
-                                        <button
-                                            onClick={handleRefreshNarrativeCharts}
-                                            disabled={!selectedId || loadingNarrativeCharts}
-                                            className="h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-opacity disabled:opacity-50"
-                                            style={{ background: 'rgba(139,92,246,0.15)', color: '#c4b5fd', border: '1px solid rgba(139,92,246,0.35)' }}>
-                                            {loadingNarrativeCharts ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                                            Làm mới chart
-                                        </button>
-                                    </div>
-                                    <div className="w-full sm:max-w-sm">
-                                        <label className="block text-[var(--text-secondary)] text-xs font-semibold mb-1.5 uppercase tracking-wider">
-                                            Phạm vi chart
-                                        </label>
-                                        <select
-                                            value={chartChapterFilter}
-                                            onChange={e => setChartChapterFilter(e.target.value)}
-                                            className="w-full h-10 px-3 rounded-xl text-sm text-[var(--text-primary)] outline-none"
-                                            style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
-                                            <option value="all">Toàn bộ project</option>
-                                            {projectChapters.map(ch => (
-                                                <option key={ch.id} value={ch.id}>
-                                                    {ch.title ?? `Chương ${ch.chapterNumber}`}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
 
-                                <NarrativeChartsPanel data={narrativeCharts} loading={loadingNarrativeCharts} />
-
-                                {/* Group breakdown */}
-                                <div className="space-y-3">
-                                    {report.groups.map((g, i) => (
-                                        <GroupCard key={g.name} group={g} idx={i}
-                                            expanded={!!expandedGroups[i]}
-                                            onToggle={() => toggleGroup(i)} />
-                                    ))}
-                                </div>
+                                        <NarrativeChartsPanel data={narrativeCharts} loading={loadingNarrativeCharts} />
+                                    </div>
+                                )}
                             </>
                         )}
 
@@ -988,7 +1087,7 @@ function AnalysisContent() {
                 onClose={() => setShowAnalyzeConfirm(false)}
                 onConfirm={handleConfirmAnalyze}
                 title="Xác nhận phân tích bộ truyện"
-                message="Hệ thống sẽ dùng 1 lượt phân tích để chạy AI trên toàn bộ dự án đang chọn. Bạn có muốn tiếp tục không?"
+                message="Hệ thống sẽ dùng 1 lượt phân tích để chạy AI trên toàn bộ dự án đang chọn. Lưu ý: mỗi lần chỉ có thể chạy 1 phân tích thôi. Bạn có muốn tiếp tục không?"
                 confirmText="Xác nhận phân tích"
                 cancelText="Hủy"
                 variant="warning"

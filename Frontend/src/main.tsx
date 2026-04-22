@@ -1,4 +1,3 @@
-import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import './index.css'
@@ -9,13 +8,11 @@ const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 initializeThemeMode()
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    {googleClientId ? (
-      <GoogleOAuthProvider clientId={googleClientId}>
-        <App />
-      </GoogleOAuthProvider>
-    ) : (
+  googleClientId ? (
+    <GoogleOAuthProvider clientId={googleClientId}>
       <App />
-    )}
-  </StrictMode>,
+    </GoogleOAuthProvider>
+  ) : (
+    <App />
+  ),
 )

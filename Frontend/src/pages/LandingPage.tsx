@@ -104,7 +104,7 @@ const LandingPage = () => {
             features: [
                 "Không giới hạn dự án",
                 "Không giới hạn chương",
-                "AI nâng cao với GPT-4",
+                "AI nâng cao với Genma 4 ",
                 "RAG Vector Search",
                 "Xuất file Word/PDF",
                 "Hỗ trợ ưu tiên",
