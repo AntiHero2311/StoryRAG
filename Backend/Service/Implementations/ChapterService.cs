@@ -522,7 +522,7 @@ namespace Service.Implementations
             foreach (var part in chapterParts)
             {
                 currentMaxChapterNumber++;
-                var defaultTitle = $"Imported Chapter {currentMaxChapterNumber}";
+                var defaultTitle = $"Chương {currentMaxChapterNumber}";
                 var title = string.IsNullOrWhiteSpace(part.Title) ? defaultTitle : part.Title.Trim();
                 if (title.Length > 255) title = title[..255];
 
