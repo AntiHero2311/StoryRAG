@@ -100,6 +100,24 @@ namespace Service.Implementations
             var tokens = completion.Usage?.TotalTokenCount ?? 0;
             
             await DeductTokenAsync(userId, tokens);
+
+            var masterKey = _config["Security:MasterKey"]!;
+            var user = await _context.Users.FindAsync(userId) ?? throw new KeyNotFoundException("Người dùng không tồn tại.");
+            var rawDek = EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
+
+            var history = new Repository.Entities.RewriteHistory
+            {
+                ProjectId = projectId,
+                UserId = userId,
+                ActionType = "WriteNew",
+                OriginalText = "",
+                RewrittenText = EncryptionHelper.EncryptWithMasterKey(text, rawDek),
+                Instruction = EncryptionHelper.EncryptWithMasterKey(instruction, rawDek),
+                TotalTokens = tokens
+            };
+            _context.RewriteHistories.Add(history);
+            await _context.SaveChangesAsync();
+
             return new AiWritingResult { GeneratedText = text, TotalTokens = tokens };
         }
 
@@ -200,6 +218,21 @@ namespace Service.Implementations
             var tokens = completion.Usage?.TotalTokenCount ?? 0;
 
             await DeductTokenAsync(userId, tokens);
+
+            var history = new Repository.Entities.RewriteHistory
+            {
+                ProjectId = projectId,
+                ChapterId = chapterId,
+                UserId = userId,
+                ActionType = "ContinueWriting",
+                OriginalText = EncryptionHelper.EncryptWithMasterKey(previousText, rawDek),
+                RewrittenText = EncryptionHelper.EncryptWithMasterKey(text, rawDek),
+                Instruction = EncryptionHelper.EncryptWithMasterKey(instruction, rawDek),
+                TotalTokens = tokens
+            };
+            _context.RewriteHistories.Add(history);
+            await _context.SaveChangesAsync();
+
             return new AiWritingResult { GeneratedText = text, TotalTokens = tokens };
         }
 
@@ -230,16 +263,17 @@ namespace Service.Implementations
                 ?? throw new KeyNotFoundException("Người dùng không tồn tại.");
             var rawDek = EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
 
-            _context.ChatMessages.Add(new AiChatMessage
+            var history = new Repository.Entities.RewriteHistory
             {
                 ProjectId = projectId,
                 UserId = userId,
-                Question = EncryptionHelper.EncryptWithMasterKey(BuildPolishHistoryQuestion(originalText, instruction), rawDek),
-                Answer = EncryptionHelper.EncryptWithMasterKey(text, rawDek),
-                InputTokens = inputTokens,
-                OutputTokens = outputTokens,
-                TotalTokens = tokens,
-            });
+                ActionType = "Polish",
+                OriginalText = EncryptionHelper.EncryptWithMasterKey(originalText, rawDek),
+                RewrittenText = EncryptionHelper.EncryptWithMasterKey(text, rawDek),
+                Instruction = EncryptionHelper.EncryptWithMasterKey(instruction, rawDek),
+                TotalTokens = tokens
+            };
+            _context.RewriteHistories.Add(history);
             await _context.SaveChangesAsync();
             return new AiWritingResult { GeneratedText = text, TotalTokens = tokens };
         }

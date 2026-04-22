@@ -14,6 +14,7 @@ import RewritePanel from '../components/RewritePanel';
 import ChatPanel from '../components/workspace/ChatPanel';
 import ChatHistoryPanel from '../components/workspace/ChatHistoryPanel';
 import AiWriterPanel from '../components/workspace/AiWriterPanel';
+import AiWriterHistoryPanel from '../components/workspace/AiWriterHistoryPanel';
 import TimelinePanel from '../components/workspace/TimelinePanel';
 
 import {
@@ -53,9 +54,8 @@ import { useDeleteConfirm } from '../hooks';
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
-type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotTimeline' | 'aiWriter';
-const EMBED_COOLDOWN_MS = 60_000;
-const AUTO_EMBED_DELAY_MS = 45_000;
+type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotTimeline' | 'aiWriter' | 'aiWriterHistory';
+
 
 // ── Export Modal ───────────────────────────────────────────────────────────
 function ExportModal({
@@ -284,12 +284,6 @@ export default function WorkspacePage() {
     const editorRef = useRef<HTMLDivElement>(null);
     const importFileRef = useRef<HTMLInputElement>(null);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const embedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    // Tracks last time chunk+embed ran — Ctrl+S cooldown to avoid spam
-    const lastEmbedRef = useRef<number>(0);
-    const isEmbeddingRef = useRef<boolean>(false);
-    const pendingEmbedChapterIdRef = useRef<string | null>(null);
-    const pendingEmbedForceRef = useRef<boolean>(false);
     // Tracks which chapter is currently active to prevent stale async callbacks from overwriting it
     const activeChapterIdRef = useRef<string | null>(null);
 
@@ -303,6 +297,18 @@ export default function WorkspacePage() {
         if (projectId) loadChapters();
     }, [projectId]);
 
+    // ── Editor Mount & Chapter Switch Sync ─────────────────────────────────
+    useEffect(() => {
+        if (activeChapter && editorRef.current) {
+            const currentMountedId = editorRef.current.getAttribute('data-chapter-id');
+            if (currentMountedId !== activeChapter.id) {
+                editorRef.current.innerHTML = activeChapter.content ?? '';
+                editorRef.current.setAttribute('data-chapter-id', activeChapter.id);
+                setWordCount((editorRef.current.innerText ?? '').trim().split(/\s+/).filter(Boolean).length);
+            }
+        }
+    }, [activeChapter?.id, activeChapter?.content]);
+
     // ── Load chapters ──────────────────────────────────────────────────────
     const loadChapters = async (preferredChapterId?: string) => {
         if (!projectId) return;
@@ -315,10 +321,11 @@ export default function WorkspacePage() {
                     ? list.find(c => c.id === preferredChapterId) ?? list[0]
                     : list[0];
                 const detail = await chapterService.getChapterDetail(projectId, selected.id);
-                const rest = list
-                    .filter(c => c.id !== selected.id)
-                    .map(c => ({ ...c, content: null, versions: [] } as ChapterDetailResponse));
-                const all = [detail, ...rest];
+                const all = list.map(c => 
+                    c.id === selected.id 
+                        ? detail 
+                        : { ...c, content: null, versions: [] } as ChapterDetailResponse
+                );
                 setChapters(all);
                 setActiveChapter(detail);
                 setChapterTitle(detail.title ?? `Chương ${detail.chapterNumber}`);
@@ -557,81 +564,8 @@ export default function WorkspacePage() {
         }
     };
 
-    const runEmbedSync = useCallback(async (embeddingChapterId: string) => {
-        if (!projectId) return;
-        isEmbeddingRef.current = true;
-        setAiSyncState('syncing');
-        try {
-            // Không cần gọi chunkChapter nữa vì Backend đã tự động chunk khi Save/Update
-            await aiService.embedChapter(embeddingChapterId);
-            lastEmbedRef.current = Date.now();
-            const embedded = await chapterService.getChapterDetail(projectId, embeddingChapterId);
-            setChapters(prev => prev.map(c => c.id === embedded.id ? embedded : c));
-            if (activeChapterIdRef.current === embeddingChapterId) {
-                setActiveChapter(embedded);
-            }
-            setAiSyncState('ready');
-            setTimeout(() => setAiSyncState('idle'), 30_000);
-        } catch {
-            setAiSyncState('error');
-            setTimeout(() => setAiSyncState('idle'), 10_000);
-        } finally {
-            isEmbeddingRef.current = false;
-        }
-    }, [projectId]);
-
-    const flushEmbedQueue = useCallback(async () => {
-        if (!projectId || isEmbeddingRef.current) return;
-        const chapterId = pendingEmbedChapterIdRef.current;
-        if (!chapterId) return;
-        pendingEmbedChapterIdRef.current = null;
-        pendingEmbedForceRef.current = false;
-        await runEmbedSync(chapterId);
-        if (pendingEmbedChapterIdRef.current) {
-            const nextForced = pendingEmbedForceRef.current;
-            const elapsed = Date.now() - lastEmbedRef.current;
-            const delay = nextForced ? 0 : Math.max(10_000, EMBED_COOLDOWN_MS - elapsed);
-            if (embedTimerRef.current) clearTimeout(embedTimerRef.current);
-            if (delay <= 0) {
-                void flushEmbedQueue();
-            } else {
-                embedTimerRef.current = setTimeout(() => { void flushEmbedQueue(); }, delay);
-            }
-        }
-    }, [projectId, runEmbedSync]);
-
-    const queueEmbedSync = useCallback((chapterId: string, immediate: boolean, force = false) => {
-        pendingEmbedChapterIdRef.current = chapterId;
-        if (force) pendingEmbedForceRef.current = true;
-        if (isEmbeddingRef.current) return;
-
-        if (embedTimerRef.current) {
-            clearTimeout(embedTimerRef.current);
-            embedTimerRef.current = null;
-        }
-
-        if (force) {
-            void flushEmbedQueue();
-            return;
-        }
-
-        const elapsed = Date.now() - lastEmbedRef.current;
-        const cooldownWait = Math.max(0, EMBED_COOLDOWN_MS - elapsed);
-        const baseDelay = immediate ? 0 : AUTO_EMBED_DELAY_MS;
-        const delay = Math.max(baseDelay, cooldownWait);
-
-        if (delay <= 0) {
-            void flushEmbedQueue();
-            return;
-        }
-
-        embedTimerRef.current = setTimeout(() => {
-            void flushEmbedQueue();
-        }, delay);
-    }, [flushEmbedQueue]);
-
     // ── Save → background Chunk + Embed ──────────────────────────────────
-    const doSave = useCallback(async (showFeedback = true, queueEmbed = true) => {
+    const doSave = useCallback(async (showFeedback = true) => {
         if (!projectId || !activeChapter || !editorRef.current) return;
         if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
         // Strip highlighting marks before saving (unwrap DOM nodes, then read innerHTML)
@@ -658,31 +592,43 @@ export default function WorkspacePage() {
                 setSavedState('saved');
                 setTimeout(() => setSavedState('idle'), 2000);
             }
-            if (queueEmbed) {
-                // Save luôn chạy ngay; embed được xếp hàng + cooldown để tránh đốt token khi autosave dồn dập.
-                queueEmbedSync(updated.id, showFeedback);
-            }
             return updated;
         } catch {
             if (showFeedback) setSavedState('error');
             return null;
         }
-    }, [projectId, activeChapter, chapterTitle, queueEmbedSync]);
+    }, [projectId, activeChapter, chapterTitle]);
 
     const doForceEmbedNow = useCallback(async () => {
-        if (!activeChapter) return;
+        if (!projectId || !activeChapter) return;
         if (aiSyncState === 'syncing') {
             toast.error('Tiến trình AI đang chạy, vui lòng đợi trong giây lát.');
             return;
         }
+        
+        let targetChapterId = activeChapter.id;
+        
         if (hasUnsavedChanges) {
-            const updated = await doSave(true, false);
+            const updated = await doSave(true);
             if (!updated) return;
-            queueEmbedSync(updated.id, true, true);
-            return;
+            targetChapterId = updated.id;
         }
-        queueEmbedSync(activeChapter.id, true, true);
-    }, [activeChapter, hasUnsavedChanges, queueEmbedSync, doSave]);
+
+        setAiSyncState('syncing');
+        try {
+            await aiService.embedChapter(targetChapterId);
+            const embedded = await chapterService.getChapterDetail(projectId, targetChapterId);
+            setChapters(prev => prev.map(c => c.id === embedded.id ? embedded : c));
+            if (activeChapterIdRef.current === targetChapterId) {
+                setActiveChapter(embedded);
+            }
+            setAiSyncState('ready');
+            setTimeout(() => setAiSyncState('idle'), 30_000);
+        } catch {
+            setAiSyncState('error');
+            setTimeout(() => setAiSyncState('idle'), 10_000);
+        }
+    }, [projectId, activeChapter, hasUnsavedChanges, doSave, aiSyncState]);
 
     // ── Debounced auto-save (in-place) ─────────────────────────────────────
     const scheduleAutoSave = useCallback(() => {
@@ -693,7 +639,6 @@ export default function WorkspacePage() {
     useEffect(() => {
         return () => {
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-            if (embedTimerRef.current) clearTimeout(embedTimerRef.current);
         };
     }, []);
 
@@ -1496,8 +1441,15 @@ export default function WorkspacePage() {
                             </div>
 
                             {/* Writing area */}
-                            <div className="flex-1 overflow-y-auto flex justify-center p-6 lg:p-12 scrollbar-thin">
-                                <div className="w-full max-w-3xl">
+                            <div
+                                ref={editorScrollRef}
+                                className="flex-1 overflow-y-auto flex justify-center p-6 lg:p-12 scrollbar-thin"
+                                onScroll={(e) => {
+                                    const scrolled = (e.currentTarget as HTMLDivElement).scrollTop > 200;
+                                    setShowFloatingAiBtn(scrolled);
+                                }}
+                            >
+                                <div className="w-full max-w-3xl relative">
                                     {activeChapter ? (
                                         <>
                                             {/* Chapter title input */}
@@ -1554,7 +1506,18 @@ export default function WorkspacePage() {
                                                 </span>
 
                                                 <div className="flex-1" />
+
                                                 <span className="hidden xl:inline text-[10px] text-[var(--text-secondary)] opacity-60">Alt+↑/↓ chuyển nhanh chương</span>
+                                                <button
+                                                    onClick={() => handleContinueWriting('normal')}
+                                                    disabled={isContinuingWriting}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all shadow-md shadow-[var(--accent)]/10 disabled:opacity-50 ml-2"
+                                                    style={{ background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)' }}
+                                                    title="AI đọc 1500 ký tự cuối và viết tiếp"
+                                                >
+                                                    {isContinuingWriting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bot className="w-3.5 h-3.5" />}
+                                                    AI Viết tiếp
+                                                </button>
                                             </div>
                                             {/* Editor */}
                                             <div
@@ -1655,7 +1618,7 @@ export default function WorkspacePage() {
                         {/* Panel header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] shrink-0 bg-[var(--bg-app)]">
                             <div className="flex items-center gap-2">
-                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotTimeline', 'aiWriter'] as ActiveTab[]).includes(activeTab) ? (
+                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotTimeline', 'aiWriter', 'aiWriterHistory'] as ActiveTab[]).includes(activeTab) ? (
                                     <>
                                         <button onClick={() => setActiveTab('chat')} className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 transition-colors">
                                             <ArrowLeft className="w-3.5 h-3.5" />
@@ -1671,6 +1634,7 @@ export default function WorkspacePage() {
                                             {activeTab === 'plotTimeline' && 'Tuyến truyện'}
                                             {activeTab === 'aiInstructions' && 'Ghi chú AI'}
                                             {activeTab === 'aiWriter' && 'AI Writer'}
+                                            {activeTab === 'aiWriterHistory' && 'Lịch sử AI'}
                                         </span>
                                     </>
                                 ) : (
@@ -1683,6 +1647,9 @@ export default function WorkspacePage() {
                                         </TabBtn>
                                         <TabBtn active={activeTab === 'chatHistory'} onClick={() => { setActiveTab('chatHistory'); }}>
                                             <Clock className="w-3.5 h-3.5" /> Lịch sử chat
+                                        </TabBtn>
+                                        <TabBtn active={activeTab === 'aiWriterHistory'} onClick={() => { setActiveTab('aiWriterHistory'); }}>
+                                            <History className="w-3.5 h-3.5" /> Lịch sử AI
                                         </TabBtn>
                                     </div>
                                 )}
@@ -1939,6 +1906,28 @@ export default function WorkspacePage() {
                                     if (editorRef.current) {
                                         editorRef.current.innerHTML += (editorRef.current.innerHTML.endsWith('<br>') ? '' : '<br><br>') + content.replace(/\n/g, '<br>');
                                         markEditorDirty();
+                                    }
+                                }}
+                            />
+                        )}
+
+                        {/* ── AI Writer History Tab ── */}
+                        {activeTab === 'aiWriterHistory' && projectId && (
+                            <AiWriterHistoryPanel
+                                projectId={projectId}
+                                chapterId={activeChapter?.id}
+                                onApplyContent={(content) => {
+                                    if (editorRef.current) {
+                                        editorRef.current.innerHTML += (editorRef.current.innerHTML.endsWith('<br>') ? '' : '<br><br>') + content.replace(/\n/g, '<br>');
+                                        markEditorDirty();
+                                        
+                                        // Scroll to bottom
+                                        setTimeout(() => {
+                                            const contentEl = document.querySelector('.workspace-editor-content');
+                                            if (contentEl && contentEl.parentElement) {
+                                                contentEl.parentElement.scrollTo({ top: contentEl.parentElement.scrollHeight, behavior: 'smooth' });
+                                            }
+                                        }, 100);
                                     }
                                 }}
                             />

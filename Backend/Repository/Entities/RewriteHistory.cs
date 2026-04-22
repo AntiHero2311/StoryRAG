@@ -26,6 +26,9 @@ namespace Repository.Entities
         /// <summary>Hướng dẫn AI (prompt instruction, encrypted). Có thể rỗng.</summary>
         public string Instruction { get; set; } = string.Empty;
 
+        /// <summary>Loại action: Rewrite, ContinueWriting, WriteNew, Polish</summary>
+        public string ActionType { get; set; } = "Rewrite";
+
         /// <summary>Số token đã dùng (tổng input + output)</summary>
         public int TotalTokens { get; set; }
 

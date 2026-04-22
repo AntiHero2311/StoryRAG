@@ -119,7 +119,7 @@ namespace Service.Implementations
             };
         }
 
-        public async Task<RewriteHistoryResult> GetHistoryAsync(Guid projectId, Guid userId, Guid? chapterId, int page, int pageSize)
+        public async Task<RewriteHistoryResult> GetHistoryAsync(Guid projectId, Guid userId, string? actionType, Guid? chapterId, int page, int pageSize)
         {
             // Kiểm tra ownership
             var project = await _context.Projects
@@ -133,6 +133,9 @@ namespace Service.Implementations
 
             var query = _context.RewriteHistories
                 .Where(r => r.ProjectId == projectId && r.UserId == userId);
+
+            if (!string.IsNullOrEmpty(actionType))
+                query = query.Where(r => r.ActionType == actionType);
 
             if (chapterId.HasValue)
                 query = query.Where(r => r.ChapterId == chapterId);
@@ -153,6 +156,7 @@ namespace Service.Implementations
                     OriginalText = EncryptionHelper.DecryptWithMasterKey(r.OriginalText, rawDek),
                     RewrittenText = EncryptionHelper.DecryptWithMasterKey(r.RewrittenText, rawDek),
                     Instruction = EncryptionHelper.DecryptWithMasterKey(r.Instruction, rawDek),
+                    ActionType = r.ActionType,
                     TotalTokens = r.TotalTokens,
                     CreatedAt = r.CreatedAt,
                 }).ToList(),

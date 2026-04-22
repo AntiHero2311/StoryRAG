@@ -102,46 +102,61 @@ namespace Service.Implementations
             if (chunks.Count == 0)
                 throw new InvalidOperationException("Không có chunk nào để embed.");
 
+            var unembeddedChunks = chunks.Where(c => c.Embedding == null).ToList();
+
+            if (unembeddedChunks.Count == 0)
+            {
+                // Tất cả chunks đã có embedding (nhờ Delta Embeddings)
+                version.IsEmbedded = true;
+                await _context.SaveChangesAsync();
+                return;
+            }
+
             // Decrypt DEK của user
             var user = await _context.Users.FindAsync(userId)
                 ?? throw new KeyNotFoundException("User không tồn tại.");
             var masterKey = _config["Security:MasterKey"]!;
             var rawDek = EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey ?? string.Empty, masterKey);
 
-            var plainTexts = chunks
+            var plainTexts = unembeddedChunks
                 .Select(c => EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek))
                 .Select(t => EnsureEmbeddingPrefix(t, isDocument: true))
                 .ToList();
 
-                var embeddings = await GetEmbeddingsForTextsAsync(plainTexts, EmbeddingUseCase.Corpus);
+            var embeddings = await GetEmbeddingsForTextsAsync(plainTexts, EmbeddingUseCase.Corpus);
 
-                // Reload lại version và chunks để tránh DbUpdateConcurrencyException sau thời gian gọi API lâu
-                _context.Entry(version).State = EntityState.Detached;
-                var latestVersion = await _context.ChapterVersions
-                    .Include(v => v.Chunks)
-                    .FirstOrDefaultAsync(v => v.Id == version.Id);
+            // Reload lại version và chunks để tránh DbUpdateConcurrencyException sau thời gian gọi API lâu
+            _context.Entry(version).State = EntityState.Detached;
+            var latestVersion = await _context.ChapterVersions
+                .Include(v => v.Chunks)
+                .FirstOrDefaultAsync(v => v.Id == version.Id);
 
-                if (latestVersion == null || latestVersion.UpdatedAt > version.UpdatedAt)
-                {
-                    _logger.LogWarning("Nội dung chương {ChapterId} đã thay đổi trong khi đang tạo embedding. Hủy lưu kết quả cũ.", chapterId);
-                    return;
-                }
+            if (latestVersion == null || latestVersion.UpdatedAt > version.UpdatedAt)
+            {
+                _logger.LogWarning("Nội dung chương {ChapterId} đã thay đổi trong khi đang tạo embedding. Hủy lưu kết quả cũ.", chapterId);
+                return;
+            }
 
-                // Lưu embedding vào từng chunk
-                var latestChunks = latestVersion.Chunks.OrderBy(c => c.ChunkIndex).ToList();
-                if (latestChunks.Count != embeddings.Count)
-                {
-                    _logger.LogWarning("Số lượng chunk của chương {ChapterId} đã thay đổi. Không thể map embedding.", chapterId);
-                    return;
-                }
+            // Lưu embedding vào từng chunk tương ứng chưa có
+            var latestChunks = latestVersion.Chunks.OrderBy(c => c.ChunkIndex).ToList();
+            var latestUnembeddedChunks = latestChunks.Where(c => c.Embedding == null).ToList();
 
-                for (int i = 0; i < latestChunks.Count; i++)
-                {
-                    latestChunks[i].Embedding = new Vector(embeddings[i]);
-                }
+            if (latestUnembeddedChunks.Count != embeddings.Count)
+            {
+                _logger.LogWarning("Số lượng unembedded chunk của chương {ChapterId} đã thay đổi. Không thể map embedding.", chapterId);
+                return;
+            }
 
-                // Đánh dấu version đã embedded
+            for (int i = 0; i < latestUnembeddedChunks.Count; i++)
+            {
+                latestUnembeddedChunks[i].Embedding = new Vector(embeddings[i]);
+            }
+
+            // Đánh dấu version đã embedded nếu tất cả đều ok
+            if (latestChunks.All(c => c.Embedding != null))
+            {
                 latestVersion.IsEmbedded = true;
+            }
 
                 try
                 {

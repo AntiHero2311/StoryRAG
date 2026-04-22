@@ -10,7 +10,7 @@ namespace Service.Interfaces
         /// <summary>
         /// Lấy lịch sử viết lại của user trong một dự án.
         /// </summary>
-        Task<RewriteHistoryResult> GetHistoryAsync(Guid projectId, Guid userId, Guid? chapterId, int page, int pageSize);
+        Task<RewriteHistoryResult> GetHistoryAsync(Guid projectId, Guid userId, string? actionType, Guid? chapterId, int page, int pageSize);
     }
 
     public class RewriteResult
@@ -30,6 +30,7 @@ namespace Service.Interfaces
         public string OriginalText { get; set; } = string.Empty;
         public string RewrittenText { get; set; } = string.Empty;
         public string Instruction { get; set; } = string.Empty;
+        public string ActionType { get; set; } = string.Empty;
         public int TotalTokens { get; set; }
         public DateTime CreatedAt { get; set; }
     }

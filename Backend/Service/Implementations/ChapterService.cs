@@ -5,6 +5,7 @@ using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
+using Pgvector;
 using Repository.Data;
 using Repository.Entities;
 using Service.DTOs;
@@ -388,27 +389,56 @@ namespace Service.Implementations
 
         private async Task PerformChunkingInternalAsync(ChapterVersion version, string plainContent, string rawDek, Guid projectId)
         {
-            // Xóa chunks cũ
+            // Lấy chunks cũ để tái sử dụng Vector
             var existingChunks = await _context.ChapterChunks
                 .Where(c => c.VersionId == version.Id)
                 .ToListAsync();
+
+            var oldChunkMap = new Dictionary<string, Vector>();
+            foreach (var chunk in existingChunks)
+            {
+                if (chunk.Embedding != null)
+                {
+                    try
+                    {
+                        var plainChunk = EncryptionHelper.DecryptWithMasterKey(chunk.Content, rawDek);
+                        oldChunkMap[plainChunk] = chunk.Embedding;
+                    }
+                    catch
+                    {
+                        // Ignore decryption errors for old chunks mapping
+                    }
+                }
+            }
+
+            // Xóa chunks cũ
             if (existingChunks.Count > 0)
                 _context.ChapterChunks.RemoveRange(existingChunks);
 
             // Chunk mới
             var textChunks = _chunkingService.SplitIntoChunks(plainContent);
-            var chunkEntities = textChunks.Select((chunkText, idx) => new ChapterChunk
+            var chunkEntities = textChunks.Select((chunkText, idx) => 
             {
-                VersionId = version.Id,
-                ProjectId = projectId,
-                ChunkIndex = idx,
-                Content = EncryptionHelper.EncryptWithMasterKey(chunkText, rawDek),
-                TokenCount = _chunkingService.EstimateTokenCount(chunkText),
+                var entity = new ChapterChunk
+                {
+                    VersionId = version.Id,
+                    ProjectId = projectId,
+                    ChunkIndex = idx,
+                    Content = EncryptionHelper.EncryptWithMasterKey(chunkText, rawDek),
+                    TokenCount = _chunkingService.EstimateTokenCount(chunkText),
+                };
+
+                if (oldChunkMap.TryGetValue(chunkText, out var oldVector))
+                {
+                    entity.Embedding = oldVector;
+                }
+
+                return entity;
             }).ToList();
 
             _context.ChapterChunks.AddRange(chunkEntities);
             version.IsChunked = true;
-            version.IsEmbedded = false; // Reset embedding since content/chunks changed
+            version.IsEmbedded = chunkEntities.Count == 0 || chunkEntities.All(c => c.Embedding != null);
             
             await _context.SaveChangesAsync();
         }

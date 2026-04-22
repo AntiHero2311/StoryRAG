@@ -199,6 +199,7 @@ builder.Services.AddScoped<IReportExportService, ReportExportService>();
 builder.Services.AddScoped<IProjectAnalysisJobService, ProjectAnalysisJobService>();
 builder.Services.AddSingleton<IAnalysisJobQueue, AnalysisJobQueue>();
 builder.Services.AddHostedService<ProjectAnalysisJobWorker>();
+builder.Services.AddHostedService<AutoEmbeddingWorker>();
 builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection("PayOS"));
 builder.Services.Configure<VnPayOptions>(builder.Configuration.GetSection("VNPay"));
 builder.Services.AddHttpClient("PayOS", (sp, client) =>

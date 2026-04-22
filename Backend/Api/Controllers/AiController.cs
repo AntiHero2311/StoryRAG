@@ -361,6 +361,7 @@ namespace Api.Controllers
         [HttpGet("{projectId:guid}/rewrite/history")]
         public async Task<IActionResult> GetRewriteHistory(
             Guid projectId,
+            [FromQuery] string? actionType,
             [FromQuery] Guid? chapterId,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
@@ -371,7 +372,7 @@ namespace Api.Controllers
                 if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
 
                 pageSize = Math.Clamp(pageSize, 1, 100);
-                var result = await _rewriteService.GetHistoryAsync(projectId, userId.Value, chapterId, page, pageSize);
+                var result = await _rewriteService.GetHistoryAsync(projectId, userId.Value, actionType, chapterId, page, pageSize);
                 return Ok(result);
             }
             catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
