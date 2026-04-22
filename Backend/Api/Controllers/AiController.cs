@@ -76,7 +76,7 @@ namespace Api.Controllers
                     }
                 });
 
-                return Accepted(new { Message = "Đã đưa vào tiến trình nhúng dữ liệu ngầm." });
+                return Accepted(new { Message = "Yêu cầu đã được ghi nhận và đang được xử lý ngầm." });
             }
             catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
             catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
@@ -405,7 +405,7 @@ namespace Api.Controllers
                 var userId = GetUserId();
                 if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
 
-                var result = await _writingService.ContinueWritingAsync(projectId, request.PreviousText, request.Instruction, userId.Value);
+                var result = await _writingService.ContinueWritingAsync(projectId, request.PreviousText, request.Instruction, userId.Value, request.ChapterId);
                 return Ok(result);
             }
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
@@ -546,6 +546,9 @@ namespace Api.Controllers
 
         [MaxLength(5000)]
         public string Instruction { get; set; } = string.Empty;
+
+        /// <summary>ID của chương hiện tại đang viết — dùng để loại trừ chunks cùng chương khỏi RAG</summary>
+        public Guid? ChapterId { get; set; }
     }
 
     public class AiPolishRequest

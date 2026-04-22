@@ -9,6 +9,10 @@ namespace Service.DTOs
         public decimal Score { get; set; }
         public decimal MaxScore { get; set; }
         public string Feedback { get; set; } = string.Empty;
+        /// <summary>Trích dẫn nguyên văn từ nội dung truyện làm bằng chứng cho nhận xét</summary>
+        public string Evidence { get; set; } = string.Empty;
+        /// <summary>So sánh nội dung đã viết với thông tin trong cẩm nang truyện (Story Bible)</summary>
+        public string? BibleComparison { get; set; }
         /// <summary>Danh sách lỗi/vấn đề cụ thể được phát hiện trong văn bản</summary>
         public List<string> Errors { get; set; } = new();
         /// <summary>Danh sách gợi ý cải thiện có thể thực hiện ngay</summary>

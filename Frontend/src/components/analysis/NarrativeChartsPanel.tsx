@@ -5,7 +5,8 @@ interface Props {
     loading: boolean;
 }
 
-function LineChart({ values, color }: { values: number[]; color: string }) {
+
+function LineChart({ values, color, labels }: { values: number[]; color: string; labels?: (string | null | undefined)[] }) {
     if (values.length === 0) {
         return <div className="h-24 rounded-xl" style={{ background: 'var(--bg-hover)' }} />;
     }
@@ -16,25 +17,45 @@ function LineChart({ values, color }: { values: number[]; color: string }) {
     const max = Math.max(...values);
     const range = max - min || 1;
 
-    const points = values
-        .map((value, index) => {
-            const x = values.length === 1 ? width / 2 : (index / (values.length - 1)) * width;
-            const y = height - ((value - min) / range) * height;
-            return `${x},${y}`;
-        })
-        .join(' ');
+    const pointCoords = values.map((value, index) => ({
+        x: values.length === 1 ? width / 2 : (index / (values.length - 1)) * width,
+        y: height - ((value - min) / range) * height,
+    }));
+
+    const polylinePoints = pointCoords.map(p => `${p.x},${p.y}`).join(' ');
+
+    const annotatedPoints = labels
+        ? pointCoords
+            .map((p, i) => ({ ...p, label: labels[i] }))
+            .filter(p => p.label)
+        : [];
 
     return (
         <div className="w-full overflow-hidden rounded-xl p-2" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
-            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-24">
+            <svg viewBox={`-10 -18 ${width + 20} ${height + 22}`} className="w-full h-28">
                 <polyline
                     fill="none"
                     stroke={color}
                     strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    points={points}
+                    points={polylinePoints}
                 />
+                {annotatedPoints.map((p, i) => (
+                    <g key={i}>
+                        <circle cx={p.x} cy={p.y} r="4" fill={color} stroke="var(--bg-app)" strokeWidth="1.5" />
+                        <text
+                            x={p.x}
+                            y={p.y - 10}
+                            textAnchor="middle"
+                            fill={color}
+                            fontSize="8"
+                            fontWeight="bold"
+                        >
+                            {p.label}
+                        </text>
+                    </g>
+                ))}
             </svg>
         </div>
     );
@@ -71,11 +92,14 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
     }
 
     const pacingValues = data.pacing.map(point => point.score);
+    const pacingLabels = data.pacing.map(point => point.label);
     const emotionValues = data.emotions.map(point => ((point.valence + 1) / 2) * 100);
+    const emotionLabels = data.emotions.map(point => point.label);
     const topFrequencies = data.characterFrequencies.slice(0, 10);
     const maxMentions = Math.max(1, ...topFrequencies.map(x => x.totalMentions));
     const topRelationships = data.characterRelationships.slice(0, 8);
     const topPresence = data.characterPresence.slice(0, 4);
+    const insights = data.insights ?? [];
 
     return (
         <div className="rounded-2xl p-5 mt-5 flex flex-col gap-5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
@@ -87,12 +111,12 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="rounded-xl p-4" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
                     <p className="text-[var(--text-primary)] text-sm font-semibold mb-2">Pacing</p>
-                    <LineChart values={pacingValues} color="#f59e0b" />
+                    <LineChart values={pacingValues} color="#f59e0b" labels={pacingLabels} />
                 </div>
 
                 <div className="rounded-xl p-4" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
                     <p className="text-[var(--text-primary)] text-sm font-semibold mb-2">Emotion progression</p>
-                    <LineChart values={emotionValues} color="#22c55e" />
+                    <LineChart values={emotionValues} color="#22c55e" labels={emotionLabels} />
                 </div>
             </div>
 
@@ -152,6 +176,22 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
                     </div>
                 </div>
             </div>
+
+            {/* Insights / Chú thích phân tích */}
+            {insights.length > 0 && (
+                <div className="rounded-xl p-4" style={{ background: 'rgba(139,92,246,0.05)', border: '1px solid rgba(139,92,246,0.15)' }}>
+                    <p className="text-[var(--text-primary)] text-sm font-semibold mb-3 flex items-center gap-2">
+                        <span>💡</span> Chú thích phân tích tự động
+                    </p>
+                    <div className="flex flex-col gap-2">
+                        {insights.map((insight, idx) => (
+                            <p key={idx} className="text-xs leading-relaxed" style={{ color: '#c4b5fd' }}>
+                                {insight}
+                            </p>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

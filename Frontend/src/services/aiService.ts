@@ -123,8 +123,8 @@ export const aiService = {
     },
 
     /** Viết tiếp đoạn văn hiện tại. */
-    continueWriting: async (projectId: string, previousText: string, instruction: string): Promise<AiWritingResult> => {
-        const res = await api.post<AiWritingResult>(`/ai/${projectId}/continue`, { previousText, instruction });
+    continueWriting: async (projectId: string, previousText: string, instruction: string, chapterId?: string): Promise<AiWritingResult> => {
+        const res = await api.post<AiWritingResult>(`/ai/${projectId}/continue`, { previousText, instruction, ...(chapterId ? { chapterId } : {}) });
         return res.data;
     },
 

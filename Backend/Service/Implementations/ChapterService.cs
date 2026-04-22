@@ -108,6 +108,9 @@ namespace Service.Implementations
             chapter.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
+            // Auto-chunk the content immediately
+            await PerformChunkingInternalAsync(version, request.Content, rawDek, chapter.ProjectId);
+
             var detail = MapToDetailResponse(chapter, request.Content);
             detail.Versions = new List<ChapterVersionSummary> { MapToVersionSummary(version, rawDek) };
             return detail;
@@ -143,6 +146,9 @@ namespace Service.Implementations
             chapter.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+
+            // Auto-chunk the content immediately
+            await PerformChunkingInternalAsync(version, request.Content, rawDek, chapter.ProjectId);
 
             // Reload versions for response
             var versions = await _context.ChapterVersions
@@ -374,26 +380,37 @@ namespace Service.Implementations
                 .FirstOrDefaultAsync(v => v.Id == chapter.CurrentVersionId.Value)
                 ?? throw new Exception("Không tìm thấy version hiện tại.");
 
-            _context.ChapterChunks.RemoveRange(version.Chunks);
-
             string plainContent = EncryptionHelper.DecryptWithMasterKey(version.Content, rawDek);
-            var textChunks = _chunkingService.SplitIntoChunks(plainContent);
+            await PerformChunkingInternalAsync(version, plainContent, rawDek, chapter.ProjectId);
 
+            return MapToVersionDetailResponse(version, rawDek, version.Chunks.ToList(), plainContent);
+        }
+
+        private async Task PerformChunkingInternalAsync(ChapterVersion version, string plainContent, string rawDek, Guid projectId)
+        {
+            // Xóa chunks cũ
+            var existingChunks = await _context.ChapterChunks
+                .Where(c => c.VersionId == version.Id)
+                .ToListAsync();
+            if (existingChunks.Count > 0)
+                _context.ChapterChunks.RemoveRange(existingChunks);
+
+            // Chunk mới
+            var textChunks = _chunkingService.SplitIntoChunks(plainContent);
             var chunkEntities = textChunks.Select((chunkText, idx) => new ChapterChunk
             {
                 VersionId = version.Id,
-                ProjectId = chapter.ProjectId,
+                ProjectId = projectId,
                 ChunkIndex = idx,
                 Content = EncryptionHelper.EncryptWithMasterKey(chunkText, rawDek),
                 TokenCount = _chunkingService.EstimateTokenCount(chunkText),
             }).ToList();
 
             _context.ChapterChunks.AddRange(chunkEntities);
-
             version.IsChunked = true;
+            version.IsEmbedded = false; // Reset embedding since content/chunks changed
+            
             await _context.SaveChangesAsync();
-
-            return MapToVersionDetailResponse(version, rawDek, chunkEntities, plainContent);
         }
 
         // ── Private Helpers ────────────────────────────────────────────────────

@@ -20,8 +20,8 @@ namespace Service.Implementations
         private readonly IEmbeddingService _embeddingService;
         private readonly ILogger<ProjectReportService> _logger;
         private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
-        private const int DefaultAnalyzeBatchSize = 8;
-        private const int DefaultAnalyzeRpmLimit = 12;
+        private const int DefaultAnalyzeBatchSize = 12;
+        private const int DefaultAnalyzeRpmLimit = 15;
         private static readonly SemaphoreSlim AnalyzeRpmLock = new(1, 1);
         private static readonly Queue<DateTime> AnalyzeCallTimestamps = [];
 
@@ -69,7 +69,7 @@ namespace Service.Implementations
                 logger,
                 "Gemini Report",
                 GeminiPrimaryKeyRole.Analyze,
-                TimeSpan.FromMinutes(5));
+                TimeSpan.FromMinutes(10)); // Tăng lên 10 phút cho các bộ truyện lớn
         }
 
         private async Task<OpenAI.Chat.ChatCompletion> CompleteChatWithGeminiAsync(
@@ -397,26 +397,26 @@ namespace Service.Implementations
             // JSON gồm 2 phần: mảng criteria (20 mục) + mảng warnings (phát hiện tự động)
             var jsonTemplate = @"{
   ""criteria"":[
-    {""key"":""1.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""1.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""2.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""2.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""2.3"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""2.4"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""3.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""3.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""3.3"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""4.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""4.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""4.3"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""5.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""5.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""6.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""6.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""7.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""7.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""8.1"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]},
-    {""key"":""8.2"",""score"":0,""maxScore"":5,""feedback"":"""",""errors"":[],""suggestions"":[]}
+    {""key"":""1.1"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""1.2"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""2.1"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""2.2"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""2.3"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""2.4"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""3.1"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""3.2"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""3.3"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""4.1"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""4.2"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""4.3"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""5.1"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""5.2"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""6.1"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""6.2"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""7.1"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""7.2"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""8.1"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]},
+    {""key"":""8.2"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]}
   ],
   ""warnings"":[
     {""code"":""INCOMPLETE"",""severity"":""INFO"",""title"":"""",""detail"":""""}
@@ -431,11 +431,14 @@ namespace Service.Implementations
             // Điểm PHẢI hoàn toàn dựa trên nội dung văn bản thực tế (contextText).
             var biblePart = string.IsNullOrWhiteSpace(storyBibleText)
                 ? ""
-                : $"\n\n[THAM CHIẾU NỀN — CHỈ ĐỌC ĐỂ HIỂU NGỮ CẢNH, KHÔNG ẢNH HƯỞNG ĐIỂM]\n" +
-                  $"Thông tin dưới đây là tài liệu cẩm nang của tác giả (thể loại, nhân vật, thế giới quan, chủ đề...).\n" +
-                  $"QUAN TRỌNG: Đây KHÔNG phải nội dung truyện. Bạn được phép dùng để hiểu ý định tác giả, " +
-                  $"nhưng TUYỆT ĐỐI không cộng điểm vì thông tin này. " +
-                  $"Điểm số chỉ phản ánh chất lượng văn bản thực tế trong phần \"Nội dung tác phẩm\" bên dưới.\n\n" +
+                : $"\n\n[THAM CHIẾU NỀN — CẨM NANG TRUYỆN CỦA TÁC GIẢ]\n" +
+                  $"Thông tin dưới đây là tài liệu cẩm nang/ý tưởng sơ thảo của tác giả (nhân vật, thế giới, cốt truyện...). " +
+                  $"Tài liệu này có thể không đầy đủ hoặc tác giả đã thay đổi ý định khi viết thực tế.\n" +
+                  $"QUAN TRỌNG: Đây KHÔNG phải nội dung truyện. Bạn dùng nó để hiểu ngữ cảnh, nhưng TUYỆT ĐỐI không trừ điểm nếu truyện viết khác với cẩm nang. " +
+                  $"Việc tác giả viết khác đi so với kế hoạch ban đầu là hoàn toàn bình thường và không được coi là lỗi logic hay điểm yếu.\n" +
+                  $"NHIỆM VỤ SO SÁNH: Với các tiêu chí liên quan, hãy chỉ ra sự khác biệt giữa nội dung đã viết với thông tin trong cẩm nang này. " +
+                  $"PHẢI GHI RÕ trong trường \"bibleComparison\": \"Theo cẩm nang dự định là [X], nhưng thực tế tác giả đã triển khai là [Y]\". " +
+                  $"Chỉ mang tính chất liệt kê sự thay đổi, không phán xét đúng sai.\n\n" +
                   $"{storyBibleText}\n[KẾT THÚC THAM CHIẾU NỀN]";
 
             var instructionsPart = string.IsNullOrWhiteSpace(aiInstructions)
@@ -449,18 +452,21 @@ namespace Service.Implementations
                 {{completenessNote}}
 
                 QUY TẮC BẮT BUỘC — VI PHẠM SẼ BỊ HỦY:
-                1. CHỐNG ẢO GIÁC 100% (ZERO HALLUCINATION): TUYỆT ĐỐI KHÔNG SỬ DỤNG KIẾN THỨC BÊN NGOÀI. Nếu truyện mượn tên nhân vật nổi tiếng (vd: Tiểu Long Nữ), bạn CẤM tự suy diễn bối cảnh gốc của tác phẩm đó. Chỉ được phép phân tích dựa trên nội dung tác giả cung cấp trong "Nội dung tác phẩm".
+                1. CHẾ ĐỘ GIÁM KHẢO KHÓ TÍNH: Bạn đóng vai một Cố vấn văn học CỰC KỲ KHẮT KHE. Hãy tìm ra mọi hạt sạn, lỗi lặp từ, văn phong sáo rỗng (cliches), hoặc sự thiếu nhất quán. TUYỆT ĐỐI không cho điểm khuyến khích. Thà cho điểm thấp để tác giả tiến bộ còn hơn cho điểm cao ảo.
+                2. CHỐNG ẢO GIÁC 100% (ZERO HALLUCINATION): TUYỆT ĐỐI KHÔNG SỬ DỤNG KIẾN THỨC BÊN NGOÀI. Nếu truyện mượn tên nhân vật nổi tiếng (vd: Tiểu Long Nữ), bạn CẤM tự suy diễn bối cảnh gốc của tác phẩm đó. Chỉ được phép phân tích dựa trên nội dung tác giả cung cấp trong "Nội dung tác phẩm".
                 2. TUỲ BIẾN THEO THỂ LOẠI: Tiêu chuẩn đánh giá phải dựa vào Thể loại của truyện (nếu có trong Tham chiếu nền). Ví dụ: Tiên hiệp ưu tiên tính logic của hệ thống tu luyện & thế giới quan; Ngôn tình ưu tiên chiều sâu cảm xúc & chemistry; Trinh thám ưu tiên tính logic của vụ án.
-                3. feedback: 1-2 câu nhận xét CỤ THỂ, có trích dẫn câu văn thực tế từ văn bản.
-                4. errors: 1-2 lỗi/mục — nêu rõ vấn đề + ví dụ câu văn mắc lỗi.
-                5. suggestions: 1-2 gợi ý/mục — nêu cách sửa cụ thể, không chung chung.
-                6. score: Chấm nghiêm khắc theo RUBRIC 5 ĐIỂM sau (không đánh giá ưu ái):
-                   - 1 điểm: Kém / Lỗi nặng — Thô sơ, phá vỡ logic cơ bản, không đạt tiêu chuẩn.
-                   - 2 điểm: Dưới trung bình — Có ý tưởng nhưng diễn đạt lúng túng, nhiều hạt sạn.
-                   - 3 điểm: Cơ bản đạt — Đọc được, đúng quy tắc nhưng lặp lại, thiếu chiều sâu.
-                   - 4 điểm: Khá tốt — Chuyên nghiệp, nhịp nhàng, có phong cách riêng.
-                   - 5 điểm: Xuất sắc — Tinh tế, độc đáo, lôi cuốn ấn tượng, ngang tầm xuất bản.
-                7. Tất cả 20 mục phải có đủ feedback, errors, suggestions — KHÔNG được để trống.
+                3. feedback: 3-4 câu nhận xét CỤ THỂ, phân tích sâu về kỹ thuật viết.
+                4. evidence: TRÍCH DẪN NGUYÊN VĂN 1-3 câu quan trọng nhất từ nội dung truyện làm bằng chứng cho nhận xét. PHẢI CÓ TRÍCH DẪN THỰC TẾ, không được tự bịa.
+                5. bibleComparison: SO SÁNH trung lập với cẩm nang (nếu có). Nêu rõ điểm nào khớp, điểm nào khác biệt/thay đổi. KHÔNG trừ điểm nếu có sự khác biệt so với kế hoạch ban đầu. Nếu không có cẩm nang: để null.
+                6. errors: BẮT BUỘC liệt kê 3-5 lỗi/vấn đề cụ thể cho mỗi mục — nêu rõ vấn đề + ví dụ câu văn mắc lỗi.
+                7. suggestions: BẮT BUỘC liệt kê 3-5 gợi ý/cách sửa cụ thể cho mỗi mục — nêu hướng xử lý chi tiết cho từng lỗi đã nêu.
+                9. score: Chấm điểm CỰC KỲ NGHIÊM KHẮC theo RUBRIC 5 ĐIỂM sau (Tiêu chuẩn xuất bản):
+                   - 1 điểm: Kém — Văn phong thô sơ, sai chính tả/ngữ pháp nặng, phá vỡ logic cơ bản.
+                   - 2 điểm: Yếu — Có cốt truyện nhưng diễn đạt lúng túng, nhân vật mờ nhạt, nhiều sáo rỗng.
+                   - 3 điểm: Đạt yêu cầu — Viết đúng quy tắc nhưng chưa có chất riêng, còn lặp ý, nhịp độ chưa tốt. (Đây là mức điểm cho các tác phẩm 'tạm ổn' nhưng chưa hay).
+                   - 4 điểm: Tốt — Chuyên nghiệp, ngôn ngữ sắc sảo, cảm xúc chân thực, có bản sắc riêng.
+                   - 5 điểm: Xuất sắc — Tinh tế, độc đáo, lôi cuốn ấn tượng, không có hạt sạn về logic. (Chỉ dành cho tác phẩm thực sự xuất sắc).
+                10. Tất cả 20 mục phải có đủ feedback, evidence, errors (≥3), suggestions (≥3) — KHÔNG được để trống. Nếu tác phẩm quá ngắn hoặc quá tệ, hãy mạnh dạn cho điểm 1-2.
 
                 NHẬN XÉT TỔNG QUAN (overallFeedback):
                 Viết một đoạn nhận xét chung tâm huyết (khoảng 4-6 câu) dành cho tác giả: đúc kết những điểm mạnh nổi bật nhất, những điểm yếu lớn nhất cần khắc phục, và một lời động viên/nhận định tổng kết về tiềm năng của tác phẩm.
@@ -474,9 +480,9 @@ namespace Service.Implementations
                    - Nếu truyện có kết thúc hợp lý (dù là cliffhanger có chủ ý): KHÔNG thêm warning này
 
                 b) LẶP LẠI NỘI DUNG (code="REPETITION"):
-                   - Kiểm tra: cụm từ được dùng lặp nhiều lần không cần thiết, tình tiết/cảnh xuất hiện lặp lại, ý tưởng được diễn đạt nhiều lần với từ ngữ khác nhau
-                   - Ngưỡng: lặp lại ≥ 3 lần đáng kể mới báo warning
-                   - Nếu phát hiện: severity="WARNING", title, detail: trích dẫn cụm từ/tình tiết lặp và số lần xuất hiện
+                   - LƯU Ý QUAN TRỌNG: Dữ liệu được đưa vào theo dạng Batch tóm tắt. Việc một nhân vật hoặc tình tiết quan trọng xuất hiện ở NHIỀU Batch khác nhau là dấu hiệu của sự NHẤT QUÁN, TUYỆT ĐỐI KHÔNG báo lỗi REPETITION cho trường hợp này.
+                   - Chỉ báo lỗi nếu: Phát hiện các đoạn văn văn phong y hệt nhau, các cảnh quay bị lặp lại thừa thãi mà không có sự tiến triển, hoặc tác giả viết đi viết lại một ý bằng đúng những từ ngữ đó trong cùng một đoạn.
+                   - Nếu phát hiện: severity="WARNING", title, detail: trích dẫn cụ thể và giải thích tại sao nó là lỗi lặp dư thừa.
 
                 c) NGHI VẤN ĐẠO NHÁI / TƯƠNG ĐỒNG CAO (code="PLAGIARISM_RISK"):
                    - Kiểm tra: nội dung có quá giống một tác phẩm nổi tiếng đã biết không (cùng nhân vật, plot, setting đặc trưng, cụm từ nguyên văn)
@@ -484,8 +490,9 @@ namespace Service.Implementations
                    - Nếu phát hiện: severity="CRITICAL", title, detail: nêu tác phẩm gốc nghi bị đạo và điểm tương đồng cụ thể
 
                 d) MÂU THUẪN LOGIC / NHẤT QUÁN (code="INCONSISTENCY"):
-                   - Phát hiện: nhân vật mâu thuẫn tính cách, sự kiện timeline không logic, mô tả bối cảnh trái nhau giữa các đoạn
-                   - Nếu phát hiện: severity theo mức độ (INFO/WARNING/CRITICAL), detail: trích dẫn 2 đoạn mâu thuẫn cụ thể
+                   - LƯU Ý: Do dữ liệu dạng tóm tắt Batch, đôi khi các chi tiết nhỏ có thể bị lược bỏ giữa các Batch. Chỉ báo lỗi mâu thuẫn khi có bằng chứng RÕ RÀNG (vd: Chương 1 nói nhân vật A đã chết, Chương 5 nhân vật A lại xuất hiện bình thường mà không có giải thích).
+                   - Phát hiện: nhân vật mâu thuẫn tính cách cực đoan không lý do, sự kiện timeline đảo lộn vô lý, bối cảnh trái ngược hoàn toàn.
+                   - Nếu phát hiện: severity theo mức độ (INFO/WARNING/CRITICAL), detail: trích dẫn mâu thuẫn cụ thể.
 
                 → Nếu KHÔNG phát hiện vấn đề nào: "warnings":[] (mảng rỗng)
                 → Nếu phát hiện nhiều: liệt kê đủ, mỗi vấn đề 1 object riêng
@@ -537,7 +544,7 @@ namespace Service.Implementations
 
             var messages = new List<ChatMessage>
             {
-                ChatMessage.CreateSystemMessage("Bạn là giám khảo văn học nghiêm khắc và chuyên sâu. Tuân thủ ZERO HALLUCINATION (chỉ dùng context, không chế cháo). Phân tích cụ thể, trích dẫn ví dụ thực tế. Điền đủ 20 tiêu chí với 1-2 errors/suggestions mỗi mục (ngắn gọn nhưng cụ thể). Viết thêm overallFeedback (4-6 câu tâm huyết). Trả về JSON thuần túy theo cấu trúc {\"criteria\":[...],\"warnings\":[...],\"overallFeedback\":\"...\"}."),
+                ChatMessage.CreateSystemMessage("Bạn là giám khảo văn học nghiêm khắc và chuyên sâu. Tuân thủ ZERO HALLUCINATION (chỉ dùng context, không chế cháo). Phân tích cụ thể, trích dẫn ví dụ thực tế. Điền đủ 20 tiêu chí với: evidence (trích dẫn nguyên văn), bibleComparison (so sánh cẩm nang nếu có), 2-4 errors và 2-4 suggestions mỗi mục. Viết thêm overallFeedback (4-6 câu tâm huyết). Trả về JSON thuần túy theo cấu trúc {\"criteria\":[...],\"warnings\":[...],\"overallFeedback\":\"...\"}."),
                 ChatMessage.CreateUserMessage(prompt),
             };
 
@@ -550,12 +557,12 @@ namespace Service.Implementations
                 if (attempt > 1)
                 {
                     attemptMessages.Add(ChatMessage.CreateUserMessage(
-                        "Kết quả lần trước thiếu dữ liệu hoặc sai JSON. Hãy trả lại JSON NGẮN GỌN, hợp lệ, đủ đúng 20 key rubric, mỗi key có feedback/errors/suggestions không rỗng, và có overallFeedback 4-6 câu."));
+                        "Kết quả lần trước thiếu dữ liệu hoặc sai JSON. Hãy trả lại JSON hợp lệ, đủ đúng 20 key rubric, mỗi key có feedback, evidence (trích dẫn nguyên văn), errors (≥2), suggestions (≥2) không rỗng, bibleComparison nếu có cẩm nang, và overallFeedback 4-6 câu."));
                 }
 
                 var response = await CompleteChatWithGeminiAsync(
                     attemptMessages,
-                    maxTokens: 8000,
+                    maxTokens: 16000, // Tăng thêm budget cho report dài
                     temperature: 0.1f,
                     cancellationToken: cancellationToken);
 
@@ -658,19 +665,19 @@ namespace Service.Implementations
 
             var emptyErrorsCount = byKey
                 .Where(x => rubricKeys.Contains(x.Key))
-                .Count(x => x.Value.Errors == null || !x.Value.Errors.Any(e => !string.IsNullOrWhiteSpace(e)));
+                .Count(x => x.Value.Errors == null || x.Value.Errors.Count(e => !string.IsNullOrWhiteSpace(e)) < 2);
             if (emptyErrorsCount > 0)
             {
-                reason = $"Có {emptyErrorsCount} tiêu chí thiếu errors.";
+                reason = $"Có {emptyErrorsCount} tiêu chí có ít hơn 2 errors.";
                 return false;
             }
 
             var emptySuggestionsCount = byKey
                 .Where(x => rubricKeys.Contains(x.Key))
-                .Count(x => x.Value.Suggestions == null || !x.Value.Suggestions.Any(s => !string.IsNullOrWhiteSpace(s)));
+                .Count(x => x.Value.Suggestions == null || x.Value.Suggestions.Count(s => !string.IsNullOrWhiteSpace(s)) < 2);
             if (emptySuggestionsCount > 0)
             {
-                reason = $"Có {emptySuggestionsCount} tiêu chí thiếu suggestions.";
+                reason = $"Có {emptySuggestionsCount} tiêu chí có ít hơn 2 suggestions.";
                 return false;
             }
 
@@ -689,8 +696,8 @@ namespace Service.Implementations
             Func<int, string?, CancellationToken, Task>? progressCallback,
             CancellationToken cancellationToken)
         {
-            var batchSize = ReadIntConfig("Gemini:AnalyzeBatchSize", DefaultAnalyzeBatchSize, 1, 30);
-            var maxSummaryBlocks = ReadIntConfig("Gemini:AnalyzeMaxSummaryBlocks", 16, 4, 40);
+            var batchSize = ReadIntConfig("Gemini:AnalyzeBatchSize", DefaultAnalyzeBatchSize, 1, 50);
+            var maxSummaryBlocks = ReadIntConfig("Gemini:AnalyzeMaxSummaryBlocks", 30, 4, 100);
             var totalBatches = (int)Math.Ceiling(decryptedChunks.Count / (double)batchSize);
 
             var batchSummaries = new List<string>(totalBatches);
@@ -717,9 +724,11 @@ namespace Service.Implementations
 
                     Yêu cầu đầu ra:
                     - Dạng bullet, tiếng Việt, súc tích.
-                    - Tối đa 12 bullet.
-                    - Mỗi bullet <= 220 ký tự.
-                    - Ưu tiên nêu: xung đột chính, phát triển nhân vật, mâu thuẫn logic, dấu hiệu lặp, câu trích đáng chú ý.
+                    - Tối đa 15 bullet.
+                    - Mỗi bullet <= 300 ký tự.
+                    - PHẢI GIỮ LẠI CÁC TRÍCH DẪN (QUOTES) ĐẮT GIÁ: thoại nhân vật, mô tả bối cảnh quan trọng.
+                    - Tập trung vào: mâu thuẫn nhân vật, tiến triển cốt truyện, và các hạt sạn logic.
+                    - LƯU Ý: Các đoạn văn có thể có phần gối đầu (overlap) nhẹ về văn bản ở đầu/cuối, hãy bỏ qua sự lặp lại kỹ thuật này khi tóm tắt.
 
                     Nội dung batch:
                     {{batchText}}
@@ -733,7 +742,7 @@ namespace Service.Implementations
 
                 var summaryResponse = await CompleteChatWithGeminiAsync(
                     summaryMessages,
-                    maxTokens: 1500,
+                    maxTokens: 2500, // Tăng budget cho summary chi tiết hơn
                     temperature: 0.1f,
                     cancellationToken: cancellationToken);
 
@@ -994,6 +1003,8 @@ namespace Service.Implementations
                     Score = c.Score,
                     MaxScore = c.MaxScore,
                     Feedback = c.Feedback,
+                    Evidence = c.Evidence ?? string.Empty,
+                    BibleComparison = c.BibleComparison,
                     Errors = c.Errors ?? new(),
                     Suggestions = c.Suggestions ?? new(),
                 }).ToList(),
@@ -1022,6 +1033,8 @@ namespace Service.Implementations
                     Score = score,
                     MaxScore = r.Max,
                     Feedback = ai?.Feedback ?? "Chưa có nhận xét.",
+                    Evidence = ai?.Evidence ?? string.Empty,
+                    BibleComparison = ai?.BibleComparison,
                     Errors = ai?.Errors ?? new List<string>(),
                     Suggestions = ai?.Suggestions ?? new List<string>(),
                 };
@@ -1074,6 +1087,8 @@ namespace Service.Implementations
             public decimal Score { get; set; }
             public decimal MaxScore { get; set; }
             public string Feedback { get; set; } = string.Empty;
+            public string Evidence { get; set; } = string.Empty;
+            public string? BibleComparison { get; set; }
             public List<string> Errors { get; set; } = new();
             public List<string> Suggestions { get; set; } = new();
         }

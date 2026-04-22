@@ -68,9 +68,35 @@ export default function GroupCard({ group, idx, expanded, onToggle }: GroupCardP
                                     </p>
                                 )}
 
+                                {/* Evidence — trích dẫn nguyên văn */}
+                                {c.evidence && (
+                                    <div className="mt-2.5 rounded-xl p-3"
+                                        style={{ background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.15)' }}>
+                                        <p className="text-xs font-bold mb-1 flex items-center gap-1.5" style={{ color: '#a78bfa' }}>
+                                            <span>📝</span> Dẫn chứng từ nội dung
+                                        </p>
+                                        <p className="text-xs leading-relaxed italic" style={{ color: '#c4b5fd' }}>
+                                            "{c.evidence}"
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Bible Comparison — so sánh cẩm nang */}
+                                {c.bibleComparison && (
+                                    <div className="mt-2 rounded-xl p-3"
+                                        style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)' }}>
+                                        <p className="text-xs font-bold mb-1 flex items-center gap-1.5" style={{ color: '#60a5fa' }}>
+                                            <span>📖</span> So sánh với cẩm nang truyện
+                                        </p>
+                                        <p className="text-xs leading-relaxed" style={{ color: '#93c5fd' }}>
+                                            {c.bibleComparison}
+                                        </p>
+                                    </div>
+                                )}
+
                                 {/* Errors */}
                                 {hasErrors && (
-                                    <div className="mt-3 rounded-xl p-3 flex flex-col gap-1.5"
+                                    <div className="mt-2 rounded-xl p-3 flex flex-col gap-1.5"
                                         style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)' }}>
                                         <p className="text-xs font-bold mb-0.5 flex items-center gap-1.5" style={{ color: '#ef4444' }}>
                                             <span>⚠</span> Vấn đề phát hiện

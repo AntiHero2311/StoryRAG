@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, type ClipboardEvent 
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     ArrowLeft, Plus, Sparkles, History, Bold,
-    Italic, Underline,
+    Italic, Underline, ChevronDown, Sunset, Wind,
     ChevronsLeft, ChevronsRight, Trash2, FileText, X,
     Undo2, Redo2, Save, Check, Loader2, Scissors,
     Clock, Pencil, GitBranch, Zap, Type, Bot,
@@ -83,7 +83,7 @@ function ExportModal({
                 style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-                        <Download className="w-5 h-5 text-[var(--accent)]" /> 
+                        <Download className="w-5 h-5 text-[var(--accent)]" />
                         Xuất {target === 'project' ? 'Toàn bộ truyện' : 'Chương hiện tại'}
                     </h3>
                     <button onClick={onClose} disabled={isLoading} className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:bg-[var(--text-primary)]/10">
@@ -277,6 +277,7 @@ export default function WorkspacePage() {
     // ── Continue Writing ───────────────────────────────────────────────────
     const [isContinuingWriting, setIsContinuingWriting] = useState(false);
     const [showFloatingAiBtn, setShowFloatingAiBtn] = useState(false);
+    const [continueMenuOpen, setContinueMenuOpen] = useState(false);
     const editorScrollRef = useRef<HTMLDivElement | null>(null);
 
     // ── Refs ───────────────────────────────────────────────────────────────
@@ -291,15 +292,6 @@ export default function WorkspacePage() {
     const pendingEmbedForceRef = useRef<boolean>(false);
     // Tracks which chapter is currently active to prevent stale async callbacks from overwriting it
     const activeChapterIdRef = useRef<string | null>(null);
-    const pendingHtmlUpdateRef = useRef<string | null>(null);
-
-    useEffect(() => {
-        if (editorRef.current && pendingHtmlUpdateRef.current !== null) {
-            editorRef.current.innerHTML = pendingHtmlUpdateRef.current;
-            setWordCount((editorRef.current.innerText ?? '').trim().split(/\s+/).filter(Boolean).length);
-            pendingHtmlUpdateRef.current = null;
-        }
-    });
 
     // ── Init ───────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -333,18 +325,12 @@ export default function WorkspacePage() {
                 setHasUnsavedChanges(false);
                 if (editorRef.current) {
                     editorRef.current.innerHTML = detail.content ?? '';
-                } else {
-                    pendingHtmlUpdateRef.current = detail.content ?? '';
                 }
             } else {
                 setChapters([]);
                 setActiveChapter(null);
                 setHasUnsavedChanges(false);
-                if (editorRef.current) {
-                    editorRef.current.innerHTML = '';
-                } else {
-                    pendingHtmlUpdateRef.current = '';
-                }
+                if (editorRef.current) editorRef.current.innerHTML = '';
             }
         } catch {
             // no chapters yet
@@ -383,9 +369,7 @@ export default function WorkspacePage() {
         // Save current before switching
         if (activeChapter && editorRef.current && activeChapter.id !== ch.id) {
             if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
-            if (hasUnsavedChanges) {
-                await doSave(false);
-            }
+            await doSave(false);
         }
         // Load full detail if not already loaded
         let detail = ch;
@@ -399,9 +383,6 @@ export default function WorkspacePage() {
         if (editorRef.current) {
             editorRef.current.innerHTML = detail.content ?? '';
             setWordCount((editorRef.current.innerText ?? '').trim().split(/\s+/).filter(Boolean).length);
-        } else {
-            pendingHtmlUpdateRef.current = detail.content ?? '';
-            setWordCount((detail.content ?? '').replace(/<[^>]*>/g, '').trim().split(/\s+/).filter(Boolean).length);
         }
         // Reset version rename state
         setRenamingVersionNum(null);
@@ -410,10 +391,10 @@ export default function WorkspacePage() {
     // ── Delete chapter ─────────────────────────────────────────────────────
     const deleteChapter = async (chapterId: string) => {
         if (!projectId) return;
-        
+
         const chapter = chapters.find(c => c.id === chapterId);
         const chapterName = chapter?.title || `Chương ${chapter?.chapterNumber}`;
-        
+
         deleteConfirm.confirm({
             itemName: chapterName,
             itemType: 'chương',
@@ -474,15 +455,31 @@ export default function WorkspacePage() {
     };
 
     // ── Continue Writing ────────────────────────────────────────────────────
-    const handleContinueWriting = async () => {
+    const handleContinueWriting = async (mode: 'normal' | 'epilogue' | 'open' | 'twist' = 'normal') => {
         if (!projectId || !activeChapter || !editorRef.current) return;
+        setContinueMenuOpen(false);
         setIsContinuingWriting(true);
         try {
             const previousText = (editorRef.current.innerText || '').slice(-1500);
+
+            let instruction = "Hãy viết tiếp đoạn mạch truyện này một cách tự nhiên, chú ý giữ nguyên văn phong và nhịp truyện nội dung ở trên.";
+            switch (mode) {
+                case 'epilogue':
+                    instruction = "Truyện đã kết thúc. Hãy viết một đoạn ngoại truyện (epilogue) ngắn, kể về cuộc sống sau này của các nhân vật sau khi mọi sóng gió đã qua, mang lại cảm giác trọn vẹn và thỏa mãn cho người đọc.";
+                    break;
+                case 'open':
+                    instruction = "Đây là phần kết mở của câu chuyện. TUYỆT ĐỐI KHÔNG giải đáp bí ẩn hay viết thêm biến cố mới để giải quyết xung đột. Hãy viết thêm một đoạn miêu tả cảm xúc, cảnh vật, hoặc một hành động nhỏ đầy ẩn ý để tô đậm sự day dứt và để lại câu hỏi ngỏ cho độc giả tự suy ngẫm.";
+                    break;
+                case 'twist':
+                    instruction = "Tạo ra một plot-twist (cú lừa/bước ngoặt) bất ngờ ngay tại đoạn kết này. Hãy lật ngược một sự thật tưởng chừng như đã rõ ràng, tạo ra một cliffhanger (cái kết treo) gây sốc để mở đường cho phần tiếp theo.";
+                    break;
+            }
+
             const res = await aiService.continueWriting(
-                projectId, 
-                previousText, 
-                "Hãy viết tiếp đoạn mạch truyện này một cách tự nhiên, chú ý giữ nguyên văn phong và nhịp truyện nội dung ở trên."
+                projectId,
+                previousText,
+                instruction,
+                activeChapter.id
             );
             if (res.generatedText) {
                 // Ensure there is some spacing before appending
@@ -528,7 +525,7 @@ export default function WorkspacePage() {
             await loadChapters(firstImportedChapterId);
             toast.success(`Đã import ${result.importedChapterCount} chapter từ file ${result.sourceFileName}.`);
         } catch (e: any) {
-            toast.error(e?.response?.data?.message ?? e?.response?.data?.Message ?? 'Không thể import file manuscript.');
+            toast.error(e?.response?.data?.message ?? 'Không thể import file manuscript.');
         } finally {
             setIsImporting(false);
             e.target.value = '';
@@ -565,7 +562,7 @@ export default function WorkspacePage() {
         isEmbeddingRef.current = true;
         setAiSyncState('syncing');
         try {
-            await chapterService.chunkChapter(projectId, embeddingChapterId);
+            // Không cần gọi chunkChapter nữa vì Backend đã tự động chunk khi Save/Update
             await aiService.embedChapter(embeddingChapterId);
             lastEmbedRef.current = Date.now();
             const embedded = await chapterService.getChapterDetail(projectId, embeddingChapterId);
@@ -637,10 +634,8 @@ export default function WorkspacePage() {
     const doSave = useCallback(async (showFeedback = true, queueEmbed = true) => {
         if (!projectId || !activeChapter || !editorRef.current) return;
         if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
-        // Strip highlighting marks using a virtual clone to prevent disrupting the live DOM caret
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = editorRef.current.innerHTML ?? '';
-        const marks = Array.from(tempDiv.querySelectorAll('mark.ai-highlight'));
+        // Strip highlighting marks before saving (unwrap DOM nodes, then read innerHTML)
+        const marks = Array.from(editorRef.current.querySelectorAll('mark.ai-highlight'));
         marks.forEach(mark => {
             const parent = mark.parentNode;
             if (!parent) return;
@@ -648,7 +643,7 @@ export default function WorkspacePage() {
             parent.removeChild(mark);
             parent.normalize();
         });
-        let content = tempDiv.innerHTML;
+        let content = editorRef.current.innerHTML ?? '';
 
         if (showFeedback) setSavedState('saving');
         try {
@@ -676,6 +671,10 @@ export default function WorkspacePage() {
 
     const doForceEmbedNow = useCallback(async () => {
         if (!activeChapter) return;
+        if (aiSyncState === 'syncing') {
+            toast.error('Tiến trình AI đang chạy, vui lòng đợi trong giây lát.');
+            return;
+        }
         if (hasUnsavedChanges) {
             const updated = await doSave(true, false);
             if (!updated) return;
@@ -1117,10 +1116,12 @@ export default function WorkspacePage() {
                             </button>
                             <button
                                 onClick={doForceEmbedNow}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all hover:scale-105 active:scale-95"
-                                title="Đồng bộ AI ngay (bỏ qua cooldown)"
+                                disabled={aiSyncState === 'syncing'}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:scale-100"
+                                title={aiSyncState === 'syncing' ? 'Đang đồng bộ...' : 'Đồng bộ AI ngay (bỏ qua cooldown)'}
                             >
-                                <Zap className="w-3.5 h-3.5" /> Embed ngay
+                                {aiSyncState === 'syncing' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                                {aiSyncState === 'syncing' ? 'Đang nhúng...' : 'Embed ngay'}
                             </button>
                         </>
                     )}
@@ -1374,8 +1375,8 @@ export default function WorkspacePage() {
                     <div className={activeTab === 'plotTimeline' && projectId ? "flex-1 min-h-0 w-full h-full overflow-hidden flex flex-col bg-[var(--bg-app)]" : "hidden"}>
                         {projectId && <TimelinePanel projectId={projectId} />}
                     </div>
-                    
-                    <div className={activeTab !== 'plotTimeline' ? "flex-1 min-h-0 flex flex-col min-w-0" : "hidden"}>
+
+                    <div className={activeTab !== 'plotTimeline' ? "flex-1 min-h-0 flex flex-col min-w-0 relative" : "hidden"}>
                         <>
                             {/* Toolbar */}
                             <div className="h-[48px] shrink-0 flex items-center gap-1 px-4 border-b border-[var(--border-color)]" style={{ background: 'var(--bg-topbar)' }}>
@@ -1493,17 +1494,10 @@ export default function WorkspacePage() {
                                     <Sparkles className="w-4 h-4" />
                                 </button>
                             </div>
-        
+
                             {/* Writing area */}
-                            <div
-                                ref={editorScrollRef}
-                                className="flex-1 overflow-y-auto flex justify-center p-6 lg:p-12 scrollbar-thin"
-                                onScroll={(e) => {
-                                    const scrolled = (e.currentTarget as HTMLDivElement).scrollTop > 200;
-                                    setShowFloatingAiBtn(scrolled);
-                                }}
-                            >
-                                <div className="w-full max-w-3xl relative">
+                            <div className="flex-1 overflow-y-auto flex justify-center p-6 lg:p-12 scrollbar-thin">
+                                <div className="w-full max-w-3xl">
                                     {activeChapter ? (
                                         <>
                                             {/* Chapter title input */}
@@ -1554,26 +1548,12 @@ export default function WorkspacePage() {
                                                     {(activeChapter.versions ?? []).length} phiên bản
                                                 </button>
                                                 <span className="text-[11px] text-[var(--text-secondary)] opacity-50">•</span>
-                                                <span 
-                                                    className={`text-[11px] font-medium inline-flex items-center gap-1 ${wordCount > 2000 ? 'text-amber-500' : 'text-[var(--text-secondary)]'}`}
-                                                    title={wordCount > 2000 ? 'Chương truyện quá dài (> 2000 chữ) có thể làm AI khó bao quát. Mời bạn chủ động ngắt sang chương mới để tối ưu.' : ''}
-                                                >
-                                                    {wordCount > 2000 ? <AlertCircle className="w-3 h-3" /> : <AlignLeft className="w-3 h-3" />}
+                                                <span className="text-[11px] font-medium text-[var(--text-secondary)] inline-flex items-center gap-1">
+                                                    <AlignLeft className="w-3 h-3" />
                                                     {wordCount} từ
                                                 </span>
-        
+
                                                 <div className="flex-1" />
-        
-                                                <button
-                                                    onClick={handleContinueWriting}
-                                                    disabled={isContinuingWriting}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all shadow-md shadow-[var(--accent)]/10 disabled:opacity-50"
-                                                    style={{ background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)' }}
-                                                    title="AI đọc 1500 ký tự cuối và viết tiếp"
-                                                >
-                                                    {isContinuingWriting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bot className="w-3.5 h-3.5" />}
-                                                    AI Viết tiếp
-                                                </button>
                                                 <span className="hidden xl:inline text-[10px] text-[var(--text-secondary)] opacity-60">Alt+↑/↓ chuyển nhanh chương</span>
                                             </div>
                                             {/* Editor */}
@@ -1587,28 +1567,7 @@ export default function WorkspacePage() {
                                                 style={{ fontFamily: `'${editorSettings.editorFont}', sans-serif`, fontSize: `${editorSettings.editorFontSize}px`, letterSpacing: '0.01em' }}
                                                 data-placeholder="Bắt đầu viết tác phẩm của bạn tại đây..."
                                             />
-                                            {/* Floating AI Viết tiếp */}
-                                            {showFloatingAiBtn && activeChapter && (
-                                                <div
-                                                    className="sticky bottom-6 flex justify-end mt-6 pointer-events-none"
-                                                    style={{ zIndex: 50 }}
-                                                >
-                                                    <button
-                                                        onClick={handleContinueWriting}
-                                                        disabled={isContinuingWriting}
-                                                        className="pointer-events-auto flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all duration-200 disabled:opacity-50 shadow-2xl hover:scale-105 active:scale-95"
-                                                        style={{
-                                                            background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)',
-                                                            boxShadow: '0 8px 24px rgba(139,92,246,0.45)',
-                                                        }}
-                                                        title="AI đọc 1500 ký tự cuối và viết tiếp (có dùng ngữ cảnh các chương trước)"
-                                                    >
-                                                        {isContinuingWriting
-                                                            ? <><Loader2 className="w-4 h-4 animate-spin" /> Đang viết...</>
-                                                            : <><Bot className="w-4 h-4" /> AI Viết tiếp</>}
-                                                    </button>
-                                                </div>
-                                            )}
+                                            {/* Floating AI Viết tiếp - MOVED OUTSIDE THIS CONTAINER */}
                                         </>
                                     ) : (
                                         <div className="flex flex-col items-center justify-center h-[60vh] gap-5 text-center px-4">
@@ -1632,6 +1591,57 @@ export default function WorkspacePage() {
                                     )}
                                 </div>
                             </div>
+
+                            {/* Floating AI Viết tiếp - Confined to editor area only */}
+                            {showFloatingAiBtn && activeChapter && (
+                                <div className="absolute bottom-20 right-8 z-50 pointer-events-none">
+                                    <div className="relative pointer-events-auto">
+                                        <div className="flex rounded-xl shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200" style={{ background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', boxShadow: '0 12px 32px rgba(139,92,246,0.5)' }}>
+                                            <button
+                                                onClick={() => handleContinueWriting('normal')}
+                                                disabled={isContinuingWriting}
+                                                className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50 border-r border-white/20 hover:bg-white/10 rounded-l-xl"
+                                                title="AI đọc 1500 ký tự cuối và viết tiếp"
+                                            >
+                                                {isContinuingWriting
+                                                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Đang viết...</>
+                                                    : <><Bot className="w-4 h-4" /> AI Viết tiếp</>}
+                                            </button>
+                                            <button
+                                                onClick={() => setContinueMenuOpen(!continueMenuOpen)}
+                                                disabled={isContinuingWriting}
+                                                className="px-2 py-2.5 text-white hover:bg-white/10 transition-colors rounded-r-xl disabled:opacity-50 flex items-center justify-center"
+                                                title="Tùy chọn kiểu viết tiếp"
+                                            >
+                                                <ChevronDown className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        {continueMenuOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-40" onClick={() => setContinueMenuOpen(false)} />
+                                                <div className="absolute bottom-full right-0 mb-2 w-64 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+                                                    <button onClick={() => handleContinueWriting('normal')} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left hover:bg-[var(--hover-bg)] text-[var(--text-primary)]">
+                                                        <Bot className="w-4 h-4 text-violet-400 shrink-0" />
+                                                        <span>Viết tiếp mạch truyện</span>
+                                                    </button>
+                                                    <button onClick={() => handleContinueWriting('epilogue')} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left hover:bg-[var(--hover-bg)] text-[var(--text-primary)]">
+                                                        <Sunset className="w-4 h-4 text-orange-400 shrink-0" />
+                                                        <span>Viết Ngoại truyện (Epilogue)</span>
+                                                    </button>
+                                                    <button onClick={() => handleContinueWriting('open')} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left hover:bg-[var(--hover-bg)] text-[var(--text-primary)]">
+                                                        <Wind className="w-4 h-4 text-emerald-400 shrink-0" />
+                                                        <span>Giữ nguyên Kết Mở</span>
+                                                    </button>
+                                                    <button onClick={() => handleContinueWriting('twist')} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left hover:bg-[var(--hover-bg)] text-[var(--text-primary)]">
+                                                        <Zap className="w-4 h-4 text-rose-400 shrink-0" />
+                                                        <span>Tạo Twist / Cú lừa phút chót</span>
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </>
                     </div>
                 </div>
