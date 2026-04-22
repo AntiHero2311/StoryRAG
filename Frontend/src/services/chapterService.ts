@@ -161,7 +161,9 @@ export const chapterService = {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('splitByHeadings', String(splitByHeadings));
-        return api.post<ManuscriptImportResponse>(`/manuscript/${projectId}/upload`, formData)
+        return api.post<ManuscriptImportResponse>(`/manuscript/${projectId}/upload`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        })
             .then(r => r.data);
     },
 
