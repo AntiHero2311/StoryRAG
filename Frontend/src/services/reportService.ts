@@ -8,6 +8,8 @@ export interface CriterionResult {
     score: number;
     maxScore: number;
     feedback: string;
+    evidence: string;
+    bibleComparison: string | null;
     errors: string[];
     suggestions: string[];
 }
@@ -66,6 +68,7 @@ export interface PacingPoint {
     segmentIndex: number;
     chapterNumber: number;
     score: number;
+    label?: string | null;
 }
 
 export interface EmotionPoint {
@@ -74,6 +77,7 @@ export interface EmotionPoint {
     valence: number;
     intensity: number;
     dominantEmotion: string;
+    label?: string | null;
 }
 
 export interface CharacterFrequency {
@@ -104,6 +108,7 @@ export interface NarrativeChartsResponse {
     characterFrequencies: CharacterFrequency[];
     characterPresence: CharacterPresenceSeries[];
     characterRelationships: CharacterRelationshipEdge[];
+    insights: string[];
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────

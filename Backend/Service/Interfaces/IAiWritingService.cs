@@ -10,7 +10,7 @@ namespace Service.Interfaces
         /// <summary>
         /// Viết tiếp từ đoạn nội dung có sẵn.
         /// </summary>
-        Task<AiWritingResult> ContinueWritingAsync(Guid projectId, string previousText, string instruction, Guid userId);
+        Task<AiWritingResult> ContinueWritingAsync(Guid projectId, string previousText, string instruction, Guid userId, Guid? chapterId = null);
 
         /// <summary>
         /// Rà soát, trau chuốt lại văn bản như một editor.

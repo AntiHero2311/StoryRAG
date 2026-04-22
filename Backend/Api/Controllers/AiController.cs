@@ -54,8 +54,23 @@ namespace Api.Controllers
                 var userId = GetUserId();
                 if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
 
-                await _embeddingService.EmbedChapterAsync(chapterId, userId.Value);
-                return Ok(new { Message = "Embedding hoàn tất." });
+                // Chạy nhúng dữ liệu trong background (Fire-and-forget) để tránh Request Timeout
+                _ = Task.Run(async () =>
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var bgEmbeddingService = scope.ServiceProvider.GetRequiredService<IEmbeddingService>();
+                    try
+                    {
+                        await bgEmbeddingService.EmbedChapterAsync(chapterId, userId.Value);
+                    }
+                    catch (Exception ex)
+                    {
+                        var logger = scope.ServiceProvider.GetRequiredService<ILogger<AiController>>();
+                        logger.LogError(ex, "Lỗi khi chạy EmbedChapterAsync ngầm cho chương {ChapterId}", chapterId);
+                    }
+                });
+
+                return Accepted(new { Message = "Yêu cầu đã được ghi nhận và đang được xử lý ngầm." });
             }
             catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
             catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
@@ -380,7 +395,7 @@ namespace Api.Controllers
                 var userId = GetUserId();
                 if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
 
-                var result = await _writingService.ContinueWritingAsync(projectId, request.PreviousText, request.Instruction, userId.Value);
+                var result = await _writingService.ContinueWritingAsync(projectId, request.PreviousText, request.Instruction, userId.Value, request.ChapterId);
                 return Ok(result);
             }
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
@@ -521,6 +536,9 @@ namespace Api.Controllers
 
         [MaxLength(5000)]
         public string Instruction { get; set; } = string.Empty;
+
+        /// <summary>ID của chương hiện tại đang viết — dùng để loại trừ chunks cùng chương khỏi RAG</summary>
+        public Guid? ChapterId { get; set; }
     }
 
     public class AiPolishRequest

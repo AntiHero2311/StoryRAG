@@ -36,6 +36,9 @@ namespace Service.Implementations
         private static int _usedTokensInWindow;
         private static int _usedRequestsInWindow;
 
+        // Chống xung đột: không cho phép 2 task cùng embed 1 chapter cùng lúc
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte> ProcessingChapters = new();
+
         public EmbeddingService(AppDbContext context, IConfiguration config, ILogger<EmbeddingService> logger)
         {
             _context = context;
@@ -63,21 +66,29 @@ namespace Service.Implementations
 
         public async Task EmbedChapterAsync(Guid chapterId, Guid userId)
         {
-            // Lấy chapter + xác minh ownership
-            var chapter = await _context.Chapters
-                .Include(c => c.Project)
-                .FirstOrDefaultAsync(c => c.Id == chapterId && !c.IsDeleted)
-                ?? throw new KeyNotFoundException("Chapter không tồn tại.");
+            if (!ProcessingChapters.TryAdd(chapterId, 0))
+            {
+                _logger.LogWarning("Chương {ChapterId} đang được nhúng dữ liệu bởi một tiến trình khác. Bỏ qua yêu cầu này.", chapterId);
+                return;
+            }
 
-            if (chapter.Project.AuthorId != userId)
-                throw new UnauthorizedAccessException("Không có quyền truy cập chapter này.");
+            try
+            {
+                // Lấy chapter + xác minh ownership
+                var chapter = await _context.Chapters
+                    .Include(c => c.Project)
+                    .FirstOrDefaultAsync(c => c.Id == chapterId && !c.IsDeleted)
+                    ?? throw new KeyNotFoundException("Chapter không tồn tại.");
 
-            if (!chapter.CurrentVersionId.HasValue)
-                throw new InvalidOperationException("Chapter chưa có version nào.");
+                if (chapter.Project.AuthorId != userId)
+                    throw new UnauthorizedAccessException("Không có quyền truy cập chapter này.");
 
-            var version = await _context.ChapterVersions
-                .FirstOrDefaultAsync(v => v.Id == chapter.CurrentVersionId.Value)
-                ?? throw new KeyNotFoundException("Version không tồn tại.");
+                if (!chapter.CurrentVersionId.HasValue)
+                    throw new InvalidOperationException("Chapter chưa có version nào.");
+
+                var version = await _context.ChapterVersions
+                    .FirstOrDefaultAsync(v => v.Id == chapter.CurrentVersionId.Value)
+                    ?? throw new KeyNotFoundException("Version không tồn tại.");
 
             if (!version.IsChunked)
                 throw new InvalidOperationException("Version chưa được chunk. Hãy chunk trước khi embed.");
@@ -102,18 +113,49 @@ namespace Service.Implementations
                 .Select(t => EnsureEmbeddingPrefix(t, isDocument: true))
                 .ToList();
 
-            var embeddings = await GetEmbeddingsForTextsAsync(plainTexts, EmbeddingUseCase.Corpus);
+                var embeddings = await GetEmbeddingsForTextsAsync(plainTexts, EmbeddingUseCase.Corpus);
 
-            // Lưu embedding vào từng chunk
-            for (int i = 0; i < chunks.Count; i++)
-            {
-                chunks[i].Embedding = new Vector(embeddings[i]);
+                // Reload lại version và chunks để tránh DbUpdateConcurrencyException sau thời gian gọi API lâu
+                _context.Entry(version).State = EntityState.Detached;
+                var latestVersion = await _context.ChapterVersions
+                    .Include(v => v.Chunks)
+                    .FirstOrDefaultAsync(v => v.Id == version.Id);
+
+                if (latestVersion == null || latestVersion.UpdatedAt > version.UpdatedAt)
+                {
+                    _logger.LogWarning("Nội dung chương {ChapterId} đã thay đổi trong khi đang tạo embedding. Hủy lưu kết quả cũ.", chapterId);
+                    return;
+                }
+
+                // Lưu embedding vào từng chunk
+                var latestChunks = latestVersion.Chunks.OrderBy(c => c.ChunkIndex).ToList();
+                if (latestChunks.Count != embeddings.Count)
+                {
+                    _logger.LogWarning("Số lượng chunk của chương {ChapterId} đã thay đổi. Không thể map embedding.", chapterId);
+                    return;
+                }
+
+                for (int i = 0; i < latestChunks.Count; i++)
+                {
+                    latestChunks[i].Embedding = new Vector(embeddings[i]);
+                }
+
+                // Đánh dấu version đã embedded
+                latestVersion.IsEmbedded = true;
+
+                try
+                {
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    _logger.LogWarning("Xung đột dữ liệu khi lưu Embedding cho chương {ChapterId}. Có tiến trình khác đã cập nhật trước.", chapterId);
+                }
             }
-
-            // Đánh dấu version đã embedded
-            version.IsEmbedded = true;
-
-            await _context.SaveChangesAsync();
+            finally
+            {
+                ProcessingChapters.TryRemove(chapterId, out _);
+            }
         }
 
         public async Task<float[]> GetEmbeddingAsync(string text, EmbeddingUseCase useCase = EmbeddingUseCase.Corpus)
