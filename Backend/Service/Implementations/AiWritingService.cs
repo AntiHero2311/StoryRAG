@@ -6,6 +6,8 @@ using Repository.Data;
 using Repository.Entities;
 using Service.Helpers;
 using Service.Interfaces;
+using Pgvector;
+using Pgvector.EntityFrameworkCore;
 
 namespace Service.Implementations
 {
@@ -15,12 +17,14 @@ namespace Service.Implementations
         private readonly IConfiguration _config;
         private readonly ILogger<AiWritingService> _logger;
         private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
+        private readonly IEmbeddingService _embeddingService;
 
-        public AiWritingService(AppDbContext context, IConfiguration config, ILogger<AiWritingService> logger)
+        public AiWritingService(AppDbContext context, IConfiguration config, ILogger<AiWritingService> logger, IEmbeddingService embeddingService)
         {
             _context = context;
             _config = config;
             _logger = logger;
+            _embeddingService = embeddingService;
             _geminiChatExecutor = new GeminiChatFailoverExecutor(
                 config,
                 logger,
@@ -163,7 +167,7 @@ namespace Service.Implementations
                             .ToList();
 
                         ragContext = string.Join("\n\n---\n\n", decryptedChunks);
-                        _logger.LogInformation("✅ RAG ContinueWriting: lấy {Count} chunks liên quan (loại trừ chương hiện tại) cho dự án {ProjectId}.", relatedChunks.Count, projectId);
+                        _logger.LogInformation("✅ RAG ContinueWriting: lấy {Count} chunks liên quan cho dự án {ProjectId}.", relatedChunks.Count, projectId);
                     }
                 }
             }
