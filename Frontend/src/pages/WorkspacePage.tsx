@@ -528,7 +528,7 @@ export default function WorkspacePage() {
             await loadChapters(firstImportedChapterId);
             toast.success(`Đã import ${result.importedChapterCount} chapter từ file ${result.sourceFileName}.`);
         } catch (e: any) {
-            toast.error(e?.response?.data?.message ?? 'Không thể import file manuscript.');
+            toast.error(e?.response?.data?.message ?? e?.response?.data?.Message ?? 'Không thể import file manuscript.');
         } finally {
             setIsImporting(false);
             e.target.value = '';
