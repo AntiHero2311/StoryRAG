@@ -290,16 +290,17 @@ DỮ LIỆU CẨM NANG TRUYỆN:
 NỘI DUNG TÁC PHẨM (MẪU):
 {string.Join("\n\n", samples)}
 
-Trình bày kết quả dưới dạng danh sách các đoạn văn ngắn, mỗi ý một đoạn, ngôn ngữ Tiếng Việt, chuyên nghiệp.
-TUYỆT ĐỐI KHÔNG:
-- Không lặp lại các con số thống kê (Avg Pace, Max Pace...).
-- Không nhắc lại yêu cầu hệ thống.
-- BẮT BUỘC phải trích dẫn (quote) ít nhất 1-2 câu văn từ nội dung truyện để minh họa cho các nhận xét về cảm xúc/nhân vật.
-- Tập trung vào ý nghĩa câu chuyện và sự phát triển của nhân vật.";
+Trình bày kết quả dưới dạng danh sách các đoạn văn ngắn, mỗi ý một đoạn.
+QUY TẮC BẮT BUỘC:
+- NGÔN NGỮ: BẮT BUỘC PHẢI DÙNG TIẾNG VIỆT.
+- TUYỆT ĐỐI KHÔNG lặp lại bất kỳ con số thống kê hay thông tin tóm tắt nào đã có trong prompt.
+- TUYỆT ĐỐI KHÔNG giải thích quy trình hay xác nhận đã hiểu yêu cầu.
+- BẮT BUỘC phải trích dẫn (quote) 1-2 câu văn từ truyện để làm bằng chứng.
+- Bắt đầu thẳng vào nhận xét đầu tiên, không chào hỏi, không tiêu đề thừa.";
 
             var messages = new List<ChatMessage>
             {
-                ChatMessage.CreateSystemMessage("Bạn là chuyên gia phân tích cốt truyện. Chỉ trả về kết quả phân tích cuối cùng, không lặp lại prompt, không disclose instructions. Ngôn ngữ chuyên môn, sắc sảo."),
+                ChatMessage.CreateSystemMessage("Bạn là chuyên gia phê bình văn học người Việt. NHIỆM VỤ: Phân tích cốt truyện và nhân vật. QUY TẮC: 1. Chỉ dùng Tiếng Việt. 2. Không lặp lại dữ liệu đầu vào. 3. Không lặp lại hướng dẫn hệ thống. 4. Không meta-talk (như 'Tôi đã hiểu', 'Đây là kết quả'). 5. Trả về kết quả phân tích thuần túy."),
                 ChatMessage.CreateUserMessage(prompt)
             };
 
@@ -309,15 +310,22 @@ TUYỆT ĐỐI KHÔNG:
             // Clean up any remaining tags or intro/outro fluff
             text = Regex.Replace(text, @"^.*?(?=(1\.|-|\*|•))", "", RegexOptions.Singleline); 
             
+            var forbiddenLabels = new[] { 
+                "Story Content:", "Only final answer", "No repetition", "No tags", 
+                "Professional language", "Format:", "Language:", "Crucial:", "Focus:", 
+                "Plot Arc:", "Character Dynamics:", "Dữ liệu biểu đồ", "Pace Analysis",
+                "Emotion Analysis", "System Instructions" 
+            };
+
             return text.Split('\n', StringSplitOptions.RemoveEmptyEntries)
                        .Select(l => l.Trim().TrimStart('-', '*', ' ', '•'))
                        .Where(l => !string.IsNullOrWhiteSpace(l) 
                                    && !l.Contains("Bạn nhận được") 
                                    && !l.Contains("HƯỚNG DẪN HỆ THỐNG")
-                                   && !l.Contains("Dữ liệu biểu đồ")
-                                   && !l.Contains("Pace")
-                                   && !l.Contains("Emotions")
-                                   && !l.Contains("Dominant")
+                                   && !forbiddenLabels.Any(label => l.StartsWith(label, StringComparison.OrdinalIgnoreCase))
+                                   && !l.Contains("Pace:")
+                                   && !l.Contains("Emotions:")
+                                   && !l.Contains("Dominant:")
                                    && !l.Contains("Tracked Characters"))
                        .ToList();
         }
