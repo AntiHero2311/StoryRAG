@@ -7,7 +7,9 @@ const PAGE_SIZE = 15;
 const POLISH_PREFIX = '[Trau chuốt]';
 const CONTINUE_PREFIX = '[Viết tiếp]';
 const WRITE_NEW_PREFIX = '[Viết mới]';
-type HistoryMode = 'all' | 'chat' | 'polish' | 'continue';
+const REWRITE_PREFIX = '[Viết lại]';
+const REWRITE_PREFIX_LEGACY = '[Rewrite]';
+type HistoryMode = 'all' | 'chat' | 'rewrite' | 'polish' | 'continue';
 
 // ── Inline markdown renderer (shared with ChatPanel) ───────────────────────
 
@@ -76,11 +78,21 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
     const isPolishItem = (item: ChatHistoryItem) => item.question.startsWith(POLISH_PREFIX);
     const isContinueItem = (item: ChatHistoryItem) => item.question.startsWith(CONTINUE_PREFIX);
     const isWriteNewItem = (item: ChatHistoryItem) => item.question.startsWith(WRITE_NEW_PREFIX);
+    const isRewriteItem = (item: ChatHistoryItem) =>
+        item.question.startsWith(REWRITE_PREFIX) || item.question.startsWith(REWRITE_PREFIX_LEGACY);
 
     const getQuestionText = (item: ChatHistoryItem) => {
         if (isPolishItem(item)) return item.question.slice(POLISH_PREFIX.length).trim();
         if (isContinueItem(item)) return item.question.slice(CONTINUE_PREFIX.length).trim();
         if (isWriteNewItem(item)) return item.question.slice(WRITE_NEW_PREFIX.length).trim();
+        if (item.question.startsWith(REWRITE_PREFIX)) {
+            const text = item.question.slice(REWRITE_PREFIX.length).trim();
+            return text || 'Viết lại đoạn văn';
+        }
+        if (item.question.startsWith(REWRITE_PREFIX_LEGACY)) {
+            const text = item.question.slice(REWRITE_PREFIX_LEGACY.length).trim();
+            return text || 'Viết lại đoạn văn';
+        }
         return item.question;
     };
 
@@ -122,8 +134,10 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
             const isPolish = isPolishItem(item);
             const isContinue = isContinueItem(item);
             const isWriteNew = isWriteNewItem(item);
+            const isRewrite = isRewriteItem(item);
 
-            if (mode === 'chat' && (isPolish || isContinue || isWriteNew)) return false;
+            if (mode === 'chat' && (isPolish || isContinue || isWriteNew || isRewrite)) return false;
+            if (mode === 'rewrite' && !isRewrite) return false;
             if (mode === 'polish' && !isPolish) return false;
             if (mode === 'continue' && !isContinue) return false;
 
@@ -211,6 +225,11 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
                         Chat thường
                     </button>
                     <button
+                        onClick={() => setMode('rewrite')}
+                        className={modeButtonClass('rewrite', 'text-orange-300 border-orange-400/35 bg-orange-400/10')}>
+                        Viết lại
+                    </button>
+                    <button
                         onClick={() => setMode('polish')}
                         className={modeButtonClass('polish', 'text-emerald-300 border-emerald-400/35 bg-emerald-400/10')}>
                         Trau chuốt
@@ -261,12 +280,15 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
                                 <div className="px-2 py-1 rounded-lg text-[10px] font-semibold tracking-wide uppercase flex items-center justify-between"
                                     style={{ background: 'var(--bg-app)', color: 'var(--text-secondary)' }}>
                                     <span>{group.label}</span>
-                                    <span>{group.items.length} đoạn chat</span>
+                                    <span>{group.items.length} mục</span>
                                 </div>
 
                                 <div className="space-y-3">
                                     {group.items.map(item => {
                                         const isPolish = isPolishItem(item);
+                                        const isContinue = isContinueItem(item);
+                                        const isWriteNew = isWriteNewItem(item);
+                                        const isRewrite = isRewriteItem(item);
                                         const questionText = getQuestionText(item);
                                         const safeAnswer = sanitizeAiResponseForDisplay(item.answer);
                                         return (
@@ -281,8 +303,24 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
                                                         style={{
                                                             background: isPolish
                                                                 ? 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(16,185,129,0.08))'
-                                                                : 'linear-gradient(135deg, rgba(139,92,246,0.14), rgba(99,102,241,0.08))',
-                                                            border: `1px solid ${isPolish ? 'rgba(16,185,129,0.32)' : 'rgba(139,92,246,0.32)'}`,
+                                                                : isContinue
+                                                                    ? 'linear-gradient(135deg, rgba(251,191,36,0.15), rgba(251,191,36,0.08))'
+                                                                    : isWriteNew
+                                                                        ? 'linear-gradient(135deg, rgba(244,114,182,0.15), rgba(244,114,182,0.08))'
+                                                                        : isRewrite
+                                                                            ? 'linear-gradient(135deg, rgba(251,146,60,0.15), rgba(251,146,60,0.08))'
+                                                                            : 'linear-gradient(135deg, rgba(139,92,246,0.14), rgba(99,102,241,0.08))',
+                                                            border: `1px solid ${
+                                                                isPolish
+                                                                    ? 'rgba(16,185,129,0.32)'
+                                                                    : isContinue
+                                                                        ? 'rgba(251,191,36,0.32)'
+                                                                        : isWriteNew
+                                                                            ? 'rgba(244,114,182,0.32)'
+                                                                            : isRewrite
+                                                                                ? 'rgba(251,146,60,0.32)'
+                                                                                : 'rgba(139,92,246,0.32)'
+                                                            }`,
                                                             color: 'var(--text-primary)',
                                                             borderBottomRightRadius: '8px',
                                                         }}>
@@ -292,28 +330,50 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
                                                                 className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
                                                                     isPolish
                                                                         ? 'text-emerald-300 bg-emerald-400/15'
-                                                                        : isContinueItem(item)
+                                                                        : isContinue
                                                                             ? 'text-amber-200 bg-amber-400/15'
-                                                                            : isWriteNewItem(item)
+                                                                            : isWriteNew
                                                                                 ? 'text-fuchsia-200 bg-fuchsia-400/15'
+                                                                                : isRewrite
+                                                                                    ? 'text-orange-200 bg-orange-400/15'
                                                                                 : 'text-indigo-200 bg-indigo-400/15'
                                                                 }`}>
-                                                                {isPolish ? 'Trau chuốt' : isContinueItem(item) ? 'Viết tiếp' : isWriteNewItem(item) ? 'Viết mới' : 'Chat'}
+                                                                {isPolish ? 'Trau chuốt' : isContinue ? 'Viết tiếp' : isWriteNew ? 'Viết mới' : isRewrite ? 'Viết lại' : 'Chat'}
                                                             </span>
                                                         </div>
                                                         <p className="leading-relaxed whitespace-pre-wrap break-words">{questionText}</p>
                                                     </div>
                                                     <div className="w-6 h-6 rounded-lg shrink-0 mt-0.5 flex items-center justify-center"
                                                         style={{
-                                                            background: isPolish ? 'rgba(16,185,129,0.15)' : 'rgba(139,92,246,0.12)',
-                                                            border: `1px solid ${isPolish ? 'rgba(16,185,129,0.3)' : 'rgba(139,92,246,0.25)'}`,
+                                                            background: isPolish
+                                                                ? 'rgba(16,185,129,0.15)'
+                                                                : isContinue
+                                                                    ? 'rgba(251,191,36,0.15)'
+                                                                    : isWriteNew
+                                                                        ? 'rgba(244,114,182,0.15)'
+                                                                        : isRewrite
+                                                                            ? 'rgba(251,146,60,0.15)'
+                                                                            : 'rgba(139,92,246,0.12)',
+                                                            border: `1px solid ${
+                                                                isPolish
+                                                                    ? 'rgba(16,185,129,0.3)'
+                                                                    : isContinue
+                                                                        ? 'rgba(251,191,36,0.3)'
+                                                                        : isWriteNew
+                                                                            ? 'rgba(244,114,182,0.3)'
+                                                                            : isRewrite
+                                                                                ? 'rgba(251,146,60,0.3)'
+                                                                                : 'rgba(139,92,246,0.25)'
+                                                            }`,
                                                         }}>
                                                         {isPolish ? (
                                                             <Feather className="w-3 h-3 text-emerald-300" />
-                                                        ) : isContinueItem(item) ? (
+                                                        ) : isContinue ? (
                                                             <Sparkles className="w-3 h-3 text-amber-200" />
-                                                        ) : isWriteNewItem(item) ? (
+                                                        ) : isWriteNew ? (
                                                             <Feather className="w-3 h-3 text-fuchsia-200" />
+                                                        ) : isRewrite ? (
+                                                            <Sparkles className="w-3 h-3 text-orange-200" />
                                                         ) : (
                                                             <User className="w-3 h-3 text-indigo-200" />
                                                         )}

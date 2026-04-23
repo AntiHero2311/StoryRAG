@@ -14,7 +14,6 @@ import RewritePanel from '../components/RewritePanel';
 import ChatPanel from '../components/workspace/ChatPanel';
 import ChatHistoryPanel from '../components/workspace/ChatHistoryPanel';
 import AiWriterPanel from '../components/workspace/AiWriterPanel';
-import AiWriterHistoryPanel from '../components/workspace/AiWriterHistoryPanel';
 import TimelinePanel from '../components/workspace/TimelinePanel';
 
 import {
@@ -54,7 +53,7 @@ import { useDeleteConfirm } from '../hooks';
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
-type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotTimeline' | 'aiWriter' | 'aiWriterHistory';
+type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotTimeline' | 'aiWriter';
 
 
 // ── Export Modal ───────────────────────────────────────────────────────────
@@ -239,6 +238,8 @@ export default function WorkspacePage() {
     const [wordCount, setWordCount] = useState(0);
     type AiSyncState = 'idle' | 'syncing' | 'ready' | 'error';
     const [aiSyncState, setAiSyncState] = useState<AiSyncState>('idle');
+    const aiSyncStateRef = useRef<AiSyncState>('idle');
+    const aiSyncResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // ── Version state ──────────────────────────────────────────────────────
     const [isCreatingVersion, setIsCreatingVersion] = useState(false);
@@ -284,6 +285,8 @@ export default function WorkspacePage() {
     const editorRef = useRef<HTMLDivElement>(null);
     const importFileRef = useRef<HTMLInputElement>(null);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isAutoEmbeddingRef = useRef(false);
+    const pendingAutoEmbedChapterIdRef = useRef<string | null>(null);
     // Tracks which chapter is currently active to prevent stale async callbacks from overwriting it
     const activeChapterIdRef = useRef<string | null>(null);
 
@@ -296,6 +299,10 @@ export default function WorkspacePage() {
         if (cached) setProjectTitle(JSON.parse(cached).title);
         if (projectId) loadChapters();
     }, [projectId]);
+
+    useEffect(() => {
+        aiSyncStateRef.current = aiSyncState;
+    }, [aiSyncState]);
 
     // ── Editor Mount & Chapter Switch Sync ─────────────────────────────────
     useEffect(() => {
@@ -564,54 +571,29 @@ export default function WorkspacePage() {
         }
     };
 
-    // ── Save → background Chunk + Embed ──────────────────────────────────
-    const doSave = useCallback(async (showFeedback = true) => {
-        if (!projectId || !activeChapter || !editorRef.current) return;
-        if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
-        // Strip highlighting marks before saving (unwrap DOM nodes, then read innerHTML)
-        const marks = Array.from(editorRef.current.querySelectorAll('mark.ai-highlight'));
-        marks.forEach(mark => {
-            const parent = mark.parentNode;
-            if (!parent) return;
-            while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
-            parent.removeChild(mark);
-            parent.normalize();
-        });
-        let content = editorRef.current.innerHTML ?? '';
+    const scheduleAiSyncReset = useCallback((state: Extract<AiSyncState, 'ready' | 'error'>) => {
+        if (aiSyncResetTimerRef.current) {
+            clearTimeout(aiSyncResetTimerRef.current);
+            aiSyncResetTimerRef.current = null;
+        }
+        const delay = state === 'ready' ? 30_000 : 10_000;
+        aiSyncResetTimerRef.current = setTimeout(() => setAiSyncState('idle'), delay);
+    }, []);
 
-        if (showFeedback) setSavedState('saving');
-        try {
-            const updated = await chapterService.updateChapter(projectId, activeChapter.id, {
-                title: chapterTitle || `Chương ${activeChapter.chapterNumber}`,
-                content,
-            });
-            setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
-            setActiveChapter(updated);
-            setHasUnsavedChanges(false);
-            if (showFeedback) {
-                setSavedState('saved');
-                setTimeout(() => setSavedState('idle'), 2000);
+    const embedChapterImmediately = useCallback(async (
+        targetChapterId: string,
+        options?: {
+            allowWhileSyncing?: boolean;
+            showSuccessToast?: boolean;
+            showErrorToast?: boolean;
+        }
+    ) => {
+        if (!projectId) return;
+        if (!options?.allowWhileSyncing && aiSyncStateRef.current === 'syncing') {
+            if (options?.showErrorToast) {
+                toast.error('Tiến trình AI đang chạy, vui lòng đợi trong giây lát.');
             }
-            return updated;
-        } catch {
-            if (showFeedback) setSavedState('error');
-            return null;
-        }
-    }, [projectId, activeChapter, chapterTitle]);
-
-    const doForceEmbedNow = useCallback(async () => {
-        if (!projectId || !activeChapter) return;
-        if (aiSyncState === 'syncing') {
-            toast.error('Tiến trình AI đang chạy, vui lòng đợi trong giây lát.');
             return;
-        }
-        
-        let targetChapterId = activeChapter.id;
-        
-        if (hasUnsavedChanges) {
-            const updated = await doSave(true);
-            if (!updated) return;
-            targetChapterId = updated.id;
         }
 
         setAiSyncState('syncing');
@@ -623,15 +605,116 @@ export default function WorkspacePage() {
                 setActiveChapter(embedded);
             }
             setAiSyncState('ready');
-            toast.success('Đồng bộ AI cho chương hoàn tất! Bạn có thể bắt đầu chat hoặc phân tích.');
-            setTimeout(() => setAiSyncState('idle'), 30_000);
+            scheduleAiSyncReset('ready');
+            if (options?.showSuccessToast) {
+                toast.success('Đồng bộ AI cho chương hoàn tất! Bạn có thể bắt đầu chat hoặc phân tích.');
+            }
         } catch (e: any) {
             setAiSyncState('error');
-            const msg = e?.response?.data?.message ?? 'Đồng bộ AI thất bại. Vui lòng thử lại.';
-            toast.error(msg);
-            setTimeout(() => setAiSyncState('idle'), 10_000);
+            scheduleAiSyncReset('error');
+            if (options?.showErrorToast) {
+                const msg = e?.response?.data?.message ?? 'Đồng bộ AI thất bại. Vui lòng thử lại.';
+                toast.error(msg);
+            }
+            throw e;
         }
-    }, [projectId, activeChapter, hasUnsavedChanges, doSave, aiSyncState]);
+    }, [projectId, toast, scheduleAiSyncReset]);
+
+    const queueAutoEmbed = useCallback((targetChapterId: string) => {
+        pendingAutoEmbedChapterIdRef.current = targetChapterId;
+        if (isAutoEmbeddingRef.current) return;
+
+        isAutoEmbeddingRef.current = true;
+        const run = async () => {
+            while (pendingAutoEmbedChapterIdRef.current) {
+                const chapterIdToEmbed = pendingAutoEmbedChapterIdRef.current;
+                pendingAutoEmbedChapterIdRef.current = null;
+                if (!chapterIdToEmbed) continue;
+                try {
+                    await embedChapterImmediately(chapterIdToEmbed, {
+                        allowWhileSyncing: true,
+                        showSuccessToast: false,
+                        showErrorToast: false,
+                    });
+                } catch {
+                    // Silent for autosync; trạng thái đã phản ánh trên UI.
+                }
+            }
+            isAutoEmbeddingRef.current = false;
+        };
+        void run();
+    }, [embedChapterImmediately]);
+
+    // ── Save → background Chunk + Embed ──────────────────────────────────
+    const doSave = useCallback(async (showFeedback = true, triggerImmediateEmbed = true) => {
+        if (!projectId || !activeChapter || !editorRef.current) return;
+        if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+        // Strip highlighting marks before saving (unwrap DOM nodes, then read innerHTML)
+        const marks = Array.from(editorRef.current.querySelectorAll('mark.ai-highlight'));
+        marks.forEach(mark => {
+            const parent = mark.parentNode;
+            if (!parent) return;
+            while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+            parent.removeChild(mark);
+            parent.normalize();
+        });
+        const content = editorRef.current.innerHTML ?? '';
+        const effectiveTitle = chapterTitle || `Chương ${activeChapter.chapterNumber}`;
+        const currentTitle = activeChapter.title ?? `Chương ${activeChapter.chapterNumber}`;
+        const shouldPersistContent = hasUnsavedChanges;
+        const shouldPersistTitle = effectiveTitle !== currentTitle;
+
+        if (!shouldPersistContent && !shouldPersistTitle) {
+            if (showFeedback) {
+                setSavedState('saved');
+                setTimeout(() => setSavedState('idle'), 2000);
+            }
+            return activeChapter;
+        }
+
+        if (showFeedback) setSavedState('saving');
+        try {
+            const updated = await chapterService.updateChapter(projectId, activeChapter.id, {
+                title: effectiveTitle,
+                content,
+            });
+            setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
+            setActiveChapter(updated);
+            setHasUnsavedChanges(false);
+            if (showFeedback) {
+                setSavedState('saved');
+                setTimeout(() => setSavedState('idle'), 2000);
+            }
+            if (triggerImmediateEmbed && shouldPersistContent) {
+                queueAutoEmbed(updated.id);
+            }
+            return updated;
+        } catch {
+            if (showFeedback) setSavedState('error');
+            return null;
+        }
+    }, [projectId, activeChapter, chapterTitle, hasUnsavedChanges, queueAutoEmbed]);
+
+    const doForceEmbedNow = useCallback(async () => {
+        if (!projectId || !activeChapter) return;
+        if (aiSyncStateRef.current === 'syncing') {
+            toast.error('Tiến trình AI đang chạy, vui lòng đợi trong giây lát.');
+            return;
+        }
+        
+        let targetChapterId = activeChapter.id;
+        
+        if (hasUnsavedChanges) {
+            const updated = await doSave(true, false);
+            if (!updated) return;
+            targetChapterId = updated.id;
+        }
+        await embedChapterImmediately(targetChapterId, {
+            allowWhileSyncing: false,
+            showSuccessToast: true,
+            showErrorToast: true,
+        });
+    }, [projectId, activeChapter, hasUnsavedChanges, doSave, toast, embedChapterImmediately]);
 
     // ── Debounced auto-save (in-place) ─────────────────────────────────────
     const scheduleAutoSave = useCallback(() => {
@@ -642,6 +725,7 @@ export default function WorkspacePage() {
     useEffect(() => {
         return () => {
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+            if (aiSyncResetTimerRef.current) clearTimeout(aiSyncResetTimerRef.current);
         };
     }, []);
 
@@ -867,6 +951,10 @@ export default function WorkspacePage() {
     }, [chapters, chapterSearchNormalized]);
 
     const activeChapterIndex = activeChapter ? chapters.findIndex(c => c.id === activeChapter.id) : -1;
+    const activeVersion = useMemo(
+        () => activeChapter?.versions?.find(v => v.versionNumber === activeChapter.currentVersionNum) ?? null,
+        [activeChapter]
+    );
     const previousChapter = activeChapterIndex > 0 ? chapters[activeChapterIndex - 1] : null;
     const nextChapter = activeChapterIndex >= 0 && activeChapterIndex < chapters.length - 1
         ? chapters[activeChapterIndex + 1]
@@ -1621,7 +1709,7 @@ export default function WorkspacePage() {
                         {/* Panel header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] shrink-0 bg-[var(--bg-app)]">
                             <div className="flex items-center gap-2">
-                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotTimeline', 'aiWriter', 'aiWriterHistory'] as ActiveTab[]).includes(activeTab) ? (
+                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotTimeline', 'aiWriter'] as ActiveTab[]).includes(activeTab) ? (
                                     <>
                                         <button onClick={() => setActiveTab('chat')} className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 transition-colors">
                                             <ArrowLeft className="w-3.5 h-3.5" />
@@ -1637,7 +1725,6 @@ export default function WorkspacePage() {
                                             {activeTab === 'plotTimeline' && 'Tuyến truyện'}
                                             {activeTab === 'aiInstructions' && 'Ghi chú AI'}
                                             {activeTab === 'aiWriter' && 'AI Writer'}
-                                            {activeTab === 'aiWriterHistory' && 'Lịch sử AI'}
                                         </span>
                                     </>
                                 ) : (
@@ -1650,9 +1737,6 @@ export default function WorkspacePage() {
                                         </TabBtn>
                                         <TabBtn active={activeTab === 'chatHistory'} onClick={() => { setActiveTab('chatHistory'); }}>
                                             <Clock className="w-3.5 h-3.5" /> Lịch sử chat
-                                        </TabBtn>
-                                        <TabBtn active={activeTab === 'aiWriterHistory'} onClick={() => { setActiveTab('aiWriterHistory'); }}>
-                                            <History className="w-3.5 h-3.5" /> Lịch sử AI
                                         </TabBtn>
                                     </div>
                                 )}
@@ -1858,7 +1942,7 @@ export default function WorkspacePage() {
                         {activeTab === 'chat' && projectId && (
                             <ChatPanel
                                 projectId={projectId}
-                                isEmbedded={!!activeChapter?.versions?.[0]?.isEmbedded}
+                                isEmbedded={!!activeVersion?.isEmbedded}
                             />
                         )}
                         {/* ── Chat History Tab ── */}
@@ -1909,28 +1993,6 @@ export default function WorkspacePage() {
                                     if (editorRef.current) {
                                         editorRef.current.innerHTML += (editorRef.current.innerHTML.endsWith('<br>') ? '' : '<br><br>') + content.replace(/\n/g, '<br>');
                                         markEditorDirty();
-                                    }
-                                }}
-                            />
-                        )}
-
-                        {/* ── AI Writer History Tab ── */}
-                        {activeTab === 'aiWriterHistory' && projectId && (
-                            <AiWriterHistoryPanel
-                                projectId={projectId}
-                                chapterId={activeChapter?.id}
-                                onApplyContent={(content) => {
-                                    if (editorRef.current) {
-                                        editorRef.current.innerHTML += (editorRef.current.innerHTML.endsWith('<br>') ? '' : '<br><br>') + content.replace(/\n/g, '<br>');
-                                        markEditorDirty();
-                                        
-                                        // Scroll to bottom
-                                        setTimeout(() => {
-                                            const contentEl = document.querySelector('.workspace-editor-content');
-                                            if (contentEl && contentEl.parentElement) {
-                                                contentEl.parentElement.scrollTo({ top: contentEl.parentElement.scrollHeight, behavior: 'smooth' });
-                                            }
-                                        }, 100);
                                     }
                                 }}
                             />
