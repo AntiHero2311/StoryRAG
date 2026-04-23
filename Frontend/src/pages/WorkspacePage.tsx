@@ -54,6 +54,7 @@ import { useDeleteConfirm } from '../hooks';
 
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
 type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotTimeline' | 'aiWriter';
+const AUTO_EMBED_QUEUE_DELAY_MS = 10_000;
 
 
 // ── Export Modal ───────────────────────────────────────────────────────────
@@ -209,7 +210,6 @@ export default function WorkspacePage() {
     const navigate = useNavigate();
     const { projectId } = useParams<{ projectId: string }>();
     const toast = useToast();
-    void Wand2; // reserved for future rewrite feature
 
     // ── Layout state ───────────────────────────────────────────────────────
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -267,13 +267,12 @@ export default function WorkspacePage() {
 
     // Chat state is now managed inside ChatPanel / ChatHistoryPanel components
 
-
-    // ── Rewrite state ──────────────────────────────────────────────────────
-    const [rewritePanelOpen, setRewritePanelOpen] = useState(false);
-    const [rewriteMode, setRewriteMode] = useState<'rewrite' | 'polish'>('rewrite');
-    const [rewriteSelectedText, setRewriteSelectedText] = useState('');
+    // ── Polish selected text ────────────────────────────────────────────────
+    const [polishPanelOpen, setPolishPanelOpen] = useState(false);
+    const [polishSelectedText, setPolishSelectedText] = useState('');
     const [selectionToolbar, setSelectionToolbar] = useState<{ visible: boolean; x: number; y: number }>({ visible: false, x: 0, y: 0 });
     const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const polishSelectionRangeRef = useRef<Range | null>(null);
 
     // ── Continue Writing ───────────────────────────────────────────────────
     const [isContinuingWriting, setIsContinuingWriting] = useState(false);
@@ -281,10 +280,12 @@ export default function WorkspacePage() {
     const [continueMenuOpen, setContinueMenuOpen] = useState(false);
     const editorScrollRef = useRef<HTMLDivElement | null>(null);
 
+
     // ── Refs ───────────────────────────────────────────────────────────────
     const editorRef = useRef<HTMLDivElement>(null);
     const importFileRef = useRef<HTMLInputElement>(null);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const autoEmbedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isAutoEmbeddingRef = useRef(false);
     const pendingAutoEmbedChapterIdRef = useRef<string | null>(null);
     // Tracks which chapter is currently active to prevent stale async callbacks from overwriting it
@@ -496,7 +497,6 @@ export default function WorkspacePage() {
                 activeChapter.id
             );
             if (res.generatedText) {
-                // Ensure there is some spacing before appending
                 let textToAppend = res.generatedText;
                 editorRef.current.innerHTML += `<br><br>${textToAppend.replace(/\n/g, '<br>')}`;
                 markEditorDirty();
@@ -599,16 +599,47 @@ export default function WorkspacePage() {
         setAiSyncState('syncing');
         try {
             await aiService.embedChapter(targetChapterId);
-            const embedded = await chapterService.getChapterDetail(projectId, targetChapterId);
-            setChapters(prev => prev.map(c => c.id === embedded.id ? embedded : c));
+
+            // Mark UI immediately after embed succeeds, then refresh detail in background.
+            setChapters(prev => prev.map(c => {
+                if (c.id !== targetChapterId) return c;
+                return {
+                    ...c,
+                    versions: (c.versions ?? []).map(v => v.versionNumber === c.currentVersionNum
+                        ? { ...v, isChunked: true, isEmbedded: true }
+                        : v
+                    ),
+                };
+            }));
             if (activeChapterIdRef.current === targetChapterId) {
-                setActiveChapter(embedded);
+                setActiveChapter(prev => {
+                    if (!prev || prev.id !== targetChapterId) return prev;
+                    return {
+                        ...prev,
+                        versions: (prev.versions ?? []).map(v => v.versionNumber === prev.currentVersionNum
+                            ? { ...v, isChunked: true, isEmbedded: true }
+                            : v
+                        ),
+                    };
+                });
             }
             setAiSyncState('ready');
             scheduleAiSyncReset('ready');
             if (options?.showSuccessToast) {
                 toast.success('Đồng bộ AI cho chương hoàn tất! Bạn có thể bắt đầu chat hoặc phân tích.');
             }
+
+            void (async () => {
+                try {
+                    const embedded = await chapterService.getChapterDetail(projectId, targetChapterId);
+                    setChapters(prev => prev.map(c => c.id === embedded.id ? embedded : c));
+                    if (activeChapterIdRef.current === targetChapterId) {
+                        setActiveChapter(embedded);
+                    }
+                } catch {
+                    // Keep optimistic UI state; no toast needed when refresh fails.
+                }
+            })();
         } catch (e: any) {
             setAiSyncState('error');
             scheduleAiSyncReset('error');
@@ -622,27 +653,35 @@ export default function WorkspacePage() {
 
     const queueAutoEmbed = useCallback((targetChapterId: string) => {
         pendingAutoEmbedChapterIdRef.current = targetChapterId;
-        if (isAutoEmbeddingRef.current) return;
+        if (autoEmbedTimerRef.current) {
+            clearTimeout(autoEmbedTimerRef.current);
+            autoEmbedTimerRef.current = null;
+        }
 
-        isAutoEmbeddingRef.current = true;
-        const run = async () => {
-            while (pendingAutoEmbedChapterIdRef.current) {
-                const chapterIdToEmbed = pendingAutoEmbedChapterIdRef.current;
-                pendingAutoEmbedChapterIdRef.current = null;
-                if (!chapterIdToEmbed) continue;
-                try {
-                    await embedChapterImmediately(chapterIdToEmbed, {
-                        allowWhileSyncing: true,
-                        showSuccessToast: false,
-                        showErrorToast: false,
-                    });
-                } catch {
-                    // Silent for autosync; trạng thái đã phản ánh trên UI.
+        autoEmbedTimerRef.current = setTimeout(() => {
+            autoEmbedTimerRef.current = null;
+            if (isAutoEmbeddingRef.current) return;
+
+            isAutoEmbeddingRef.current = true;
+            const run = async () => {
+                while (pendingAutoEmbedChapterIdRef.current) {
+                    const chapterIdToEmbed = pendingAutoEmbedChapterIdRef.current;
+                    pendingAutoEmbedChapterIdRef.current = null;
+                    if (!chapterIdToEmbed) continue;
+                    try {
+                        await embedChapterImmediately(chapterIdToEmbed, {
+                            allowWhileSyncing: true,
+                            showSuccessToast: false,
+                            showErrorToast: false,
+                        });
+                    } catch {
+                        // Silent for autosync; trạng thái đã phản ánh trên UI.
+                    }
                 }
-            }
-            isAutoEmbeddingRef.current = false;
-        };
-        void run();
+                isAutoEmbeddingRef.current = false;
+            };
+            void run();
+        }, AUTO_EMBED_QUEUE_DELAY_MS);
     }, [embedChapterImmediately]);
 
     // ── Save → background Chunk + Embed ──────────────────────────────────
@@ -701,6 +740,12 @@ export default function WorkspacePage() {
             toast.error('Tiến trình AI đang chạy, vui lòng đợi trong giây lát.');
             return;
         }
+
+        if (autoEmbedTimerRef.current) {
+            clearTimeout(autoEmbedTimerRef.current);
+            autoEmbedTimerRef.current = null;
+        }
+        pendingAutoEmbedChapterIdRef.current = null;
         
         let targetChapterId = activeChapter.id;
         
@@ -725,7 +770,9 @@ export default function WorkspacePage() {
     useEffect(() => {
         return () => {
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+            if (autoEmbedTimerRef.current) clearTimeout(autoEmbedTimerRef.current);
             if (aiSyncResetTimerRef.current) clearTimeout(aiSyncResetTimerRef.current);
+            if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
         };
     }, []);
 
@@ -741,17 +788,24 @@ export default function WorkspacePage() {
         return () => window.removeEventListener('keydown', handler);
     }, [doSave]);
 
-    // ── Selection toolbar (floating, inside editor) ────────────────────────
+    // ── Selection toolbar (polish only) ────────────────────────────────────
     useEffect(() => {
         const handleSelection = () => {
             if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
             selectionTimerRef.current = setTimeout(() => {
                 const sel = window.getSelection();
                 const text = sel?.toString().trim() ?? '';
-                if (!text || text.length < 5 || !editorRef.current?.contains(sel?.anchorNode ?? null)) {
+                if (
+                    polishPanelOpen ||
+                    !activeChapter ||
+                    !text ||
+                    text.length < 5 ||
+                    !editorRef.current?.contains(sel?.anchorNode ?? null)
+                ) {
                     setSelectionToolbar(prev => ({ ...prev, visible: false }));
                     return;
                 }
+
                 const range = sel!.getRangeAt(0);
                 const rect = range.getBoundingClientRect();
                 setSelectionToolbar({
@@ -767,7 +821,7 @@ export default function WorkspacePage() {
             document.removeEventListener('selectionchange', handleSelection);
             if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
         };
-    }, []);
+    }, [activeChapter, polishPanelOpen]);
 
     // AI Chat logic is now inside ChatPanel / ChatHistoryPanel components
 
@@ -985,10 +1039,10 @@ export default function WorkspacePage() {
     return (
         <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
 
-            {/* ── Floating selection toolbar ── */}
-            {selectionToolbar.visible && !rewritePanelOpen && (
+            {/* ── Floating selection toolbar (Trau chuốt only) ── */}
+            {selectionToolbar.visible && !polishPanelOpen && (
                 <div
-                    className="fixed z-40 -translate-x-1/2 -translate-y-full flex items-center gap-1 px-2 py-1.5 rounded-xl shadow-xl"
+                    className="fixed z-40 -translate-x-1/2 -translate-y-full flex items-center px-2 py-1.5 rounded-xl shadow-xl"
                     style={{
                         left: selectionToolbar.x,
                         top: selectionToolbar.y,
@@ -999,27 +1053,14 @@ export default function WorkspacePage() {
                 >
                     <button
                         onClick={() => {
-                            const sel = window.getSelection()?.toString().trim() ?? '';
-                            if (sel.length >= 5) {
-                                setRewriteSelectedText(sel);
-                                setRewriteMode('rewrite');
-                                setRewritePanelOpen(true);
-                                setSelectionToolbar(prev => ({ ...prev, visible: false }));
-                            }
-                        }}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all hover:bg-[var(--accent)]/10 text-[var(--text-secondary)] hover:text-[var(--accent)]"
-                    >
-                        <Wand2 className="w-3 h-3" />
-                        Viết lại
-                    </button>
-                    <div className="w-px h-3 bg-[var(--border-color)] mx-1" />
-                    <button
-                        onClick={() => {
-                            const sel = window.getSelection()?.toString().trim() ?? '';
-                            if (sel.length >= 5) {
-                                setRewriteSelectedText(sel);
-                                setRewriteMode('polish');
-                                setRewritePanelOpen(true);
+                            const selection = window.getSelection();
+                            const selectedText = selection?.toString().trim() ?? '';
+                            if (selectedText.length >= 5) {
+                                polishSelectionRangeRef.current = selection && selection.rangeCount > 0
+                                    ? selection.getRangeAt(0).cloneRange()
+                                    : null;
+                                setPolishSelectedText(selectedText);
+                                setPolishPanelOpen(true);
                                 setSelectionToolbar(prev => ({ ...prev, visible: false }));
                             }
                         }}
@@ -1056,25 +1097,37 @@ export default function WorkspacePage() {
                 />
             )}
 
-            {/* ── Rewrite Panel ── */}
-            {rewritePanelOpen && (
+            {/* ── Polish Panel ── */}
+            {projectId && polishPanelOpen && (
                 <RewritePanel
-                    projectId={projectId!}
+                    projectId={projectId}
                     chapterId={activeChapter?.id}
-                    selectedText={rewriteSelectedText}
-                    mode={rewriteMode}
+                    selectedText={polishSelectedText}
+                    mode="polish"
                     onAccept={(rewritten) => {
-                        // Replace selected text in editor
-                        const sel = window.getSelection();
-                        if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
-                            const range = sel.getRangeAt(0);
+                        const range = polishSelectionRangeRef.current;
+                        if (range && editorRef.current?.contains(range.commonAncestorContainer)) {
                             range.deleteContents();
                             range.insertNode(document.createTextNode(rewritten));
-                            sel.removeAllRanges();
+                            polishSelectionRangeRef.current = null;
+                            markEditorDirty();
+                            return;
                         }
-                        markEditorDirty();
+
+                        const sel = window.getSelection();
+                        if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
+                            const fallbackRange = sel.getRangeAt(0);
+                            fallbackRange.deleteContents();
+                            fallbackRange.insertNode(document.createTextNode(rewritten));
+                            sel.removeAllRanges();
+                            polishSelectionRangeRef.current = null;
+                            markEditorDirty();
+                        }
                     }}
-                    onClose={() => setRewritePanelOpen(false)}
+                    onClose={() => {
+                        polishSelectionRangeRef.current = null;
+                        setPolishPanelOpen(false);
+                    }}
                 />
             )}
 
@@ -1621,7 +1674,6 @@ export default function WorkspacePage() {
                                                 style={{ fontFamily: `'${editorSettings.editorFont}', sans-serif`, fontSize: `${editorSettings.editorFontSize}px`, letterSpacing: '0.01em' }}
                                                 data-placeholder="Bắt đầu viết tác phẩm của bạn tại đây..."
                                             />
-                                            {/* Floating AI Viết tiếp - MOVED OUTSIDE THIS CONTAINER */}
                                         </>
                                     ) : (
                                         <div className="flex flex-col items-center justify-center h-[60vh] gap-5 text-center px-4">
