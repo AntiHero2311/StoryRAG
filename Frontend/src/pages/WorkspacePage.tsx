@@ -54,7 +54,7 @@ import { useDeleteConfirm } from '../hooks';
 
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
 type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotTimeline' | 'aiWriter';
-const AUTO_EMBED_QUEUE_DELAY_MS = 10_000;
+const AUTO_EMBED_QUEUE_DELAY_MS = 5_000;
 
 
 // ── Export Modal ───────────────────────────────────────────────────────────
@@ -269,6 +269,7 @@ export default function WorkspacePage() {
 
     // ── Polish selected text ────────────────────────────────────────────────
     const [polishPanelOpen, setPolishPanelOpen] = useState(false);
+    const [polishPanelMode, setPolishPanelMode] = useState<'polish' | 'rewrite'>('polish');
     const [polishSelectedText, setPolishSelectedText] = useState('');
     const [selectionToolbar, setSelectionToolbar] = useState<{ visible: boolean; x: number; y: number }>({ visible: false, x: 0, y: 0 });
     const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1051,25 +1052,47 @@ export default function WorkspacePage() {
                     }}
                     onMouseDown={e => e.preventDefault()}
                 >
-                    <button
-                        onClick={() => {
-                            const selection = window.getSelection();
-                            const selectedText = selection?.toString().trim() ?? '';
-                            if (selectedText.length >= 5) {
-                                polishSelectionRangeRef.current = selection && selection.rangeCount > 0
-                                    ? selection.getRangeAt(0).cloneRange()
-                                    : null;
-                                setPolishSelectedText(selectedText);
-                                setPolishPanelOpen(true);
-                                setSelectionToolbar(prev => ({ ...prev, visible: false }));
-                            }
-                        }}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all"
-                        style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)' }}
-                    >
-                        <Sparkles className="w-3 h-3" />
-                        Trau chuốt
-                    </button>
+                        <button
+                            onClick={() => {
+                                const selection = window.getSelection();
+                                const selectedText = selection?.toString().trim() ?? '';
+                                if (selectedText.length >= 5) {
+                                    polishSelectionRangeRef.current = selection && selection.rangeCount > 0
+                                        ? selection.getRangeAt(0).cloneRange()
+                                        : null;
+                                    setPolishSelectedText(selectedText);
+                                    setPolishPanelMode('polish');
+                                    setPolishPanelOpen(true);
+                                    setSelectionToolbar(prev => ({ ...prev, visible: false }));
+                                }
+                            }}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all hover:bg-[var(--accent)]/10"
+                            style={{ color: 'var(--accent-text)' }}
+                        >
+                            <Sparkles className="w-3 h-3" />
+                            Trau chuốt
+                        </button>
+                        <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
+                        <button
+                            onClick={() => {
+                                const selection = window.getSelection();
+                                const selectedText = selection?.toString().trim() ?? '';
+                                if (selectedText.length >= 5) {
+                                    polishSelectionRangeRef.current = selection && selection.rangeCount > 0
+                                        ? selection.getRangeAt(0).cloneRange()
+                                        : null;
+                                    setPolishSelectedText(selectedText);
+                                    setPolishPanelMode('rewrite');
+                                    setPolishPanelOpen(true);
+                                    setSelectionToolbar(prev => ({ ...prev, visible: false }));
+                                }
+                            }}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all hover:bg-[var(--accent)]/10"
+                            style={{ color: 'var(--accent-text)' }}
+                        >
+                            <Wand2 className="w-3 h-3" />
+                            Viết lại
+                        </button>
                 </div>
             )}
 
@@ -1103,7 +1126,7 @@ export default function WorkspacePage() {
                     projectId={projectId}
                     chapterId={activeChapter?.id}
                     selectedText={polishSelectedText}
-                    mode="polish"
+                    mode={polishPanelMode}
                     onAccept={(rewritten) => {
                         const range = polishSelectionRangeRef.current;
                         if (range && editorRef.current?.contains(range.commonAncestorContainer)) {
@@ -1699,7 +1722,7 @@ export default function WorkspacePage() {
                             </div>
 
                             {/* Floating AI Viết tiếp - Confined to editor area only */}
-                            {showFloatingAiBtn && activeChapter && (
+                            {showFloatingAiBtn && activeChapter && !selectionToolbar.visible && !polishPanelOpen && (
                                 <div className="absolute bottom-20 right-8 z-50 pointer-events-none">
                                     <div className="relative pointer-events-auto">
                                         <div className="flex rounded-xl shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200" style={{ background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', boxShadow: '0 12px 32px rgba(139,92,246,0.5)' }}>
@@ -1995,6 +2018,8 @@ export default function WorkspacePage() {
                             <ChatPanel
                                 projectId={projectId}
                                 isEmbedded={!!activeVersion?.isEmbedded}
+                                onEmbed={doForceEmbedNow}
+                                isSyncing={aiSyncState === 'syncing'}
                             />
                         )}
                         {/* ── Chat History Tab ── */}

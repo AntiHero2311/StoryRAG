@@ -109,6 +109,7 @@ export interface NarrativeChartsResponse {
     characterPresence: CharacterPresenceSeries[];
     characterRelationships: CharacterRelationshipEdge[];
     insights: string[];
+    segmentTexts: string[];
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────

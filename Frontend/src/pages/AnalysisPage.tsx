@@ -1087,7 +1087,12 @@ function AnalysisContent() {
                 onClose={() => setShowAnalyzeConfirm(false)}
                 onConfirm={handleConfirmAnalyze}
                 title="Xác nhận phân tích bộ truyện"
-                message="Hệ thống sẽ dùng 1 lượt phân tích để chạy AI trên toàn bộ dự án đang chọn. Lưu ý: mỗi lần chỉ có thể chạy 1 phân tích thôi. Bạn có muốn tiếp tục không?"
+                message={(
+                    <div className="space-y-2">
+                        <p>Hệ thống sẽ dùng <span className="text-amber-400 font-bold">1 lượt phân tích</span> để chạy AI trên toàn bộ dự án đang chọn.</p>
+                        <p className="text-[11px] opacity-70 italic">Lưu ý: mỗi lần chỉ có thể chạy 1 phân tích thôi. Bạn có muốn tiếp tục không?</p>
+                    </div>
+                )}
                 confirmText="Xác nhận phân tích"
                 cancelText="Hủy"
                 variant="warning"

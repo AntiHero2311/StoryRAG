@@ -6,7 +6,7 @@ export interface ConfirmDialogProps {
   onClose: () => void;
   onConfirm: () => void;
   title?: string;
-  message: string;
+  message: string | React.ReactNode;
   confirmText?: string;
   cancelText?: string;
   variant?: 'danger' | 'warning' | 'info';
@@ -115,12 +115,12 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           )}
 
           {/* Message */}
-          <p
-            className="text-sm leading-relaxed mb-8 max-w-[320px]"
-            style={{ color: 'rgba(255,255,255,0.5)' }}
+          <div
+            className="text-sm leading-relaxed mb-8 max-w-[340px]"
+            style={{ color: 'rgba(255,255,255,0.75)' }}
           >
             {message}
-          </p>
+          </div>
 
           {/* Actions */}
           <div className="flex gap-3 w-full">

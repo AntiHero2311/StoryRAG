@@ -9,6 +9,8 @@ namespace Service.DTOs
         public List<CharacterRelationshipEdge> CharacterRelationships { get; set; } = new();
         /// <summary>Chú thích tự động giải thích ý nghĩa của các biểu đồ</summary>
         public List<string> Insights { get; set; } = new();
+        /// <summary>Nội dung văn bản tương ứng với từng SegmentIndex để người dùng đối chiếu</summary>
+        public List<string> SegmentTexts { get; set; } = new();
     }
 
     public class PacingPoint
