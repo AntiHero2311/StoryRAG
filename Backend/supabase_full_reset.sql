@@ -453,6 +453,7 @@ CREATE TABLE "RewriteHistories" (
     "OriginalText"  text                     NOT NULL,
     "RewrittenText" text                     NOT NULL,
     "Instruction"   text                     NOT NULL DEFAULT '',
+    "ActionType"    text                     NOT NULL DEFAULT '',
     "TotalTokens"   integer                  NOT NULL DEFAULT 0,
     "CreatedAt"     timestamp with time zone NOT NULL DEFAULT NOW(),
     CONSTRAINT "PK_RewriteHistories" PRIMARY KEY ("Id"),
@@ -694,4 +695,5 @@ INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
     ('20260413072432_EnforceSingleActiveAnalysisJob', '9.0.0'),
     ('20260413163500_AddStaffFunctions', '9.0.0'),
     ('20260415083200_EnsureStaffFeedbackTable', '9.0.0'),
-    ('20260415084500_EnsureStaffKnowledgeAndReviewTables', '9.0.0');
+    ('20260415084500_EnsureStaffKnowledgeAndReviewTables', '9.0.0'),
+    ('20260422192758_AddActionTypeToRewriteHistory', '9.0.0');

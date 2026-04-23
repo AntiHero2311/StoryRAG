@@ -232,31 +232,84 @@ namespace Service.Implementations
                 .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted && p.AuthorId == userId)
                 ?? throw new KeyNotFoundException("Dự án không tồn tại hoặc bạn không có quyền truy cập.");
 
-            var query = _context.ChatMessages
+            // 1. Query ChatMessages
+            var chatQuery = _context.ChatMessages
                 .Where(m => m.ProjectId == projectId && m.UserId == userId)
-                .OrderByDescending(m => m.CreatedAt);
+                .Select(m => new
+                {
+                    m.Id,
+                    Question = m.Question,
+                    Answer = m.Answer,
+                    m.TotalTokens,
+                    m.CreatedAt,
+                    Type = "Chat",
+                    OriginalText = (string?)null,
+                    Instruction = (string?)null
+                });
 
-            var totalCount = await query.CountAsync();
+            // 2. Query RewriteHistories (Polish, ContinueWriting, WriteNew)
+            var rewriteQuery = _context.RewriteHistories
+                .Where(r => r.ProjectId == projectId && r.UserId == userId)
+                .Select(r => new
+                {
+                    r.Id,
+                    Question = (string?)null,
+                    Answer = r.RewrittenText,
+                    r.TotalTokens,
+                    r.CreatedAt,
+                    Type = r.ActionType,
+                    OriginalText = r.OriginalText,
+                    Instruction = r.Instruction
+                });
 
-            var rows = await query
+            // 3. Union + Sort + Paginate
+            var combinedQuery = chatQuery.Union(rewriteQuery);
+            var totalCount = await combinedQuery.CountAsync();
+            var rows = await combinedQuery
+                .OrderByDescending(x => x.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
 
-            // Decrypt
+            // 4. Decrypt and Map
             var user = await _context.Users.FindAsync(userId);
             var masterKey = _config["Security:MasterKey"]!;
             var rawDek = EncryptionHelper.DecryptWithMasterKey(user!.DataEncryptionKey!, masterKey);
 
-            var items = rows.Select(m => new ChatHistoryItem
+            var items = rows.Select(r =>
             {
-                Id = m.Id,
-                Question = EncryptionHelper.DecryptWithMasterKey(m.Question, rawDek),
-                Answer = EncryptionHelper.DecryptWithMasterKey(m.Answer, rawDek),
-                InputTokens = m.InputTokens,
-                OutputTokens = m.OutputTokens,
-                TotalTokens = m.TotalTokens,
-                CreatedAt = m.CreatedAt,
+                string question;
+                string answer = EncryptionHelper.DecryptWithMasterKey(r.Answer, rawDek);
+
+                if (r.Type == "Chat")
+                {
+                    question = EncryptionHelper.DecryptWithMasterKey(r.Question!, rawDek);
+                }
+                else
+                {
+                    // Build question based on action type
+                    var orig = r.OriginalText != null ? EncryptionHelper.DecryptWithMasterKey(r.OriginalText, rawDek) : "";
+                    var inst = r.Instruction != null ? EncryptionHelper.DecryptWithMasterKey(r.Instruction, rawDek) : "";
+
+                    question = r.Type switch
+                    {
+                        "Polish" => AiWritingService.BuildPolishHistoryQuestion(orig, inst),
+                        "ContinueWriting" => AiWritingService.BuildContinueWritingHistoryQuestion(orig, inst),
+                        "WriteNew" => AiWritingService.BuildWriteNewHistoryQuestion(inst),
+                        _ => $"[{r.Type}] {inst}"
+                    };
+                }
+
+                return new ChatHistoryItem
+                {
+                    Id = r.Id,
+                    Question = question,
+                    Answer = answer,
+                    InputTokens = 0, // Union doesn't easily support mixed schemas with all fields
+                    OutputTokens = 0,
+                    TotalTokens = r.TotalTokens,
+                    CreatedAt = r.CreatedAt,
+                };
             }).ToList();
 
             return new ChatHistoryResult

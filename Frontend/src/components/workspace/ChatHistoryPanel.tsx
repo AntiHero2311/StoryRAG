@@ -5,7 +5,9 @@ import { sanitizeAiResponseForDisplay } from '../../utils/aiResponseSanitizer';
 
 const PAGE_SIZE = 15;
 const POLISH_PREFIX = '[Trau chuốt]';
-type HistoryMode = 'all' | 'chat' | 'polish';
+const CONTINUE_PREFIX = '[Viết tiếp]';
+const WRITE_NEW_PREFIX = '[Viết mới]';
+type HistoryMode = 'all' | 'chat' | 'polish' | 'continue';
 
 // ── Inline markdown renderer (shared with ChatPanel) ───────────────────────
 
@@ -72,10 +74,15 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
     const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const isPolishItem = (item: ChatHistoryItem) => item.question.startsWith(POLISH_PREFIX);
-    const getQuestionText = (item: ChatHistoryItem) =>
-        isPolishItem(item)
-            ? item.question.slice(POLISH_PREFIX.length).trim()
-            : item.question;
+    const isContinueItem = (item: ChatHistoryItem) => item.question.startsWith(CONTINUE_PREFIX);
+    const isWriteNewItem = (item: ChatHistoryItem) => item.question.startsWith(WRITE_NEW_PREFIX);
+
+    const getQuestionText = (item: ChatHistoryItem) => {
+        if (isPolishItem(item)) return item.question.slice(POLISH_PREFIX.length).trim();
+        if (isContinueItem(item)) return item.question.slice(CONTINUE_PREFIX.length).trim();
+        if (isWriteNewItem(item)) return item.question.slice(WRITE_NEW_PREFIX.length).trim();
+        return item.question;
+    };
 
     const load = async (p = 1) => {
         const isLoadMore = p > 1;
@@ -113,8 +120,13 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
 
         return items.filter(item => {
             const isPolish = isPolishItem(item);
-            if (mode === 'chat' && isPolish) return false;
+            const isContinue = isContinueItem(item);
+            const isWriteNew = isWriteNewItem(item);
+
+            if (mode === 'chat' && (isPolish || isContinue || isWriteNew)) return false;
             if (mode === 'polish' && !isPolish) return false;
+            if (mode === 'continue' && !isContinue) return false;
+
             if (!normalizedQuery) return true;
 
             const q = getQuestionText(item).toLowerCase();
@@ -203,6 +215,11 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
                         className={modeButtonClass('polish', 'text-emerald-300 border-emerald-400/35 bg-emerald-400/10')}>
                         Trau chuốt
                     </button>
+                    <button
+                        onClick={() => setMode('continue')}
+                        className={modeButtonClass('continue', 'text-amber-300 border-amber-400/35 bg-amber-400/10')}>
+                        Viết tiếp
+                    </button>
                 </div>
             </div>
 
@@ -275,9 +292,13 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
                                                                 className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
                                                                     isPolish
                                                                         ? 'text-emerald-300 bg-emerald-400/15'
-                                                                        : 'text-indigo-200 bg-indigo-400/15'
+                                                                        : isContinueItem(item)
+                                                                            ? 'text-amber-200 bg-amber-400/15'
+                                                                            : isWriteNewItem(item)
+                                                                                ? 'text-fuchsia-200 bg-fuchsia-400/15'
+                                                                                : 'text-indigo-200 bg-indigo-400/15'
                                                                 }`}>
-                                                                {isPolish ? 'Trau chuốt' : 'Chat'}
+                                                                {isPolish ? 'Trau chuốt' : isContinueItem(item) ? 'Viết tiếp' : isWriteNewItem(item) ? 'Viết mới' : 'Chat'}
                                                             </span>
                                                         </div>
                                                         <p className="leading-relaxed whitespace-pre-wrap break-words">{questionText}</p>
@@ -289,6 +310,10 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
                                                         }}>
                                                         {isPolish ? (
                                                             <Feather className="w-3 h-3 text-emerald-300" />
+                                                        ) : isContinueItem(item) ? (
+                                                            <Sparkles className="w-3 h-3 text-amber-200" />
+                                                        ) : isWriteNewItem(item) ? (
+                                                            <Feather className="w-3 h-3 text-fuchsia-200" />
                                                         ) : (
                                                             <User className="w-3 h-3 text-indigo-200" />
                                                         )}

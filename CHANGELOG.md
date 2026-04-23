@@ -892,6 +892,42 @@ import RoleGuard from './components/RoleGuard';
 
 ---
 
+## Phase 11: AI Writing History - 2026-04-22
+
+### ✅ Added
+
+#### Persistent AI History (`RewriteHistories` table)
+- **New ActionType column**: Categorizes AI actions (WriteNew, ContinueWriting, Polish)
+- **Backend Persistence**: All AI-generated content is now encrypted and saved to the database
+- **API Integration**: Support for retrieving categorized history with pagination and filtering
+
+#### AI Writer History UI (`AiWriterHistoryPanel.tsx`)
+- **Dedicated History View**: New "Lịch sử AI" tab in the workspace right panel
+- **Categorized Display**: Entries grouped by action type with formatted timestamps
+- **Quick Insert**: "Chèn lại vào bài viết" feature to restore historical AI suggestions to the editor
+- **Responsive Design**: Compact list view with expansion for full content review
+
+### 📖 Testing Guide - Phase 11
+
+#### AI Generation Persistence
+1. Use "Viết tiếp" or "Trau chuốt" features in the workspace
+2. Switch to "Lịch sử AI" tab
+3. **Expected**: New entry appears immediately with correct action label
+
+#### History Restoration
+1. Click "Chèn lại vào bài viết" on a history entry
+2. **Expected**: Text is inserted into the main editor at the current cursor position
+
+#### Database Sync
+1. Run `dotnet ef migrations list`
+2. **Expected**: `AddActionTypeToRewriteHistory` is marked as applied
+
+### 📝 Migration Notes
+- **Manual Migration**: Due to existing schema drift, the `ActionType` column was applied manually and the migration history synced.
+- **Encryption**: All historical content is end-to-end encrypted; ensure `rawDek` is present in the workspace state.
+
+---
+
 ## Development Environment
 
 - **Node.js**: v18+ required

@@ -14,8 +14,8 @@
 - ✍️ Quản lý project truyện, chương, version (Git-style: pin, diff, restore)
 - 🤖 Chat AI theo ngữ cảnh (RAG) — AI "đọc" nội dung truyện của bạn (chỉ tốn token)
 - 🔁 Rewrite đoạn văn theo instruction
-- ✍️ **Viết mới** từ dàn ý, **Tiếp nối** mạch truyện, **Trau chuốt** bản thảo — có tích hợp các kỹ thuật viết văn (Show don't tell, Pacing)
-- 📊 **Phân tích** chấm điểm chất lượng truyện (**Rubric 5 điểm**, 20 tiêu chí, **Zero Hallucination**, chấm theo Thể loại, phát hiện 4 cảnh báo đặc biệt)
+- ✍️ **Viết mới** từ dàn ý, **Tiếp nối** mạch truyện (RAG context), **Trau chuốt** bản thảo — lưu **Lịch sử viết AI** (Rewrite History)
+- 📊 **Phân tích** chấm điểm chất lượng truyện (**Rubric 100 điểm**, 20 tiêu chí, **Zero Hallucination**, chấm theo Thể loại, phát hiện 4 cảnh báo đặc biệt)
 - 🌍 Quản lý Worldbuilding & nhân vật có vector embedding (thêm Category **Scene** cho phân cảnh cụ thể)
 - 📥📤 Import/Export chương và dự án (`.txt`)
 - 🐛 Luồng báo cáo lỗi User → Staff
@@ -135,7 +135,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
   │           ├──< CharacterEntries     (vector)
   │           ├──< ProjectReports
   │           ├──< ChatMessages
-  │           ├──< RewriteHistories
+  │           ├──< RewriteHistories (ActionType: WriteNew, ContinueWriting, Polish)
   │           └──< TimelineEvents
   │
   ├──< UserSubscriptions >── SubscriptionPlans
@@ -154,7 +154,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | `WorldbuildingEntries` | Ghi chú thế giới truyện                 | **`Embedding vector(768)`**                                                                |
 | `CharacterEntries`     | Hồ sơ nhân vật                          | **`Embedding vector(768)`**                                                                |
 | `ChatMessages`         | Lịch sử chat AI                         | Question/Answer mã hóa AES-256                                                             |
-| `RewriteHistories`     | Lịch sử rewrite AI                      | OriginalText/RewrittenText mã hóa                                                          |
+| `RewriteHistories`     | Lịch sử viết/trau chuốt AI              | OriginalText/RewrittenText mã hóa, phân loại qua `ActionType`                              |
 | `ProjectReports`       | Báo cáo phân tích truyện                | `CriteriaJson` (JSONB), `ProjectVersion` (v1.chương.chunks), `OverallFeedback`, `Warnings` |
 | `BugReports`           | Báo cáo lỗi từ user                     | Category, Priority, Status, StaffNote                                                      |
 | `Genres`               | Thể loại truyện                         | 14 thể loại mặc định                                                                       |
@@ -219,7 +219,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | POST   | `/{projectId}/chat`               | Chat RAG với ngữ cảnh truyện    |
 | GET    | `/{projectId}/chat/history`       | Lịch sử chat                    |
 | POST   | `/{projectId}/rewrite`            | Rewrite đoạn văn                |
-| GET    | `/{projectId}/rewrite/history`    | Lịch sử rewrite                 |
+| GET    | `/{projectId}/rewrite/history`    | Lịch sử viết AI (mới/tiếp/trau chuốt) |
 | POST   | `/{projectId}/analyze`            | Phân tích & chấm điểm truyện    |
 | GET    | `/{projectId}/reports/latest`     | Báo cáo phân tích mới nhất      |
 | GET    | `/{projectId}/reports`            | Toàn bộ lịch sử báo cáo         |
@@ -445,7 +445,7 @@ npm run dev
 | `IAiRewriteService`     | Rewrite theo instruction, lưu lịch sử                                                                                                                                                                                                                            |
 | `IEmbeddingService`     | Gọi Gemini lấy embedding vector                                                                                                                                                                                                                                  |
 | `IChunkingService`      | Chia text thành chunks với overlap                                                                                                                                                                                                                               |
-| `IAiWritingService`     | Viết mới từ dàn ý, tiếp nối mạch truyện, trau chuốt bản thảo — tích hợp kỹ thuật **Show Don't Tell**, **Pacing**                                                                                                                                                 |
+| `IAiWritingService`     | Viết mới từ dàn ý, tiếp nối mạch truyện (RAG), trau chuốt bản thảo — tích hợp kỹ thuật **Show Don't Tell**, **Pacing**, lưu lịch sử bền vững                                                                                                                      |
 | `IProjectReportService` | Phân tích & chấm điểm theo **Rubric 5b điểm** (1-Kém → 5-Xuất sắc), **Zero Hallucination**, chấm theo **Thể loại**, phát hiện **4 cảnh báo** (INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY), sinh `OverallFeedback` tâm huyết, ghi `ProjectVersion` |
 | `IEmailService`         | Gửi email (welcome, password reset) qua Gmail SMTP                                                                                                                                                                                                               |
 | `IAdminService`         | Dashboard stats cho Admin                                                                                                                                                                                                                                        |

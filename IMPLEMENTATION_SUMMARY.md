@@ -16,14 +16,16 @@
 ✅ **Partial Phases**:
 - Phase 3: Workspace improvements (2/7 todos - Tab system, custom hooks)
 - Phase 8: Code cleanup (2/8 todos - file removal, hooks extraction)
+- Phase 11: AI Writing History (100% Complete)
 
 ### Key Deliverables
 
 1. **Design System**: Comprehensive design tokens (colors, typography, spacing, shadows, transitions)
-2. **UI Library**: 9 production-ready components (Button, Input, TextArea, Card, Badge, Modal, Spinner, LoadingOverlay, EmptyState, Alert, ConfirmDialog, Tabs)
-3. **Security**: Route guards, role-based access control, error boundaries
+2. **UI Library**: 12 production-ready components (Button, Input, TextArea, Card, Badge, Modal, Spinner, LoadingOverlay, EmptyState, Alert, ConfirmDialog, Tabs)
+3. **Security**: Route guards, role-based access control, error boundaries, End-to-End Encryption
 4. **Developer Tools**: Custom hooks (useAuth, useDebounce, useLocalStorage, useMediaQuery)
-5. **Documentation**: Detailed CHANGELOG with testing instructions
+5. **AI History**: Persistent, encrypted history for all AI writing actions with workspace integration
+6. **Documentation**: Detailed CHANGELOG and implementation guides
 
 ---
 
@@ -584,6 +586,27 @@ npm run build
 ### For Testers
 - **Testing Guide**: See `CHANGELOG.md` sections for each phase
 - **Known Issues**: See section above
+
+---
+
+## 📜 Phase 11: AI Writing History (100% Complete)
+
+### Persistent AI History
+
+Implemented a robust system for tracking and retrieving AI-generated content across all writing features.
+
+**Database Layer**:
+- **RewriteHistories Extension**: Added `ActionType` column to distinguish between "New Chapter", "Continue Writing", and "Polish" actions.
+- **Supabase Sync**: Manually resolved migration drift and synchronized local EF Core history with the production Supabase instance.
+
+**Backend Services**:
+- **AiWritingService Integration**: Updated all generation methods to persist outputs as encrypted `RewriteHistory` entries.
+- **Security**: Maintained end-to-end encryption by encrypting historical records with the user's `DataEncryptionKey` before storage.
+
+**Frontend Workspace**:
+- **AiWriterHistoryPanel**: A new React component providing a scrollable, paginated view of historical AI outputs.
+- **Contextual Integration**: Automatically filters history by the current chapter when available.
+- **Restoration Workflow**: Users can "Insert into Editor" with one click, streamlining the iterative writing process.
 
 ---
 

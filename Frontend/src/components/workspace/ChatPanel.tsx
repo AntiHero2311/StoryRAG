@@ -10,6 +10,8 @@ type ChatMsg = { role: 'user' | 'assistant'; content: string; tokens?: number };
 interface ChatPanelProps {
     projectId: string;
     isEmbedded: boolean;
+    onEmbed?: () => void;
+    isSyncing?: boolean;
 }
 
 // ── Markdown renderer ──────────────────────────────────────────────────────
@@ -69,7 +71,7 @@ const SUGGESTIONS = [
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export default function ChatPanel({ projectId, isEmbedded }: ChatPanelProps) {
+export default function ChatPanel({ projectId, isEmbedded, onEmbed, isSyncing }: ChatPanelProps) {
     const [messages, setMessages] = useState<ChatMsg[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -154,9 +156,36 @@ export default function ChatPanel({ projectId, isEmbedded }: ChatPanelProps) {
                             <p className="text-[var(--text-secondary)] text-[10px] leading-relaxed max-w-[200px]">
                                 {isEmbedded
                                     ? 'Hỏi bất cứ điều gì về nhân vật, cốt truyện, bối cảnh...'
-                                    : 'Lưu chương → Chunk → Embed để AI sẵn sàng phân tích.'}
+                                    : 'Nội dung chưa được đồng bộ với AI. Hãy embed để bắt đầu.'}
                             </p>
                         </div>
+
+                        {/* Embed button for ChatPanel context */}
+                        {!isEmbedded && onEmbed && (
+                            <button
+                                onClick={onEmbed}
+                                disabled={isSyncing}
+                                className="group relative flex items-center gap-2 px-6 py-2.5 rounded-2xl font-bold text-xs transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:scale-100 overflow-hidden"
+                                style={{
+                                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                                    color: '#fff',
+                                    boxShadow: '0 4px 15px rgba(16,185,129,0.25)',
+                                }}
+                            >
+                                {isSyncing ? (
+                                    <>
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        <span>ĐANG ĐỒNG BỘ...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles className="w-3.5 h-3.5" />
+                                        <span>EMBED NGAY</span>
+                                    </>
+                                )}
+                                <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 skew-x-[-20deg]" />
+                            </button>
+                        )}
                         {/* Suggestion cards */}
                         {isEmbedded && (
                             <div className="flex flex-col gap-1.5 w-full px-1">

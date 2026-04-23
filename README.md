@@ -70,7 +70,7 @@ Users
   │    ├─< PlotNoteEntries (vector 768)
   │    ├─< TimelineEvents
   │    ├─< ChatMessages
-  │    └─< RewriteHistories / AiAnalysisHistories
+  │    └─< RewriteHistories (ActionType) / AiAnalysisHistories
   ├─< UserSubscriptions >─ SubscriptionPlans
   ├─< Payments
   ├─< BugReports

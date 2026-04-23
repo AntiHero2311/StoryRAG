@@ -623,9 +623,12 @@ export default function WorkspacePage() {
                 setActiveChapter(embedded);
             }
             setAiSyncState('ready');
+            toast.success('Đồng bộ AI cho chương hoàn tất! Bạn có thể bắt đầu chat hoặc phân tích.');
             setTimeout(() => setAiSyncState('idle'), 30_000);
-        } catch {
+        } catch (e: any) {
             setAiSyncState('error');
+            const msg = e?.response?.data?.message ?? 'Đồng bộ AI thất bại. Vui lòng thử lại.';
+            toast.error(msg);
             setTimeout(() => setAiSyncState('idle'), 10_000);
         }
     }, [projectId, activeChapter, hasUnsavedChanges, doSave, aiSyncState]);

@@ -68,7 +68,7 @@ namespace Service.Implementations
             }
         }
 
-        private static string BuildPolishHistoryQuestion(string originalText, string instruction)
+        public static string BuildPolishHistoryQuestion(string originalText, string instruction)
         {
             var normalizedInstruction = string.IsNullOrWhiteSpace(instruction)
                 ? "Trau chuốt theo mặc định"
@@ -81,6 +81,30 @@ namespace Service.Implementations
                 normalizedSource = normalizedSource[..180] + "...";
 
             return $"[Trau chuốt] {normalizedInstruction} | Đoạn gốc: {normalizedSource}";
+        }
+
+        public static string BuildContinueWritingHistoryQuestion(string previousText, string instruction)
+        {
+            var normalizedInstruction = string.IsNullOrWhiteSpace(instruction)
+                ? "Viết tiếp tự nhiên"
+                : instruction.Trim().Replace("\r\n", " ").Replace('\n', ' ').Replace('\r', ' ');
+            if (normalizedInstruction.Length > 120)
+                normalizedInstruction = normalizedInstruction[..120] + "...";
+
+            var normalizedPrev = (previousText ?? string.Empty).Trim().Replace("\r\n", " ").Replace('\n', ' ').Replace('\r', ' ');
+            if (normalizedPrev.Length > 180)
+                normalizedPrev = normalizedPrev.Length > 180 ? normalizedPrev[^180..] : normalizedPrev;
+
+            return $"[Viết tiếp] {normalizedInstruction} | Tiếp nối từ: ...{normalizedPrev}";
+        }
+
+        public static string BuildWriteNewHistoryQuestion(string instruction)
+        {
+            var normalizedInstruction = (instruction ?? string.Empty).Trim().Replace("\r\n", " ").Replace('\n', ' ').Replace('\r', ' ');
+            if (normalizedInstruction.Length > 200)
+                normalizedInstruction = normalizedInstruction[..200] + "...";
+
+            return $"[Viết mới] {normalizedInstruction}";
         }
 
         public async Task<AiWritingResult> WriteNewAsync(Guid projectId, string instruction, Guid userId)
