@@ -82,7 +82,7 @@ function PlanCard({
 
     return (
         <div className={`relative flex flex-col rounded-[2rem] glass-card border border-white/10 overflow-hidden transition-all duration-300 transform hover:-translate-y-2 ${cfg.borderGlow}`}>
-            
+
             {/* Popular badge */}
             {cfg.popular && (
                 <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-fuchsia-500 via-purple-600 to-indigo-600" />
@@ -98,7 +98,7 @@ function PlanCard({
                 <div className="relative z-10">
                     <div className="text-4xl mb-3 drop-shadow-md">{cfg.emoji}</div>
                     <h3 className="text-white font-black text-xl uppercase tracking-widest mb-4 opacity-90 drop-shadow-sm">{plan.planName}</h3>
-                    
+
                     <div className="flex items-end justify-center gap-1 mb-2">
                         <span className="font-black text-5xl leading-none text-transparent bg-clip-text bg-gradient-to-br from-white to-zinc-400 drop-shadow-sm">{main}</span>
                         <span className="text-zinc-500 text-sm font-semibold mb-1">{sub}</span>
@@ -126,9 +126,13 @@ function PlanCard({
             {/* CTA */}
             <div className="p-8 pt-0 mt-auto">
                 {isCurrent ? (
-                    <div className="w-full py-4 rounded-xl text-center text-[15px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-inner">
-                        ✓ Đang sử dụng
-                    </div>
+                    <button
+                        onClick={() => onSelect(plan)}
+                        disabled={subscribing}
+                        className="w-full py-3.5 rounded-xl text-center text-[15px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-inner hover:bg-emerald-500/20 transition-all active:scale-95"
+                    >
+                        {isFree ? '✓ Đang sử dụng' : '🔄 Gia hạn gói'}
+                    </button>
                 ) : (
                     <button
                         id={`plan-select-${plan.id}`}
@@ -138,7 +142,7 @@ function PlanCard({
                         bg-gradient-to-r ${cfg.gradient} 
                         hover:brightness-110 hover:shadow-lg active:scale-95 disabled:opacity-50 shadow-inner`}
                     >
-                        {isFree ? '🆓 Dùng miễn phí' : 'Nâng cấp ngay'}
+                        {isFree ? '🆓 Dùng miễn phí' : (plan.price > (current?.price ?? 0) ? 'Nâng cấp ngay' : 'Hạ cấp gói')}
                     </button>
                 )}
             </div>
@@ -174,7 +178,7 @@ function FreeConfirmModal({ plan, onClose, onSuccess }: {
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#090514]/80 backdrop-blur-md">
             <div className="w-full max-w-[400px] glass-card rounded-[2rem] border border-white/10 shadow-[0_0_60px_-15px_rgba(0,0,0,0.8)] overflow-hidden relative">
-                
+
                 {/* Close button */}
                 <button
                     onClick={onClose}
@@ -188,12 +192,12 @@ function FreeConfirmModal({ plan, onClose, onSuccess }: {
                         <div className="relative p-8 pb-6 text-center border-b border-white/5 overflow-hidden">
                             <div className="absolute top-0 right-0 w-32 h-32 bg-slate-500/20 blur-[50px] rounded-full pointer-events-none" />
                             <div className="absolute bottom-0 left-0 w-32 h-32 bg-slate-400/10 blur-[40px] rounded-full pointer-events-none" />
-                            
+
                             <div className="relative z-10">
                                 <div className="text-5xl mb-4 drop-shadow-md">🆓</div>
                                 <h3 className="text-white font-black text-2xl tracking-tight mb-2">Gói Khởi Điểm</h3>
                                 <p className="text-zinc-400 text-[13px] font-medium leading-relaxed">
-                                    Hoàn toàn miễn phí — trải nghiệm sức mạnh AI <br/>không cần thẻ thanh toán.
+                                    Hoàn toàn miễn phí — trải nghiệm sức mạnh AI <br />không cần thẻ thanh toán.
                                 </p>
                             </div>
                         </div>
@@ -290,7 +294,7 @@ function PaidPlanModal({ plan, onClose }: { plan: SubscriptionPlan; onClose: () 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#090514]/80 backdrop-blur-md">
             <div className="w-full max-w-[400px] glass-card rounded-[2rem] border border-white/10 shadow-[0_0_60px_-15px_rgba(0,0,0,0.8)] overflow-hidden relative">
-                
+
                 {/* Close button */}
                 <button
                     onClick={onClose}
@@ -300,8 +304,8 @@ function PaidPlanModal({ plan, onClose }: { plan: SubscriptionPlan; onClose: () 
                 </button>
 
                 <div className="relative p-8 pb-6 text-center border-b border-white/5 overflow-hidden">
-                     <div className={`absolute top-0 right-0 w-32 h-32 blur-[50px] rounded-full pointer-events-none opacity-20 bg-gradient-to-tr ${cfg.gradient}`} />
-                     <div className="relative z-10">
+                    <div className={`absolute top-0 right-0 w-32 h-32 blur-[50px] rounded-full pointer-events-none opacity-20 bg-gradient-to-tr ${cfg.gradient}`} />
+                    <div className="relative z-10">
                         <div className="mx-auto w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-4 shadow-inner">
                             <Crown className={`w-8 h-8 ${cfg.accentColor}`} />
                         </div>
@@ -373,7 +377,7 @@ function PlansContent() {
 
     return (
         <div className="flex-1 overflow-y-auto w-full relative">
-            
+
             {/* Background effects */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] max-w-[800px] h-[300px] bg-indigo-600/10 blur-[120px] rounded-full pointer-events-none mix-blend-screen" />
             <div className="absolute top-[20%] right-[10%] w-[300px] h-[300px] bg-purple-600/10 blur-[120px] rounded-full pointer-events-none mix-blend-screen" />
@@ -385,16 +389,16 @@ function PlansContent() {
                         <Zap className="w-4 h-4 text-amber-400" />
                         <span className="text-zinc-200 text-[13px] font-bold tracking-widest uppercase">Phá vỡ giới hạn</span>
                     </div>
-                    
+
                     <h2 className="text-4xl md:text-5xl font-black mb-6 text-white tracking-tight leading-tight">
-                        Chọn quyền năng <br/>
+                        Chọn quyền năng <br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-fuchsia-400 to-purple-400">kiến tạo thế giới của bạn</span>
                     </h2>
-                    
+
                     <p className="text-zinc-400 text-lg mx-auto leading-relaxed font-medium">
                         Toàn quyền sử dụng bộ công cụ AI thông minh để xây dựng tiểu thuyết, nhân vật và thiết kế cốt truyện theo mong muốn.
                     </p>
-                    
+
                     {current && (
                         <div className="inline-flex items-center gap-2 mt-8 px-5 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-bold shadow-inner">
                             <Check className="w-5 h-5 text-indigo-400" /> Gói hiện hành: {current.planName}

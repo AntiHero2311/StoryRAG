@@ -14,22 +14,29 @@ export interface PayOsOrderStatusResponse {
     status: string;
 }
 
-export interface CreateVnPayPaymentUrlResponse {
-    paymentId: string;
-    txnRef: string;
-    checkoutUrl: string;
+export interface PaymentResponse {
+    id: string;
+    userId: string;
+    subscriptionId?: number | null;
+    planId: number;
+    planName?: string;
     amount: number;
-    description: string;
+    currency: string;
+    paymentMethod: string;
+    status: 'Pending' | 'Completed' | 'Failed' | 'Refunded' | 'Cancelled';
+    transactionId?: string;
+    description?: string;
+    paidAt?: string;
+    refundedAt?: string;
+    createdAt: string;
+    updatedAt?: string;
 }
 
-export interface VnPayOrderStatusResponse {
-    txnRef: string;
-    status: string;
-}
-
-export interface VnPayIpnAcknowledgeResponse {
-    rspCode: string;
-    message: string;
+export interface PaymentHistoryResponse {
+    payments: PaymentResponse[];
+    totalCount: number;
+    totalSpent: number;
+    statusSummary: Record<string, number>;
 }
 
 interface ApiResponse<T> {
@@ -68,6 +75,13 @@ export const paymentService = {
             rspCode: response.data.rspCode ?? response.data.RspCode ?? '',
             message: response.data.message ?? response.data.Message ?? '',
         };
+    },
+
+    async getPaymentHistory(page = 1, pageSize = 20): Promise<PaymentHistoryResponse> {
+        const response = await api.get<ApiResponse<PaymentHistoryResponse>>('/payment/history', {
+            params: { page, pageSize }
+        });
+        return response.data.data;
     },
 };
 
