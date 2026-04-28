@@ -27,6 +27,7 @@ namespace Repository.Data
         // AI Reports
         public DbSet<ProjectReport> ProjectReports { get; set; }
         public DbSet<ProjectAnalysisJob> ProjectAnalysisJobs { get; set; }
+        public DbSet<ProjectAnalysisFact> ProjectAnalysisFacts { get; set; }
 
         // Chat History
         public DbSet<AiChatMessage> ChatMessages { get; set; }
@@ -367,6 +368,27 @@ namespace Repository.Data
                       .HasForeignKey(j => j.ReportId)
                       .OnDelete(DeleteBehavior.SetNull)
                       .IsRequired(false);
+            });
+
+            // ── ProjectAnalysisFact ───────────────────────────────────────────────
+            modelBuilder.Entity<ProjectAnalysisFact>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Payload)
+                      .IsRequired()
+                      .HasColumnType("jsonb")
+                      .HasDefaultValueSql("'{}'::jsonb");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasIndex(e => e.ProjectId);
+                entity.HasIndex(e => e.RunId);
+                entity.HasIndex(e => new { e.ProjectId, e.RunId });
+
+                entity.HasOne(f => f.Project)
+                      .WithMany()
+                      .HasForeignKey(f => f.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
 
             // ── UserSettings ──────────────────────────────────────────────────────
