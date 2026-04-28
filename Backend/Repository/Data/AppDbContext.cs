@@ -70,6 +70,7 @@ namespace Repository.Data
                 entity.Property(e => e.Email).IsRequired().HasMaxLength(100);
                 entity.Property(e => e.PasswordHash).IsRequired();
                 entity.Property(e => e.PasswordSalt).IsRequired();
+                entity.Property(e => e.PasswordFormatVersion).HasDefaultValue(1);
                 entity.Property(e => e.AvatarURL).HasMaxLength(500);
                 entity.Property(e => e.Role).IsRequired().HasMaxLength(20);
                 entity.ToTable(t => t.HasCheckConstraint("CK_Users_Role", "\"Role\" IN ('Admin','Author','Staff')"));

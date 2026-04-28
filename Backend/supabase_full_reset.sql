@@ -64,6 +64,7 @@ CREATE TABLE "Users" (
     "Email"                        character varying(100)   NOT NULL,
     "PasswordHash"                 text                     NOT NULL,
     "PasswordSalt"                 text                     NOT NULL,
+    "PasswordFormatVersion"        integer                  NOT NULL DEFAULT 1,
     "AvatarURL"                    character varying(500),
     "Role"                         character varying(20)    NOT NULL,
     "IsActive"                     boolean                  NOT NULL DEFAULT TRUE,
@@ -696,4 +697,5 @@ INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
     ('20260413163500_AddStaffFunctions', '9.0.0'),
     ('20260415083200_EnsureStaffFeedbackTable', '9.0.0'),
     ('20260415084500_EnsureStaffKnowledgeAndReviewTables', '9.0.0'),
-    ('20260422192758_AddActionTypeToRewriteHistory', '9.0.0');
+    ('20260422192758_AddActionTypeToRewriteHistory', '9.0.0'),
+    ('20260428181448_AddPasswordFormatVersion', '9.0.0');

@@ -11,6 +11,7 @@ using Service.Configuration;
 using Service.Implementations;
 using Service.Interfaces;
 using System.Text;
+using System.Text.Json;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -167,6 +168,22 @@ builder.Services.AddRateLimiter(options =>
         opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         opt.QueueLimit = 0;
     });
+
+    // Auth login: tối đa 5 attempts / 15 phút / IP + email
+    options.AddPolicy("AuthLogin", context =>
+    {
+        var key = GetAuthLoginPartitionKey(context);
+        return RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: key,
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(15),
+                SegmentsPerWindow = 5,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            });
+    });
 });
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
@@ -284,6 +301,41 @@ if (app.Environment.IsDevelopment())
 
 app.UseRequestTimeouts();
 
+app.Use(async (context, next) =>
+{
+    if (HttpMethods.IsPost(context.Request.Method) &&
+        context.Request.Path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Request.EnableBuffering();
+        using var reader = new StreamReader(context.Request.Body, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
+        var body = await reader.ReadToEndAsync();
+        context.Request.Body.Position = 0;
+
+        if (!string.IsNullOrWhiteSpace(body))
+        {
+            try
+            {
+                using var json = JsonDocument.Parse(body);
+                if (json.RootElement.TryGetProperty("email", out var emailProp) &&
+                    emailProp.ValueKind == JsonValueKind.String)
+                {
+                    var email = emailProp.GetString()?.Trim().ToLowerInvariant();
+                    if (!string.IsNullOrWhiteSpace(email))
+                    {
+                        context.Items["AuthLoginEmail"] = email;
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // Ignore malformed payload; model binding/validation will handle request rejection.
+            }
+        }
+    }
+
+    await next();
+});
+
 app.UseRateLimiter();
 
 app.UseCors("AllowFrontend");
@@ -305,3 +357,13 @@ app.MapGet("/health", () => Results.Ok(new
 app.MapControllers();
 
 app.Run();
+
+static string GetAuthLoginPartitionKey(HttpContext context)
+{
+    var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown-ip";
+    var email = context.Items.TryGetValue("AuthLoginEmail", out var value)
+        ? value?.ToString()
+        : null;
+
+    return $"{ip}:{(string.IsNullOrWhiteSpace(email) ? "unknown-email" : email)}";
+}

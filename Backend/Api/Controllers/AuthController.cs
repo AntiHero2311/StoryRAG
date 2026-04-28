@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Service.DTOs;
 using Service.Interfaces;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Api.Controllers
 {
@@ -38,6 +39,7 @@ namespace Api.Controllers
 
         [HttpPost("login")]
         [AllowAnonymous]
+        [EnableRateLimiting("AuthLogin")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             if (!ModelState.IsValid)
