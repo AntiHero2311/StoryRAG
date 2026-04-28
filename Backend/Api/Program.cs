@@ -52,18 +52,26 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddControllers();
 
 // Add CORS Policy
+// In production only allow the real frontend domains; localhost origins are added in development only.
 var corsOrigins = builder.Configuration["Cors:AllowedOrigins"]
     ?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
     ?? [];
-var defaultOrigins = new[]
+var productionOrigins = new[]
 {
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://localhost:3000",
     "https://www.storynest.cloud",
     "https://storynest.cloud"
 };
-var allOrigins = defaultOrigins.Union(corsOrigins).ToArray();
+var developmentOrigins = new[]
+{
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:3000"
+};
+var allOrigins = (builder.Environment.IsDevelopment()
+    ? productionOrigins.Concat(developmentOrigins)
+    : productionOrigins)
+    .Union(corsOrigins)
+    .ToArray();
 
 builder.Services.AddCors(options =>
 {
@@ -290,8 +298,12 @@ static bool ContainsPostgresRelationExists(Exception ex)
 }
 
 // Configure the HTTP request pipeline.
-app.UseSwagger();
-app.UseSwaggerUI();
+// Swagger is only available in development to avoid exposing API schema in production.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 // Render terminates SSL externally — do not redirect HTTP inside container
 if (app.Environment.IsDevelopment())
