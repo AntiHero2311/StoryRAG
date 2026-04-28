@@ -54,6 +54,9 @@ namespace Repository.Data
         public DbSet<StaffKnowledgeBaseItem> StaffKnowledgeBaseItems { get; set; }
         public DbSet<StaffAnalysisReview> StaffAnalysisReviews { get; set; }
 
+        // System Configuration
+        public DbSet<SystemConfig> SystemConfigs { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
