@@ -12,7 +12,7 @@ export const exportService = {
         const url = window.URL.createObjectURL(new Blob([res.data]));
         const link = document.createElement('a');
         link.href = url;
-        const extension = format === 'docx' ? 'docx' : format === 'html' ? 'html' : format === 'md' ? 'md' : 'txt';
+        const extension = format === 'docx' ? 'docx' : format === 'pdf' ? 'pdf' : 'txt';
         const fileName = `Project_Export.${extension}`;
         
         // Header trích xuất tên file nếu lấy được từ disposition
@@ -43,7 +43,7 @@ export const exportService = {
         const url = window.URL.createObjectURL(new Blob([res.data]));
         const link = document.createElement('a');
         link.href = url;
-        const extension = format === 'docx' ? 'docx' : format === 'html' ? 'html' : format === 'md' ? 'md' : 'txt';
+        const extension = format === 'docx' ? 'docx' : format === 'pdf' ? 'pdf' : 'txt';
         const fileName = `Chapter_Export.${extension}`;
         
         // Header trích xuất tên file

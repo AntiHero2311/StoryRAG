@@ -27,5 +27,9 @@ namespace Repository.Entities
         // Navigation
         public User User { get; set; } = null!;
         public SubscriptionPlan Plan { get; set; } = null!;
+
+        /// <summary>ID của gói tiếp theo sẽ được kích hoạt sau khi gói hiện tại hết hạn (dùng cho hạ cấp)</summary>
+        public int? NextPlanId { get; set; }
+        public SubscriptionPlan? NextPlan { get; set; }
     }
 }

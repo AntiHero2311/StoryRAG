@@ -76,13 +76,55 @@ namespace Service.Implementations
 
         public async Task<UserSubscriptionResponse?> GetMySubscriptionAsync(Guid userId)
         {
+            var now = DateTime.UtcNow;
+            
+            // 1. Tìm subscription active hiện tại
             var sub = await _db.UserSubscriptions
                 .Include(s => s.Plan)
-                .Where(s => s.UserId == userId && s.Status == "Active" && s.EndDate >= DateTime.UtcNow)
+                .Include(s => s.NextPlan)
+                .Where(s => s.UserId == userId && s.Status == "Active")
                 .OrderByDescending(s => s.CreatedAt)
                 .FirstOrDefaultAsync();
 
             if (sub == null) return null;
+
+            // 2. Nếu đã hết hạn và có gói tiếp theo được hẹn lịch (Hạ cấp)
+            if (sub.EndDate < now && sub.NextPlanId.HasValue)
+            {
+                sub.Status = "Expired";
+                
+                var nextPlan = sub.NextPlan ?? await _db.SubscriptionPlans.FindAsync(sub.NextPlanId.Value);
+                if (nextPlan != null && nextPlan.IsActive)
+                {
+                    var newSub = new UserSubscription
+                    {
+                        UserId = userId,
+                        PlanId = nextPlan.Id,
+                        StartDate = now,
+                        EndDate = now.AddMonths(1),
+                        Status = "Active",
+                        UsedAnalysisCount = 0,
+                        UsedTokens = 0,
+                        CreatedAt = now
+                    };
+                    _db.UserSubscriptions.Add(newSub);
+                    await _db.SaveChangesAsync();
+                    
+                    newSub.Plan = nextPlan;
+                    return MapSubscription(newSub);
+                }
+                
+                await _db.SaveChangesAsync();
+                return null;
+            }
+
+            // 3. Nếu đã hết hạn nhưng không có gói tiếp theo
+            if (sub.EndDate < now)
+            {
+                sub.Status = "Expired";
+                await _db.SaveChangesAsync();
+                return null;
+            }
 
             return MapSubscription(sub);
         }
@@ -151,34 +193,48 @@ namespace Service.Implementations
             if (plan.Price <= 0)
                 throw new InvalidOperationException("Chỉ dùng API này cho gói trả phí.");
 
-            var existing = await _db.UserSubscriptions
+            var current = await _db.UserSubscriptions
                 .Include(s => s.Plan)
                 .FirstOrDefaultAsync(s =>
                     s.UserId == userId &&
-                    s.PlanId == planId &&
                     s.Status == "Active" &&
                     s.EndDate >= DateTime.UtcNow);
 
-            if (existing != null)
+            // 1. Nếu đang có gói active
+            if (current != null)
             {
-                var existingPayment = await _db.Payments.FindAsync(paymentId);
-                if (existingPayment != null && existingPayment.SubscriptionId == null)
+                // A. Nếu là cùng gói (Gia hạn)
+                if (current.PlanId == planId)
                 {
-                    existingPayment.SubscriptionId = existing.Id;
-                    existingPayment.UpdatedAt = DateTime.UtcNow;
+                    current.EndDate = current.EndDate.AddMonths(1);
+                    
+                    var p = await _db.Payments.FindAsync(paymentId);
+                    if (p != null) { p.SubscriptionId = current.Id; p.UpdatedAt = DateTime.UtcNow; }
+                    
                     await _db.SaveChangesAsync();
+                    return MapSubscription(current);
                 }
-
-                return MapSubscription(existing);
+                
+                // B. Nếu là hạ cấp (Giá gói mới < Giá gói hiện tại)
+                if (plan.Price < current.Plan.Price)
+                {
+                    current.NextPlanId = planId;
+                    
+                    var p = await _db.Payments.FindAsync(paymentId);
+                    if (p != null) { p.UpdatedAt = DateTime.UtcNow; } // Downgrade payment logic might need more thought, but following request
+                    
+                    await _db.SaveChangesAsync();
+                    
+                    // Load NextPlan for mapping
+                    current.NextPlan = plan;
+                    return MapSubscription(current);
+                }
+                
+                // C. Nếu là nâng cấp (Giá gói mới > Giá gói hiện tại) -> Thay thế ngay lập tức
+                current.Status = "Cancelled";
             }
 
-            var oldSubs = await _db.UserSubscriptions
-                .Where(s => s.UserId == userId && s.Status == "Active")
-                .ToListAsync();
-
-            foreach (var old in oldSubs)
-                old.Status = "Cancelled";
-
+            // 2. Tạo subscription mới (Cho trường hợp Nâng cấp hoặc chưa có gói)
             var now = DateTime.UtcNow;
             var newSub = new UserSubscription
             {
@@ -232,7 +288,9 @@ namespace Service.Implementations
             EndDate = s.EndDate,
             Status = s.Status,
             UsedAnalysisCount = s.UsedAnalysisCount,
-            UsedTokens = s.UsedTokens
+            UsedTokens = s.UsedTokens,
+            NextPlanId = s.NextPlanId,
+            NextPlanName = s.NextPlan?.PlanName
         };
     }
 }

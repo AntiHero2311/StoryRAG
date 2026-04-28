@@ -475,18 +475,7 @@ function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
                                     onClick={() => {
                                         if (!menuOpen && menuBtnRef.current) {
                                             const rect = menuBtnRef.current.getBoundingClientRect();
-                                            const MENU_WIDTH = 144;
-                                            const MENU_HEIGHT = 168;
-                                            const EDGE_PADDING = 8;
-                                            const MENU_GAP = 6;
-                                            const top = rect.bottom + MENU_GAP + MENU_HEIGHT > window.innerHeight - EDGE_PADDING
-                                                ? Math.max(EDGE_PADDING, rect.top - MENU_HEIGHT - MENU_GAP)
-                                                : rect.bottom + MENU_GAP;
-                                            const left = Math.min(
-                                                Math.max(EDGE_PADDING, rect.right - MENU_WIDTH),
-                                                window.innerWidth - MENU_WIDTH - EDGE_PADDING
-                                            );
-                                            setMenuPos({ top, left });
+                                            setMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
                                         }
                                         setMenuOpen(v => !v);
                                     }}
@@ -499,7 +488,7 @@ function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
                                         <div className="fixed inset-0 z-[200]" onClick={() => setMenuOpen(false)} />
                                         <div
                                             className="fixed w-36 rounded-xl shadow-2xl overflow-hidden z-[201]"
-                                            style={{ top: menuPos.top, left: menuPos.left, background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
+                                            style={{ top: menuPos.top, right: menuPos.right, background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
                                         >
                                             <button onClick={() => { onInfo(project); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
                                                 <Info className="w-3.5 h-3.5" /> Thông tin

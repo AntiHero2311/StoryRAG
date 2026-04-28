@@ -72,8 +72,7 @@ function ExportModal({
     const formats = [
         { id: 'docx', label: 'Word (.docx)', icon: FileText, color: 'text-blue-500' },
         { id: 'txt', label: 'Text (.txt)', icon: AlignLeft, color: 'text-gray-500' },
-        { id: 'md', label: 'Markdown (.md)', icon: BookOpen, color: 'text-gray-300' },
-        { id: 'html', label: 'HTML (.html)', icon: Globe, color: 'text-orange-500' },
+        { id: 'pdf', label: 'PDF (.pdf)', icon: FileText, color: 'text-red-500' },
     ];
 
     return (
@@ -90,7 +89,7 @@ function ExportModal({
                         <X className="w-4 h-4" />
                     </button>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                     {formats.map(fmt => {
                         const Icon = fmt.icon;
                         return (

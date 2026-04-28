@@ -22,6 +22,8 @@ export interface UserSubscription {
     status: string;
     usedAnalysisCount: number;
     usedTokens: number;
+    nextPlanId?: number;
+    nextPlanName?: string;
 }
 
 export interface MySubscriptionResponse {

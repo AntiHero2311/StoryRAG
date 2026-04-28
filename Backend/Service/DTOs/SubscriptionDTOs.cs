@@ -26,6 +26,8 @@ namespace Service.DTOs
         public string Status { get; set; } = string.Empty;
         public int UsedAnalysisCount { get; set; }
         public long UsedTokens { get; set; }
+        public int? NextPlanId { get; set; }
+        public string? NextPlanName { get; set; }
     }
 
     // ── Requests ───────────────────────────────────────────────────────────────

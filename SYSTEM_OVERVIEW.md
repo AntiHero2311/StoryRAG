@@ -14,11 +14,13 @@
 - ✍️ Quản lý project truyện, chương, version (Git-style: pin, diff, restore)
 - 🤖 Chat AI theo ngữ cảnh (RAG) — AI "đọc" nội dung truyện của bạn (chỉ tốn token)
 - 🔁 Rewrite đoạn văn theo instruction
-- ✍️ **Viết mới** từ dàn ý, **Tiếp nối** mạch truyện (RAG context), **Trau chuốt** bản thảo — lưu **Lịch sử viết AI** (Rewrite History)
-- 📊 **Phân tích** chấm điểm chất lượng truyện (**Rubric 100 điểm**, 20 tiêu chí, **Zero Hallucination**, chấm theo Thể loại, phát hiện 4 cảnh báo đặc biệt)
-- 🌍 Quản lý Worldbuilding & nhân vật có vector embedding (thêm Category **Scene** cho phân cảnh cụ thể)
-- 📥📤 Import/Export chương và dự án (`.txt`)
-- 🐛 Luồng báo cáo lỗi User → Staff
+- ✍️ **Viết mới** từ dàn ý, **Tiếp nối** mạch truyện, **Trau chuốt** bản thảo — có tích hợp các kỹ thuật viết văn (Show don't tell, Pacing)
+- 📊 **Phân tích** chấm điểm chất lượng truyện (**Rubric 5 điểm**, 20 tiêu chí, **Zero Hallucination**, chấm theo Thể loại, phát hiện 4 cảnh báo đặc biệt)
+- 🌍 **Story Bible** chuyên sâu: Quản lý Worldbuilding, Nhân vật, Ghi chú cốt truyện (Plot Notes), Chủ đề (Themes), Cẩm nang phong cách (Style Guides) — Hỗ trợ vector embedding.
+- 📅 Quản lý **Timeline** mốc sự kiện dòng thời gian.
+- 📥📤 **Import/Export bản thảo chuyên nghiệp** (`.docx`, `.txt`), tự động tách chương theo tiêu đề.
+- 💳 Tích hợp cổng thanh toán **PayOS** và **VNPay** hỗ trợ nâng cấp/gia hạn gói dịch vụ.
+- 🐛 Luồng báo cáo lỗi User → Staff/Admin.
 - 🔑 Quên mật khẩu qua email (MailKit / Gmail SMTP)
 - 🔐 Mã hóa toàn bộ nội dung nhạy cảm theo từng user (AES-256)
 
@@ -211,6 +213,14 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | GET    | `/{id}/versions/{num}/content`  | Lấy nội dung version để diff                 |
 | DELETE | `/{id}/versions/{num}`          | Xóa version                                  |
 
+### 6.3b Manuscript & Export — `/api/manuscript`
+
+| Method | Endpoint | Mô tả |
+| ------ | -------- | ---- |
+| POST   | `/{projectId}/upload` | Upload bản thảo (docx/txt), tự động tách chương |
+| GET    | `/{projectId}/export` | Export toàn bộ project (docx/txt/pdf) |
+| GET    | `/{projectId}/chapters/{chapterId}/export` | Export một chương |
+
 ### 6.4 AI — `/api/ai`
 
 | Method | Endpoint                          | Mô tả                           |
@@ -225,7 +235,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | GET    | `/{projectId}/reports`            | Toàn bộ lịch sử báo cáo         |
 | GET    | `/{projectId}/reports/{reportId}` | Báo cáo cụ thể                  |
 
-### 6.5 Worldbuilding & Characters
+### 6.5 Worldbuilding, Characters, Plot Notes, Themes & Style Guides
 
 | Route                                                      | Mô tả                |
 | ---------------------------------------------------------- | -------------------- |
@@ -235,6 +245,15 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | `GET/POST /api/projects/{id}/character`                     | Danh sách / Tạo mới  |
 | `GET/PUT/DELETE /api/projects/{id}/character/{entryId}`     | Chi tiết / Sửa / Xóa |
 | `POST /api/projects/{id}/character/{entryId}/embed`         | Embed character      |
+| `GET/POST /api/projects/{id}/plot-notes`                    | Danh sách / Tạo mới  |
+| `GET/PUT/DELETE /api/projects/{id}/plot-notes/{id}`         | Chi tiết / Sửa / Xóa |
+| `POST /api/projects/{id}/plot-notes/{id}/embed`             | Embed plot note      |
+| `GET/POST /api/projects/{id}/themes`                        | Danh sách / Tạo mới  |
+| `GET/PUT/DELETE /api/projects/{id}/themes/{id}`             | Chi tiết / Sửa / Xóa |
+| `POST /api/projects/{id}/themes/{id}/embed`                 | Embed theme          |
+| `GET/POST /api/projects/{id}/style-guides`                  | Danh sách / Tạo mới  |
+| `GET/PUT/DELETE /api/projects/{id}/style-guides/{id}`       | Chi tiết / Sửa / Xóa |
+| `POST /api/projects/{id}/style-guides/{id}/embed`           | Embed style guide    |
 
 ### 6.6 Bug Reports — `/api/bug-reports`
 
@@ -262,6 +281,15 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | GET/POST | `/plans`, `/plans/{id}` | CRUD gói (Admin) |
 | POST     | `/subscribe`            | Đăng ký gói      |
 | GET      | `/my`                   | Gói đang dùng    |
+
+### 6.8b Payments — `/api/payment`
+
+| Method | Endpoint | Mô tả |
+| ------ | -------- | ---- |
+| POST   | `/vnpay/create-url` | Tạo URL thanh toán VNPay |
+| POST   | `/payos/create-link` | Tạo link checkout PayOS |
+| GET    | `/history` | Lấy lịch sử thanh toán |
+| GET    | `/{paymentId}` | Chi tiết thanh toán |
 
 ### 6.9 Settings — `/api/settings`
 
@@ -435,10 +463,15 @@ npm run dev
 | `IAuthService`          | Đăng ký, đăng nhập, refresh token, đổi mật khẩu, forgot/reset password                                                                                                                                                                                           |
 | `IUserService`          | Xem/cập nhật profile                                                                                                                                                                                                                                             |
 | `IUserSettingsService`  | Cài đặt editor (font, size)                                                                                                                                                                                                                                      |
-| `IProjectService`       | CRUD project, stats tác giả, export project                                                                                                                                                                                                                      |
+| `IProjectService`       | CRUD project, stats tác giả                                                                                                                                                                                                                                       |
 | `IChapterService`       | CRUD chương, quản lý version (create/switch/pin/delete/prune), chunk                                                                                                                                                                                             |
 | `ICharacterService`     | CRUD nhân vật + embed                                                                                                                                                                                                                                            |
 | `IWorldbuildingService` | CRUD worldbuilding/lore + embed                                                                                                                                                                                                                                  |
+| `IPlotNoteService`      | CRUD ghi chú cốt truyện + embed                                                                                                                                                                                                                                  |
+| `IThemeService`         | CRUD chủ đề + embed                                                                                                                                                                                                                                              |
+| `IStyleGuideService`    | CRUD cẩm nang phong cách + embed                                                                                                                                                                                                                                 |
+| `IExportService`        | Export project/chapter ra file `.docx`, `.txt`, `.pdf`                                                                                                                                                                                                           |
+| `IPaymentService`       | Quản lý thanh toán (PayOS, VNPay), lưu lịch sử giao dịch                                                                                                                                                                                                         |
 | `IGenreService`         | Quản lý thể loại (Admin)                                                                                                                                                                                                                                         |
 | `ISubscriptionService`  | Quản lý gói dịch vụ                                                                                                                                                                                                                                              |
 | `IAiChatService`        | RAG chat, lưu lịch sử, deduct token only                                                                                                                                                                                                                         |
@@ -451,3 +484,4 @@ npm run dev
 | `IAdminService`         | Dashboard stats cho Admin                                                                                                                                                                                                                                        |
 | `IBugReportService`     | CRUD bug reports, cập nhật trạng thái (Staff/Admin)                                                                                                                                                                                                              |
 | `ITimelineEventService` | CRUD mốc sự kiện dòng thời gian, tự động sort order                                                                                                                                                                                                              |
+| `IStaffService`         | Quản lý phản hồi, duyệt phân tích của Staff                                                                                                                                                                                                                      |

@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using OpenAI.Chat;
+using Pgvector;
+using Pgvector.EntityFrameworkCore;
 using Repository.Data;
 using Repository.Entities;
 using Service.Helpers;
@@ -16,6 +18,7 @@ namespace Service.Implementations
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
         private readonly ILogger<AiWritingService> _logger;
+        private readonly IEmbeddingService _embeddingService;
         private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
         private readonly IEmbeddingService _embeddingService;
 
