@@ -288,7 +288,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 
 ```
 PRIMARY:  Google Gemini API
-  └─ Chat Models:     gemma-4-31b -> gemma-4-26b (fallback)
+  └─ Chat Models:     gemini-3-flash-preview -> gemini-2.5-flash (fallback)
   └─ Embed Model:     gemini-embedding-001 (768 chiều)
 ```
 
@@ -395,7 +395,7 @@ Allowed Origins:
 | `Gemini:EmbeddingApiKey`              | Key chuyên cho embedding (ưu tiên nếu được cấu hình) |
 | `Gemini:AnalyzeApiKey`                | Key ưu tiên cho phân tích (và fallback embedding) |
 | `Gemini:ChatApiKey`                   | Key ưu tiên cho chatbot (và fallback embedding)   |
-| `Gemini:ChatModels`                   | Thứ tự fallback model chat (`gemma-4-31b,gemma-4-26b`) |
+| `Gemini:ChatModels`                   | Thứ tự fallback model chat (`gemini-3-flash-preview,gemini-2.5-flash`) |
 | `Email:Password`                      | Gmail app password                      |
 
 ---

@@ -5,7 +5,12 @@ import {
     Bug, Briefcase, AlertTriangle, Loader2, CheckCircle,
 } from 'lucide-react';
 import { getInitials } from '../utils/jwtHelper';
-import { bugReportService, type BugCategory, type BugPriority } from '../services/bugReportService';
+import {
+    bugReportService,
+    type BugCategory,
+    type BugPriority,
+    type BugReportResponse,
+} from '../services/bugReportService';
 import { appNotificationService, type AppNotificationItem } from '../services/appNotificationService';
 
 interface TopbarProps {
@@ -49,6 +54,34 @@ function getNotificationDot(type: AppNotificationItem['type']) {
     if (type === 'error') return '#f87171';
     if (type === 'warning') return '#fbbf24';
     return '#60a5fa';
+}
+
+const BUG_FEEDBACK_SEEN_KEY = 'storyrag:bug-feedback-seen-v1';
+
+function getSeenBugFeedbackMap(): Record<string, string> {
+    try {
+        const raw = localStorage.getItem(BUG_FEEDBACK_SEEN_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw) as Record<string, string>;
+        if (!parsed || typeof parsed !== 'object') return {};
+        return parsed;
+    } catch {
+        return {};
+    }
+}
+
+function saveSeenBugFeedbackMap(data: Record<string, string>) {
+    localStorage.setItem(BUG_FEEDBACK_SEEN_KEY, JSON.stringify(data));
+}
+
+function getBugStatusLabel(status: BugReportResponse['status']) {
+    switch (status) {
+        case 'Open': return 'Mở';
+        case 'InProgress': return 'Đang xử lý';
+        case 'Resolved': return 'Đã giải quyết';
+        case 'Closed': return 'Đã đóng';
+        default: return status;
+    }
 }
 
 // ── Bug Report Modal ───────────────────────────────────────────────────────────
@@ -219,6 +252,64 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
         sync();
         return appNotificationService.subscribe(sync);
     }, []);
+
+    useEffect(() => {
+        if (role !== 'Author') return;
+
+        let disposed = false;
+
+        const syncFeedbackNotifications = async () => {
+            try {
+                const reports = await bugReportService.getMy();
+                if (disposed) return;
+
+                const seenMap = getSeenBugFeedbackMap();
+                let hasSeenUpdates = false;
+                const existingTags = new Set(appNotificationService.getAll().map(n => n.tag).filter(Boolean));
+
+                for (const report of reports) {
+                    if (!report.updatedAt) continue;
+
+                    const hasFeedback = Boolean(report.staffNote?.trim()) || report.status !== 'Open';
+                    if (!hasFeedback) continue;
+
+                    if (seenMap[report.id] === report.updatedAt) continue;
+
+                    const tag = `bug-feedback:${report.id}:${report.updatedAt}`;
+                    if (!existingTags.has(tag)) {
+                        const statusLabel = getBugStatusLabel(report.status);
+                        const message = report.staffNote?.trim()
+                            ? `${report.title} • ${statusLabel}: ${report.staffNote}`
+                            : `${report.title} • Trạng thái mới: ${statusLabel}`;
+
+                        appNotificationService.add({
+                            type: 'info',
+                            title: 'Phản hồi từ Staff',
+                            message,
+                            tag,
+                        });
+                    }
+
+                    seenMap[report.id] = report.updatedAt;
+                    hasSeenUpdates = true;
+                }
+
+                if (hasSeenUpdates) {
+                    saveSeenBugFeedbackMap(seenMap);
+                }
+            } catch {
+                // Không làm gián đoạn Topbar khi không tải được phản hồi.
+            }
+        };
+
+        void syncFeedbackNotifications();
+        const intervalId = window.setInterval(() => { void syncFeedbackNotifications(); }, 60000);
+
+        return () => {
+            disposed = true;
+            window.clearInterval(intervalId);
+        };
+    }, [role]);
 
     return (
         <>

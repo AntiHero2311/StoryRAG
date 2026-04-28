@@ -5,6 +5,7 @@ using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
+using Npgsql;
 using Pgvector;
 using Repository.Data;
 using Repository.Entities;
@@ -176,6 +177,14 @@ namespace Service.Implementations
         {
             var chapter = await GetChapterWithOwnerCheckAsync(chapterId, userId);
 
+            // Phá vòng phụ thuộc Chapter <-> CurrentVersion trước khi xóa.
+            if (chapter.CurrentVersionId.HasValue)
+            {
+                chapter.CurrentVersionId = null;
+                chapter.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+            }
+
             // Xóa toàn bộ dữ liệu gắn trực tiếp với chapter để tránh rác RAG.
             var versions = await _context.ChapterVersions
                 .Where(v => v.ChapterId == chapterId)
@@ -201,11 +210,20 @@ namespace Service.Implementations
             if (rewriteHistories.Count > 0)
                 _context.RewriteHistories.RemoveRange(rewriteHistories);
 
-            var analysisHistories = await _context.AiAnalysisHistories
-                .Where(r => r.ChapterId == chapterId)
-                .ToListAsync();
-            if (analysisHistories.Count > 0)
-                _context.AiAnalysisHistories.RemoveRange(analysisHistories);
+            try
+            {
+                var analysisHistories = await _context.AiAnalysisHistories
+                    .Where(r => r.ChapterId == chapterId)
+                    .ToListAsync();
+                if (analysisHistories.Count > 0)
+                    _context.AiAnalysisHistories.RemoveRange(analysisHistories);
+            }
+            catch (PostgresException ex)
+                when (ex.SqlState == "42P01" &&
+                      ex.MessageText.Contains("AiAnalysisHistories", StringComparison.Ordinal))
+            {
+                // Tương thích schema cũ: một số DB chưa có bảng lịch sử phân tích AI.
+            }
 
             _context.Chapters.Remove(chapter);
             await _context.SaveChangesAsync();

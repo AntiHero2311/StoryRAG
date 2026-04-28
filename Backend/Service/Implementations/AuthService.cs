@@ -16,6 +16,12 @@ namespace Service.Implementations
 {
     public class AuthService : IAuthService
     {
+        private const int LegacyPasswordFormatVersion = 1;
+        private const int Pbkdf2PasswordFormatVersion = 2;
+        private const int Pbkdf2Iterations = 120_000;
+        private const int Pbkdf2SaltSize = 16;
+        private const int Pbkdf2KeySize = 64;
+
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
         private readonly IEmailService _emailService;
@@ -47,6 +53,7 @@ namespace Service.Implementations
                 Email = request.Email,
                 PasswordHash = passwordHash,
                 PasswordSalt = passwordSalt,
+                PasswordFormatVersion = Pbkdf2PasswordFormatVersion,
                 DataEncryptionKey = encryptedDek
             };
 
@@ -80,7 +87,7 @@ namespace Service.Implementations
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
             
-            if (user == null || !VerifyPasswordHash(request.Password, user.PasswordHash, user.PasswordSalt))
+            if (user == null || !VerifyPasswordHash(request.Password, user, out var shouldRehash))
             {
                 throw new Exception("Email hoặc mật khẩu không chính xác.");
             }
@@ -93,6 +100,13 @@ namespace Service.Implementations
             var refreshToken = GenerateRefreshToken();
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            if (shouldRehash)
+            {
+                CreatePasswordHash(request.Password, out var upgradedHash, out var upgradedSalt);
+                user.PasswordHash = upgradedHash;
+                user.PasswordSalt = upgradedSalt;
+                user.PasswordFormatVersion = Pbkdf2PasswordFormatVersion;
+            }
 
             _context.Users.Update(user);
             await _context.SaveChangesAsync();
@@ -156,6 +170,7 @@ namespace Service.Implementations
                     Email = normalizedEmail,
                     PasswordHash = passwordHash,
                     PasswordSalt = passwordSalt,
+                    PasswordFormatVersion = Pbkdf2PasswordFormatVersion,
                     AvatarURL = payload.Picture,
                     Role = "Author",
                     DataEncryptionKey = encryptedDek,
@@ -239,6 +254,7 @@ namespace Service.Implementations
             CreatePasswordHash(request.NewPassword, out string hash, out string salt);
             user.PasswordHash = hash;
             user.PasswordSalt = salt;
+            user.PasswordFormatVersion = Pbkdf2PasswordFormatVersion;
             user.PasswordResetToken = null;
             user.PasswordResetTokenExpiryTime = null;
 
@@ -254,7 +270,7 @@ namespace Service.Implementations
                 throw new Exception("User not found.");
             }
 
-            if (!VerifyPasswordHash(request.OldPassword, user.PasswordHash, user.PasswordSalt))
+            if (!VerifyPasswordHash(request.OldPassword, user, out _))
             {
                 throw new Exception("Mật khẩu hiện tại không chính xác.");
             }
@@ -263,6 +279,7 @@ namespace Service.Implementations
 
             user.PasswordHash = passwordHash;
             user.PasswordSalt = passwordSalt;
+            user.PasswordFormatVersion = Pbkdf2PasswordFormatVersion;
 
             _context.Users.Update(user);
             await _context.SaveChangesAsync();
@@ -272,27 +289,75 @@ namespace Service.Implementations
 
         private void CreatePasswordHash(string password, out string passwordHash, out string passwordSalt)
         {
-            byte[] saltBytes = new byte[16];
-            using (var rng = RandomNumberGenerator.Create())
-            {
-                rng.GetBytes(saltBytes);
-            }
+            byte[] saltBytes = RandomNumberGenerator.GetBytes(Pbkdf2SaltSize);
             passwordSalt = Convert.ToBase64String(saltBytes);
 
-            using (var hmac = new HMACSHA512(saltBytes))
+            var hashBytes = Rfc2898DeriveBytes.Pbkdf2(
+                password,
+                saltBytes,
+                Pbkdf2Iterations,
+                HashAlgorithmName.SHA512,
+                Pbkdf2KeySize);
+
+            passwordHash = Convert.ToBase64String(hashBytes);
+        }
+
+        private bool VerifyPasswordHash(string password, User user, out bool shouldRehash)
+        {
+            shouldRehash = false;
+            if (user.PasswordFormatVersion > LegacyPasswordFormatVersion)
             {
-                var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
-                passwordHash = Convert.ToBase64String(hashBytes);
+                return VerifyPbkdf2Hash(password, user.PasswordHash, user.PasswordSalt);
+            }
+
+            var validLegacy = VerifyLegacyHmacHash(password, user.PasswordHash, user.PasswordSalt);
+            shouldRehash = validLegacy;
+            return validLegacy;
+        }
+
+        private static bool VerifyPbkdf2Hash(string password, string storedHash, string storedSalt)
+        {
+            try
+            {
+                byte[] saltBytes = Convert.FromBase64String(storedSalt);
+                byte[] expectedHash = Convert.FromBase64String(storedHash);
+
+                var computedHash = Rfc2898DeriveBytes.Pbkdf2(
+                    password,
+                    saltBytes,
+                    Pbkdf2Iterations,
+                    HashAlgorithmName.SHA512,
+                    expectedHash.Length);
+
+                return CryptographicOperations.FixedTimeEquals(computedHash, expectedHash);
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
+            catch (CryptographicException)
+            {
+                return false;
             }
         }
 
-        private bool VerifyPasswordHash(string password, string storedHash, string storedSalt)
+        private static bool VerifyLegacyHmacHash(string password, string storedHash, string storedSalt)
         {
-            byte[] saltBytes = Convert.FromBase64String(storedSalt);
-            using (var hmac = new HMACSHA512(saltBytes))
+            try
             {
+                byte[] saltBytes = Convert.FromBase64String(storedSalt);
+                using var hmac = new HMACSHA512(saltBytes);
                 var computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
-                return Convert.ToBase64String(computedHash) == storedHash;
+                var expectedHash = Convert.FromBase64String(storedHash);
+                return CryptographicOperations.FixedTimeEquals(computedHash, expectedHash);
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
+            catch (CryptographicException)
+            {
+                return false;
             }
         }
 

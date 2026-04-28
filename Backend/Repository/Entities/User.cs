@@ -9,6 +9,7 @@ namespace Repository.Entities
         public string Email { get; set; } = string.Empty;
         public string PasswordHash { get; set; } = string.Empty;
         public string PasswordSalt { get; set; } = string.Empty;
+        public int PasswordFormatVersion { get; set; } = 1;
         public string? AvatarURL { get; set; }
         public string Role { get; set; } = "Author";
         public bool IsActive { get; set; } = true;

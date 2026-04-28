@@ -313,7 +313,7 @@ Trả về JSON thuần túy:
 
 | Tham số | Giá trị mặc định | Config key |
 |---------|-----------------|-----------|
-| Chat models fallback | `gemma-4-31b,gemma-4-26b` | `Gemini:ChatModels` |
+| Chat models fallback | `gemini-3-flash-preview,gemini-2.5-flash` | `Gemini:ChatModels` |
 | Primary Embedding model | `gemini-embedding-001` | `Gemini:EmbeddingModel` |
 | Embedding dimensions | `768` | `Gemini:EmbeddingDimensions` |
 | Max tokens (analysis) | `4000` | hardcoded trong `EvaluateWithAiAsync` |
