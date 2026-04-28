@@ -22,8 +22,8 @@ namespace Repository.Entities
         public int TokenCount { get; set; } = 0;
 
         /// <summary>
-        /// Vector embedding (1536 dims cho OpenAI text-embedding-3-small).
-        /// Mapped sang column vector(1536) trong PostgreSQL qua Pgvector.EntityFrameworkCore.
+        /// Vector embedding (768 dims cho Gemini gemini-embedding-001).
+        /// Mapped sang column vector(768) trong PostgreSQL qua Pgvector.EntityFrameworkCore.
         /// </summary>
         public Vector? Embedding { get; set; }
 

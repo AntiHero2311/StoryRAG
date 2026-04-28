@@ -423,6 +423,10 @@ FodyWeavers.xsd
 # Copilot CLI local plan log (không commit)
 planCopilotCliPlan.md
 
+# Local build artifacts generated on developer machines
+**/build_error*.txt
+**/build_log*.txt
+
 
 
 # Ignore Backend configuration files to protect MasterKey & DB Password
