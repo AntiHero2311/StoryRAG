@@ -433,3 +433,7 @@ planCopilotCliPlan.md
 **/Frontend/.env
 **/Frontend/.env.*
 **/Frontend/.env.*.local
+
+# Ignore local build error/log artifacts
+**/build_error*.txt
+**/build_log*.txt
