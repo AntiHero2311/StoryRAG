@@ -2,6 +2,9 @@ using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using Microsoft.EntityFrameworkCore;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
+using QuestPDF.Infrastructure;
 using Repository.Data;
 using Service.Interfaces;
 using System.Text;
@@ -12,6 +15,8 @@ namespace Service.Implementations
     {
         private readonly AppDbContext _context;
         private readonly IChapterService _chapterService;
+        private static readonly object QuestPdfLicenseLock = new();
+        private static bool _questPdfLicenseConfigured;
 
         public ExportService(AppDbContext context, IChapterService chapterService)
         {
@@ -24,6 +29,7 @@ namespace Service.Implementations
             return format.ToLower() switch
             {
                 "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "pdf" => "application/pdf",
                 "html" => "text/html",
                 "md" => "text/markdown",
                 _ => "text/plain",
@@ -35,10 +41,23 @@ namespace Service.Implementations
             return format.ToLower() switch
             {
                 "docx" => ".docx",
+                "pdf" => ".pdf",
                 "html" => ".html",
                 "md" => ".md",
                 _ => ".txt",
             };
+        }
+
+        private static void EnsureQuestPdfLicenseConfigured()
+        {
+            if (_questPdfLicenseConfigured) return;
+
+            lock (QuestPdfLicenseLock)
+            {
+                if (_questPdfLicenseConfigured) return;
+                QuestPDF.Settings.License = LicenseType.Community;
+                _questPdfLicenseConfigured = true;
+            }
         }
 
         private async Task ValidateAccessAsync(Guid projectId, Guid userId)
@@ -101,6 +120,8 @@ namespace Service.Implementations
             {
                 case "docx":
                     return GenerateDocx(title, content);
+                case "pdf":
+                    return GeneratePdf(title, content);
                 case "html":
                     var html = $"<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>{title}</title></head><body><h1>{title}</h1>";
                     html += string.Join("", content.Split('\n').Select(line => $"<p>{System.Net.WebUtility.HtmlEncode(line)}</p>"));
@@ -123,7 +144,7 @@ namespace Service.Implementations
                 using (var wordDoc = WordprocessingDocument.Create(mem, WordprocessingDocumentType.Document))
                 {
                     var mainPart = wordDoc.AddMainDocumentPart();
-                    mainPart.Document = new Document(new Body());
+                    mainPart.Document = new DocumentFormat.OpenXml.Wordprocessing.Document(new Body());
                     var body = mainPart.Document.Body;
 
                     // Add Title
@@ -143,6 +164,49 @@ namespace Service.Implementations
                 }
                 return mem.ToArray();
             }
+        }
+
+        private byte[] GeneratePdf(string title, string text)
+        {
+            EnsureQuestPdfLicenseConfigured();
+
+            var document = QuestPDF.Fluent.Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4);
+                    page.Margin(28);
+                    page.DefaultTextStyle(style => style.FontSize(12).FontFamily("Arial"));
+
+                    page.Header().Column(column =>
+                    {
+                        column.Spacing(4);
+                        column.Item().Text(title)
+                            .FontSize(20)
+                            .SemiBold();
+                    });
+
+                    page.Content().PaddingTop(12).Column(column =>
+                    {
+                        column.Spacing(10);
+                        foreach (var line in text.Split('\n'))
+                        {
+                            if (string.IsNullOrWhiteSpace(line)) continue;
+                            column.Item().Text(line);
+                        }
+                    });
+
+                    page.Footer()
+                        .AlignCenter()
+                        .Text(x =>
+                        {
+                            x.Span("Trang ");
+                            x.CurrentPageNumber();
+                        });
+                });
+            });
+
+            return document.GeneratePdf();
         }
     }
 }

@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using OpenAI.Chat;
+using Pgvector;
+using Pgvector.EntityFrameworkCore;
 using Repository.Data;
 using Repository.Entities;
 using Service.Helpers;
@@ -14,13 +16,15 @@ namespace Service.Implementations
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
         private readonly ILogger<AiWritingService> _logger;
+        private readonly IEmbeddingService _embeddingService;
         private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
 
-        public AiWritingService(AppDbContext context, IConfiguration config, ILogger<AiWritingService> logger)
+        public AiWritingService(AppDbContext context, IConfiguration config, ILogger<AiWritingService> logger, IEmbeddingService embeddingService)
         {
             _context = context;
             _config = config;
             _logger = logger;
+            _embeddingService = embeddingService;
             _geminiChatExecutor = new GeminiChatFailoverExecutor(
                 config,
                 logger,

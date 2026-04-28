@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.DependencyInjection;
 using Service.Interfaces;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
@@ -21,6 +22,7 @@ namespace Api.Controllers
         private readonly IProjectAnalysisJobService _analysisJobService;
         private readonly INarrativeAnalyticsService _narrativeAnalyticsService;
         private readonly IReportExportService _reportExportService;
+        private readonly IServiceScopeFactory _scopeFactory;
 
         public AiController(
             IEmbeddingService embeddingService,
@@ -31,7 +33,8 @@ namespace Api.Controllers
             IAiAnalysisHistoryService historyService,
             IProjectAnalysisJobService analysisJobService,
             INarrativeAnalyticsService narrativeAnalyticsService,
-            IReportExportService reportExportService)
+            IReportExportService reportExportService,
+            IServiceScopeFactory scopeFactory)
         {
             _embeddingService = embeddingService;
             _aiChatService = aiChatService;
@@ -42,6 +45,7 @@ namespace Api.Controllers
             _analysisJobService = analysisJobService;
             _narrativeAnalyticsService = narrativeAnalyticsService;
             _reportExportService = reportExportService;
+            _scopeFactory = scopeFactory;
         }
 
         /// <summary>Embed tất cả chunks của current version của một chương.</summary>

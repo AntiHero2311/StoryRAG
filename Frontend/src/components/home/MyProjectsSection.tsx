@@ -383,7 +383,7 @@ function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
     const color = hashColor(project.id);
     const createdDate = new Date(project.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const [menuOpen, setMenuOpen] = useState(false);
-    const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+    const [menuPos, setMenuPos] = useState<{ top?: number; bottom?: number; right: number }>({ right: 0 });
     const menuBtnRef = useRef<HTMLButtonElement>(null);
     const [isHovered, setIsHovered] = useState(false);
     const BOOK_W = 195;
@@ -465,7 +465,14 @@ function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
                                     onClick={() => {
                                         if (!menuOpen && menuBtnRef.current) {
                                             const rect = menuBtnRef.current.getBoundingClientRect();
-                                            setMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+                                            const spaceBelow = window.innerHeight - rect.bottom;
+                                            const menuHeight = 180;
+                                            
+                                            if (spaceBelow < menuHeight) {
+                                                setMenuPos({ bottom: window.innerHeight - rect.top + 6, right: window.innerWidth - rect.right });
+                                            } else {
+                                                setMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+                                            }
                                         }
                                         setMenuOpen(v => !v);
                                     }}
@@ -478,7 +485,7 @@ function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
                                         <div className="fixed inset-0 z-[200]" onClick={() => setMenuOpen(false)} />
                                         <div
                                             className="fixed w-36 rounded-xl shadow-2xl overflow-hidden z-[201]"
-                                            style={{ top: menuPos.top, right: menuPos.right, background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
+                                            style={{ top: menuPos.top, bottom: menuPos.bottom, right: menuPos.right, background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
                                         >
                                             <button onClick={() => { onInfo(project); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
                                                 <Info className="w-3.5 h-3.5" /> Thông tin

@@ -232,7 +232,6 @@ namespace Service.Implementations
                 
                 // C. Nếu là nâng cấp (Giá gói mới > Giá gói hiện tại) -> Thay thế ngay lập tức
                 current.Status = "Cancelled";
-                current.UpdatedAt = DateTime.UtcNow;
             }
 
             // 2. Tạo subscription mới (Cho trường hợp Nâng cấp hoặc chưa có gói)
