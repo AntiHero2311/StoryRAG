@@ -451,7 +451,7 @@ Nếu bạn reset DB bằng `supabase_full_reset.sql`, cần đảm bảo migrat
 | `AiRewriteService` | Gemini-only rewrite, lưu lịch sử |
 | `ChunkingService` | 1500 ký tự, overlap 150, ưu tiên cắt tại `\n\n` → `.` → space |
 | `AiWritingService` | Viết mới, tiếp nối, rất trau chuốt — tích hợp kỹ thuật **Show Don't Tell** & **Pacing** |
-| `ProjectReportService` | Rubric **5 điểm** (1-Kém → 5-Xuất sắc), phát hiện **4 loại cảnh báo** (INCOMPLETE/REPETITION/PLAGIARISM\_RISK/INCONSISTENCY), **Zero Hallucination**, chấm theo **Thể loại**; phân tích ưu tiên Analyze key, fallback sang Chat key; model fallback `gemma-4-31b` -> `gemma-4-26b` |
+| `ProjectReportService` | Rubric **5 điểm** (1-Kém → 5-Xuất sắc), phát hiện **4 loại cảnh báo** (INCOMPLETE/REPETITION/PLAGIARISM\_RISK/INCONSISTENCY), **Zero Hallucination**, chấm theo **Thể loại**; phân tích ưu tiên Analyze key, fallback sang Chat key; model fallback `gemini-3-flash-preview` -> `gemini-2.5-flash` |
 | `ProjectAnalysisJobService` | Điều phối queue async cho phân tích: enqueue/status/result/cancel, chống enqueue trùng theo `ProjectVersionHash` |
 | `GeminiRetryHelper` | Backoff [10s, 30s, 65s] cho 429; throw lỗi thân thiện sau 3 lần |
 | `EncryptionHelper` | AES-256 với user DEK + Master Key |

@@ -29,7 +29,11 @@ services:
       - key: Gemini__EmbeddingModel
         value: gemini-embedding-001
       - key: Gemini__ChatModels
-        value: gemma-4-31b,gemma-4-26b
+        value: gemini-3-flash-preview,gemini-2.5-flash
+      - key: Gemini__TraceOpenAiHttp
+        value: "false"
+      - key: Gemini__TraceOpenAiHttpBodyLimit
+        value: "16000"
       - key: Gemini__EmbeddingDimensions
         value: "768"
       - key: Email__SmtpHost
