@@ -7,6 +7,7 @@ namespace Service.Interfaces
         Task<AuthResponse> RegisterAsync(RegisterRequest request);
         Task<AuthResponse> LoginAsync(LoginRequest request);
         Task<AuthResponse> LoginWithGoogleAsync(GoogleLoginRequest request);
+        Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request);
         Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordRequest request);
         Task ForgotPasswordAsync(ForgotPasswordRequest request);
         Task ResetPasswordAsync(ResetPasswordRequest request);

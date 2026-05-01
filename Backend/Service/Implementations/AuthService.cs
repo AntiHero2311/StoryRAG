@@ -217,6 +217,39 @@ namespace Service.Implementations
             };
         }
 
+        public async Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u =>
+                u.RefreshToken == request.RefreshToken &&
+                u.RefreshTokenExpiryTime > DateTime.UtcNow);
+
+            if (user == null)
+            {
+                throw new Exception("Refresh token không hợp lệ hoặc đã hết hạn.");
+            }
+
+            if (!user.IsActive)
+            {
+                throw new Exception("User is inactive.");
+            }
+
+            var refreshToken = GenerateRefreshToken();
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+
+            await _context.SaveChangesAsync();
+
+            return new AuthResponse
+            {
+                UserId = user.Id,
+                FullName = user.FullName,
+                Email = user.Email,
+                Role = user.Role,
+                AccessToken = GenerateJwtToken(user),
+                RefreshToken = user.RefreshToken
+            };
+        }
+
         public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email && u.IsActive);

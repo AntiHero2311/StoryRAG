@@ -34,6 +34,12 @@ namespace Service.DTOs
         public string IdToken { get; set; } = string.Empty;
     }
 
+    public class RefreshTokenRequest
+    {
+        [Required]
+        public string RefreshToken { get; set; } = string.Empty;
+    }
+
     public class ChangePasswordRequest
     {
         [Required]

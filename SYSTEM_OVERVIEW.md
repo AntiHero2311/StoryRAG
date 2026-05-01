@@ -1,7 +1,7 @@
 # StoryRAG — Tổng Quan Kiến Trúc Hệ Thống
 
-> **Phiên bản tài liệu:** 1.1  
-> **Cập nhật lần cuối:** Tháng 3/2026
+> **Phiên bản tài liệu:** 1.2  
+> **Cập nhật lần cuối:** Tháng 5/2026
 
 ---
 
@@ -101,21 +101,21 @@
 StoryRAG/
 ├── Backend/
 │   ├── Api/                        # Tầng API (Controllers, Program.cs)
-│   │   ├── Controllers/            # 11 REST Controllers
+│   │   ├── Controllers/            # 20 REST Controllers
 │   │   ├── appsettings.json        # Config production
 │   │   └── appsettings.Development.json
 │   ├── Service/                    # Tầng Business Logic
-│   │   ├── Implementations/        # 16 Service implementations
-│   │   ├── Interfaces/             # 16 Service interfaces
+│   │   ├── Implementations/        # Business services, queues, AI/export helpers
+│   │   ├── Interfaces/             # Service contracts
 │   │   ├── DTOs/                   # Data Transfer Objects
 │   │   └── Helpers/                # EncryptionHelper, GeminiRetryHelper
 │   └── Repository/                 # Tầng Data Access
 │       ├── Data/AppDbContext.cs     # EF Core DbContext
-│       ├── Entities/               # 15 Entity models
+│       ├── Entities/               # 26 Entity models
 │       └── Migrations/             # EF Core migrations
 ├── Frontend/
 │   └── src/
-│       ├── pages/                  # 16 trang React
+│       ├── pages/                  # 18 trang React
 │       ├── components/             # Sidebar, Topbar, RewritePanel, Toast...
 │       ├── services/               # API clients TypeScript
 │       ├── hooks/                  # Custom React hooks
@@ -135,12 +135,22 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
   │           ├──< ProjectGenres >── Genres
   │           ├──< WorldbuildingEntries  (vector)
   │           ├──< CharacterEntries     (vector)
+  │           ├──< StyleGuideEntries    (vector)
+  │           ├──< ThemeEntries         (vector)
+  │           ├──< PlotNoteEntries      (vector)
   │           ├──< ProjectReports
+  │           ├──< ProjectAnalysisJobs (có thể trỏ tới ProjectReports khi hoàn tất)
   │           ├──< ChatMessages
   │           ├──< RewriteHistories (ActionType: WriteNew, ContinueWriting, Polish)
+  │           ├──< AiAnalysisHistories
   │           └──< TimelineEvents
   │
   ├──< UserSubscriptions >── SubscriptionPlans
+  ├──< Payments
+  ├──< BugReports
+  ├──< StaffFeedbacks
+  ├──< StaffKnowledgeBaseItems
+  ├──< StaffAnalysisReviews
   └──1 UserSettings
 ```
 
@@ -155,10 +165,19 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | `ChapterChunks`        | Đoạn văn nhỏ để RAG                     | **`Embedding vector(768)`** — pgvector                                                     |
 | `WorldbuildingEntries` | Ghi chú thế giới truyện                 | **`Embedding vector(768)`**                                                                |
 | `CharacterEntries`     | Hồ sơ nhân vật                          | **`Embedding vector(768)`**                                                                |
+| `StyleGuideEntries`    | Cẩm nang phong cách                     | **`Embedding vector(768)`**                                                                |
+| `ThemeEntries`         | Chủ đề/tầng nghĩa                       | **`Embedding vector(768)`**                                                                |
+| `PlotNoteEntries`      | Ghi chú cốt truyện                      | **`Embedding vector(768)`**                                                                |
 | `ChatMessages`         | Lịch sử chat AI                         | Question/Answer mã hóa AES-256                                                             |
 | `RewriteHistories`     | Lịch sử viết/trau chuốt AI              | OriginalText/RewrittenText mã hóa, phân loại qua `ActionType`                              |
 | `ProjectReports`       | Báo cáo phân tích truyện                | `CriteriaJson` (JSONB), `ProjectVersion` (v1.chương.chunks), `OverallFeedback`, `Warnings` |
+| `ProjectAnalysisJobs`  | Job phân tích bất đồng bộ               | Trạng thái/progress/result cho phân tích dài                                                |
+| `AiAnalysisHistories`  | Lịch sử phân tích cảnh/cliffhanger      | JSON kết quả và token đã dùng                                                              |
+| `Payments`             | Giao dịch thanh toán                    | PayOS/VNPay, trạng thái, transaction/order reference                                        |
 | `BugReports`           | Báo cáo lỗi từ user                     | Category, Priority, Status, StaffNote                                                      |
+| `StaffFeedbacks`       | Phản hồi chuyên môn từ Staff            | Gắn với project/user/staff                                                                  |
+| `StaffKnowledgeBaseItems` | Bài viết tri thức Staff              | Published/draft, loại nội dung                                                             |
+| `StaffAnalysisReviews` | Review báo cáo phân tích                | Verified/Adjusted/RerunRequested                                                           |
 | `Genres`               | Thể loại truyện                         | 14 thể loại mặc định                                                                       |
 | `ProjectGenres`        | Liên kết Project ↔ Genre                | Many-to-many                                                                               |
 | `SubscriptionPlans`    | Gói dịch vụ (Free/Basic/Pro/Enterprise) | Token & analysis limits                                                                    |
@@ -176,10 +195,13 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | ------ | ------------------ | ------------------------------------ |
 | POST   | `/register`        | Đăng ký tài khoản mới                |
 | POST   | `/login`           | Đăng nhập, nhận JWT                  |
-| POST   | `/refresh`         | Làm mới Access Token                 |
+| POST   | `/google-login`    | Đăng nhập bằng Google                |
+| POST   | `/refresh`         | Làm mới Access Token bằng Refresh Token |
 | PUT    | `/change-password` | Đổi mật khẩu                         |
 | POST   | `/forgot-password` | Yêu cầu link reset qua email         |
 | POST   | `/reset-password`  | Đặt mật khẩu mới bằng token từ email |
+
+> Hiện code chưa có endpoint xác thực email bắt buộc sau đăng ký; scope này nằm trong tài liệu kế hoạch nhưng chưa được triển khai ở API.
 
 ### 6.2 Projects — `/api/projects`
 
@@ -200,6 +222,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | GET    | `/`                             | Danh sách chương                             |
 | GET    | `/{id}`                         | Chi tiết chương                              |
 | POST   | `/`                             | Tạo chương mới                               |
+| POST   | `/import`                       | Import nhiều chương từ nội dung đã tách      |
 | PUT    | `/{id}`                         | Cập nhật / lưu nội dung                      |
 | PATCH  | `/{id}/title`                   | Đổi tên chương                               |
 | DELETE | `/{id}`                         | Xóa chương                                   |
@@ -211,6 +234,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | PATCH  | `/{id}/versions/{num}/title`    | Đổi tên version                              |
 | PUT    | `/{id}/versions/{num}/pin`      | Toggle pin/unpin version                     |
 | GET    | `/{id}/versions/{num}/content`  | Lấy nội dung version để diff                 |
+| GET    | `/{id}/versions/compare`        | So sánh hai version                          |
 | DELETE | `/{id}/versions/{num}`          | Xóa version                                  |
 
 ### 6.3b Manuscript & Export — `/api/manuscript`
@@ -228,12 +252,27 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | POST   | `/chapters/{chapterId}/embed`     | Embed active version của chương |
 | POST   | `/{projectId}/chat`               | Chat RAG với ngữ cảnh truyện    |
 | GET    | `/{projectId}/chat/history`       | Lịch sử chat                    |
+| POST   | `/{projectId}/analyze/jobs`       | Tạo job phân tích bất đồng bộ   |
+| GET    | `/analyze/jobs/active`            | Job phân tích đang chạy của user |
+| GET    | `/{projectId}/analyze/jobs/latest` | Job phân tích gần nhất của project |
+| GET    | `/{projectId}/analyze/jobs/{jobId}` | Trạng thái job phân tích       |
+| GET    | `/{projectId}/analyze/jobs/{jobId}/result` | Kết quả job đã hoàn thành |
+| POST   | `/{projectId}/analyze/jobs/{jobId}/cancel` | Hủy job đang chờ xử lý |
 | POST   | `/{projectId}/rewrite`            | Rewrite đoạn văn                |
 | GET    | `/{projectId}/rewrite/history`    | Lịch sử viết AI (mới/tiếp/trau chuốt) |
+| POST   | `/{projectId}/write`              | AI viết mới theo instruction    |
+| POST   | `/{projectId}/continue`           | AI viết tiếp từ ngữ cảnh        |
+| POST   | `/{projectId}/polish`             | AI trau chuốt đoạn văn          |
+| POST   | `/{projectId}/suggest`            | Gợi ý ý tưởng/tình tiết         |
+| POST   | `/{projectId}/scenes`             | Phân rã cảnh và trích quote     |
+| POST   | `/{projectId}/cliffhanger`        | Phân tích cliffhanger/ba hồi    |
+| GET    | `/{projectId}/analysis/history`   | Lịch sử phân tích cảnh/cliffhanger |
 | POST   | `/{projectId}/analyze`            | Phân tích & chấm điểm truyện    |
 | GET    | `/{projectId}/reports/latest`     | Báo cáo phân tích mới nhất      |
 | GET    | `/{projectId}/reports`            | Toàn bộ lịch sử báo cáo         |
 | GET    | `/{projectId}/reports/{reportId}` | Báo cáo cụ thể                  |
+| GET    | `/{projectId}/narrative/charts`   | Dữ liệu biểu đồ pacing/emotion/character |
+| GET    | `/{projectId}/reports/{reportId}/export/pdf` | Xuất PDF báo cáo cho gói trả phí |
 
 ### 6.5 Worldbuilding, Characters, Plot Notes, Themes & Style Guides
 
@@ -286,8 +325,16 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 
 | Method | Endpoint | Mô tả |
 | ------ | -------- | ---- |
+| POST   | `/create` | Tạo payment record |
+| PATCH  | `/{paymentId}/status` | Cập nhật trạng thái payment |
+| PUT    | `/{paymentId}/mark-completed` | Đánh dấu thanh toán hoàn tất |
+| POST   | `/{paymentId}/refund` | Hoàn tiền payment |
 | POST   | `/vnpay/create-url` | Tạo URL thanh toán VNPay |
+| GET    | `/vnpay/ipn` | IPN callback từ VNPay |
+| GET    | `/vnpay/order/{txnRef}` | Lấy trạng thái đơn VNPay |
 | POST   | `/payos/create-link` | Tạo link checkout PayOS |
+| POST   | `/payos/webhook` | Webhook callback từ PayOS |
+| GET    | `/payos/order/{orderCode}` | Lấy trạng thái đơn PayOS |
 | GET    | `/history` | Lấy lịch sử thanh toán |
 | GET    | `/{paymentId}` | Chi tiết thanh toán |
 
@@ -307,6 +354,18 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | PUT    | `/{id}`         | Cập nhật mốc sự kiện                        |
 | DELETE | `/{id}`         | Xóa mốc sự kiện                             |
 | PATCH  | `/{id}/reorder` | Thay đổi thứ tự (sortOrder)                 |
+
+### 6.11 Staff — `/api/staff`
+
+| Method | Endpoint | Mô tả |
+| ------ | -------- | ---- |
+| GET    | `/manuscripts/flagged` | Danh sách manuscript bị flag |
+| GET/POST | `/feedback` | Xem / tạo phản hồi Staff |
+| PUT/DELETE | `/feedback/{feedbackId}` | Cập nhật / xóa phản hồi |
+| GET/POST | `/knowledge-base` | Xem / tạo bài tri thức |
+| PUT/DELETE | `/knowledge-base/{id}` | Cập nhật / xóa bài tri thức |
+| GET    | `/analyses/reviews` | Danh sách review phân tích |
+| POST   | `/analyses/{reportId}/review` | Duyệt/chỉnh/yêu cầu chạy lại báo cáo |
 
 ---
 
@@ -395,7 +454,9 @@ Allowed Origins:
   - http://localhost:5173  (Vite dev)
   - http://localhost:5174
   - http://localhost:3000
-  - https://storyrag-frontend.onrender.com  (Render production)
+  - https://storynest.cloud
+  - https://www.storynest.cloud
+  - Các domain bổ sung từ `Cors:AllowedOrigins`
 ```
 
 ---
@@ -425,6 +486,8 @@ Allowed Origins:
 | `Gemini:ChatApiKey`                   | Key ưu tiên cho chatbot (và fallback embedding)   |
 | `Gemini:ChatModels`                   | Thứ tự fallback model chat (`gemini-3-flash-preview,gemini-2.5-flash`) |
 | `Email:Password`                      | Gmail app password                      |
+| `Cors:AllowedOrigins`                 | Domain frontend bổ sung ngoài mặc định   |
+| `PayOS:*`, `VNPay:*`                  | Cấu hình cổng thanh toán                 |
 
 ---
 
@@ -476,10 +539,14 @@ npm run dev
 | `ISubscriptionService`  | Quản lý gói dịch vụ                                                                                                                                                                                                                                              |
 | `IAiChatService`        | RAG chat, lưu lịch sử, deduct token only                                                                                                                                                                                                                         |
 | `IAiRewriteService`     | Rewrite theo instruction, lưu lịch sử                                                                                                                                                                                                                            |
+| `IAiAnalysisHistoryService` | Lưu và truy xuất lịch sử phân tích cảnh/cliffhanger                                                                                                                                                                                                          |
 | `IEmbeddingService`     | Gọi Gemini lấy embedding vector                                                                                                                                                                                                                                  |
 | `IChunkingService`      | Chia text thành chunks với overlap                                                                                                                                                                                                                               |
 | `IAiWritingService`     | Viết mới từ dàn ý, tiếp nối mạch truyện (RAG), trau chuốt bản thảo — tích hợp kỹ thuật **Show Don't Tell**, **Pacing**, lưu lịch sử bền vững                                                                                                                      |
-| `IProjectReportService` | Phân tích & chấm điểm theo **Rubric 5b điểm** (1-Kém → 5-Xuất sắc), **Zero Hallucination**, chấm theo **Thể loại**, phát hiện **4 cảnh báo** (INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY), sinh `OverallFeedback` tâm huyết, ghi `ProjectVersion` |
+| `IProjectReportService` | Phân tích & chấm điểm theo **Rubric 5 điểm** (1-Kém → 5-Xuất sắc), **Zero Hallucination**, chấm theo **Thể loại**, phát hiện **4 cảnh báo** (INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY), sinh `OverallFeedback` tâm huyết, ghi `ProjectVersion` |
+| `IProjectAnalysisJobService` | Quản lý job phân tích bất đồng bộ, progress, cancel, lấy kết quả                                                                                                                                                                                          |
+| `INarrativeAnalyticsService` | Sinh dữ liệu biểu đồ pacing, emotion, tần suất/xuất hiện nhân vật                                                                                                                                                                                        |
+| `IReportExportService` | Xuất báo cáo phân tích sang PDF                                                                                                                                                                                                                                   |
 | `IEmailService`         | Gửi email (welcome, password reset) qua Gmail SMTP                                                                                                                                                                                                               |
 | `IAdminService`         | Dashboard stats cho Admin                                                                                                                                                                                                                                        |
 | `IBugReportService`     | CRUD bug reports, cập nhật trạng thái (Staff/Admin)                                                                                                                                                                                                              |

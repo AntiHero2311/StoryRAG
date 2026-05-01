@@ -29,6 +29,10 @@ export interface ResetPasswordData {
     newPassword: string;
 }
 
+export interface RefreshTokenData {
+    refreshToken: string;
+}
+
 export interface AuthResponse {
     userId: string;
     fullName: string;
@@ -54,6 +58,12 @@ export const authService = {
     // Gọi API Đăng Nhập Google
     googleLogin: async (data: GoogleLoginData): Promise<AuthResponse> => {
         const response = await api.post<AuthResponse>('/Auth/google-login', data);
+        return response.data;
+    },
+
+    // Làm mới Access Token bằng Refresh Token
+    refresh: async (data: RefreshTokenData): Promise<AuthResponse> => {
+        const response = await api.post<AuthResponse>('/Auth/refresh', data);
         return response.data;
     },
 
