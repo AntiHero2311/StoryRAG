@@ -8,8 +8,6 @@ using Repository.Data;
 using Repository.Entities;
 using Service.Helpers;
 using Service.Interfaces;
-using Pgvector;
-using Pgvector.EntityFrameworkCore;
 
 namespace Service.Implementations
 {
@@ -20,7 +18,6 @@ namespace Service.Implementations
         private readonly ILogger<AiWritingService> _logger;
         private readonly IEmbeddingService _embeddingService;
         private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
-        private readonly IEmbeddingService _embeddingService;
 
         public AiWritingService(AppDbContext context, IConfiguration config, ILogger<AiWritingService> logger, IEmbeddingService embeddingService)
         {
