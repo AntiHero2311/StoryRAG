@@ -21,10 +21,7 @@ export default function MainLayout({ children, pageTitle, onSettings }: MainLayo
 
     useEffect(() => {
         const token = localStorage.getItem('token');
-        if (!token) {
-            navigate('/login');
-            return;
-        }
+        if (!token) { navigate('/login'); return; }
         setUserInfo(getUserInfo(token));
     }, [navigate]);
 
@@ -34,9 +31,25 @@ export default function MainLayout({ children, pageTitle, onSettings }: MainLayo
     };
 
     return (
-        <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
+        <div
+            className="flex h-screen w-screen overflow-hidden"
+            style={{ background: 'var(--bg-app)' }}
+        >
+            {/* Ambient background glow */}
+            <div className="pointer-events-none fixed inset-0 z-0">
+                <div
+                    className="absolute -top-64 left-1/4 w-[600px] h-[600px] rounded-full opacity-[0.04]"
+                    style={{ background: 'radial-gradient(circle, #6366f1, transparent 70%)', filter: 'blur(80px)' }}
+                />
+                <div
+                    className="absolute bottom-0 right-1/4 w-[400px] h-[400px] rounded-full opacity-[0.03]"
+                    style={{ background: 'radial-gradient(circle, #a855f7, transparent 70%)', filter: 'blur(60px)' }}
+                />
+            </div>
+
             <Sidebar role={userInfo.role} onNavigate={navigate} />
-            <div className="flex flex-col flex-1 min-w-0">
+
+            <div className="relative flex flex-col flex-1 min-w-0 z-10">
                 <Topbar
                     fullName={userInfo.fullName}
                     role={userInfo.role}
@@ -44,7 +57,7 @@ export default function MainLayout({ children, pageTitle, onSettings }: MainLayo
                     onLogout={handleLogout}
                     onSettings={onSettings}
                 />
-                <main className="flex-1 overflow-y-auto pt-6">
+                <main className="flex-1 overflow-y-auto scrollbar-thin">
                     {typeof children === 'function' ? children(userInfo) : children}
                 </main>
             </div>

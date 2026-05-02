@@ -23,9 +23,9 @@ interface TopbarProps {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function getRoleBadge(role: string) {
-    if (role === 'Admin') return { label: 'Admin', bg: 'bg-rose-500/20', text: 'text-rose-400', border: 'border-rose-500/30' };
-    if (role === 'Staff') return { label: 'Staff', bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' };
-    return { label: 'Author', bg: 'bg-indigo-500/20', text: 'text-indigo-400', border: 'border-indigo-500/30' };
+    if (role === 'Admin') return { label: 'Admin', bg: 'bg-rose-500/15', text: 'text-rose-300', border: 'border-rose-500/25' };
+    if (role === 'Staff') return { label: 'Staff', bg: 'bg-violet-500/15', text: 'text-violet-300', border: 'border-violet-500/25' };
+    return { label: 'Author', bg: 'bg-indigo-500/15', text: 'text-indigo-300', border: 'border-indigo-500/25' };
 }
 
 function getGreeting() {
@@ -116,11 +116,12 @@ function BugReportModal({ onClose }: { onClose: () => void }) {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
             onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-3xl overflow-hidden shadow-2xl">
+            <div className="w-full max-w-md overflow-hidden shadow-2xl animate-scale-in"
+                style={{ background: 'var(--bg-modal)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-3xl)', boxShadow: 'var(--shadow-2xl)' }}>
                 {/* Header */}
-                <div className="flex items-center gap-3 px-6 py-4 border-b border-[var(--border-color)]">
+                <div className="flex items-center gap-3 px-6 py-4" style={{ borderBottom: '1px solid var(--border-color)' }}>
                     <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
                         style={{ background: 'linear-gradient(135deg,#f59e0b,#ef4444)' }}>
                         <Bug className="w-4 h-4 text-white" />
@@ -352,13 +353,22 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
 
             {/* ── Header ────────────────────────────────────────────────── */}
             <header
-                style={{ background: 'var(--bg-topbar)', borderBottom: '1px solid var(--border-color)' }}
-                className="h-[68px] flex items-center px-6 py-5 gap-4 shrink-0 relative z-20"
+                style={{
+                    background: 'var(--bg-topbar)',
+                    borderBottom: '1px solid var(--border-color)',
+                    backdropFilter: 'blur(16px)',
+                    WebkitBackdropFilter: 'blur(16px)',
+                }}
+                className="h-[var(--topbar-height)] flex items-center px-5 gap-4 shrink-0 relative z-20"
             >
-                {pageTitle && <h1 className="text-[var(--text-primary)] font-bold text-lg">{pageTitle}</h1>}
+                {pageTitle && (
+                    <h1 className="font-bold text-base" style={{ color: 'var(--text-bright)' }}>
+                        {pageTitle}
+                    </h1>
+                )}
                 <div className="flex-1" />
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                     {/* ── Bell / Notification ── */}
                     <div className="relative">
                         <button
@@ -368,7 +378,10 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                                 setUserOpen(false);
                                 if (nextOpen) appNotificationService.markAllRead();
                             }}
-                            className="relative w-9 h-9 flex items-center justify-center rounded-xl bg-[var(--text-primary)]/5 hover:bg-[var(--text-primary)]/10 transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                            className="relative w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150"
+                            style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'; }}
                         >
                             <Bell className="w-4 h-4" />
                             {unreadCount > 0 && (
@@ -384,13 +397,19 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
                                 <div
-                                    className="absolute right-0 top-full mt-2 w-72 rounded-2xl shadow-2xl z-50 overflow-hidden"
-                                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
+                                    className="absolute right-0 top-full mt-2 w-72 z-50 overflow-hidden animate-slide-in-right"
+                                    style={{
+                                        background: 'var(--bg-elevated)',
+                                        border: '1px solid var(--border-color)',
+                                        borderRadius: 'var(--radius-2xl)',
+                                        boxShadow: 'var(--shadow-xl)',
+                                        backdropFilter: 'blur(16px)',
+                                    }}
                                 >
                                     {/* Header */}
-                                    <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)]">
+                                    <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border-color)' }}>
                                         <div className="flex items-center gap-2">
-                                            <Bell className="w-4 h-4 text-[#f5a623]" />
+                                            <Bell className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
                                             <span className="text-[var(--text-primary)] text-sm font-semibold">Thông báo</span>
                                         </div>
                                         <button onClick={() => setNotifOpen(false)}
@@ -446,7 +465,10 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                     {/* Bug Report */}
                     <button
                         onClick={() => setBugModalOpen(true)}
-                        className="w-9 h-9 flex items-center justify-center rounded-xl bg-[var(--text-primary)]/5 hover:bg-[var(--text-primary)]/10 transition-colors text-[var(--text-secondary)] hover:text-amber-400"
+                        className="w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150"
+                        style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--warning)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'; }}
                         title="Báo cáo lỗi"
                     >
                         <Bug className="w-4 h-4" />
@@ -456,7 +478,10 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                     {onSettings && (
                         <button
                             onClick={onSettings}
-                            className="w-9 h-9 flex items-center justify-center rounded-xl bg-[var(--text-primary)]/5 hover:bg-[var(--text-primary)]/10 transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                            className="w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150"
+                            style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'; }}
                         >
                             <Settings className="w-4 h-4" />
                         </button>
@@ -467,32 +492,41 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                 <div className="relative">
                     <button
                         onClick={() => { setUserOpen(o => !o); setNotifOpen(false); }}
-                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-[var(--text-primary)]/5 hover:bg-[var(--text-primary)]/10 transition-colors"
+                        className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl transition-all duration-150"
+                        style={{ background: 'var(--bg-hover)' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-active)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
                     >
                         <div
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm"
-                            style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)' }}
+                            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-lg"
+                            style={{ background: 'var(--gradient-brand)', boxShadow: '0 0 12px rgba(99,102,241,0.35)' }}
                         >
                             {getInitials(fullName)}
                         </div>
-                        <span className="text-[var(--text-primary)] text-sm font-medium max-w-[120px] truncate hidden sm:block">
+                        <span className="text-sm font-medium max-w-[120px] truncate hidden sm:block" style={{ color: 'var(--text-primary)' }}>
                             {fullName}
                         </span>
-                        <ChevronDown className={`w-3.5 h-3.5 text-[var(--text-secondary)] transition-transform ${userOpen ? 'rotate-180' : ''}`} />
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${userOpen ? 'rotate-180' : ''}`} style={{ color: 'var(--text-secondary)' }} />
                     </button>
 
                     {userOpen && (
                         <>
                             <div className="fixed inset-0 z-40" onClick={() => setUserOpen(false)} />
                             <div
-                                className="absolute right-0 top-full mt-2 w-52 rounded-2xl overflow-hidden shadow-2xl z-50"
-                                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
+                                className="absolute right-0 top-full mt-2 w-56 z-50 overflow-hidden animate-scale-in"
+                                style={{
+                                    background: 'var(--bg-elevated)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: 'var(--radius-2xl)',
+                                    boxShadow: 'var(--shadow-xl)',
+                                    backdropFilter: 'blur(16px)',
+                                }}
                             >
-                                <div className="px-4 py-3 border-b border-[var(--border-color)]">
+                                <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border-color)' }}>
                                     <div className="flex items-center gap-3">
                                         <div
                                             className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
-                                            style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)' }}
+                                            style={{ background: 'var(--gradient-brand)', boxShadow: '0 0 16px rgba(99,102,241,0.3)' }}
                                         >
                                             {getInitials(fullName)}
                                         </div>
@@ -507,7 +541,10 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
 
                                 <button
                                     onClick={() => { setUserOpen(false); navigate('/profile'); }}
-                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors duration-150"
+                                    style={{ color: 'var(--text-secondary)' }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'; }}
                                 >
                                     <User className="w-4 h-4 shrink-0" />
                                     Xem hồ sơ
@@ -516,18 +553,24 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                                 {(role === 'Staff' || role === 'Admin') && (
                                     <button
                                         onClick={() => { setUserOpen(false); navigate('/staff'); }}
-                                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-amber-400 hover:bg-amber-500/10 transition-colors"
+                                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors duration-150"
+                                        style={{ color: 'var(--accent-text)' }}
+                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-active)'; }}
+                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; }}
                                     >
                                         <Briefcase className="w-4 h-4 shrink-0" />
                                         Quản lý báo cáo
                                     </button>
                                 )}
 
-                                <div className="h-px bg-[var(--border-color)] mx-3" />
+                                <div className="mx-3 my-1" style={{ height: '1px', background: 'var(--border-color)' }} />
 
                                 <button
                                     onClick={onLogout}
-                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors duration-150"
+                                    style={{ color: 'var(--error)' }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(248,113,113,0.08)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; }}
                                 >
                                     <LogOut className="w-4 h-4 shrink-0" /> Đăng xuất
                                 </button>
