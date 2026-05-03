@@ -1,4 +1,4 @@
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, FileText } from 'lucide-react';
 import { groupColor } from './helpers';
 import ScoreBar from './ScoreBar';
 import type { ProjectReportResponse } from '../../services/reportService';
@@ -8,9 +8,11 @@ interface GroupCardProps {
     idx: number;
     expanded: boolean;
     onToggle: () => void;
+    projectId: string;
+    onViewEvidence?: (ordinals: number[], evidenceQuote: string, criterionLabel: string) => void;
 }
 
-export default function GroupCard({ group, idx, expanded, onToggle }: GroupCardProps) {
+export default function GroupCard({ group, idx, expanded, onToggle, projectId, onViewEvidence }: GroupCardProps) {
     const color = groupColor(idx);
     const pct = Math.round((group.score / group.maxScore) * 100);
     return (
@@ -42,19 +44,45 @@ export default function GroupCard({ group, idx, expanded, onToggle }: GroupCardP
                         return (
                             <div key={c.key} className="pt-4" style={{ borderTop: ci > 0 ? '1px solid var(--border-color)' : undefined }}>
                                 {/* Header: key + name + score */}
-                                <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center gap-2">
+                                <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                                    <div className="flex items-center gap-2 min-w-0">
                                         <span className="text-xs font-bold px-2 py-0.5 rounded-full"
                                             style={{ background: `${color}18`, color }}>
                                             {c.key}
                                         </span>
                                         <span className="text-[var(--text-primary)] text-sm font-semibold">{c.criterionName}</span>
                                     </div>
-                                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                                        <span className="text-xs font-semibold" style={{ color: `${color}99` }}>{cpct}%</span>
-                                        <span className="text-sm font-bold" style={{ color }}>
-                                            {c.score.toFixed(1)}<span className="text-[var(--text-secondary)] font-normal text-xs">/{c.maxScore}</span>
-                                        </span>
+                                    <div className="flex items-center gap-2 shrink-0 ml-auto">
+                                        {onViewEvidence &&
+                                            c.evidenceChunkOrdinals &&
+                                            c.evidenceChunkOrdinals.length > 0 &&
+                                            projectId && (
+                                                <button
+                                                    type="button"
+                                                    onClick={e => {
+                                                        e.stopPropagation();
+                                                        onViewEvidence(
+                                                            c.evidenceChunkOrdinals!,
+                                                            c.evidence ?? '',
+                                                            `${c.key} — ${c.criterionName}`
+                                                        );
+                                                    }}
+                                                    className="text-[11px] font-semibold px-2.5 py-1 rounded-lg flex items-center gap-1 transition-opacity hover:opacity-90"
+                                                    style={{
+                                                        background: 'rgba(139,92,246,0.15)',
+                                                        color: '#c4b5fd',
+                                                        border: '1px solid rgba(139,92,246,0.35)',
+                                                    }}>
+                                                    <FileText className="w-3.5 h-3.5" />
+                                                    Đoạn gốc
+                                                </button>
+                                            )}
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-xs font-semibold" style={{ color: `${color}99` }}>{cpct}%</span>
+                                            <span className="text-sm font-bold" style={{ color }}>
+                                                {c.score.toFixed(1)}<span className="text-[var(--text-secondary)] font-normal text-xs">/{c.maxScore}</span>
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
 

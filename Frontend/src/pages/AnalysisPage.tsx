@@ -11,6 +11,7 @@ import { classifyColor, groupColor } from '../components/analysis/helpers';
 import DonutChart from '../components/analysis/DonutChart';
 import RadarChart from '../components/analysis/RadarChart';
 import GroupCard from '../components/analysis/GroupCard';
+import EvidenceChunksPanel from '../components/analysis/EvidenceChunksPanel';
 import NarrativeChartsPanel from '../components/analysis/NarrativeChartsPanel';
 import { useToast } from '../components/Toast';
 import { browserNotificationService } from '../services/browserNotificationService';
@@ -46,6 +47,11 @@ function AnalysisContent() {
     const [cancelingJob, setCancelingJob] = useState(false);
     const [activeReportId, setActiveReportId] = useState<string | null>(null);
     const [showAnalyzeConfirm, setShowAnalyzeConfirm] = useState(false);
+    const [evidencePanel, setEvidencePanel] = useState<{
+        ordinals: number[];
+        highlight: string;
+        label: string;
+    } | null>(null);
     const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const mountedRef = useRef(true);
     const pollingJobRef = useRef<string | null>(null);
@@ -931,7 +937,12 @@ function AnalysisContent() {
                                             {report.groups.map((g, i) => (
                                                 <GroupCard key={g.name} group={g} idx={i}
                                                     expanded={!!expandedGroups[i]}
-                                                    onToggle={() => toggleGroup(i)} />
+                                                    onToggle={() => toggleGroup(i)}
+                                                    projectId={selectedId}
+                                                    onViewEvidence={(ordinals, highlight, label) =>
+                                                        setEvidencePanel({ ordinals, highlight, label })
+                                                    }
+                                                />
                                             ))}
                                         </div>
                                     </div>
@@ -1082,6 +1093,14 @@ function AnalysisContent() {
 
                 </div>
             </div>
+            <EvidenceChunksPanel
+                open={evidencePanel !== null}
+                onClose={() => setEvidencePanel(null)}
+                projectId={selectedId}
+                ordinals={evidencePanel?.ordinals ?? []}
+                evidenceHighlight={evidencePanel?.highlight ?? ''}
+                criterionLabel={evidencePanel?.label ?? ''}
+            />
             <ConfirmDialog
                 isOpen={showAnalyzeConfirm}
                 onClose={() => setShowAnalyzeConfirm(false)}
