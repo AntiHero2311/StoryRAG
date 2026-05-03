@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Pgvector.EntityFrameworkCore;
 using Repository.Entities;
 
@@ -26,6 +28,7 @@ namespace Repository.Data
 
         // AI Reports
         public DbSet<ProjectReport> ProjectReports { get; set; }
+        public DbSet<ReportItem> ReportItems { get; set; }
         public DbSet<ProjectAnalysisJob> ProjectAnalysisJobs { get; set; }
         public DbSet<ProjectAnalysisFact> ProjectAnalysisFacts { get; set; }
 
@@ -324,6 +327,36 @@ namespace Repository.Data
                 entity.HasOne(r => r.User)
                       .WithMany()
                       .HasForeignKey(r => r.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── ReportItem (rubric row ↔ chunk evidence, JSONB list of ints) ──────
+            modelBuilder.Entity<ReportItem>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.CriterionKey).IsRequired().HasMaxLength(20);
+
+                var jsonOpts = (JsonSerializerOptions?)null;
+                var chunkIdsConverter = new ValueConverter<List<int>?, string?>(
+                    v => v == null ? null : JsonSerializer.Serialize(v, jsonOpts),
+                    v => string.IsNullOrWhiteSpace(v) ? null : JsonSerializer.Deserialize<List<int>>(v, jsonOpts));
+
+                var chunkIdsComparer = new ValueComparer<List<int>?>(
+                    (a, b) => (a == null && b == null) || (a != null && b != null && a.SequenceEqual(b)),
+                    v => v == null ? 0 : v.Aggregate(0, (h, x) => HashCode.Combine(h, x)),
+                    v => v == null ? null : v.ToList());
+
+                entity.Property(e => e.EvidenceChunkIds)
+                      .HasColumnType("jsonb")
+                      .HasConversion(chunkIdsConverter)
+                      .Metadata.SetValueComparer(chunkIdsComparer);
+
+                entity.HasIndex(e => new { e.ProjectReportId, e.CriterionKey }).IsUnique();
+
+                entity.HasOne(i => i.ProjectReport)
+                      .WithMany(r => r.ReportItems)
+                      .HasForeignKey(i => i.ProjectReportId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
 

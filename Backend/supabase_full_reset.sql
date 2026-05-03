@@ -25,6 +25,7 @@ DROP TABLE IF EXISTS "CharacterEntries"      CASCADE;
 DROP TABLE IF EXISTS "UserSettings"          CASCADE;
 DROP TABLE IF EXISTS "ProjectAnalysisFacts"  CASCADE;
 DROP TABLE IF EXISTS "ProjectAnalysisJobs"   CASCADE;
+DROP TABLE IF EXISTS "ReportItems"           CASCADE;
 DROP TABLE IF EXISTS "ProjectReports"        CASCADE;
 DROP TABLE IF EXISTS "ProjectGenres"         CASCADE;
 DROP TABLE IF EXISTS "ChapterChunks"         CASCADE;
@@ -273,6 +274,20 @@ CREATE TABLE "ProjectReports" (
     CONSTRAINT "FK_ProjectReports_Projects" FOREIGN KEY ("ProjectId") REFERENCES "Projects" ("Id") ON DELETE CASCADE,
     CONSTRAINT "FK_ProjectReports_Users"    FOREIGN KEY ("UserId")    REFERENCES "Users"    ("Id") ON DELETE CASCADE
 );
+
+-- ── ReportItems (Stage 2 rubric row ↔ evidence chunk ids, JSONB mảng số nguyên) ──
+CREATE TABLE "ReportItems" (
+    "Id"               uuid                     NOT NULL DEFAULT uuid_generate_v4(),
+    "ProjectReportId"  uuid                     NOT NULL,
+    "CriterionKey"     character varying(20)    NOT NULL,
+    "EvidenceChunkIds" jsonb,
+    CONSTRAINT "PK_ReportItems" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_ReportItems_ProjectReports_ProjectReportId" FOREIGN KEY ("ProjectReportId")
+        REFERENCES "ProjectReports" ("Id") ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX "IX_ReportItems_ProjectReportId_CriterionKey"
+    ON "ReportItems" ("ProjectReportId", "CriterionKey");
 
 -- ── ProjectAnalysisJobs ────────────────────────────────────────
 CREATE TABLE "ProjectAnalysisJobs" (
@@ -721,4 +736,5 @@ INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
     ('20260415084500_EnsureStaffKnowledgeAndReviewTables', '9.0.0'),
     ('20260422192758_AddActionTypeToRewriteHistory', '9.0.0'),
     ('20260428181448_AddPasswordFormatVersion', '9.0.0'),
-    ('20260503030041_AddProjectAnalysisFact', '9.0.0');
+    ('20260503030041_AddProjectAnalysisFact', '9.0.0'),
+    ('20260503031424_AddReportItemEvidenceChunkIds', '9.0.0');
