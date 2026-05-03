@@ -4,10 +4,11 @@ import {
     Users, UserCheck, UserX, Shield, BookOpen, Briefcase,
     RefreshCw, Search, ChevronUp, ChevronDown,
     FileText, AlignLeft, Sparkles,
-    CreditCard, Bug, Globe, DollarSign,
+    CreditCard, Bug, Globe, DollarSign, Settings2, Save, Loader2, CheckCircle2,
 } from 'lucide-react';
 import { adminService, UserSummary, UserStatsResponse, AdminOverviewStats } from '../services/adminService';
 import MainLayout from '../layouts/MainLayout';
+import api from '../services/api';
 
 type SortKey = 'fullName' | 'email' | 'role' | 'createdAt';
 type SortDir = 'asc' | 'desc';
@@ -93,6 +94,151 @@ const roleStyle = (role: string) => {
 };
 const roleLabel = (role: string) =>
     ({ Admin: 'Admin', Author: 'Tác giả', Staff: 'Nhân viên' } as Record<string, string>)[role] ?? role;
+
+// ── RAG Config Panel ──────────────────────────────────────────────────────
+
+type RagConfig = {
+    chunk_size: number;
+    chunk_overlap: number;
+    top_k_chat: number;
+    top_k_report: number;
+    splitter: string;
+};
+
+function RagConfigPanel() {
+    const [config, setConfig] = useState<RagConfig>({
+        chunk_size: 800, chunk_overlap: 100, top_k_chat: 5, top_k_report: 8, splitter: 'paragraph',
+    });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving]   = useState(false);
+    const [saved, setSaved]     = useState(false);
+    const [error, setError]     = useState<string | null>(null);
+
+    useEffect(() => {
+        api.get<RagConfig>('/admin/rag-config')
+            .then(r => setConfig(r.data))
+            .catch(() => setError('Không tải được cấu hình RAG.'))
+            .finally(() => setLoading(false));
+    }, []);
+
+    const handleChange = (field: keyof RagConfig, value: string | number) =>
+        setConfig(prev => ({ ...prev, [field]: value }));
+
+    const handleSave = async () => {
+        setSaving(true); setError(null); setSaved(false);
+        try {
+            await api.put('/admin/rag-config', config);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 3000);
+        } catch (e: any) {
+            const errs: string[] = e?.response?.data?.errors ?? [];
+            setError(errs.length ? errs.join(' ') : (e?.response?.data?.message ?? 'Lưu thất bại.'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const inputBase = [
+        'w-full h-10 px-3 rounded-xl text-sm outline-none',
+        'bg-[var(--bg-hover)] border border-[var(--border-color)]',
+        'text-[var(--text-primary)] focus:border-indigo-500/60 transition-colors',
+    ].join(' ');
+
+    if (loading) return (
+        <div className="flex items-center gap-2 py-6 text-sm text-[var(--text-secondary)]">
+            <Loader2 className="w-4 h-4 animate-spin" /> Đang tải cấu hình...
+        </div>
+    );
+
+    return (
+        <div className="space-y-5">
+            {error && (
+                <div className="px-4 py-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-sm">
+                    {error}
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                {/* chunk_size */}
+                <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                        Chunk size <span className="normal-case font-normal">(100–4000)</span>
+                    </label>
+                    <input id="rag-chunk-size" type="number" min={100} max={4000} className={inputBase}
+                        value={config.chunk_size} onChange={e => handleChange('chunk_size', Number(e.target.value))} />
+                    <p className="text-[10px] text-[var(--text-secondary)]">Số ký tự mỗi chunk khi embed nội dung chương.</p>
+                </div>
+
+                {/* chunk_overlap */}
+                <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                        Chunk overlap <span className="normal-case font-normal">(0–500)</span>
+                    </label>
+                    <input id="rag-chunk-overlap" type="number" min={0} max={500} className={inputBase}
+                        value={config.chunk_overlap} onChange={e => handleChange('chunk_overlap', Number(e.target.value))} />
+                    <p className="text-[10px] text-[var(--text-secondary)]">Số ký tự phần gọi nối giữa các chunk liên tiếp.</p>
+                </div>
+
+                {/* splitter */}
+                <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                        Splitter strategy
+                    </label>
+                    <select id="rag-splitter" className={inputBase}
+                        value={config.splitter} onChange={e => handleChange('splitter', e.target.value)}>
+                        <option value="paragraph">paragraph — đoạn văn</option>
+                        <option value="sentence">sentence — câu</option>
+                        <option value="fixed">fixed — cố định</option>
+                    </select>
+                    <p className="text-[10px] text-[var(--text-secondary)]">Chiến lược chia nhỏ nội dung trước khi embed.</p>
+                </div>
+
+                {/* top_k_chat */}
+                <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                        Top-K Chat <span className="normal-case font-normal">(1–20)</span>
+                    </label>
+                    <input id="rag-top-k-chat" type="number" min={1} max={20} className={inputBase}
+                        value={config.top_k_chat} onChange={e => handleChange('top_k_chat', Number(e.target.value))} />
+                    <p className="text-[10px] text-[var(--text-secondary)]">Số chunk ngữ cảnh trả về cho chức năng AI Chat.</p>
+                </div>
+
+                {/* top_k_report */}
+                <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                        Top-K Report <span className="normal-case font-normal">(1–20)</span>
+                    </label>
+                    <input id="rag-top-k-report" type="number" min={1} max={20} className={inputBase}
+                        value={config.top_k_report} onChange={e => handleChange('top_k_report', Number(e.target.value))} />
+                    <p className="text-[10px] text-[var(--text-secondary)]">Số chunk dùng để chấm điểm từng tiêu chí rubric (Stage 2 RAG).</p>
+                </div>
+
+            </div>
+
+            {/* Save button */}
+            <div className="flex items-center gap-3 pt-2">
+                <button
+                    id="rag-config-save-btn"
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-60 transition-all"
+                    style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 4px 16px rgba(99,102,241,0.3)' }}
+                >
+                    {saving
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Đang lưu...</>
+                        : <><Save className="w-4 h-4" /> Lưu cấu hình</>
+                    }
+                </button>
+                {saved && (
+                    <span className="flex items-center gap-1.5 text-emerald-400 text-sm font-semibold">
+                        <CheckCircle2 className="w-4 h-4" /> Đã lưu thành công!
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -405,7 +551,31 @@ function AdminDashboardContent() {
                         </table>
                     </div>
                 </div>
+
+                {/* ── RAG Configuration ───────────────────────────────── */}
+                <div
+                    className="bg-[var(--bg-surface)] border border-indigo-500/20 rounded-3xl overflow-hidden"
+                    style={{ boxShadow: '0 0 40px rgba(99,102,241,0.06)' }}
+                >
+                    <div className="px-6 py-4 border-b border-[var(--border-color)] flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+                            style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.15),rgba(139,92,246,0.1))' }}>
+                            <Settings2 className="w-4 h-4 text-indigo-400" />
+                        </div>
+                        <div>
+                            <h2 className="font-semibold text-sm text-[var(--text-primary)]">Cấu hình RAG</h2>
+                            <p className="text-xs text-[var(--text-secondary)]">Điều chỉnh tham số chunking và retrieval — áp dụng ngay, không cần restart server.</p>
+                        </div>
+                    </div>
+                    <div className="p-6">
+                        <RagConfigPanel />
+                    </div>
+                </div>
+
             </main>
+
         </div>
     );
 }
+
+// ── Inject RAG Config into the dashboard layout ────────────────────────

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Settings, Bell, ChevronDown, LogOut, User, Sparkles, X,
-    Bug, Briefcase, AlertTriangle, Loader2, CheckCircle,
+    Bug, Briefcase, AlertTriangle, Loader2, CheckCircle, Search
 } from 'lucide-react';
 import { getInitials } from '../utils/jwtHelper';
 import {
@@ -366,7 +366,27 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                         {pageTitle}
                     </h1>
                 )}
-                <div className="flex-1" />
+                <div className="flex-1 max-w-md mx-6">
+                    <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[var(--accent)] transition-colors" />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Tìm kiếm dự án, chương, nhân vật..."
+                            className="w-full bg-[var(--input-bg)] text-[var(--text-primary)] text-sm rounded-xl pl-10 pr-4 py-2 border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] outline-none transition-all placeholder:text-[var(--text-secondary)] placeholder:opacity-50"
+                            style={{
+                                backdropFilter: 'blur(12px)',
+                                WebkitBackdropFilter: 'blur(12px)',
+                            }}
+                        />
+                        <div className="absolute inset-y-0 right-0 pr-2 flex items-center">
+                            <kbd className="hidden sm:inline-block px-2 py-0.5 rounded text-[10px] font-semibold text-[var(--text-secondary)] bg-[var(--hover-bg)] border border-[var(--border-color)]">
+                                Ctrl K
+                            </kbd>
+                        </div>
+                    </div>
+                </div>
 
                 <div className="flex items-center gap-1.5">
                     {/* ── Bell / Notification ── */}

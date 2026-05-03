@@ -1,7 +1,8 @@
 # StoryRAG — Tổng Quan Kiến Trúc Hệ Thống
 
-> **Phiên bản tài liệu:** 1.2  
-> **Cập nhật lần cuối:** Tháng 5/2026
+> **Phiên bản tài liệu:** 1.3  
+> **Cập nhật lần cuối:** Tháng 5/2026 — Thêm Section 11b: EF Core Migrations trên Supabase
+
 
 ---
 
@@ -518,6 +519,147 @@ npm run dev
 3. EF Core sẽ không cần migrate lại (migration history đã ghi sẵn)
 
 ---
+
+## 11b. EF Core Migrations trên Supabase PostgreSQL
+
+> **Bắt buộc đọc trước khi chạy `dotnet ef`** — Supabase có một số đặc điểm khác PostgreSQL tự host.
+
+### Cấu hình Connection String đúng cho EF Tools
+
+Supabase cung cấp **2 loại connection string** khác nhau:
+
+| Loại | Port | Dùng cho |
+|------|------|----------|
+| **Transaction Pooler** | `6543` | Runtime app (ngắn hạn, nhiều request) |
+| **Session Mode / Direct** | `5432` | EF Core migrations (cần session-level lock) |
+
+`dotnet ef` yêu cầu **session-level lock** (`LOCK TABLE ... IN ACCESS EXCLUSIVE MODE`) → **phải dùng port `5432`** (direct connection hoặc session pooler).
+
+> ⚠️ Nếu dùng port `6543` (transaction pooler), migration sẽ báo lỗi hoặc treo vô hạn.
+
+Để chạy migration, tạm thời thay connection string trong `appsettings.json` hoặc truyền thẳng qua `--connection`:
+
+```bash
+# Cách 1: Dùng --connection flag (không cần sửa appsettings)
+dotnet ef database update \
+  --project Repository/Repository.csproj \
+  --startup-project Api/Api.csproj \
+  --connection "Host=db.<project-ref>.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=<db-password>"
+
+# Cách 2: Sửa tạm appsettings.Development.json dùng port 5432, rồi chạy bình thường
+dotnet ef database update \
+  --project Repository/Repository.csproj \
+  --startup-project Api/Api.csproj
+```
+
+### Các lệnh thường dùng
+
+```bash
+# Tạo migration mới (sau khi sửa entity / AppDbContext)
+dotnet ef migrations add <TênMigration> \
+  --project Repository/Repository.csproj \
+  --startup-project Api/Api.csproj
+
+# Apply migration lên Supabase
+dotnet ef database update \
+  --project Repository/Repository.csproj \
+  --startup-project Api/Api.csproj
+
+# Xem danh sách migrations và trạng thái
+dotnet ef migrations list \
+  --project Repository/Repository.csproj \
+  --startup-project Api/Api.csproj
+
+# Rollback về migration trước (tên migration muốn quay về)
+dotnet ef database update <TênMigrationMuốnQuayVề> \
+  --project Repository/Repository.csproj \
+  --startup-project Api/Api.csproj
+
+# Xóa migration cuối chưa apply
+dotnet ef migrations remove \
+  --project Repository/Repository.csproj \
+  --startup-project Api/Api.csproj
+```
+
+### Lỗi thường gặp & cách xử lý
+
+#### ❌ `42P07: relation "table_name" already exists`
+
+**Nguyên nhân:** Bảng đã được tạo thủ công (ví dụ qua Supabase SQL Editor hoặc MCP tool) nhưng chưa đăng ký vào `__EFMigrationsHistory`.
+
+**Cách xử lý:**
+
+```bash
+# Bước 1: Lấy tên migration ID vừa tạo
+dotnet ef migrations list --project Repository/Repository.csproj --startup-project Api/Api.csproj
+# Ví dụ output: 20260503060214_AddSystemConfig
+
+# Bước 2: Tìm ProductVersion của EF đang dùng
+dotnet ef --version
+# Ví dụ: 9.0.3
+
+# Bước 3: Insert thủ công vào migration history trên Supabase SQL Editor
+INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+VALUES ('20260503060214_AddSystemConfig', '9.0.3')
+ON CONFLICT ("MigrationId") DO NOTHING;
+
+# Bước 4: Chạy lại database update — sẽ thấy "No migrations were applied. The database is already up to date."
+dotnet ef database update --project Repository/Repository.csproj --startup-project Api/Api.csproj
+```
+
+#### ❌ DI Lifetime Conflict khi chạy `dotnet ef`
+
+```
+Cannot consume scoped service 'DbContextOptions<AppDbContext>' from singleton
+```
+
+**Nguyên nhân:** `AddDbContextFactory<T>(ServiceLifetime.Singleton)` xung đột với `AddDbContext<T>()` (scoped) vì cả hai chia sẻ cùng `DbContextOptions` (scoped).
+
+**Cách xử lý đúng:** Singleton service cần DB access **không được** dùng `IDbContextFactory` khi đã có `AddDbContext`. Thay bằng `IServiceScopeFactory`:
+
+```csharp
+// ✅ ĐÚNG — Singleton service dùng IServiceScopeFactory
+public class MyService : IMyService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public MyService(IServiceScopeFactory scopeFactory) { _scopeFactory = scopeFactory; }
+
+    public async Task DoWorkAsync()
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        // ... sử dụng db bình thường
+    }
+}
+
+// ❌ SAI — Gây xung đột lifetime
+builder.Services.AddDbContextFactory<AppDbContext>(..., ServiceLifetime.Singleton);
+builder.Services.AddSingleton<IMyService, MyService>(); // MyService inject IDbContextFactory
+```
+
+#### ❌ Migration treo / timeout khi dùng Transaction Pooler
+
+**Triệu chứng:** Lệnh `database update` chạy mãi không xong, log hiện `Acquiring an exclusive lock...`
+
+**Nguyên nhân:** Transaction Pooler (port 6543) không hỗ trợ session-level locks.
+
+**Cách xử lý:** Dùng **Direct Connection** (port 5432) — lấy từ Supabase Dashboard → Settings → Database → Connection String → chọn tab **"Direct connection"**.
+
+### Workflow chuẩn khi thêm entity mới
+
+```
+1. Tạo Entity class trong Repository/Entities/
+2. Thêm DbSet + OnModelCreating config vào AppDbContext.cs
+3. dotnet ef migrations add <TênMigration> ...
+4. Kiểm tra file migration vừa tạo (Repository/Migrations/)
+5. dotnet ef database update ...  (dùng port 5432)
+6. Verify: dotnet ef migrations list → tất cả hiển thị [applied]
+7. Đăng ký service mới vào Program.cs (nếu có)
+```
+
+---
+
 
 ## 12. Services Overview
 

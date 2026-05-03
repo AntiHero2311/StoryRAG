@@ -27,12 +27,13 @@ namespace Service.Implementations
             if (chunkEntities.Count != decryptedChunks.Count)
                 throw new InvalidOperationException("Chunk entities và plaintext không khớp số lượng.");
 
-            var topK = ReadIntConfig("RagAnalysis:RetrievalTopK", 8, 1, 64);
+            var topK             = Math.Clamp(await _sysConfig.GetAsync("rag.top_k_report", 8), 1, 64);
             var stage1BatchChunks = ReadIntConfig("RagAnalysis:Stage1BatchChunks", 4, 1, 20);
-            var stage1MaxChars = ReadIntConfig("RagAnalysis:Stage1MaxChunkChars", 900, 200, 4000);
-            var factsMaxChars = ReadIntConfig("RagAnalysis:FactsJsonMaxChars", 12000, 2000, 50000);
-            var bibleMaxChars = ReadIntConfig("RagAnalysis:BibleMaxChars", 4000, 500, 20000);
+            var stage1MaxChars   = ReadIntConfig("RagAnalysis:Stage1MaxChunkChars", 900, 200, 4000);
+            var factsMaxChars    = ReadIntConfig("RagAnalysis:FactsJsonMaxChars", 12000, 2000, 50000);
+            var bibleMaxChars    = ReadIntConfig("RagAnalysis:BibleMaxChars", 4000, 500, 20000);
             var embedTokenEstimate = ReadIntConfig("RagAnalysis:EstimatedTokensPerQueryEmbed", 200, 0, 2000);
+
 
             var ordinalByChunkId = new Dictionary<Guid, int>(chunkEntities.Count);
             for (var i = 0; i < chunkEntities.Count; i++)

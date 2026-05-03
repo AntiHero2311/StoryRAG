@@ -20,12 +20,13 @@ namespace Service.Implementations
         private readonly IEmbeddingService _embeddingService;
         private readonly ILogger<ProjectReportService> _logger;
         private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
+        private readonly ISystemConfigService _sysConfig;
         private const int DefaultAnalyzeBatchSize = 12;
         private const int DefaultAnalyzeRpmLimit = 15;
         private static readonly SemaphoreSlim AnalyzeRpmLock = new(1, 1);
         private static readonly Queue<DateTime> AnalyzeCallTimestamps = [];
 
-        // ── Rubric definition (8 nhóm, 20 tiêu chí, 100 điểm) ──────────────────
+        // ── Rubric definition (8 nhóm, 20 tiêu chí, 100 điểm) ──────────────────────
         private static readonly List<(string Key, string Group, string Name, decimal Max)> Rubric = new()
         {
             // 1. Expectations — Kỳ vọng thể loại & tiền đề (10 điểm)
@@ -58,12 +59,18 @@ namespace Service.Implementations
             ("8.2", "Xây dựng thế giới",           "Bối cảnh",                        5),
         };
 
-        public ProjectReportService(AppDbContext context, IConfiguration config, IEmbeddingService embeddingService, ILogger<ProjectReportService> logger)
+        public ProjectReportService(
+            AppDbContext context,
+            IConfiguration config,
+            IEmbeddingService embeddingService,
+            ILogger<ProjectReportService> logger,
+            ISystemConfigService sysConfig)
         {
             _context = context;
             _config = config;
             _embeddingService = embeddingService;
             _logger = logger;
+            _sysConfig = sysConfig;
             _geminiChatExecutor = new GeminiChatFailoverExecutor(
                 config,
                 logger,
@@ -71,6 +78,8 @@ namespace Service.Implementations
                 GeminiPrimaryKeyRole.Analyze,
                 TimeSpan.FromMinutes(10)); // Tăng lên 10 phút cho các bộ truyện lớn
         }
+
+
 
         private async Task<OpenAI.Chat.ChatCompletion> CompleteChatWithGeminiAsync(
             IEnumerable<ChatMessage> messages,

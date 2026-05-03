@@ -23,7 +23,6 @@ namespace Api.Controllers
         private readonly INarrativeAnalyticsService _narrativeAnalyticsService;
         private readonly IReportExportService _reportExportService;
         private readonly ISubscriptionService _subscriptionService;
-        private readonly IServiceScopeFactory _scopeFactory;
 
         public AiController(
             IEmbeddingService embeddingService,
@@ -34,7 +33,8 @@ namespace Api.Controllers
             IAiAnalysisHistoryService historyService,
             IProjectAnalysisJobService analysisJobService,
             INarrativeAnalyticsService narrativeAnalyticsService,
-            IReportExportService reportExportService)
+            IReportExportService reportExportService,
+            ISubscriptionService subscriptionService)
         {
             _embeddingService = embeddingService;
             _aiChatService = aiChatService;
@@ -45,6 +45,7 @@ namespace Api.Controllers
             _analysisJobService = analysisJobService;
             _narrativeAnalyticsService = narrativeAnalyticsService;
             _reportExportService = reportExportService;
+            _subscriptionService = subscriptionService;
         }
 
         /// <summary>Embed tất cả chunks của current version của một chương.</summary>

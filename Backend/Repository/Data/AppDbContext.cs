@@ -58,6 +58,9 @@ namespace Repository.Data
         public DbSet<StaffKnowledgeBaseItem> StaffKnowledgeBaseItems { get; set; }
         public DbSet<StaffAnalysisReview> StaffAnalysisReviews { get; set; }
 
+        // System Config (Admin runtime configuration)
+        public DbSet<SystemConfig> SystemConfigs { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -763,6 +766,22 @@ namespace Repository.Data
                 entity.HasOne(e => e.RerunReport)
                       .WithMany()
                       .HasForeignKey(e => e.RerunReportId)
+                      .OnDelete(DeleteBehavior.SetNull)
+                      .IsRequired(false);
+            });
+
+            // ── SystemConfig ──────────────────────────────────────────────────────
+            modelBuilder.Entity<SystemConfig>(entity =>
+            {
+                entity.HasKey(e => e.Key);
+                entity.Property(e => e.Key).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Value).IsRequired().HasColumnType("jsonb").HasDefaultValue("null");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("NOW()");
+                entity.ToTable("system_config");
+
+                entity.HasOne(e => e.Updater)
+                      .WithMany()
+                      .HasForeignKey(e => e.UpdatedBy)
                       .OnDelete(DeleteBehavior.SetNull)
                       .IsRequired(false);
             });

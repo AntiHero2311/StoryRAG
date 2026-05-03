@@ -48,7 +48,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         });
 });
 
+
 // Removed default OpenApi in favor of Swashbuckle
+
 builder.Services.AddControllers();
 
 // Add CORS Policy
@@ -225,6 +227,8 @@ builder.Services.AddScoped<IProjectAnalysisJobService, ProjectAnalysisJobService
 builder.Services.AddSingleton<IAnalysisJobQueue, AnalysisJobQueue>();
 builder.Services.AddHostedService<ProjectAnalysisJobWorker>();
 builder.Services.AddHostedService<AutoEmbeddingWorker>();
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<ISystemConfigService, SystemConfigService>();
 builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection("PayOS"));
 builder.Services.Configure<VnPayOptions>(builder.Configuration.GetSection("VNPay"));
 builder.Services.AddHttpClient("PayOS", (sp, client) =>
