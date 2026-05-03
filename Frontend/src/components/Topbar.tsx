@@ -233,6 +233,7 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
     const [notifications, setNotifications] = useState<AppNotificationItem[]>(() => appNotificationService.getAll());
     const [showWelcome, setShowWelcome] = useState(false);
     const [bugModalOpen, setBugModalOpen] = useState(false);
+    const [searchValue, setSearchValue] = useState('');
     const badge = getRoleBadge(role);
     const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -366,13 +367,22 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                         {pageTitle}
                     </h1>
                 )}
-                <div className="flex-1 max-w-md mx-6">
-                    <div className="relative group">
+                <div className="flex-1 flex justify-center px-6">
+                    <div className="relative group w-full max-w-md">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[var(--accent)] transition-colors" />
                         </div>
                         <input
                             type="text"
+                            value={searchValue}
+                            onChange={(e) => setSearchValue(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && searchValue.trim()) {
+                                    // Giả lập search hoặc navigate tới trang search nếu có
+                                    console.log('Searching for:', searchValue);
+                                    setSearchValue('');
+                                }
+                            }}
                             placeholder="Tìm kiếm dự án, chương, nhân vật..."
                             className="w-full bg-[var(--input-bg)] text-[var(--text-primary)] text-sm rounded-xl pl-10 pr-4 py-2 border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] outline-none transition-all placeholder:text-[var(--text-secondary)] placeholder:opacity-50"
                             style={{
@@ -388,7 +398,7 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                     </div>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2 ml-auto">
                     {/* ── Bell / Notification ── */}
                     <div className="relative">
                         <button

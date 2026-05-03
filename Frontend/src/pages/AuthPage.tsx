@@ -213,15 +213,15 @@ export default function AuthPage() {
                             <Sparkles className="h-4 w-4 shrink-0 text-fuchsia-300 drop-shadow-[0_0_8px_rgba(232,121,249,0.45)]" />
                             Workspace RAG cho truyện dài
                         </div>
-                        <h1 className="mt-7 text-balance text-5xl font-black leading-[1.05] tracking-tight xl:text-[3.35rem] xl:leading-[1.08]">
+                        <h1 className="mt-8 text-balance text-5xl font-black leading-[1.05] tracking-tight xl:text-[3.35rem] xl:leading-[1.08]">
                             <span className="bg-gradient-to-br from-white via-[#ecebff] to-[#a5b4fc] bg-clip-text text-transparent">Đăng nhập vào </span>
                             <span className="bg-gradient-to-r from-indigo-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-transparent">workspace của bạn.</span>
                         </h1>
-                        <p className="mt-6 text-pretty text-lg leading-8 text-zinc-400">
+                        <p className="mt-8 text-pretty text-lg leading-8 text-zinc-400">
                             Soạn thảo chương trong workspace, quản lý Story Bible, đồng bộ chunk/embed và xem báo cáo rubric — có chat RAG và phân tích, không có chế độ AI viết thay bạn.
                         </p>
 
-                        <div className="mt-10 grid w-full max-w-xl grid-cols-3 gap-3">
+                        <div className="mt-12 grid w-full max-w-xl grid-cols-3 gap-4">
                             <AuthMetric icon={Layers3} label="Context" value="Vector + Bible" />
                             <AuthMetric icon={BarChart3} label="Rubric" value="100 điểm" />
                             <AuthMetric icon={ShieldCheck} label="Mã hóa" value="AES-256" />

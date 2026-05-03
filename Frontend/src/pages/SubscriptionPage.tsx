@@ -326,19 +326,16 @@ function ActiveSubscription({
                         </div>
                     </div>
 
-                    <div className="grid sm:grid-cols-2 gap-3">
+                    <div className="pt-2">
                         <button
                             onClick={() => onNavigate('/plans')}
-                            className="py-3.5 rounded-xl text-sm font-bold text-white transition-all hover:brightness-110"
-                            style={{ background: 'linear-gradient(135deg,#a855f7,#ec4899)', boxShadow: '0 16px 28px -12px rgba(236,72,153,0.55)' }}
+                            className="w-full py-4 rounded-2xl text-sm font-black text-white transition-all hover:brightness-110 flex items-center justify-center gap-2 group"
+                            style={{ 
+                                background: 'linear-gradient(135deg,#a855f7,#ec4899)', 
+                                boxShadow: '0 16px 32px -12px rgba(236,72,153,0.5)' 
+                            }}
                         >
-                            Đổi gói / Gia hạn
-                        </button>
-                        <button
-                            onClick={() => onNavigate('/plans')}
-                            className="py-3.5 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 border border-white/20 text-white bg-gradient-to-r from-slate-800/90 to-slate-700/90 hover:from-slate-700/90 hover:to-slate-600/90"
-                        >
-                            Quản lý gói <ArrowRight className="w-4 h-4" />
+                            Quản lý / Gia hạn gói <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
                         </button>
                     </div>
                 </section>
