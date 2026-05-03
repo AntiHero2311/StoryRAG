@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace Repository.Entities
 {
     public class ProjectReport
@@ -30,5 +28,6 @@ namespace Repository.Entities
         // Navigation
         public Project Project { get; set; } = null!;
         public User User { get; set; } = null!;
+        public ICollection<ReportItem> ReportItems { get; set; } = new List<ReportItem>();
     }
 }

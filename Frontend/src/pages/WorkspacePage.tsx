@@ -835,7 +835,10 @@ export default function WorkspacePage() {
             const updated = await chapterService.createNewVersion(projectId, activeChapter.id, {});
             setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
             setActiveChapter(updated);
-            if (editorRef.current) editorRef.current.innerHTML = '';
+            if (editorRef.current) {
+                editorRef.current.innerHTML = updated.content ?? '';
+                setWordCount((editorRef.current.innerText ?? '').trim().split(/\s+/).filter(Boolean).length);
+            }
             setHasUnsavedChanges(false);
         } catch (e: any) {
             toast.error(e?.response?.data?.message ?? 'Không thể tạo phiên bản mới.');

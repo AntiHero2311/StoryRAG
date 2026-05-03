@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -12,9 +13,11 @@ using Repository.Data;
 namespace Repository.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260503030041_AddProjectAnalysisFact")]
+    partial class AddProjectAnalysisFact
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -952,32 +955,6 @@ namespace Repository.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Repository.Entities.ReportItem", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<string>("CriterionKey")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("EvidenceChunkIds")
-                        .HasColumnType("jsonb");
-
-                    b.Property<Guid>("ProjectReportId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectReportId", "CriterionKey")
-                        .IsUnique();
-
-                    b.ToTable("ReportItems");
-                });
-
             modelBuilder.Entity("Repository.Entities.RewriteHistory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1904,17 +1881,6 @@ namespace Repository.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Repository.Entities.ReportItem", b =>
-                {
-                    b.HasOne("Repository.Entities.ProjectReport", "ProjectReport")
-                        .WithMany("ReportItems")
-                        .HasForeignKey("ProjectReportId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ProjectReport");
-                });
-
             modelBuilder.Entity("Repository.Entities.RewriteHistory", b =>
                 {
                     b.HasOne("Repository.Entities.Chapter", "Chapter")
@@ -2133,11 +2099,6 @@ namespace Repository.Migrations
             modelBuilder.Entity("Repository.Entities.Project", b =>
                 {
                     b.Navigation("ProjectGenres");
-                });
-
-            modelBuilder.Entity("Repository.Entities.ProjectReport", b =>
-                {
-                    b.Navigation("ReportItems");
                 });
 
             modelBuilder.Entity("Repository.Entities.SubscriptionPlan", b =>

@@ -58,8 +58,11 @@ namespace Api.Workers
 
             if (pendingVersionIds.Count == 0) return;
 
+            // UpdatedAt null: bản ghi cũ / version mới trước khi gán timestamp — vẫn phải được worker xử lý (tránh vòng lặp query vô ích + không embed).
+            // Có UpdatedAt: chờ _embedDelay sau lần sửa để tránh đua với lưu tay / embed từ API.
             var versionsToEmbed = await context.ChapterVersions
-                .Where(v => pendingVersionIds.Contains(v.Id) && !v.IsEmbedded && v.UpdatedAt <= thresholdTime)
+                .Where(v => pendingVersionIds.Contains(v.Id) && !v.IsEmbedded &&
+                    (v.UpdatedAt == null || v.UpdatedAt <= thresholdTime))
                 .ToListAsync(stoppingToken);
 
             foreach (var version in versionsToEmbed)

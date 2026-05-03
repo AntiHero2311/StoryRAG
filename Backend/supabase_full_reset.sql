@@ -23,7 +23,9 @@ DROP TABLE IF EXISTS "ThemeEntries"          CASCADE;
 DROP TABLE IF EXISTS "StyleGuideEntries"     CASCADE;
 DROP TABLE IF EXISTS "CharacterEntries"      CASCADE;
 DROP TABLE IF EXISTS "UserSettings"          CASCADE;
+DROP TABLE IF EXISTS "ProjectAnalysisFacts"  CASCADE;
 DROP TABLE IF EXISTS "ProjectAnalysisJobs"   CASCADE;
+DROP TABLE IF EXISTS "ReportItems"           CASCADE;
 DROP TABLE IF EXISTS "ProjectReports"        CASCADE;
 DROP TABLE IF EXISTS "ProjectGenres"         CASCADE;
 DROP TABLE IF EXISTS "ChapterChunks"         CASCADE;
@@ -136,16 +138,20 @@ CREATE TABLE "UserSubscriptions" (
     "UsedAnalysisCount" integer                  NOT NULL DEFAULT 0,
     "UsedTokens"        bigint                   NOT NULL DEFAULT 0,
     "CreatedAt"         timestamp with time zone NOT NULL DEFAULT NOW(),
+    "NextPlanId"        integer,
     CONSTRAINT "PK_UserSubscriptions" PRIMARY KEY ("Id"),
     CONSTRAINT "CK_UserSub_Status" CHECK ("Status" IN ('Active','Expired','Cancelled')),
     CONSTRAINT "FK_UserSubscriptions_Users_UserId" FOREIGN KEY ("UserId")
         REFERENCES "Users" ("Id") ON DELETE CASCADE,
     CONSTRAINT "FK_UserSubscriptions_SubscriptionPlans_PlanId" FOREIGN KEY ("PlanId")
-        REFERENCES "SubscriptionPlans" ("Id") ON DELETE RESTRICT
+        REFERENCES "SubscriptionPlans" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_UserSubscriptions_SubscriptionPlans_NextPlanId" FOREIGN KEY ("NextPlanId")
+        REFERENCES "SubscriptionPlans" ("Id")
 );
 
 CREATE INDEX "IX_UserSubscriptions_UserId"  ON "UserSubscriptions" ("UserId");
 CREATE INDEX "IX_UserSubscriptions_PlanId"  ON "UserSubscriptions" ("PlanId");
+CREATE INDEX "IX_UserSubscriptions_NextPlanId" ON "UserSubscriptions" ("NextPlanId");
 
 -- ── ProjectGenres ────────────────────────────────────────────
 CREATE TABLE "ProjectGenres" (
@@ -269,6 +275,20 @@ CREATE TABLE "ProjectReports" (
     CONSTRAINT "FK_ProjectReports_Users"    FOREIGN KEY ("UserId")    REFERENCES "Users"    ("Id") ON DELETE CASCADE
 );
 
+-- ── ReportItems (Stage 2 rubric row ↔ evidence chunk ids, JSONB mảng số nguyên) ──
+CREATE TABLE "ReportItems" (
+    "Id"               uuid                     NOT NULL DEFAULT uuid_generate_v4(),
+    "ProjectReportId"  uuid                     NOT NULL,
+    "CriterionKey"     character varying(20)    NOT NULL,
+    "EvidenceChunkIds" jsonb,
+    CONSTRAINT "PK_ReportItems" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_ReportItems_ProjectReports_ProjectReportId" FOREIGN KEY ("ProjectReportId")
+        REFERENCES "ProjectReports" ("Id") ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX "IX_ReportItems_ProjectReportId_CriterionKey"
+    ON "ReportItems" ("ProjectReportId", "CriterionKey");
+
 -- ── ProjectAnalysisJobs ────────────────────────────────────────
 CREATE TABLE "ProjectAnalysisJobs" (
     "Id"                 uuid                     NOT NULL DEFAULT uuid_generate_v4(),
@@ -304,6 +324,23 @@ CREATE INDEX "IX_ProjectAnalysisJobs_ReportId" ON "ProjectAnalysisJobs" ("Report
 CREATE UNIQUE INDEX "IX_ProjectAnalysisJobs_UserId_Active"
     ON "ProjectAnalysisJobs" ("UserId")
     WHERE "Status" IN ('Queued','Processing');
+
+-- ── ProjectAnalysisFacts (Stage 1 extraction JSONB, RAG / Stage 2) ──
+CREATE TABLE "ProjectAnalysisFacts" (
+    "Id"        uuid                     NOT NULL DEFAULT uuid_generate_v4(),
+    "ProjectId" uuid                     NOT NULL,
+    "RunId"     uuid                     NOT NULL,
+    "Payload"   jsonb                    NOT NULL,
+    "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
+    CONSTRAINT "PK_ProjectAnalysisFacts" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_ProjectAnalysisFacts_ProjectAnalysisJobs_RunId" FOREIGN KEY ("RunId")
+        REFERENCES "ProjectAnalysisJobs" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_ProjectAnalysisFacts_Projects_ProjectId" FOREIGN KEY ("ProjectId")
+        REFERENCES "Projects" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_ProjectAnalysisFacts_ProjectId_RunId" ON "ProjectAnalysisFacts" ("ProjectId", "RunId");
+CREATE INDEX "IX_ProjectAnalysisFacts_RunId" ON "ProjectAnalysisFacts" ("RunId");
 
 -- ── WorldbuildingEntries ──────────────────────────────────────
 -- Valid Category values:
@@ -698,4 +735,6 @@ INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
     ('20260415083200_EnsureStaffFeedbackTable', '9.0.0'),
     ('20260415084500_EnsureStaffKnowledgeAndReviewTables', '9.0.0'),
     ('20260422192758_AddActionTypeToRewriteHistory', '9.0.0'),
-    ('20260428181448_AddPasswordFormatVersion', '9.0.0');
+    ('20260428181448_AddPasswordFormatVersion', '9.0.0'),
+    ('20260503030041_AddProjectAnalysisFact', '9.0.0'),
+    ('20260503031424_AddReportItemEvidenceChunkIds', '9.0.0');

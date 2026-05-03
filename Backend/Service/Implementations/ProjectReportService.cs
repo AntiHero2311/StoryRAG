@@ -13,7 +13,7 @@ using System.Text.Json;
 
 namespace Service.Implementations
 {
-    public class ProjectReportService : IProjectReportService
+    public partial class ProjectReportService : IProjectReportService
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
@@ -94,7 +94,8 @@ namespace Service.Implementations
             Guid projectId,
             Guid userId,
             Func<int, string?, CancellationToken, Task>? progressCallback = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            Guid? analysisJobId = null)
         {
             // 1. Verify ownership
             var project = await _context.Projects
@@ -135,13 +136,15 @@ namespace Service.Implementations
                 .Select(c => c.CurrentVersionId!.Value)
                 .ToList();
 
-            var chunks = await _context.ChapterChunks
+            var chunksRaw = await _context.ChapterChunks
                 .Where(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId))
                 .ToListAsync(cancellationToken);
 
-            if (chunks.Count == 0)
+            if (chunksRaw.Count == 0)
                 throw new InvalidOperationException("Dự án chưa có nội dung được nhúng (embed). Vui lòng chunk và embed các chương trong Workspace trước khi phân tích.");
 
+            var orderedTuples = OrderChunksByChapter(chapters, chunksRaw);
+            var chunks = orderedTuples.Select(t => t.Chunk).ToList();
             var decryptedChunks = chunks
                 .Select(c => EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek))
                 .ToList();
@@ -237,17 +240,84 @@ namespace Service.Implementations
                 ? EncryptionHelper.DecryptWithMasterKey(project.AiInstructions, rawDek)
                 : null;
 
-            var (criteria, warnings, overallFeedback, analyzeTokens) = await EvaluateWithAiAsync(
-                projectTitle,
-                decryptedChunks,
-                storyBibleText,
-                chapterCount,
-                totalWords,
-                aiInstructions,
-                progressCallback,
-                cancellationToken);
+            var useRag = _config.GetValue("RagAnalysis:Enabled", true);
+            List<CriterionResult> criteria;
+            List<StoryWarning> warnings;
+            string overallFeedback;
+            int analyzeTokens;
+            string factsPayloadJson;
+            List<ReportItem> reportItemsForSave;
+            Guid analysisRunId;
+            ProjectAnalysisJob? syntheticRunCarrier = null;
+
+            if (analysisJobId is Guid existingRun &&
+                await _context.ProjectAnalysisJobs.AnyAsync(
+                    j => j.Id == existingRun && j.ProjectId == projectId && j.UserId == userId, cancellationToken))
+            {
+                analysisRunId = existingRun;
+            }
+            else
+            {
+                syntheticRunCarrier = new ProjectAnalysisJob
+                {
+                    Id = Guid.NewGuid(),
+                    ProjectId = projectId,
+                    UserId = userId,
+                    Status = "Completed",
+                    Stage = "Completed",
+                    Progress = 100,
+                    ProjectVersionHash = $"sync-rag-{DateTime.UtcNow:O}",
+                    StartedAt = DateTime.UtcNow,
+                    CompletedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow,
+                };
+                _context.ProjectAnalysisJobs.Add(syntheticRunCarrier);
+                await _context.SaveChangesAsync(cancellationToken);
+                analysisRunId = syntheticRunCarrier.Id;
+            }
+
+            if (useRag)
+            {
+                (criteria, warnings, overallFeedback, analyzeTokens, factsPayloadJson, reportItemsForSave) =
+                    await EvaluateWithRagPipelineAsync(
+                        projectTitle,
+                        chunks,
+                        decryptedChunks,
+                        storyBibleText,
+                        chapterCount,
+                        totalWords,
+                        aiInstructions,
+                        progressCallback,
+                        analysisRunId,
+                        cancellationToken);
+            }
+            else
+            {
+                (criteria, warnings, overallFeedback, analyzeTokens) = await EvaluateWithAiAsync(
+                    projectTitle,
+                    decryptedChunks,
+                    storyBibleText,
+                    chapterCount,
+                    totalWords,
+                    aiInstructions,
+                    progressCallback,
+                    cancellationToken);
+                factsPayloadJson = """{"characters":[],"chapter_stats":[],"plot_events":[],"consistency_flags":[]}""";
+                reportItemsForSave = new List<ReportItem>();
+            }
+
             var reportStatus = "Completed";
             var projectVersion = $"v1.{chapterCount}.{chunks.Count}";
+
+            if (useRag)
+            {
+                foreach (var item in reportItemsForSave)
+                {
+                    var c = criteria.FirstOrDefault(x => x.Key == item.CriterionKey);
+                    if (c != null && item.EvidenceChunkIds is { Count: > 0 })
+                        c.EvidenceChunkOrdinals = item.EvidenceChunkIds.ToList();
+                }
+            }
 
             // 5. Calculate total
             var total = criteria.Sum(c => c.Score);
@@ -266,10 +336,37 @@ namespace Service.Implementations
             };
             _context.ProjectReports.Add(report);
 
+            if (useRag)
+            {
+                _context.ProjectAnalysisFacts.Add(new ProjectAnalysisFact
+                {
+                    ProjectId = projectId,
+                    RunId = analysisRunId,
+                    Payload = factsPayloadJson,
+                });
+
+                foreach (var item in reportItemsForSave)
+                {
+                    item.ProjectReportId = report.Id;
+                    _context.ReportItems.Add(item);
+                }
+            }
+
             // 7. Deduct usage — trừ cả analysis count và token
             sub.UsedAnalysisCount += 1;
             sub.UsedTokens += analyzeTokens;
             await _context.SaveChangesAsync(cancellationToken);
+
+            if (syntheticRunCarrier != null)
+            {
+                var carrier = await _context.ProjectAnalysisJobs.FirstOrDefaultAsync(j => j.Id == syntheticRunCarrier.Id, cancellationToken);
+                if (carrier != null)
+                {
+                    carrier.ReportId = report.Id;
+                    carrier.UpdatedAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+            }
 
             return BuildResponse(report.Id, projectId, projectTitle, reportStatus, total, criteria, warnings, overallFeedback, projectVersion);
         }
@@ -280,6 +377,7 @@ namespace Service.Implementations
 
             var report = await _context.ProjectReports
                 .Include(r => r.Project)
+                .Include(r => r.ReportItems)
                 .Where(r => r.ProjectId == projectId)
                 .OrderByDescending(r => r.CreatedAt)
                 .FirstOrDefaultAsync();
@@ -307,7 +405,15 @@ namespace Service.Implementations
                 warnings = new();
             }
 
-            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, MergeWithRubric(aiResults), warnings, overallFeedback, report.ProjectVersion, report.CreatedAt);
+            var mergedLatest = MergeWithRubric(aiResults);
+            foreach (var row in report.ReportItems)
+            {
+                var c = mergedLatest.FirstOrDefault(x => x.Key == row.CriterionKey);
+                if (c != null && row.EvidenceChunkIds is { Count: > 0 })
+                    c.EvidenceChunkOrdinals = row.EvidenceChunkIds.ToList();
+            }
+
+            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, mergedLatest, warnings, overallFeedback, report.ProjectVersion, report.CreatedAt);
         }
 
         public async Task<List<ProjectReportSummary>> GetAllAsync(Guid projectId, Guid userId)
@@ -344,6 +450,7 @@ namespace Service.Implementations
 
             var report = await _context.ProjectReports
                 .Include(r => r.Project)
+                .Include(r => r.ReportItems)
                 .FirstOrDefaultAsync(r => r.Id == reportId && r.ProjectId == projectId);
 
             if (report == null) return null;
@@ -369,7 +476,15 @@ namespace Service.Implementations
                 warnings = new();
             }
 
-            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, MergeWithRubric(aiResults), warnings, overallFeedback, report.ProjectVersion, report.CreatedAt);
+            var mergedById = MergeWithRubric(aiResults);
+            foreach (var row in report.ReportItems)
+            {
+                var c = mergedById.FirstOrDefault(x => x.Key == row.CriterionKey);
+                if (c != null && row.EvidenceChunkIds is { Count: > 0 })
+                    c.EvidenceChunkOrdinals = row.EvidenceChunkIds.ToList();
+            }
+
+            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, mergedById, warnings, overallFeedback, report.ProjectVersion, report.CreatedAt);
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────────

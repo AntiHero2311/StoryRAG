@@ -12,6 +12,19 @@ export interface CriterionResult {
     bibleComparison: string | null;
     errors: string[];
     suggestions: string[];
+    /** Ordinal phẳng (thứ tự embed) — gọi GET /projects/:id/chunks?ordinals= */
+    evidenceChunkOrdinals?: number[] | null;
+}
+
+export interface EvidenceChunkItemDto {
+    chunkId: string;
+    ordinal: number;
+    chapterNumber: number;
+    chapterTitle: string;
+    chunkIndex: number;
+    offsetInChapterChars: number;
+    content: string;
+    tokenCount: number;
 }
 
 export interface GroupResult {
@@ -148,6 +161,14 @@ export const reportService = {
 
     getById: (projectId: string, reportId: string) =>
         api.get<ProjectReportResponse>(`/ai/${projectId}/reports/${reportId}`).then(r => r.data),
+
+    /** Chunk đã giải mã (ids = Guid CSV, ordinals = số CSV). */
+    getEvidenceChunks: (projectId: string, params: { ids?: string; ordinals?: string }) =>
+        api
+            .get<EvidenceChunkItemDto[]>(`/projects/${projectId}/chunks`, {
+                params: { ids: params.ids, ordinals: params.ordinals },
+            })
+            .then(r => r.data),
 
     getNarrativeCharts: (projectId: string, chapterId?: string) =>
         api.get<NarrativeChartsResponse>(`/ai/${projectId}/narrative/charts`, {

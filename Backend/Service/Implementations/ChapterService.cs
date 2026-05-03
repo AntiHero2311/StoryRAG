@@ -297,6 +297,9 @@ namespace Service.Implementations
             // Auto-prune: keep max 20 versions, delete oldest non-pinned first
             await PruneVersionsAsync(chapterId, maxVersions: 20);
 
+            // Giống CreateChapter / UpdateChapter: version mới phải được chunk ngay (EmbedChapterAsync yêu cầu IsChunked).
+            await PerformChunkingInternalAsync(version, snapshotContent, rawDek, chapter.ProjectId);
+
             var versions = await _context.ChapterVersions
                 .Include(v => v.Creator)
                 .Where(v => v.ChapterId == chapterId)
@@ -457,7 +460,8 @@ namespace Service.Implementations
             _context.ChapterChunks.AddRange(chunkEntities);
             version.IsChunked = true;
             version.IsEmbedded = chunkEntities.Count == 0 || chunkEntities.All(c => c.Embedding != null);
-            
+            version.UpdatedAt = DateTime.UtcNow;
+
             await _context.SaveChangesAsync();
         }
 

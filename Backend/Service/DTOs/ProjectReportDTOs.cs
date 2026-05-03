@@ -17,6 +17,23 @@ namespace Service.DTOs
         public List<string> Errors { get; set; } = new();
         /// <summary>Danh sách gợi ý cải thiện có thể thực hiện ngay</summary>
         public List<string> Suggestions { get; set; } = new();
+
+        /// <summary>Chỉ số chunk phẳng (thứ tự phân tích RAG) để gọi API lấy nội dung chunk gốc.</summary>
+        public List<int>? EvidenceChunkOrdinals { get; set; }
+    }
+
+    /// <summary>Chunk đã giải mã trả về cho UI evidence (M2.1.4).</summary>
+    public class EvidenceChunkItemDto
+    {
+        public Guid ChunkId { get; set; }
+        public int Ordinal { get; set; }
+        public int ChapterNumber { get; set; }
+        public string ChapterTitle { get; set; } = string.Empty;
+        public int ChunkIndex { get; set; }
+        /// <summary>Ký tự bắt đầu của chunk trong nội dung chương (theo các chunk cùng version, đã giải mã).</summary>
+        public int OffsetInChapterChars { get; set; }
+        public string Content { get; set; } = string.Empty;
+        public int TokenCount { get; set; }
     }
 
     // ─── Group summary ───────────────────────────────────────────────────────────

@@ -12,7 +12,8 @@ namespace Service.Interfaces
             Guid projectId,
             Guid userId,
             Func<int, string?, CancellationToken, Task>? progressCallback = null,
-            CancellationToken cancellationToken = default);
+            CancellationToken cancellationToken = default,
+            Guid? analysisJobId = null);
 
         /// <summary>Lấy report mới nhất của dự án.</summary>
         Task<ProjectReportResponse?> GetLatestAsync(Guid projectId, Guid userId);
@@ -22,5 +23,15 @@ namespace Service.Interfaces
 
         /// <summary>Lấy report theo ID.</summary>
         Task<ProjectReportResponse?> GetByIdAsync(Guid reportId, Guid projectId, Guid userId);
+
+        /// <summary>
+        /// Lấy nội dung chunk đã giải mã theo <c>ids</c> (Guid chunk) hoặc <c>ordinals</c> (thứ tự phân tích).
+        /// </summary>
+        Task<List<EvidenceChunkItemDto>> GetProjectEvidenceChunksAsync(
+            Guid projectId,
+            Guid userId,
+            string? ids,
+            string? ordinals,
+            CancellationToken cancellationToken = default);
     }
 }

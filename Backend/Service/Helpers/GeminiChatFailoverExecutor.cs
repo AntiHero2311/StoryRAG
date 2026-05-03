@@ -18,7 +18,8 @@ namespace Service.Helpers
 
     public sealed class GeminiChatFailoverExecutor
     {
-        private const string DefaultChatModels = "gemini-3-flash-preview,gemini-2.5-flash";
+        /// <summary>Ưu tiên model ổn định; preview đặt cuối vì nhiều key/API trả 400 nếu chưa bật model.</summary>
+        private const string DefaultChatModels = "gemini-2.0-flash,gemini-2.5-flash,gemini-1.5-flash,gemini-3-flash-preview";
         private static readonly Uri GeminiOpenAiEndpoint = new("https://generativelanguage.googleapis.com/v1beta/openai/");
         private static readonly HttpClient TraceHttpClient = new();
 
@@ -71,8 +72,7 @@ namespace Service.Helpers
                         continue;
 
                     var client = new OpenAIClient(new ApiKeyCredential(key), options).GetChatClient(model);
-                    var isGemma = model.StartsWith("gemma", StringComparison.OrdinalIgnoreCase);
-                    _candidates.Add(new GeminiChatCandidate(client, isGemma, $"{roleLabel} | {model}", model, key));
+                    _candidates.Add(new GeminiChatCandidate(client, $"{roleLabel} | {model}", model, key));
                 }
             }
         }
@@ -99,9 +99,8 @@ namespace Service.Helpers
             {
                 try
                 {
-                    var geminiMessages = candidate.IsGemma
-                        ? GeminiRetryHelper.FlattenSystemForGemma(sourceMessages)
-                        : sourceMessages;
+                    // Gemini OpenAI-compat thường chấp nhận system, nhưng một số model/bản trả 400 — gộp system → user (cùng helper Gemma).
+                    var geminiMessages = GeminiRetryHelper.FlattenSystemForGemma(sourceMessages);
 
                     ClientResult<ChatCompletion> result;
                     if (options == null)
@@ -124,7 +123,19 @@ namespace Service.Helpers
                 catch (Exception ex)
                 {
                     lastError = ex;
-                    _logger.LogWarning(ex, "{Operation} thất bại với {Candidate}, thử fallback.", _operationName, candidate.Label);
+                    if (ex is ClientResultException clientEx)
+                    {
+                        _logger.LogWarning(
+                            "{Operation} thất bại với {Candidate}: HTTP {Status} — {Detail}",
+                            _operationName,
+                            candidate.Label,
+                            clientEx.Status,
+                            clientEx.Message);
+                    }
+                    else
+                    {
+                        _logger.LogWarning(ex, "{Operation} thất bại với {Candidate}, thử fallback.", _operationName, candidate.Label);
+                    }
                 }
             }
 
@@ -188,14 +199,9 @@ namespace Service.Helpers
 
         private async Task TraceCandidateMatrixAsync(IEnumerable<ChatMessage> messages)
         {
+            var flat = GeminiRetryHelper.FlattenSystemForGemma(messages);
             foreach (var candidate in _candidates)
-            {
-                var candidateMessages = candidate.IsGemma
-                    ? GeminiRetryHelper.FlattenSystemForGemma(messages)
-                    : messages;
-
-                await TraceRawHttpAsync(candidate, candidateMessages);
-            }
+                await TraceRawHttpAsync(candidate, flat);
         }
 
         private static List<object> BuildTraceMessages(IEnumerable<ChatMessage> messages)
@@ -284,7 +290,6 @@ namespace Service.Helpers
 
         private sealed record GeminiChatCandidate(
             ChatClient Client,
-            bool IsGemma,
             string Label,
             string Model,
             string ApiKey);

@@ -6,6 +6,7 @@ using Repository.Data;
 using Service.Helpers;
 using Service.Interfaces;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Net.Http.Json;
 using System.Text;
 
@@ -45,8 +46,9 @@ namespace Service.Implementations
             _config = config;
             _logger = logger;
 
-            // Gemini config
-            _embeddingApiKey = NormalizeKey(config["Gemini:EmbeddingApiKey"]);
+            // Gemini config (EmbedApiKey = alias trong appsettings mẫu)
+            _embeddingApiKey = NormalizeKey(config["Gemini:EmbeddingApiKey"])
+                ?? NormalizeKey(config["Gemini:EmbedApiKey"]);
             _analyzeApiKey = NormalizeKey(config["Gemini:AnalyzeApiKey"]);
             _chatApiKey = NormalizeKey(config["Gemini:ChatApiKey"]);
             _geminiModel = config["Gemini:EmbeddingModel"] ?? "gemini-embedding-001";
@@ -120,7 +122,7 @@ namespace Service.Implementations
 
             var plainTexts = unembeddedChunks
                 .Select(c => EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek))
-                .Select(t => EnsureEmbeddingPrefix(t, isDocument: true))
+                .Select(NormalizeEmbeddingText)
                 .ToList();
 
             var embeddings = await GetEmbeddingsForTextsAsync(plainTexts, EmbeddingUseCase.Corpus);
@@ -175,7 +177,7 @@ namespace Service.Implementations
 
         public async Task<float[]> GetEmbeddingAsync(string text, EmbeddingUseCase useCase = EmbeddingUseCase.Corpus)
         {
-            var prepared = EnsureEmbeddingPrefix(text, isDocument: false);
+            var prepared = NormalizeEmbeddingText(text);
             var res = await GetEmbeddingsForTextsAsync(new List<string> { prepared }, useCase);
             return res.First();
         }
@@ -191,7 +193,7 @@ namespace Service.Implementations
 
             try
             {
-                return await GetGeminiEmbeddingsAsync(texts, orderedKeys);
+                return await GetGeminiEmbeddingsAsync(texts, orderedKeys, useCase);
             }
             catch (Exception ex)
             {
@@ -200,7 +202,10 @@ namespace Service.Implementations
             }
         }
 
-        private async Task<List<float[]>> GetGeminiEmbeddingsAsync(List<string> texts, IReadOnlyList<string> orderedKeys)
+        private async Task<List<float[]>> GetGeminiEmbeddingsAsync(
+            List<string> texts,
+            IReadOnlyList<string> orderedKeys,
+            EmbeddingUseCase useCase)
         {
             var batches = BuildBatches(texts);
             var allEmbeddings = new List<float[]>(texts.Count);
@@ -210,14 +215,7 @@ namespace Service.Implementations
                 var batch = batches[batchIndex];
                 var operationName = $"Gemini Embedding batch {batchIndex + 1}/{batches.Count}";
                 await ReserveEmbeddingQuotaAsync(batch.EstimatedTokens, operationName);
-                var requests = batch.Texts.Select(text => new
-                {
-                    model = $"models/{_geminiModel}",
-                    content = new { parts = new[] { new { text } } },
-                    outputDimensionality = _geminiEmbeddingDimensions
-                }).ToArray();
-
-                var batchBody = new { requests };
+                var batchBody = BuildGeminiBatchEmbedBody(batch.Texts, useCase);
                 using var response = await SendBatchWithKeyFailoverAsync(batchBody, operationName, orderedKeys);
                 var json = await response.Content.ReadFromJsonAsync<JsonElement>();
                 var batchResult = json.GetProperty("embeddings")
@@ -241,11 +239,12 @@ namespace Service.Implementations
         }
 
         private async Task<HttpResponseMessage> SendBatchWithKeyFailoverAsync(
-            object batchBody,
+            GeminiBatchEmbedContentsDto batchBody,
             string operationName,
             IReadOnlyList<string> keys)
         {
             Exception? lastError = null;
+            string? lastErrorBody = null;
 
             for (var i = 0; i < keys.Count; i++)
             {
@@ -255,8 +254,10 @@ namespace Service.Implementations
 
                 try
                 {
+                    var json = JsonSerializer.Serialize(batchBody, GeminiRequestJsonOptions);
+                    using var httpContent = new StringContent(json, Encoding.UTF8, "application/json");
                     var response = await GeminiRetryHelper.ExecuteAsync(
-                        () => _geminiHttpClient.PostAsJsonAsync(batchUrl, batchBody),
+                        () => _geminiHttpClient.PostAsync(batchUrl, httpContent),
                         _logger,
                         $"{operationName} ({keyLabel})");
 
@@ -264,6 +265,7 @@ namespace Service.Implementations
                         return response;
 
                     var errorBody = await response.Content.ReadAsStringAsync();
+                    lastErrorBody = errorBody;
                     _logger.LogWarning(
                         "{Operation} thất bại với {KeyLabel}: {StatusCode}. Body: {Body}",
                         operationName,
@@ -273,7 +275,7 @@ namespace Service.Implementations
 
                     response.Dispose();
                     lastError = new HttpRequestException(
-                        $"Gemini embedding failed with status {(int)response.StatusCode}.",
+                        $"Gemini embedding failed with status {(int)response.StatusCode}. Response: {errorBody}",
                         null,
                         response.StatusCode);
                 }
@@ -284,8 +286,50 @@ namespace Service.Implementations
                 }
             }
 
-            throw lastError ?? new InvalidOperationException("Gemini embedding failed for all configured keys.");
+            if (lastError != null)
+                throw lastError;
+
+            throw new InvalidOperationException(
+                string.IsNullOrEmpty(lastErrorBody)
+                    ? "Gemini embedding failed for all configured keys."
+                    : $"Gemini embedding failed for all configured keys. Last response: {lastErrorBody}");
         }
+
+        private static bool ModelSupportsTaskType(string model) =>
+            model.Contains("embedding-001", StringComparison.OrdinalIgnoreCase);
+
+        private GeminiBatchEmbedContentsDto BuildGeminiBatchEmbedBody(IReadOnlyList<string> texts, EmbeddingUseCase useCase)
+        {
+            var useTaskType = ModelSupportsTaskType(_geminiModel);
+            var taskType = useTaskType
+                ? (useCase == EmbeddingUseCase.ChatQuery ? "RETRIEVAL_QUERY" : "RETRIEVAL_DOCUMENT")
+                : null;
+            var modelId = $"models/{_geminiModel}";
+
+            var requests = new List<GeminiEmbedContentRequestDto>(texts.Count);
+            foreach (var t in texts)
+            {
+                var textForApi = useTaskType
+                    ? t
+                    : EnsureEmbeddingPrefix(t, isDocument: useCase != EmbeddingUseCase.ChatQuery);
+                if (string.IsNullOrWhiteSpace(textForApi))
+                    textForApi = " ";
+                requests.Add(new GeminiEmbedContentRequestDto
+                {
+                    Model = modelId,
+                    Content = new GeminiContentDto { Parts = new List<GeminiPartDto> { new() { Text = textForApi } } },
+                    OutputDimensionality = _geminiEmbeddingDimensions,
+                    TaskType = taskType,
+                });
+            }
+
+            return new GeminiBatchEmbedContentsDto { Requests = requests };
+        }
+
+        private static readonly JsonSerializerOptions GeminiRequestJsonOptions = new()
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        };
 
         private List<EmbeddingBatch> BuildBatches(List<string> texts)
         {
@@ -451,6 +495,41 @@ namespace Service.Implementations
 
         private static string? NormalizeKey(string? raw)
             => string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
+
+        /// <summary>JSON khớp REST Gemini (snake_case). PostAsJsonAsync camelCase dễ bị 400.</summary>
+        private sealed class GeminiBatchEmbedContentsDto
+        {
+            [JsonPropertyName("requests")]
+            public List<GeminiEmbedContentRequestDto> Requests { get; set; } = new();
+        }
+
+        private sealed class GeminiEmbedContentRequestDto
+        {
+            [JsonPropertyName("model")]
+            public string Model { get; set; } = "";
+
+            [JsonPropertyName("content")]
+            public GeminiContentDto Content { get; set; } = null!;
+
+            [JsonPropertyName("output_dimensionality")]
+            public int OutputDimensionality { get; set; }
+
+            [JsonPropertyName("task_type")]
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public string? TaskType { get; set; }
+        }
+
+        private sealed class GeminiContentDto
+        {
+            [JsonPropertyName("parts")]
+            public List<GeminiPartDto> Parts { get; set; } = new();
+        }
+
+        private sealed class GeminiPartDto
+        {
+            [JsonPropertyName("text")]
+            public string Text { get; set; } = "";
+        }
 
         private sealed record EmbeddingBatch(List<string> Texts, int EstimatedTokens);
     }
