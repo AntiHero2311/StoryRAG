@@ -93,6 +93,7 @@
     --bg-sidebar:  #09091a;    /* sidebar — slightly bluer */
     --bg-surface:  #131325;    /* cards, panels */
     --bg-elevated: #1a1a2e;    /* dropdowns, floating */
+    --bg-dropdown: #1a1a2e;    /* menus — opaque; must match elevated (was missing → transparent UI) */
     --bg-topbar:   rgba(13, 13, 26, 0.85); /* translucent topbar */
     --bg-editor:   #0a0a16;    /* writing editor */
     --bg-panel:    #0f0f22;    /* right panels */
@@ -277,6 +278,7 @@
     --bg-sidebar:  #ffffff;
     --bg-surface:  #ffffff;
     --bg-elevated: #ffffff;
+    --bg-dropdown: #ffffff;
     --bg-topbar:   rgba(255, 255, 255, 0.9);
     --bg-editor:   #ffffff;
     --bg-panel:    #f8f8fc;
