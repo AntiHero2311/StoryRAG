@@ -23,5 +23,15 @@ namespace Service.Interfaces
 
         /// <summary>Lấy report theo ID.</summary>
         Task<ProjectReportResponse?> GetByIdAsync(Guid reportId, Guid projectId, Guid userId);
+
+        /// <summary>
+        /// Lấy nội dung chunk đã giải mã theo <c>ids</c> (Guid chunk) hoặc <c>ordinals</c> (thứ tự phân tích).
+        /// </summary>
+        Task<List<EvidenceChunkItemDto>> GetProjectEvidenceChunksAsync(
+            Guid projectId,
+            Guid userId,
+            string? ids,
+            string? ordinals,
+            CancellationToken cancellationToken = default);
     }
 }

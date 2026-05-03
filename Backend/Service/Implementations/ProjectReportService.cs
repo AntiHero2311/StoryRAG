@@ -136,13 +136,15 @@ namespace Service.Implementations
                 .Select(c => c.CurrentVersionId!.Value)
                 .ToList();
 
-            var chunks = await _context.ChapterChunks
+            var chunksRaw = await _context.ChapterChunks
                 .Where(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId))
                 .ToListAsync(cancellationToken);
 
-            if (chunks.Count == 0)
+            if (chunksRaw.Count == 0)
                 throw new InvalidOperationException("Dự án chưa có nội dung được nhúng (embed). Vui lòng chunk và embed các chương trong Workspace trước khi phân tích.");
 
+            var orderedTuples = OrderChunksByChapter(chapters, chunksRaw);
+            var chunks = orderedTuples.Select(t => t.Chunk).ToList();
             var decryptedChunks = chunks
                 .Select(c => EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek))
                 .ToList();
@@ -307,6 +309,16 @@ namespace Service.Implementations
             var reportStatus = "Completed";
             var projectVersion = $"v1.{chapterCount}.{chunks.Count}";
 
+            if (useRag)
+            {
+                foreach (var item in reportItemsForSave)
+                {
+                    var c = criteria.FirstOrDefault(x => x.Key == item.CriterionKey);
+                    if (c != null && item.EvidenceChunkIds is { Count: > 0 })
+                        c.EvidenceChunkOrdinals = item.EvidenceChunkIds.ToList();
+                }
+            }
+
             // 5. Calculate total
             var total = criteria.Sum(c => c.Score);
 
@@ -365,6 +377,7 @@ namespace Service.Implementations
 
             var report = await _context.ProjectReports
                 .Include(r => r.Project)
+                .Include(r => r.ReportItems)
                 .Where(r => r.ProjectId == projectId)
                 .OrderByDescending(r => r.CreatedAt)
                 .FirstOrDefaultAsync();
@@ -392,7 +405,15 @@ namespace Service.Implementations
                 warnings = new();
             }
 
-            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, MergeWithRubric(aiResults), warnings, overallFeedback, report.ProjectVersion, report.CreatedAt);
+            var mergedLatest = MergeWithRubric(aiResults);
+            foreach (var row in report.ReportItems)
+            {
+                var c = mergedLatest.FirstOrDefault(x => x.Key == row.CriterionKey);
+                if (c != null && row.EvidenceChunkIds is { Count: > 0 })
+                    c.EvidenceChunkOrdinals = row.EvidenceChunkIds.ToList();
+            }
+
+            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, mergedLatest, warnings, overallFeedback, report.ProjectVersion, report.CreatedAt);
         }
 
         public async Task<List<ProjectReportSummary>> GetAllAsync(Guid projectId, Guid userId)
@@ -429,6 +450,7 @@ namespace Service.Implementations
 
             var report = await _context.ProjectReports
                 .Include(r => r.Project)
+                .Include(r => r.ReportItems)
                 .FirstOrDefaultAsync(r => r.Id == reportId && r.ProjectId == projectId);
 
             if (report == null) return null;
@@ -454,7 +476,15 @@ namespace Service.Implementations
                 warnings = new();
             }
 
-            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, MergeWithRubric(aiResults), warnings, overallFeedback, report.ProjectVersion, report.CreatedAt);
+            var mergedById = MergeWithRubric(aiResults);
+            foreach (var row in report.ReportItems)
+            {
+                var c = mergedById.FirstOrDefault(x => x.Key == row.CriterionKey);
+                if (c != null && row.EvidenceChunkIds is { Count: > 0 })
+                    c.EvidenceChunkOrdinals = row.EvidenceChunkIds.ToList();
+            }
+
+            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, mergedById, warnings, overallFeedback, report.ProjectVersion, report.CreatedAt);
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────────
