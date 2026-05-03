@@ -590,14 +590,15 @@ function AnalysisContent() {
                     </div>
                 </div>
 
-                {/* Project selector + Analyze button */}
-                <div className="rounded-3xl p-5 md:p-6 flex flex-col gap-4 border"
+                {/* Project selector + Analyze — relative z cao để menu sổ không bị thanh usage / cột dưới đè */}
+                <div
+                    className="rounded-3xl p-5 md:p-6 flex flex-col gap-4 border relative z-[60] isolate"
                     style={{
                         borderColor: 'rgba(255,255,255,0.08)',
                         background: 'linear-gradient(160deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01) 45%, var(--bg-surface) 100%)',
                     }}>
-                    <div className="flex flex-col lg:flex-row gap-4 items-end">
-                        <div className="flex-1 w-full">
+                    <div className="relative z-20 flex flex-col lg:flex-row gap-4 items-end">
+                        <div className="flex-1 w-full min-w-0">
                             <label className="block text-[var(--text-secondary)] text-xs font-semibold mb-2 uppercase tracking-wider">
                                 Chọn dự án
                             </label>
@@ -622,8 +623,14 @@ function AnalysisContent() {
 
                                     {projectPickerOpen && projects.length > 0 && (
                                         <div
-                                            className="absolute z-30 mt-2 w-full rounded-2xl overflow-hidden"
-                                            style={{ background: 'var(--bg-dropdown)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-lg)' }}>
+                                            className="absolute left-0 right-0 z-[100] mt-2 rounded-2xl overflow-hidden max-h-[min(70vh,420px)] flex flex-col shadow-2xl"
+                                            style={{
+                                                background: 'var(--bg-dropdown, var(--bg-elevated))',
+                                                border: '1px solid var(--border-color)',
+                                                boxShadow: '0 24px 48px rgba(0,0,0,0.45)',
+                                                backdropFilter: 'none',
+                                                WebkitBackdropFilter: 'none',
+                                            }}>
                                             <div className="p-2 border-b" style={{ borderColor: 'var(--border-color)' }}>
                                                 <input
                                                     value={projectQuery}
@@ -633,7 +640,7 @@ function AnalysisContent() {
                                                     style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
                                                 />
                                             </div>
-                                            <div className="max-h-64 overflow-y-auto">
+                                            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                                                 {filteredProjects.length === 0 ? (
                                                     <div className="px-4 py-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
                                                         Không tìm thấy tác phẩm phù hợp.
@@ -701,7 +708,7 @@ function AnalysisContent() {
                     )}
                     {/* Subscription usage bar */}
                     {subscription && (
-                        <div className="pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div className="relative z-0 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                             <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
                                     <CreditCard className="w-3.5 h-3.5" />
@@ -727,10 +734,10 @@ function AnalysisContent() {
                 </div>
 
                 {/* Two-column layout: main content + history sidebar */}
-                <div className="flex flex-col xl:flex-row gap-5 xl:gap-6 items-start">
+                <div className="relative z-0 flex flex-col xl:flex-row gap-5 xl:gap-6 items-start">
 
                     {/* ── Left: main report area ── */}
-                    <div className="flex-1 min-w-0 space-y-5">
+                    <div className="relative z-0 flex-1 min-w-0 space-y-5">
 
                         {/* Error */}
                         {analysisStatus && !error && (
@@ -1021,8 +1028,8 @@ function AnalysisContent() {
                         )}
                     </div>
 
-                    {/* ── Right: history sidebar ── */}
-                    <div className="w-full xl:w-80 xl:sticky xl:top-8 shrink-0 order-first xl:order-none">
+                    {/* ── Right: history sidebar — z thấp hơn khối chọn dự án để không đè menu sổ */}
+                    <div className="relative z-0 w-full xl:w-80 xl:sticky xl:top-8 shrink-0 order-first xl:order-none">
                         <div
                             className="rounded-3xl overflow-hidden border"
                             style={{

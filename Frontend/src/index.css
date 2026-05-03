@@ -16,6 +16,28 @@
     transition: background-color 0.2s ease, color 0.2s ease;
   }
 
+  /* Vùng chọn chữ: trên nền tối màu mặc định của trình duyệt thường gần như không thấy */
+  html.dark ::selection {
+    background-color: rgba(245, 166, 35, 0.42);
+    color: #f4f4f5;
+  }
+
+  html:not(.dark) ::selection {
+    background-color: rgba(79, 70, 229, 0.28);
+    color: #18181b;
+  }
+
+  /* Cho phép chọn / copy nội dung trong khung app (một số control mặc định không cho chọn chữ trong button) */
+  main {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  main :is(button, [role='button']) {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
   /* Contenteditable placeholder */
   [contenteditable][data-placeholder]:empty::before {
     content: attr(data-placeholder);
