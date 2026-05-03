@@ -248,7 +248,8 @@ namespace Service.Implementations
                         job.UpdatedAt = DateTime.UtcNow;
                         await _context.SaveChangesAsync(token);
                     },
-                    cancellationToken);
+                    cancellationToken,
+                    job.Id);
 
                 job.Stage = StageSaving;
                 job.Progress = 90;

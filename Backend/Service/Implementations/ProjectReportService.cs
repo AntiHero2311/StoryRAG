@@ -13,7 +13,7 @@ using System.Text.Json;
 
 namespace Service.Implementations
 {
-    public class ProjectReportService : IProjectReportService
+    public partial class ProjectReportService : IProjectReportService
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
@@ -94,7 +94,8 @@ namespace Service.Implementations
             Guid projectId,
             Guid userId,
             Func<int, string?, CancellationToken, Task>? progressCallback = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            Guid? analysisJobId = null)
         {
             // 1. Verify ownership
             var project = await _context.Projects
@@ -237,15 +238,72 @@ namespace Service.Implementations
                 ? EncryptionHelper.DecryptWithMasterKey(project.AiInstructions, rawDek)
                 : null;
 
-            var (criteria, warnings, overallFeedback, analyzeTokens) = await EvaluateWithAiAsync(
-                projectTitle,
-                decryptedChunks,
-                storyBibleText,
-                chapterCount,
-                totalWords,
-                aiInstructions,
-                progressCallback,
-                cancellationToken);
+            var useRag = _config.GetValue("RagAnalysis:Enabled", true);
+            List<CriterionResult> criteria;
+            List<StoryWarning> warnings;
+            string overallFeedback;
+            int analyzeTokens;
+            string factsPayloadJson;
+            List<ReportItem> reportItemsForSave;
+            Guid analysisRunId;
+            ProjectAnalysisJob? syntheticRunCarrier = null;
+
+            if (analysisJobId is Guid existingRun &&
+                await _context.ProjectAnalysisJobs.AnyAsync(
+                    j => j.Id == existingRun && j.ProjectId == projectId && j.UserId == userId, cancellationToken))
+            {
+                analysisRunId = existingRun;
+            }
+            else
+            {
+                syntheticRunCarrier = new ProjectAnalysisJob
+                {
+                    Id = Guid.NewGuid(),
+                    ProjectId = projectId,
+                    UserId = userId,
+                    Status = "Completed",
+                    Stage = "Completed",
+                    Progress = 100,
+                    ProjectVersionHash = $"sync-rag-{DateTime.UtcNow:O}",
+                    StartedAt = DateTime.UtcNow,
+                    CompletedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow,
+                };
+                _context.ProjectAnalysisJobs.Add(syntheticRunCarrier);
+                await _context.SaveChangesAsync(cancellationToken);
+                analysisRunId = syntheticRunCarrier.Id;
+            }
+
+            if (useRag)
+            {
+                (criteria, warnings, overallFeedback, analyzeTokens, factsPayloadJson, reportItemsForSave) =
+                    await EvaluateWithRagPipelineAsync(
+                        projectTitle,
+                        chunks,
+                        decryptedChunks,
+                        storyBibleText,
+                        chapterCount,
+                        totalWords,
+                        aiInstructions,
+                        progressCallback,
+                        analysisRunId,
+                        cancellationToken);
+            }
+            else
+            {
+                (criteria, warnings, overallFeedback, analyzeTokens) = await EvaluateWithAiAsync(
+                    projectTitle,
+                    decryptedChunks,
+                    storyBibleText,
+                    chapterCount,
+                    totalWords,
+                    aiInstructions,
+                    progressCallback,
+                    cancellationToken);
+                factsPayloadJson = """{"characters":[],"chapter_stats":[],"plot_events":[],"consistency_flags":[]}""";
+                reportItemsForSave = new List<ReportItem>();
+            }
+
             var reportStatus = "Completed";
             var projectVersion = $"v1.{chapterCount}.{chunks.Count}";
 
@@ -266,10 +324,37 @@ namespace Service.Implementations
             };
             _context.ProjectReports.Add(report);
 
+            if (useRag)
+            {
+                _context.ProjectAnalysisFacts.Add(new ProjectAnalysisFact
+                {
+                    ProjectId = projectId,
+                    RunId = analysisRunId,
+                    Payload = factsPayloadJson,
+                });
+
+                foreach (var item in reportItemsForSave)
+                {
+                    item.ProjectReportId = report.Id;
+                    _context.ReportItems.Add(item);
+                }
+            }
+
             // 7. Deduct usage — trừ cả analysis count và token
             sub.UsedAnalysisCount += 1;
             sub.UsedTokens += analyzeTokens;
             await _context.SaveChangesAsync(cancellationToken);
+
+            if (syntheticRunCarrier != null)
+            {
+                var carrier = await _context.ProjectAnalysisJobs.FirstOrDefaultAsync(j => j.Id == syntheticRunCarrier.Id, cancellationToken);
+                if (carrier != null)
+                {
+                    carrier.ReportId = report.Id;
+                    carrier.UpdatedAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+            }
 
             return BuildResponse(report.Id, projectId, projectTitle, reportStatus, total, criteria, warnings, overallFeedback, projectVersion);
         }

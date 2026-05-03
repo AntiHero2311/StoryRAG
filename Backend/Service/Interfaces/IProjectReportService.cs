@@ -12,7 +12,8 @@ namespace Service.Interfaces
             Guid projectId,
             Guid userId,
             Func<int, string?, CancellationToken, Task>? progressCallback = null,
-            CancellationToken cancellationToken = default);
+            CancellationToken cancellationToken = default,
+            Guid? analysisJobId = null);
 
         /// <summary>Lấy report mới nhất của dự án.</summary>
         Task<ProjectReportResponse?> GetLatestAsync(Guid projectId, Guid userId);
