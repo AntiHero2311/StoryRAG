@@ -42,14 +42,21 @@ namespace Api.Controllers
         }
 
         [HttpPost("feedback")]
-        public async Task<IActionResult> CreateFeedback([FromBody] StaffFeedbackRequest request)
+        public async Task<IActionResult> CreateFeedback([FromBody] StaffFeedbackCreateRequest request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
             var staffId = GetUserId();
             if (staffId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
 
-            var result = await _staffService.CreateFeedbackAsync(staffId.Value, request);
-            return Ok(result);
+            try
+            {
+                var result = await _staffService.CreateFeedbackAsync(staffId.Value, request);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
         }
 
         [HttpPut("feedback/{feedbackId:guid}")]

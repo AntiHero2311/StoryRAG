@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
@@ -35,6 +36,35 @@ namespace Service.DTOs
         public DateTime LastUpdatedAt { get; set; }
     }
 
+    /// <summary>POST /api/staff/feedback — body theo spec issue (project_id + message).</summary>
+    public class StaffFeedbackCreateRequest : IValidatableObject
+    {
+        [JsonPropertyName("project_id")]
+        public Guid? ProjectIdSnake { get; set; }
+
+        /// <summary>JSON camelCase: projectId</summary>
+        public Guid ProjectId { get; set; }
+
+        [JsonPropertyName("message")]
+        public string? Message { get; set; }
+
+        /// <summary>Tương thích body cũ dùng content.</summary>
+        public string? Content { get; set; }
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            var pid = ProjectIdSnake is Guid g && g != Guid.Empty ? g : ProjectId;
+            if (pid == Guid.Empty)
+                yield return new ValidationResult("project_id là bắt buộc và phải là UUID hợp lệ.", new[] { nameof(ProjectId) });
+
+            var text = !string.IsNullOrWhiteSpace(Message) ? Message.Trim() : (Content?.Trim() ?? string.Empty);
+            if (text.Length == 0)
+                yield return new ValidationResult("message không được để trống.", new[] { nameof(Message) });
+            else if (text.Length > 3000)
+                yield return new ValidationResult("message tối đa 3000 ký tự.", new[] { nameof(Message) });
+        }
+    }
+
     public class StaffFeedbackRequest
     {
         [Required]
@@ -68,6 +98,7 @@ namespace Service.DTOs
         public string? StaffNote { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
+        public DateTime? ReadAt { get; set; }
     }
 
     public class StaffContentRequest

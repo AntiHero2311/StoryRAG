@@ -591,6 +591,7 @@ CREATE TABLE "StaffFeedbacks" (
     "StaffNote" character varying(3000),
     "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
     "UpdatedAt" timestamp with time zone,
+    "ReadAt"    timestamp with time zone,
     CONSTRAINT "PK_StaffFeedbacks" PRIMARY KEY ("Id"),
     CONSTRAINT "CK_StaffFeedback_Status" CHECK ("Status" IN ('Open','Resolved')),
     CONSTRAINT "FK_StaffFeedbacks_Chapters_ChapterId" FOREIGN KEY ("ChapterId")

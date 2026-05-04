@@ -677,6 +677,7 @@ namespace Repository.Data
                 entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue("Open");
                 entity.Property(e => e.StaffNote).HasMaxLength(3000);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+                entity.Property(e => e.ReadAt);
                 entity.HasIndex(e => e.ProjectId);
                 entity.HasIndex(e => e.AuthorId);
                 entity.HasIndex(e => e.StaffId);

@@ -32,6 +32,9 @@ namespace Repository.Entities
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
 
+        /// <summary>Thời điểm tác giả đã đọc phản hồi (null = chưa đọc).</summary>
+        public DateTime? ReadAt { get; set; }
+
         [ForeignKey(nameof(ProjectId))]
         public Project Project { get; set; } = null!;
 

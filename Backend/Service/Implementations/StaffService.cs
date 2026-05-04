@@ -159,6 +159,45 @@ namespace Service.Implementations
             };
         }
 
+        public async Task<StaffFeedbackResponse> CreateFeedbackAsync(Guid staffId, StaffFeedbackCreateRequest request)
+        {
+            var projectId = (request.ProjectIdSnake is Guid snake && snake != Guid.Empty)
+                ? snake
+                : request.ProjectId;
+            var message = !string.IsNullOrWhiteSpace(request.Message)
+                ? request.Message.Trim()
+                : (request.Content?.Trim() ?? string.Empty);
+
+            var project = await _db.Projects
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted)
+                ?? throw new KeyNotFoundException("Không tìm thấy dự án.");
+
+            var feedback = new StaffFeedback
+            {
+                Id = Guid.NewGuid(),
+                ProjectId = projectId,
+                ChapterId = null,
+                AuthorId = project.AuthorId,
+                StaffId = staffId,
+                Content = message,
+                Status = "Open",
+                StaffNote = null,
+                CreatedAt = DateTime.UtcNow,
+                ReadAt = null,
+            };
+
+            _db.StaffFeedbacks.Add(feedback);
+            await _db.SaveChangesAsync();
+
+            feedback = await _db.StaffFeedbacks
+                .Include(x => x.Author)
+                .Include(x => x.Staff)
+                .FirstAsync(x => x.Id == feedback.Id);
+
+            return MapFeedback(feedback);
+        }
+
         public async Task<StaffFeedbackResponse> CreateFeedbackAsync(Guid staffId, StaffFeedbackRequest request)
         {
             var project = await _db.Projects
@@ -185,7 +224,8 @@ namespace Service.Implementations
                 Content = request.Content.Trim(),
                 Status = request.Status,
                 StaffNote = string.IsNullOrWhiteSpace(request.StaffNote) ? null : request.StaffNote.Trim(),
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                ReadAt = null,
             };
 
             _db.StaffFeedbacks.Add(feedback);
@@ -399,7 +439,8 @@ namespace Service.Implementations
                 Status = feedback.Status,
                 StaffNote = feedback.StaffNote,
                 CreatedAt = feedback.CreatedAt,
-                UpdatedAt = feedback.UpdatedAt
+                UpdatedAt = feedback.UpdatedAt,
+                ReadAt = feedback.ReadAt,
             };
         }
 
