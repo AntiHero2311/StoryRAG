@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import {
     LayoutDashboard, BarChart2, User, Settings,
     Users, CreditCard, ChevronLeft, ChevronRight,
-    Bug, HelpCircle, BookOpen,
+    Bug, HelpCircle, BookOpen, AlertTriangle,
 } from 'lucide-react';
 
 const NAV_AUTHOR = [
@@ -16,8 +16,8 @@ const NAV_AUTHOR = [
 
 const NAV_STAFF = [
     { key: 'dashboard',    label: 'Trang chủ',  icon: LayoutDashboard, path: '/home' },
+    { key: 'staff-flagged', label: 'Dự án bị cờ', icon: AlertTriangle,   path: '/staff/flagged' },
     { key: 'staff',        label: 'Báo cáo lỗi',icon: Bug,             path: '/staff' },
-    { key: 'subscription', label: 'Gói dịch vụ',icon: CreditCard,      path: '/subscription' },
     { key: 'profile',      label: 'Hồ sơ',      icon: User,            path: '/profile' },
     { key: 'settings',     label: 'Cài đặt',    icon: Settings,        path: '/settings' },
 ];
@@ -25,6 +25,7 @@ const NAV_STAFF = [
 const NAV_ADMIN = [
     { key: 'dashboard',    label: 'Trang chủ',  icon: LayoutDashboard, path: '/home' },
     { key: 'users',        label: 'Người dùng', icon: Users,           path: '/admin' },
+    { key: 'staff-flagged', label: 'Dự án bị cờ', icon: AlertTriangle,   path: '/staff/flagged' },
     { key: 'staff',        label: 'Báo cáo lỗi',icon: Bug,             path: '/staff' },
     { key: 'sub-admin',    label: 'Quản lý Plans',icon: CreditCard,    path: '/admin/subscription' },
     { key: 'profile',      label: 'Hồ sơ',      icon: User,            path: '/profile' },
@@ -112,8 +113,11 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
                     <nav className="space-y-0.5 px-2">
                         {nav.map(item => {
                             const Icon = item.icon;
-                            const active = location.pathname === item.path ||
-                                (item.path !== '/home' && location.pathname.startsWith(item.path));
+                            const active =
+                                item.path === '/staff'
+                                    ? location.pathname === '/staff'
+                                    : location.pathname === item.path ||
+                                      (item.path !== '/home' && location.pathname.startsWith(`${item.path}/`));
 
                             return (
                                 <button

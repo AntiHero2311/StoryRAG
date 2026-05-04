@@ -39,7 +39,7 @@ function StatCard({ label, value, icon: Icon, color, delay = 0 }: {
 function DashboardContent({ fullName, role, onNavigate }: {
     fullName: string; role: string; onNavigate: (path: string) => void
 }) {
-    const canManageProjects = role !== 'Admin';
+    const showAuthorProjectDashboard = role === 'Author';
     const [projectCount, setProjectCount] = useState(0);
     const [stats, setStats] = useState<ProjectStats>({
         totalChapters: 0,
@@ -83,17 +83,19 @@ function DashboardContent({ fullName, role, onNavigate }: {
                         {fullName} 👋
                     </h2>
                     <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                        {canManageProjects
+                        {showAuthorProjectDashboard
                             ? projectCount > 0
                                 ? `Bạn có ${projectCount} dự án đang thực hiện. Hãy tiếp tục sáng tạo!`
                                 : 'Bạn chưa có dự án nào. Bắt đầu ý tưởng mới ngay hôm nay!'
-                            : 'Theo dõi hoạt động hệ thống và quản lý người dùng từ dashboard.'}
+                            : role === 'Staff'
+                                ? 'Dùng menu bên trái để xem dự án bị cờ, xử lý báo cáo lỗi và hỗ trợ hệ thống.'
+                                : 'Theo dõi hoạt động hệ thống và quản lý người dùng từ dashboard.'}
                     </p>
                 </div>
             </div>
 
             {/* ── Stats Grid ── */}
-            {canManageProjects && (
+            {showAuthorProjectDashboard && (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <StatCard label="Tổng Dự án"  value={projectCount.toString()}              icon={FolderOpen}    color="#6366f1" delay={0}   />
                     <StatCard label="Tổng Chương" value={stats.totalChapters.toString()}       icon={BookOpen}      color="#8b5cf6" delay={50}  />
@@ -103,7 +105,7 @@ function DashboardContent({ fullName, role, onNavigate }: {
             )}
 
             {/* ── Projects Section ── */}
-            {canManageProjects && (
+            {showAuthorProjectDashboard && (
                 <MyProjectsSection
                     onNavigate={onNavigate}
                     createRequestToken={0}
@@ -114,7 +116,7 @@ function DashboardContent({ fullName, role, onNavigate }: {
             {/* ── Admin / Staff panel ── */}
             {(role === 'Admin' || role === 'Staff') && (
                 <button
-                    onClick={() => onNavigate('/admin')}
+                    onClick={() => onNavigate(role === 'Admin' ? '/admin' : '/staff')}
                     className="w-full rounded-2xl p-5 text-left transition-all duration-200 hover:-translate-y-0.5 group"
                     style={{
                         background: 'linear-gradient(135deg, rgba(239,68,68,0.06), rgba(239,68,68,0.03))',
@@ -133,7 +135,9 @@ function DashboardContent({ fullName, role, onNavigate }: {
                                     {role === 'Admin' ? 'Admin Panel' : 'Staff Panel'}
                                 </p>
                                 <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                                    Quản lý người dùng & thống kê hệ thống
+                                    {role === 'Admin'
+                                        ? 'Quản lý người dùng & thống kê hệ thống'
+                                        : 'Báo cáo lỗi, dự án bị cờ & hỗ trợ vận hành'}
                                 </p>
                             </div>
                         </div>

@@ -91,6 +91,41 @@ namespace Service.Implementations
             };
         }
 
+        public async Task<StaffPagedResponse<FlaggedProjectItem>> GetFlaggedProjectsAsync(int page, int pageSize)
+        {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, 100);
+
+            var baseQuery =
+                from f in _db.ProjectAbuseFlags.AsNoTracking()
+                join p in _db.Projects.AsNoTracking() on f.ProjectId equals p.Id
+                where !p.IsDeleted
+                join u in _db.Users.AsNoTracking() on p.AuthorId equals u.Id
+                orderby f.FlaggedAt descending
+                select new FlaggedProjectItem
+                {
+                    ProjectId = f.ProjectId,
+                    AuthorEmail = u.Email,
+                    FlagReason = f.FlagReason,
+                    FlaggedAt = f.FlaggedAt,
+                    Severity = f.Severity,
+                };
+
+            var total = await baseQuery.CountAsync();
+            var items = await baseQuery
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return new StaffPagedResponse<FlaggedProjectItem>
+            {
+                Items = items,
+                TotalCount = total,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
+
         public async Task<StaffPagedResponse<StaffFeedbackResponse>> GetFeedbacksAsync(Guid? projectId, int page, int pageSize)
         {
             page = Math.Max(1, page);

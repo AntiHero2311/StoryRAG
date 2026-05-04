@@ -20,6 +20,7 @@ const PaymentCancelPage = lazy(() => import('./pages/PaymentCancelPage'));
 const AdminSubscriptionPage = lazy(() => import('./pages/AdminSubscriptionPage'));
 const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
 const StaffDashboardPage = lazy(() => import('./pages/StaffDashboardPage'));
+const StaffFlaggedPage = lazy(() => import('./pages/StaffFlaggedPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
@@ -80,7 +81,17 @@ function App() {
               } 
             />
 
-            {/* Staff routes */}
+            {/* Staff routes — cụ thể trước /staff để khớp đúng */}
+            <Route
+              path="/staff/flagged"
+              element={
+                <RouteGuard>
+                  <RoleGuard allowedRoles={['Staff', 'Admin']}>
+                    <StaffFlaggedPage />
+                  </RoleGuard>
+                </RouteGuard>
+              }
+            />
             <Route 
               path="/staff" 
               element={

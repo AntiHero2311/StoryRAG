@@ -6,6 +6,8 @@ namespace Service.Interfaces
     {
         Task<StaffPagedResponse<FlaggedManuscriptItem>> GetFlaggedManuscriptsAsync(int page, int pageSize);
 
+        Task<StaffPagedResponse<FlaggedProjectItem>> GetFlaggedProjectsAsync(int page, int pageSize);
+
         Task<StaffPagedResponse<StaffFeedbackResponse>> GetFeedbacksAsync(Guid? projectId, int page, int pageSize);
         Task<StaffFeedbackResponse> CreateFeedbackAsync(Guid staffId, StaffFeedbackRequest request);
         Task<StaffFeedbackResponse> UpdateFeedbackAsync(Guid feedbackId, Guid staffId, StaffFeedbackRequest request);

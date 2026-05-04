@@ -25,6 +25,15 @@ namespace Api.Controllers
             return Ok(result);
         }
 
+        [HttpGet("flagged-projects")]
+        public async Task<IActionResult> GetFlaggedProjects(
+            [FromQuery] int page = 1,
+            [FromQuery(Name = "page_size")] int pageSize = 20)
+        {
+            var result = await _staffService.GetFlaggedProjectsAsync(page, pageSize);
+            return Ok(result);
+        }
+
         [HttpGet("feedback")]
         public async Task<IActionResult> GetFeedbacks([FromQuery] Guid? projectId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
