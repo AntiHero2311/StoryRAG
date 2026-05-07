@@ -57,6 +57,7 @@ namespace Repository.Data
         public DbSet<StaffFeedback> StaffFeedbacks { get; set; }
         public DbSet<StaffKnowledgeBaseItem> StaffKnowledgeBaseItems { get; set; }
         public DbSet<StaffAnalysisReview> StaffAnalysisReviews { get; set; }
+        public DbSet<ProjectAbuseFlag> ProjectAbuseFlags { get; set; }
 
         // System Config (Admin runtime configuration)
         public DbSet<SystemConfig> SystemConfigs { get; set; }
@@ -676,6 +677,7 @@ namespace Repository.Data
                 entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue("Open");
                 entity.Property(e => e.StaffNote).HasMaxLength(3000);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+                entity.Property(e => e.ReadAt);
                 entity.HasIndex(e => e.ProjectId);
                 entity.HasIndex(e => e.AuthorId);
                 entity.HasIndex(e => e.StaffId);
@@ -768,6 +770,30 @@ namespace Repository.Data
                       .HasForeignKey(e => e.RerunReportId)
                       .OnDelete(DeleteBehavior.SetNull)
                       .IsRequired(false);
+            });
+
+            // ── ProjectAbuseFlag (cờ AbuseDetector / rate limit) ────────────────
+            modelBuilder.Entity<ProjectAbuseFlag>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.FlagReason).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.Severity).IsRequired().HasMaxLength(20).HasDefaultValue("Warning");
+                entity.Property(e => e.FlaggedAt).HasDefaultValueSql("NOW()");
+                entity.HasIndex(e => e.ProjectId);
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.FlaggedAt);
+                entity.ToTable(t => t.HasCheckConstraint("CK_ProjectAbuseFlags_Severity", "\"Severity\" IN ('Warning','Critical')"));
+
+                entity.HasOne(e => e.Project)
+                      .WithMany()
+                      .HasForeignKey(e => e.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.User)
+                      .WithMany()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
 
             // ── SystemConfig ──────────────────────────────────────────────────────

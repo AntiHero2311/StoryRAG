@@ -213,7 +213,7 @@ namespace Service.Implementations
             await _context.SaveChangesAsync();
 
             // 10. Kiểm tra hành vi lạm dụng (fire-and-forget, không block response)
-            _ = Task.Run(() => AbuseDetector.CheckAndFlagAsync(userId, _context, _logger));
+            _ = Task.Run(() => AbuseDetector.CheckAndFlagAsync(userId, projectId, _context, _logger));
 
             return new AiChatResult
             {

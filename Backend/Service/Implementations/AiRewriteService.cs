@@ -106,7 +106,7 @@ namespace Service.Implementations
             await _context.SaveChangesAsync();
 
             // Kiểm tra hành vi lạm dụng (fire-and-forget)
-            _ = Task.Run(() => AbuseDetector.CheckAndFlagAsync(userId, _context, _logger));
+            _ = Task.Run(() => AbuseDetector.CheckAndFlagAsync(userId, projectId, _context, _logger));
 
             return new RewriteResult
             {

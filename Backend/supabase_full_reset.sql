@@ -17,6 +17,7 @@ DROP TABLE IF EXISTS "TimelineEvents"       CASCADE;
 DROP TABLE IF EXISTS "RewriteHistories"      CASCADE;
 DROP TABLE IF EXISTS "AiAnalysisHistories"   CASCADE;
 DROP TABLE IF EXISTS "ChatMessages"          CASCADE;
+DROP TABLE IF EXISTS "ProjectAbuseFlags"     CASCADE;
 DROP TABLE IF EXISTS "WorldbuildingEntries"  CASCADE;
 DROP TABLE IF EXISTS "PlotNoteEntries"       CASCADE;
 DROP TABLE IF EXISTS "ThemeEntries"          CASCADE;
@@ -165,6 +166,26 @@ CREATE TABLE "ProjectGenres" (
 );
 
 CREATE INDEX "IX_ProjectGenres_GenreId" ON "ProjectGenres" ("GenreId");
+
+-- ── ProjectAbuseFlags (AbuseDetector / rate limit — staff API flagged-projects)
+CREATE TABLE "ProjectAbuseFlags" (
+    "Id"          uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "ProjectId"   uuid                     NOT NULL,
+    "UserId"      uuid                     NOT NULL,
+    "FlagReason"  character varying(500)   NOT NULL,
+    "Severity"    character varying(20)    NOT NULL DEFAULT 'Warning',
+    "FlaggedAt"   timestamp with time zone NOT NULL DEFAULT NOW(),
+    CONSTRAINT "PK_ProjectAbuseFlags" PRIMARY KEY ("Id"),
+    CONSTRAINT "CK_ProjectAbuseFlags_Severity" CHECK ("Severity" IN ('Warning','Critical')),
+    CONSTRAINT "FK_ProjectAbuseFlags_Projects_ProjectId" FOREIGN KEY ("ProjectId")
+        REFERENCES "Projects" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_ProjectAbuseFlags_Users_UserId" FOREIGN KEY ("UserId")
+        REFERENCES "Users" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_ProjectAbuseFlags_ProjectId" ON "ProjectAbuseFlags" ("ProjectId");
+CREATE INDEX "IX_ProjectAbuseFlags_UserId"    ON "ProjectAbuseFlags" ("UserId");
+CREATE INDEX "IX_ProjectAbuseFlags_FlaggedAt" ON "ProjectAbuseFlags" ("FlaggedAt");
 
 -- ── ChapterVersions (tạo trước để Chapters có thể FK vào) ───
 -- Tạm thời chưa có FK ngược từ Chapters → ChapterVersions
@@ -570,6 +591,7 @@ CREATE TABLE "StaffFeedbacks" (
     "StaffNote" character varying(3000),
     "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
     "UpdatedAt" timestamp with time zone,
+    "ReadAt"    timestamp with time zone,
     CONSTRAINT "PK_StaffFeedbacks" PRIMARY KEY ("Id"),
     CONSTRAINT "CK_StaffFeedback_Status" CHECK ("Status" IN ('Open','Resolved')),
     CONSTRAINT "FK_StaffFeedbacks_Chapters_ChapterId" FOREIGN KEY ("ChapterId")
