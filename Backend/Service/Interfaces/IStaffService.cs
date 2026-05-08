@@ -21,5 +21,8 @@ namespace Service.Interfaces
 
         Task<StaffPagedResponse<StaffAnalysisReviewResponse>> GetAnalysisReviewsAsync(Guid? projectId, int page, int pageSize);
         Task<StaffAnalysisReviewResponse> ReviewAnalysisAsync(Guid reportId, Guid staffId, ReviewAnalysisRequest request);
+
+        Task<IReadOnlyList<StaffAnalysisJobItem>> GetAnalysisJobsAsync(string? status);
+        Task<StaffAnalysisJobItem> RerunAnalysisJobAsync(Guid jobId, Guid staffId);
     }
 }

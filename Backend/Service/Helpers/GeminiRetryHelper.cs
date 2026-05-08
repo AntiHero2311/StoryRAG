@@ -11,16 +11,18 @@ namespace Service.Helpers
     /// </summary>
     public static class GeminiRetryHelper
     {
-        private static readonly int[] BackoffSeconds = [10, 30, 65];
+        // Backoff cho lỗi transient (429/5xx). Keep short để UX tốt, nhưng vẫn đủ giảm tải.
+        private static readonly int[] BackoffSeconds = [2, 5, 12, 25];
 
         /// <summary>
-        /// Retry async action khi gặp 429. Dùng cho cả OpenAI SDK và HttpClient calls.
+        /// Retry async action khi gặp lỗi transient (429/5xx/timeout/network).
+        /// Dùng cho cả OpenAI SDK (ClientResultException) và HttpClient calls.
         /// </summary>
         public static async Task<T> ExecuteAsync<T>(
             Func<Task<T>> action,
             ILogger logger,
             string operationName = "Gemini",
-            int maxRetries = 3)
+            int maxRetries = 4)
         {
             for (var attempt = 0; attempt <= maxRetries; attempt++)
             {
@@ -28,11 +30,12 @@ namespace Service.Helpers
                 {
                     return await action();
                 }
-                catch (Exception ex) when (attempt < maxRetries && Is429(ex))
+                catch (Exception ex) when (attempt < maxRetries && IsTransient(ex))
                 {
                     var wait = GetWaitSeconds(ex, attempt);
-                    logger.LogWarning("{Op} gặp 429 Too Many Requests (lần {Attempt}/{Max}). Chờ {Wait}s...",
-                        operationName, attempt + 1, maxRetries, wait);
+                    var label = DescribeTransient(ex);
+                    logger.LogWarning("{Op} gặp lỗi tạm thời ({Label}) (lần {Attempt}/{Max}). Chờ {Wait}s rồi retry...",
+                        operationName, label, attempt + 1, maxRetries, wait);
                     await Task.Delay(TimeSpan.FromSeconds(wait));
                 }
             }
@@ -92,15 +95,33 @@ namespace Service.Helpers
             return remaining;
         }
 
-        private static bool Is429(Exception ex)
+        private static bool IsTransient(Exception ex)
         {
             // OpenAI SDK throws ClientResultException for HTTP errors
-            if (ex is ClientResultException cre && cre.Status == (int)HttpStatusCode.TooManyRequests)
-                return true;
+            if (ex is ClientResultException cre)
+            {
+                var s = cre.Status;
+                if (s == (int)HttpStatusCode.TooManyRequests) return true;
+                if (s == (int)HttpStatusCode.InternalServerError) return true; // 500
+                if (s == (int)HttpStatusCode.BadGateway) return true; // 502
+                if (s == (int)HttpStatusCode.ServiceUnavailable) return true; // 503
+                if (s == (int)HttpStatusCode.GatewayTimeout) return true; // 504
+            }
 
             // HttpClient throws HttpRequestException
-            if (ex is HttpRequestException hre && hre.StatusCode == HttpStatusCode.TooManyRequests)
-                return true;
+            if (ex is HttpRequestException hre)
+            {
+                // Some network failures have StatusCode = null (DNS, socket reset...)
+                if (hre.StatusCode == null) return true;
+                if (hre.StatusCode == HttpStatusCode.TooManyRequests) return true;
+                if (hre.StatusCode == HttpStatusCode.InternalServerError) return true;
+                if (hre.StatusCode == HttpStatusCode.BadGateway) return true;
+                if (hre.StatusCode == HttpStatusCode.ServiceUnavailable) return true;
+                if (hre.StatusCode == HttpStatusCode.GatewayTimeout) return true;
+            }
+
+            // Timeouts / cancellations (treat as transient unless caller explicitly cancelled)
+            if (ex is TaskCanceledException) return true;
 
             return false;
         }
@@ -110,6 +131,17 @@ namespace Service.Helpers
             // Đọc Retry-After header nếu có (OpenAI SDK expose qua message hoặc inner)
             // Fallback về exponential backoff
             return BackoffSeconds[Math.Min(attempt, BackoffSeconds.Length - 1)];
+        }
+
+        private static string DescribeTransient(Exception ex)
+        {
+            if (ex is ClientResultException cre)
+                return $"HTTP {cre.Status}";
+            if (ex is HttpRequestException hre && hre.StatusCode.HasValue)
+                return $"HTTP {(int)hre.StatusCode.Value}";
+            if (ex is TaskCanceledException)
+                return "timeout";
+            return "network";
         }
     }
 }

@@ -170,4 +170,26 @@ namespace Service.DTOs
         public int Page { get; set; }
         public int PageSize { get; set; }
     }
+
+    public class StaffAnalysisJobItem
+    {
+        public Guid Id { get; set; }
+
+        [JsonPropertyName("project_id")]
+        public Guid ProjectId { get; set; }
+
+        [JsonPropertyName("requested_by")]
+        public Guid RequestedBy { get; set; }
+
+        public string Status { get; set; } = string.Empty;
+
+        [JsonPropertyName("error_message")]
+        public string? ErrorMessage { get; set; }
+
+        [JsonPropertyName("started_at")]
+        public DateTime? StartedAt { get; set; }
+
+        [JsonPropertyName("last_heartbeat")]
+        public DateTime? LastHeartbeat { get; set; }
+    }
 }

@@ -21,9 +21,14 @@ const AdminSubscriptionPage = lazy(() => import('./pages/AdminSubscriptionPage')
 const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
 const StaffDashboardPage = lazy(() => import('./pages/StaffDashboardPage'));
 const StaffFlaggedPage = lazy(() => import('./pages/StaffFlaggedPage'));
+const StaffFaqPage = lazy(() => import('./pages/StaffFaqPage'));
+const StaffWritingTipPage = lazy(() => import('./pages/StaffWritingTipPage'));
+const StaffAnalysisJobsPage = lazy(() => import('./pages/StaffAnalysisJobsPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
+const FeedbackDetailPage = lazy(() => import('./pages/FeedbackDetailPage'));
 
 // A simple fallback for Suspense
 const PageLoader = () => (
@@ -58,6 +63,8 @@ function App() {
             <Route path="/workspace/:projectId" element={<RouteGuard><WorkspacePage /></RouteGuard>} />
             <Route path="/subscription" element={<RouteGuard><SubscriptionPage /></RouteGuard>} />
             <Route path="/analysis" element={<RouteGuard><AnalysisPage /></RouteGuard>} />
+            <Route path="/feedback" element={<RouteGuard><FeedbackPage /></RouteGuard>} />
+            <Route path="/feedback/:id" element={<RouteGuard><FeedbackDetailPage /></RouteGuard>} />
 
             {/* Admin routes */}
             <Route 
@@ -88,6 +95,36 @@ function App() {
                 <RouteGuard>
                   <RoleGuard allowedRoles={['Staff', 'Admin']}>
                     <StaffFlaggedPage />
+                  </RoleGuard>
+                </RouteGuard>
+              }
+            />
+            <Route
+              path="/staff/faqs"
+              element={
+                <RouteGuard>
+                  <RoleGuard allowedRoles={['Staff', 'Admin']}>
+                    <StaffFaqPage />
+                  </RoleGuard>
+                </RouteGuard>
+              }
+            />
+            <Route
+              path="/staff/writing-tips"
+              element={
+                <RouteGuard>
+                  <RoleGuard allowedRoles={['Staff', 'Admin']}>
+                    <StaffWritingTipPage />
+                  </RoleGuard>
+                </RouteGuard>
+              }
+            />
+            <Route
+              path="/staff/analysis-jobs"
+              element={
+                <RouteGuard>
+                  <RoleGuard allowedRoles={['Staff', 'Admin']}>
+                    <StaffAnalysisJobsPage />
                   </RoleGuard>
                 </RouteGuard>
               }

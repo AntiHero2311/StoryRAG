@@ -12,10 +12,12 @@ namespace Api.Controllers
     public class CharacterController : ControllerBase
     {
         private readonly ICharacterService _service;
+        private readonly ICharacterRelationshipService _relationshipService;
 
-        public CharacterController(ICharacterService service)
+        public CharacterController(ICharacterService service, ICharacterRelationshipService relationshipService)
         {
             _service = service;
+            _relationshipService = relationshipService;
         }
 
         [HttpGet]
@@ -100,6 +102,35 @@ namespace Api.Controllers
                 return Ok(result);
             }
             catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+        }
+
+        [HttpGet("relationships")]
+        public async Task<IActionResult> GetRelationships(Guid projectId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized();
+                var result = await _relationshipService.GetAllAsync(projectId, userId.Value, HttpContext.RequestAborted);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+        }
+
+        [HttpPost("relationships/extract")]
+        public async Task<IActionResult> ExtractRelationships(Guid projectId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized();
+                var result = await _relationshipService.ExtractAsync(projectId, userId.Value, HttpContext.RequestAborted);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+            catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
             catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
         }
 

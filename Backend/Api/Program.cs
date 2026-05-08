@@ -37,7 +37,35 @@ builder.Configuration.Sources
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
+    var rawConn = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrWhiteSpace(rawConn))
+        throw new InvalidOperationException("Missing connection string: ConnectionStrings:DefaultConnection");
+
+    // Supabase pooler (pgBouncer) needs a few Npgsql knobs to be stable.
+    // We apply safe defaults only when the host indicates pooler usage.
+    var csb = new NpgsqlConnectionStringBuilder(rawConn);
+    var host = csb.Host ?? string.Empty;
+    if (host.Contains("pooler.supabase.com", StringComparison.OrdinalIgnoreCase))
+    {
+        // Supabase pooler requires SSL.
+        if (csb.SslMode == SslMode.Disable)
+            csb.SslMode = SslMode.Require;
+
+        // Required for pgBouncer transaction pooling.
+        csb.NoResetOnClose = true;
+
+        // Keep the TCP connection warm; reduce "connection reset by peer".
+        csb.KeepAlive = csb.KeepAlive <= 0 ? 30 : csb.KeepAlive;
+
+        // Fail fast on bad network; EF has retry-on-failure.
+        csb.Timeout = csb.Timeout <= 0 ? 15 : csb.Timeout;
+        csb.CommandTimeout = csb.CommandTimeout <= 0 ? 30 : csb.CommandTimeout;
+
+        // Reasonable pool cap for web API
+        csb.MaxPoolSize = csb.MaxPoolSize <= 0 ? 50 : csb.MaxPoolSize;
+    }
+
+    options.UseNpgsql(csb.ConnectionString,
         npgsqlOptions =>
         {
             npgsqlOptions.EnableRetryOnFailure(
@@ -211,6 +239,7 @@ builder.Services.AddScoped<IProjectReportService, ProjectReportService>();
 builder.Services.AddScoped<IUserSettingsService, UserSettingsService>();
 builder.Services.AddScoped<IWorldbuildingService, WorldbuildingService>();
 builder.Services.AddScoped<ICharacterService, CharacterService>();
+builder.Services.AddScoped<ICharacterRelationshipService, CharacterRelationshipService>();
 builder.Services.AddScoped<IAiRewriteService, AiRewriteService>();
 builder.Services.AddScoped<IAiWritingService, AiWritingService>();
 builder.Services.AddScoped<IBugReportService, BugReportService>();

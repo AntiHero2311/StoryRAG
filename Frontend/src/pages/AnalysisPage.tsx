@@ -13,6 +13,7 @@ import RadarChart from '../components/analysis/RadarChart';
 import GroupCard from '../components/analysis/GroupCard';
 import EvidenceChunksPanel from '../components/analysis/EvidenceChunksPanel';
 import NarrativeChartsPanel from '../components/analysis/NarrativeChartsPanel';
+import CharacterRelationshipsGraphPanel from '../components/analysis/CharacterRelationshipsGraphPanel';
 import { useToast } from '../components/Toast';
 import { browserNotificationService } from '../services/browserNotificationService';
 import { appNotificationService } from '../services/appNotificationService';
@@ -993,6 +994,10 @@ function AnalysisContent() {
                                         </div>
 
                                         <NarrativeChartsPanel data={narrativeCharts} loading={loadingNarrativeCharts} />
+
+                                        <div className="mt-5">
+                                            <CharacterRelationshipsGraphPanel projectId={selectedId} />
+                                        </div>
                                     </div>
                                 )}
                             </>

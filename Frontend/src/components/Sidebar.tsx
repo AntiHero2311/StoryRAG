@@ -1,31 +1,41 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
     LayoutDashboard, BarChart2, User, Settings,
     Users, CreditCard, ChevronLeft, ChevronRight,
-    Bug, HelpCircle, BookOpen, AlertTriangle,
+    Bug, HelpCircle, BookOpen, AlertTriangle, MessageSquare, CircleHelp, Sparkles, Activity,
 } from 'lucide-react';
+import { feedbackService } from '../services/feedbackService';
 
-const NAV_AUTHOR = [
+type NavItem = { key: string; label: string; icon: typeof LayoutDashboard; path: string };
+
+const NAV_AUTHOR: NavItem[] = [
     { key: 'dashboard',    label: 'Trang chủ',  icon: LayoutDashboard, path: '/home' },
     { key: 'analysis',     label: 'Phân tích',  icon: BarChart2,       path: '/analysis' },
+    { key: 'feedback',     label: 'Feedback',   icon: MessageSquare,   path: '/feedback' },
     { key: 'subscription', label: 'Gói dịch vụ',icon: CreditCard,      path: '/subscription' },
     { key: 'profile',      label: 'Hồ sơ',      icon: User,            path: '/profile' },
     { key: 'settings',     label: 'Cài đặt',    icon: Settings,        path: '/settings' },
 ];
 
-const NAV_STAFF = [
+const NAV_STAFF: NavItem[] = [
     { key: 'dashboard',    label: 'Trang chủ',  icon: LayoutDashboard, path: '/home' },
     { key: 'staff-flagged', label: 'Dự án bị cờ', icon: AlertTriangle,   path: '/staff/flagged' },
+    { key: 'staff-analysis-jobs', label: 'Analysis Jobs', icon: Activity, path: '/staff/analysis-jobs' },
+    { key: 'staff-faqs',   label: 'FAQs',       icon: CircleHelp,      path: '/staff/faqs' },
+    { key: 'staff-tips',   label: 'Writing Tips', icon: Sparkles,      path: '/staff/writing-tips' },
     { key: 'staff',        label: 'Báo cáo lỗi',icon: Bug,             path: '/staff' },
     { key: 'profile',      label: 'Hồ sơ',      icon: User,            path: '/profile' },
     { key: 'settings',     label: 'Cài đặt',    icon: Settings,        path: '/settings' },
 ];
 
-const NAV_ADMIN = [
+const NAV_ADMIN: NavItem[] = [
     { key: 'dashboard',    label: 'Trang chủ',  icon: LayoutDashboard, path: '/home' },
     { key: 'users',        label: 'Người dùng', icon: Users,           path: '/admin' },
     { key: 'staff-flagged', label: 'Dự án bị cờ', icon: AlertTriangle,   path: '/staff/flagged' },
+    { key: 'staff-analysis-jobs', label: 'Analysis Jobs', icon: Activity, path: '/staff/analysis-jobs' },
+    { key: 'staff-faqs',   label: 'FAQs',       icon: CircleHelp,      path: '/staff/faqs' },
+    { key: 'staff-tips',   label: 'Writing Tips', icon: Sparkles,      path: '/staff/writing-tips' },
     { key: 'staff',        label: 'Báo cáo lỗi',icon: Bug,             path: '/staff' },
     { key: 'sub-admin',    label: 'Quản lý Plans',icon: CreditCard,    path: '/admin/subscription' },
     { key: 'profile',      label: 'Hồ sơ',      icon: User,            path: '/profile' },
@@ -47,6 +57,36 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
     const nav = getNav(role);
     const location = useLocation();
     const [collapsed, setCollapsed] = useState(false);
+    const [unreadFeedback, setUnreadFeedback] = useState(0);
+
+    const navBadgeMap = useMemo(() => {
+        return {
+            feedback: unreadFeedback,
+        } as Record<string, number>;
+    }, [unreadFeedback]);
+
+    useEffect(() => {
+        if (role !== 'Author') return;
+
+        let disposed = false;
+        const sync = async () => {
+            try {
+                const items = await feedbackService.getMy();
+                if (disposed) return;
+                setUnreadFeedback(items.filter(x => !x.readAt).length);
+            } catch {
+                if (disposed) return;
+                setUnreadFeedback(0);
+            }
+        };
+
+        void sync();
+        const id = window.setInterval(() => { void sync(); }, 60000);
+        return () => {
+            disposed = true;
+            window.clearInterval(id);
+        };
+    }, [role]);
 
     return (
         <aside
@@ -160,6 +200,14 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
                                     {!collapsed && (
                                         <>
                                             <span className="truncate flex-1 text-left">{item.label}</span>
+                                            {navBadgeMap[item.key] > 0 && (
+                                                <span
+                                                    className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
+                                                    style={{ background: '#ef4444' }}
+                                                >
+                                                    {navBadgeMap[item.key] > 99 ? '99+' : navBadgeMap[item.key]}
+                                                </span>
+                                            )}
                                             {active && (
                                                 <div
                                                     className="w-1.5 h-1.5 rounded-full shrink-0"
@@ -167,6 +215,12 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
                                                 />
                                             )}
                                         </>
+                                    )}
+                                    {collapsed && navBadgeMap[item.key] > 0 && (
+                                        <span
+                                            className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full"
+                                            style={{ background: '#ef4444' }}
+                                        />
                                     )}
                                 </button>
                             );

@@ -51,4 +51,24 @@ namespace Service.DTOs
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
     }
+
+    public class CharacterRelationshipDto
+    {
+        public Guid Id { get; set; }
+        public Guid ProjectId { get; set; }
+        public Guid CharAId { get; set; }
+        public Guid CharBId { get; set; }
+        public string RelationType { get; set; } = string.Empty;
+        public float StrengthScore { get; set; }
+        public List<int>? EvidenceChunkIds { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class CharacterRelationshipExtractResult
+    {
+        public int CandidatesConsidered { get; set; }
+        public int PairsSentToAi { get; set; }
+        public int Upserted { get; set; }
+        public int SkippedNoEvidence { get; set; }
+    }
 }

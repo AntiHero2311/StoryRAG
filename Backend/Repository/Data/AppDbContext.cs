@@ -47,6 +47,7 @@ namespace Repository.Data
         // Worldbuilding & Characters & Other Notes
         public DbSet<WorldbuildingEntry> WorldbuildingEntries { get; set; }
         public DbSet<CharacterEntry> CharacterEntries { get; set; }
+        public DbSet<CharacterRelationship> CharacterRelationships { get; set; }
         public DbSet<StyleGuideEntry> StyleGuideEntries { get; set; }
         public DbSet<ThemeEntry> ThemeEntries { get; set; }
         public DbSet<PlotNoteEntry> PlotNoteEntries { get; set; }
@@ -58,9 +59,12 @@ namespace Repository.Data
         public DbSet<StaffKnowledgeBaseItem> StaffKnowledgeBaseItems { get; set; }
         public DbSet<StaffAnalysisReview> StaffAnalysisReviews { get; set; }
         public DbSet<ProjectAbuseFlag> ProjectAbuseFlags { get; set; }
+        public DbSet<Faq> Faqs { get; set; }
+        public DbSet<WritingTip> WritingTips { get; set; }
 
         // System Config (Admin runtime configuration)
         public DbSet<SystemConfig> SystemConfigs { get; set; }
+        public DbSet<AnalysisJobRerunAudit> AnalysisJobRerunAudits { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -376,6 +380,7 @@ namespace Repository.Data
                 entity.Property(e => e.ErrorMessage).HasMaxLength(2000);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("NOW()");
+                entity.Property(e => e.RetriedFromId);
                 entity.ToTable(t =>
                 {
                     t.HasCheckConstraint("CK_ProjectAnalysisJobs_Status", "\"Status\" IN ('Queued','Processing','Completed','Failed','Cancelled')");
@@ -389,6 +394,7 @@ namespace Repository.Data
                     .HasDatabaseName("IX_ProjectAnalysisJobs_UserId_Active")
                     .IsUnique()
                     .HasFilter("\"Status\" IN ('Queued','Processing')");
+                entity.HasIndex(e => e.RetriedFromId);
 
                 entity.HasOne(j => j.Project)
                       .WithMany()
@@ -405,6 +411,22 @@ namespace Repository.Data
                       .HasForeignKey(j => j.ReportId)
                       .OnDelete(DeleteBehavior.SetNull)
                       .IsRequired(false);
+            });
+
+            // ── AnalysisJobRerunAudit ────────────────────────────────────────────
+            modelBuilder.Entity<AnalysisJobRerunAudit>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.OldJobId).IsRequired();
+                entity.Property(e => e.NewJobId).IsRequired();
+                entity.Property(e => e.StaffId).IsRequired();
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+                entity.HasIndex(e => e.OldJobId);
+                entity.HasIndex(e => e.NewJobId).IsUnique();
+                entity.HasIndex(e => e.StaffId);
+                entity.HasIndex(e => e.CreatedAt);
+                entity.ToTable("analysis_job_rerun_audits");
             });
 
             // ── ProjectAnalysisFact (Stage 1 facts, JSONB for RAG / Stage 2) ───────
@@ -497,6 +519,55 @@ namespace Repository.Data
                 entity.HasOne(c => c.Project)
                       .WithMany()
                       .HasForeignKey(c => c.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── CharacterRelationship ────────────────────────────────────────────
+            modelBuilder.Entity<CharacterRelationship>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.RelationType).IsRequired().HasMaxLength(50).HasDefaultValue("Other");
+                entity.Property(e => e.StrengthScore).HasDefaultValue(0f);
+                // JSONB list-of-ints (same approach as ReportItem.EvidenceChunkIds)
+                var jsonOpts = (JsonSerializerOptions?)null;
+                var relChunkIdsConverter = new ValueConverter<List<int>?, string?>(
+                    v => v == null ? null : JsonSerializer.Serialize(v, jsonOpts),
+                    v => string.IsNullOrWhiteSpace(v) ? null : JsonSerializer.Deserialize<List<int>>(v, jsonOpts));
+
+                var relChunkIdsComparer = new ValueComparer<List<int>?>(
+                    (a, b) => (a == null && b == null) || (a != null && b != null && a.SequenceEqual(b)),
+                    v => v == null ? 0 : v.Aggregate(0, (h, x) => HashCode.Combine(h, x)),
+                    v => v == null ? null : v.ToList());
+
+                entity.Property(e => e.EvidenceChunkIds)
+                      .HasColumnType("jsonb")
+                      .HasConversion(relChunkIdsConverter)
+                      .Metadata.SetValueComparer(relChunkIdsComparer);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasIndex(e => new { e.ProjectId, e.CharAId, e.CharBId }).IsUnique();
+                entity.HasIndex(e => e.ProjectId);
+
+                entity.ToTable(t =>
+                {
+                    t.HasCheckConstraint("CK_CharacterRelationships_CharOrder", "\"CharAId\" < \"CharBId\"");
+                });
+                entity.ToTable("character_relationships");
+
+                entity.HasOne(e => e.Project)
+                      .WithMany()
+                      .HasForeignKey(e => e.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.CharA)
+                      .WithMany()
+                      .HasForeignKey(e => e.CharAId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.CharB)
+                      .WithMany()
+                      .HasForeignKey(e => e.CharBId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
 
@@ -730,6 +801,37 @@ namespace Repository.Data
                       .HasForeignKey(e => e.UpdatedBy)
                       .OnDelete(DeleteBehavior.SetNull)
                       .IsRequired(false);
+            });
+
+            // ── Faq ──────────────────────────────────────────────────────────────
+            modelBuilder.Entity<Faq>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Question).IsRequired().HasMaxLength(300);
+                entity.Property(e => e.Answer).IsRequired().HasMaxLength(5000);
+                entity.Property(e => e.Category).IsRequired().HasMaxLength(50).HasDefaultValue("General");
+                entity.Property(e => e.Order).HasDefaultValue(0);
+                entity.Property(e => e.Published).HasDefaultValue(false);
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("NOW()");
+                entity.HasIndex(e => new { e.Category, e.Published, e.Order });
+                entity.HasIndex(e => e.UpdatedAt);
+                entity.ToTable("faqs");
+            });
+
+            // ── WritingTip ───────────────────────────────────────────────────────
+            modelBuilder.Entity<WritingTip>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Content).IsRequired().HasMaxLength(8000);
+                entity.Property(e => e.Tags).HasColumnType("text[]").HasDefaultValue(Array.Empty<string>());
+                entity.Property(e => e.Published).HasDefaultValue(false);
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("NOW()");
+                entity.HasIndex(e => e.Published);
+                entity.HasIndex(e => e.UpdatedAt);
+                entity.ToTable("writing_tips");
             });
 
             // ── StaffAnalysisReview ───────────────────────────────────────────────

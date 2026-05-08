@@ -25,6 +25,9 @@ namespace Repository.Entities
         /// <summary>Report được tạo ra sau khi job hoàn thành</summary>
         public Guid? ReportId { get; set; }
 
+        /// <summary>Job này được retry từ job cũ (nếu có).</summary>
+        public Guid? RetriedFromId { get; set; }
+
         /// <summary>Lý do thất bại/cancel (nếu có)</summary>
         public string? ErrorMessage { get; set; }
 

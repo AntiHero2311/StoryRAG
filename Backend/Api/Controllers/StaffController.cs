@@ -131,6 +131,32 @@ namespace Api.Controllers
             return Ok(result);
         }
 
+        // GET /api/staff/analysis-jobs?status=failed,stale
+        [HttpGet("analysis-jobs")]
+        public async Task<IActionResult> GetAnalysisJobs([FromQuery] string? status)
+        {
+            var result = await _staffService.GetAnalysisJobsAsync(status);
+            return Ok(result);
+        }
+
+        // POST /api/staff/analysis-jobs/{id}/rerun
+        [HttpPost("analysis-jobs/{id:guid}/rerun")]
+        public async Task<IActionResult> RerunAnalysisJob(Guid id)
+        {
+            var staffId = GetUserId();
+            if (staffId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+            try
+            {
+                var result = await _staffService.RerunAnalysisJobAsync(id, staffId.Value);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+        }
+
         private Guid? GetUserId()
         {
             var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value

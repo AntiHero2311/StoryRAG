@@ -13,12 +13,18 @@ namespace Service.Implementations
         private readonly AppDbContext _db;
         private readonly IConfiguration _config;
         private readonly IProjectReportService _projectReportService;
+        private readonly IAnalysisJobQueue _analysisJobQueue;
 
-        public StaffService(AppDbContext db, IConfiguration config, IProjectReportService projectReportService)
+        public StaffService(
+            AppDbContext db,
+            IConfiguration config,
+            IProjectReportService projectReportService,
+            IAnalysisJobQueue analysisJobQueue)
         {
             _db = db;
             _config = config;
             _projectReportService = projectReportService;
+            _analysisJobQueue = analysisJobQueue;
         }
 
         public async Task<StaffPagedResponse<FlaggedManuscriptItem>> GetFlaggedManuscriptsAsync(int page, int pageSize)
@@ -422,6 +428,134 @@ namespace Service.Implementations
 
             await _db.SaveChangesAsync();
             return MapReview(review);
+        }
+
+        public async Task<IReadOnlyList<StaffAnalysisJobItem>> GetAnalysisJobsAsync(string? status)
+        {
+            var statuses = ParseStatuses(status);
+            var now = DateTime.UtcNow;
+            var staleBefore = now.AddMinutes(-15);
+
+            var query = _db.ProjectAnalysisJobs
+                .AsNoTracking()
+                .Select(j => new
+                {
+                    j.Id,
+                    j.ProjectId,
+                    RequestedBy = j.UserId,
+                    j.Status,
+                    j.ErrorMessage,
+                    j.StartedAt,
+                    j.UpdatedAt,
+                    j.CreatedAt
+                })
+                .AsQueryable();
+
+            if (statuses.Contains("failed"))
+            {
+                // keep in query; additional filters below
+            }
+
+            var wantFailed = statuses.Contains("failed");
+            var wantStale = statuses.Contains("stale");
+
+            if (wantFailed && !wantStale)
+            {
+                query = query.Where(x => x.Status == "Failed");
+            }
+            else if (!wantFailed && wantStale)
+            {
+                query = query.Where(x => x.Status == "Processing" && (x.UpdatedAt ?? x.StartedAt ?? x.CreatedAt) < staleBefore);
+            }
+            else
+            {
+                // default or both
+                query = query.Where(x =>
+                    x.Status == "Failed" ||
+                    (x.Status == "Processing" && (x.UpdatedAt ?? x.StartedAt ?? x.CreatedAt) < staleBefore));
+            }
+
+            var items = await query
+                .OrderByDescending(x => x.UpdatedAt ?? x.StartedAt ?? x.CreatedAt)
+                .Take(200)
+                .ToListAsync();
+
+            return items.Select(x => new StaffAnalysisJobItem
+            {
+                Id = x.Id,
+                ProjectId = x.ProjectId,
+                RequestedBy = x.RequestedBy,
+                Status = x.Status,
+                ErrorMessage = x.ErrorMessage,
+                StartedAt = x.StartedAt,
+                LastHeartbeat = x.UpdatedAt ?? x.StartedAt ?? x.CreatedAt
+            }).ToList();
+        }
+
+        public async Task<StaffAnalysisJobItem> RerunAnalysisJobAsync(Guid jobId, Guid staffId)
+        {
+            var oldJob = await _db.ProjectAnalysisJobs
+                .AsNoTracking()
+                .FirstOrDefaultAsync(j => j.Id == jobId)
+                ?? throw new KeyNotFoundException("Không tìm thấy job phân tích.");
+
+            // Create new queued job referencing the old one.
+            var now = DateTime.UtcNow;
+            var newJob = new ProjectAnalysisJob
+            {
+                Id = Guid.NewGuid(),
+                ProjectId = oldJob.ProjectId,
+                UserId = oldJob.UserId,
+                Status = "Queued",
+                Stage = "Queued",
+                Progress = 0,
+                ProjectVersionHash = oldJob.ProjectVersionHash ?? string.Empty,
+                RetriedFromId = oldJob.Id,
+                CreatedAt = now,
+                UpdatedAt = now,
+                ErrorMessage = null,
+                StartedAt = null,
+                CompletedAt = null,
+                ReportId = null,
+            };
+
+            _db.ProjectAnalysisJobs.Add(newJob);
+            _db.AnalysisJobRerunAudits.Add(new AnalysisJobRerunAudit
+            {
+                Id = Guid.NewGuid(),
+                OldJobId = oldJob.Id,
+                NewJobId = newJob.Id,
+                StaffId = staffId,
+                CreatedAt = now,
+            });
+
+            await _db.SaveChangesAsync();
+
+            // Queue for immediate processing.
+            await _analysisJobQueue.EnqueueAsync(newJob.Id, CancellationToken.None);
+
+            return new StaffAnalysisJobItem
+            {
+                Id = newJob.Id,
+                ProjectId = newJob.ProjectId,
+                RequestedBy = newJob.UserId,
+                Status = newJob.Status,
+                ErrorMessage = newJob.ErrorMessage,
+                StartedAt = newJob.StartedAt,
+                LastHeartbeat = newJob.UpdatedAt ?? newJob.CreatedAt
+            };
+        }
+
+        private static HashSet<string> ParseStatuses(string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+                return new HashSet<string>(new[] { "failed", "stale" }, StringComparer.OrdinalIgnoreCase);
+
+            return status
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => s.Trim().ToLowerInvariant())
+                .Where(s => s is "failed" or "stale")
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
 
         private static StaffFeedbackResponse MapFeedback(StaffFeedback feedback)
