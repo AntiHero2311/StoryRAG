@@ -254,6 +254,7 @@ builder.Services.AddScoped<INarrativeAnalyticsService, NarrativeAnalyticsService
 builder.Services.AddScoped<IReportExportService, ReportExportService>();
 builder.Services.AddScoped<IProjectAnalysisJobService, ProjectAnalysisJobService>();
 builder.Services.AddSingleton<IAnalysisJobQueue, AnalysisJobQueue>();
+builder.Services.AddSingleton<IAnalysisJobCancellationRegistry, AnalysisJobCancellationRegistry>();
 builder.Services.AddHostedService<ProjectAnalysisJobWorker>();
 builder.Services.AddHostedService<AutoEmbeddingWorker>();
 builder.Services.AddMemoryCache();

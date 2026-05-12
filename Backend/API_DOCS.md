@@ -448,6 +448,75 @@ AI Chat — hỏi đáp về nội dung dự án truyện (RAG).
 
 ---
 
+### POST `/api/ai/{projectId}/analyze/jobs`
+Tạo job phân tích bất đồng bộ cho dự án.
+
+**Auth:** Bắt buộc.
+
+**Response `202`:**
+```json
+{
+  "jobId": "guid",
+  "projectId": "guid",
+  "status": "Queued",
+  "stage": "Queued",
+  "progress": 0,
+  "isExistingJob": false,
+  "createdAt": "datetime"
+}
+```
+
+---
+
+### GET `/api/ai/analyze/jobs/active?projectId={projectId?}`
+Lấy job active (`Queued`/`Processing`) gần nhất của user hiện tại.
+
+**Auth:** Bắt buộc.
+
+**Response `200`:** `ProjectAnalysisJobResponse | null`
+
+---
+
+### GET `/api/ai/{projectId}/analyze/jobs/latest`
+Lấy job phân tích gần nhất của một project (kể cả đã hoàn tất/thất bại/hủy).
+
+**Auth:** Bắt buộc.
+
+**Response `200`:** `ProjectAnalysisJobResponse | null`
+
+---
+
+### GET `/api/ai/{projectId}/analyze/jobs/{jobId}`
+Lấy trạng thái và tiến độ của một job phân tích.
+
+**Auth:** Bắt buộc.
+
+**Response `200`:** `ProjectAnalysisJobResponse`
+
+---
+
+### GET `/api/ai/{projectId}/analyze/jobs/{jobId}/result`
+Lấy kết quả báo cáo sau khi job hoàn tất.
+
+**Auth:** Bắt buộc.
+
+**Response `200`:** `ProjectReportResponse`
+
+**Response `409`:** Nếu job chưa hoàn thành.
+
+---
+
+### POST `/api/ai/{projectId}/analyze/jobs/{jobId}/cancel`
+Hủy job phân tích khi job đang `Queued` hoặc `Processing` **và** đã qua ngưỡng khoảng **5 phút** kể từ lúc enqueue.
+
+**Auth:** Bắt buộc.
+
+**Response `200`:** `ProjectAnalysisJobResponse` (status/stage chuyển `Cancelled`)
+
+**Response `409`:** Nếu job chưa đủ thời gian tối thiểu để hủy hoặc đã kết thúc.
+
+---
+
 ## 8. Subscription — `/api/subscription`
 
 ### GET `/api/subscription/plans`

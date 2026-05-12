@@ -114,26 +114,6 @@ namespace Api.Controllers
 
         // ── Project Report endpoints ───────────────────────────────────────────────
 
-        /// <summary>Phân tích bộ truyện theo rubric 100 điểm và lưu kết quả.</summary>
-        [HttpPost("{projectId:guid}/analyze")]
-        [EnableRateLimiting("AiAnalyze")]
-        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
-        public async Task<IActionResult> Analyze(Guid projectId)
-        {
-            try
-            {
-                var userId = GetUserId();
-                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
-
-                var result = await _reportService.AnalyzeAsync(projectId, userId.Value);
-                return Ok(result);
-            }
-            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
-            catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
-            catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
-            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
-        }
-
         /// <summary>Tạo job phân tích bất đồng bộ cho dự án.</summary>
         [HttpPost("{projectId:guid}/analyze/jobs")]
         [EnableRateLimiting("AiAnalyze")]
@@ -219,7 +199,7 @@ namespace Api.Controllers
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
 
-        /// <summary>Hủy job đang chờ xử lý.</summary>
+        /// <summary>Hủy job phân tích sau khi đã chạy tối thiểu 5 phút.</summary>
         [HttpPost("{projectId:guid}/analyze/jobs/{jobId:guid}/cancel")]
         public async Task<IActionResult> CancelAnalyzeJob(Guid projectId, Guid jobId)
         {

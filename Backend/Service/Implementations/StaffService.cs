@@ -546,6 +546,110 @@ namespace Service.Implementations
             };
         }
 
+        public async Task<StaffReportDetailResponse> GetReportDetailAsync(Guid reportId)
+        {
+            var report = await _db.ProjectReports
+                .AsNoTracking()
+                .Include(r => r.Project)
+                    .ThenInclude(p => p.Author)
+                .FirstOrDefaultAsync(r => r.Id == reportId)
+                ?? throw new KeyNotFoundException("Không tìm thấy báo cáo phân tích.");
+
+            var masterKey = _config["Security:MasterKey"] ?? throw new InvalidOperationException("Thiếu cấu hình Security:MasterKey.");
+
+            var projectTitle = "[Encrypted Title]";
+            if (!string.IsNullOrWhiteSpace(report.Project?.Author?.DataEncryptionKey))
+            {
+                var authorDek = EncryptionHelper.DecryptWithMasterKey(report.Project.Author.DataEncryptionKey, masterKey);
+                projectTitle = EncryptionHelper.DecryptWithMasterKey(report.Project.Title, authorDek);
+            }
+            else if (report.Project != null)
+            {
+                projectTitle = report.Project.Title;
+            }
+
+            return MapReportDetail(report, projectTitle);
+        }
+
+        public async Task<StaffReportDetailResponse> EditReportAsync(Guid reportId, Guid staffId, StaffEditReportRequest request)
+        {
+            var report = await _db.ProjectReports
+                .Include(r => r.Project)
+                    .ThenInclude(p => p.Author)
+                .FirstOrDefaultAsync(r => r.Id == reportId)
+                ?? throw new KeyNotFoundException("Không tìm thấy báo cáo phân tích.");
+
+            if (string.Equals(report.Status, "Pending", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(report.Status, "Failed", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Chỉ có thể chỉnh sửa report đã hoàn tất (Completed/MockData).");
+            }
+
+            // Parse AI CriteriaJson gốc
+            var sourceCriteriaJson = report.StaffEditedCriteriaJson ?? report.CriteriaJson;
+            List<System.Text.Json.Nodes.JsonObject>? criteriaList = null;
+
+            try
+            {
+                var arr = System.Text.Json.Nodes.JsonNode.Parse(sourceCriteriaJson) as System.Text.Json.Nodes.JsonArray;
+                criteriaList = arr?
+                    .OfType<System.Text.Json.Nodes.JsonObject>()
+                    .ToList();
+            }
+            catch
+            {
+                throw new InvalidOperationException("CriteriaJson của report không hợp lệ, không thể chỉnh sửa.");
+            }
+
+            if (criteriaList == null)
+                throw new InvalidOperationException("CriteriaJson rỗng hoặc không phải mảng JSON.");
+
+            // Áp dụng các chỉnh sửa của staff
+            foreach (var edit in request.EditedCriteria)
+            {
+                var target = criteriaList.FirstOrDefault(c =>
+                    c["key"]?.GetValue<string>() == edit.Key ||
+                    c["Key"]?.GetValue<string>() == edit.Key);
+
+                if (target == null) continue;
+
+                if (edit.Feedback != null)
+                    target["feedback"] = edit.Feedback;
+                if (edit.Evidence != null)
+                    target["evidence"] = edit.Evidence;
+                if (edit.Errors != null)
+                    target["errors"] = new System.Text.Json.Nodes.JsonArray(
+                        edit.Errors.Select(e => (System.Text.Json.Nodes.JsonNode)System.Text.Json.Nodes.JsonValue.Create(e)!).ToArray());
+                if (edit.Suggestions != null)
+                    target["suggestions"] = new System.Text.Json.Nodes.JsonArray(
+                        edit.Suggestions.Select(s => (System.Text.Json.Nodes.JsonNode)System.Text.Json.Nodes.JsonValue.Create(s)!).ToArray());
+            }
+
+            var editedJson = new System.Text.Json.Nodes.JsonArray(
+                criteriaList.Cast<System.Text.Json.Nodes.JsonNode?>().ToArray()
+            ).ToJsonString();
+
+            report.StaffEditedCriteriaJson = editedJson;
+            report.ReviewStatus = request.ReleaseToUser ? "Released" : "StaffReviewing";
+            report.UpdatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            var masterKey = _config["Security:MasterKey"] ?? throw new InvalidOperationException("Thiếu cấu hình Security:MasterKey.");
+            var projectTitle = "[Encrypted Title]";
+            if (!string.IsNullOrWhiteSpace(report.Project?.Author?.DataEncryptionKey))
+            {
+                var authorDek = EncryptionHelper.DecryptWithMasterKey(report.Project.Author.DataEncryptionKey, masterKey);
+                projectTitle = EncryptionHelper.DecryptWithMasterKey(report.Project.Title, authorDek);
+            }
+            else if (report.Project != null)
+            {
+                projectTitle = report.Project.Title;
+            }
+
+            return MapReportDetail(report, projectTitle);
+        }
+
         private static HashSet<string> ParseStatuses(string? status)
         {
             if (string.IsNullOrWhiteSpace(status))
@@ -610,6 +714,43 @@ namespace Service.Implementations
                 RerunReportId = review.RerunReportId,
                 CreatedAt = review.CreatedAt,
                 UpdatedAt = review.UpdatedAt
+            };
+        }
+
+        private static StaffReportDetailResponse MapReportDetail(ProjectReport report, string projectTitle)
+        {
+            // Phân loại điểm số
+            var classification = report.TotalScore >= 85 ? "Xuất sắc"
+                : report.TotalScore >= 70 ? "Khá"
+                : report.TotalScore >= 55 ? "Trung bình"
+                : "Cần sửa lớn";
+
+            // Trích overallFeedback từ CriteriaJson nếu có
+            var overallFeedback = string.Empty;
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(report.CriteriaJson);
+                if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                    doc.RootElement.TryGetProperty("overallFeedback", out var ofProp))
+                    overallFeedback = ofProp.GetString() ?? string.Empty;
+            }
+            catch { /* ignore parse errors */ }
+
+            return new StaffReportDetailResponse
+            {
+                Id = report.Id,
+                ProjectId = report.ProjectId,
+                ProjectTitle = projectTitle,
+                Status = report.Status,
+                ReviewStatus = report.ReviewStatus,
+                TotalScore = report.TotalScore,
+                Classification = classification,
+                OverallFeedback = overallFeedback,
+                ProjectVersion = report.ProjectVersion,
+                CriteriaJson = report.CriteriaJson,
+                StaffEditedCriteriaJson = report.StaffEditedCriteriaJson,
+                CreatedAt = report.CreatedAt,
+                UpdatedAt = report.UpdatedAt,
             };
         }
 

@@ -58,6 +58,31 @@ namespace Api.Workers
             using var scope = _scopeFactory.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+            // Reset "Processing" jobs về "Queued" — những jobs này bị orphaned khi server restart.
+            // Nếu để nguyên "Processing", user sẽ thấy job mãi không hoàn thành.
+            var staleProcessingJobs = await context.ProjectAnalysisJobs
+                .Where(j => j.Status == "Processing")
+                .ToListAsync(cancellationToken);
+
+            if (staleProcessingJobs.Count > 0)
+            {
+                var now = DateTime.UtcNow;
+                foreach (var job in staleProcessingJobs)
+                {
+                    job.Status = "Queued";
+                    job.Stage = "Queued";
+                    job.Progress = 0;
+                    job.StartedAt = null;
+                    job.UpdatedAt = now;
+                    job.ErrorMessage = null;
+                }
+                await context.SaveChangesAsync(cancellationToken);
+                _logger.LogWarning(
+                    "Reset {Count} stale 'Processing' analysis jobs back to 'Queued' on startup.",
+                    staleProcessingJobs.Count);
+            }
+
+            // Re-enqueue tất cả jobs ở trạng thái Queued (bao gồm cả những job vừa reset ở trên).
             var pendingJobIds = await context.ProjectAnalysisJobs
                 .AsNoTracking()
                 .Where(j => j.Status == "Queued")

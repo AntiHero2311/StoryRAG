@@ -96,7 +96,7 @@ namespace Service.Implementations
                 Temperature = temperature,
             };
 
-            return await _geminiChatExecutor.CompleteAsync(messages, options);
+            return await _geminiChatExecutor.CompleteAsync(messages, options, cancellationToken);
         }
 
         public async Task<ProjectReportResponse> AnalyzeAsync(

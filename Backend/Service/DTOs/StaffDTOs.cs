@@ -192,4 +192,66 @@ namespace Service.DTOs
         [JsonPropertyName("last_heartbeat")]
         public DateTime? LastHeartbeat { get; set; }
     }
+
+    // ─── Staff Report Edit DTOs ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Một tiêu chí mà staff muốn chỉnh sửa nội dung (feedback, errors, suggestions).
+    /// Điểm số (Score) giữ nguyên theo AI, staff chỉ được sửa văn bản nhận xét.
+    /// </summary>
+    public class StaffCriterionEditItem
+    {
+        [Required]
+        public string Key { get; set; } = string.Empty;
+
+        [MaxLength(2000)]
+        public string? Feedback { get; set; }
+
+        [MaxLength(2000)]
+        public string? Evidence { get; set; }
+
+        public List<string>? Errors { get; set; }
+        public List<string>? Suggestions { get; set; }
+    }
+
+    /// <summary>
+    /// Request body để staff chỉnh sửa report.
+    /// Chỉ gửi các tiêu chí cần thay đổi — những tiêu chí không có trong list sẽ giữ nguyên AI output.
+    /// </summary>
+    public class StaffEditReportRequest
+    {
+        /// <summary>Các tiêu chí mà staff muốn override nội dung.</summary>
+        [Required]
+        public List<StaffCriterionEditItem> EditedCriteria { get; set; } = [];
+
+        /// <summary>Sau khi edit xong có phát hành cho user không. Mặc định true.</summary>
+        public bool ReleaseToUser { get; set; } = true;
+    }
+
+    /// <summary>
+    /// Response khi staff lấy chi tiết một report để xem/chỉnh sửa.
+    /// Bao gồm cả CriteriaJson gốc AI và StaffEditedCriteriaJson nếu đã có.
+    /// </summary>
+    public class StaffReportDetailResponse
+    {
+        public Guid Id { get; set; }
+        public Guid ProjectId { get; set; }
+        public string ProjectTitle { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string? ReviewStatus { get; set; }
+        public decimal TotalScore { get; set; }
+        public string Classification { get; set; } = string.Empty;
+        public string OverallFeedback { get; set; } = string.Empty;
+        public string ProjectVersion { get; set; } = "v1.0.0";
+
+        /// <summary>Criteria do AI tạo (không thay đổi)</summary>
+        public string CriteriaJson { get; set; } = "[]";
+
+        /// <summary>Criteria đã được staff chỉnh sửa. Null = chưa có staff edit.</summary>
+        public string? StaffEditedCriteriaJson { get; set; }
+
+        public DateTime CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
+    }
 }
+

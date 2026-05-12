@@ -1,4 +1,4 @@
-TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
+ư'ơ;lkjuhgfdsazTOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
 
 1) Hạ tầng chung
 - Frontend gọi API qua src/services/api.ts, tự động đính Bearer token.
@@ -107,7 +107,7 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
   GET /ai/{projectId}/reports/latest
   GET /ai/{projectId}/reports
   GET /ai/{projectId}/reports/{reportId}
-- Huỷ job queued:
+- Huỷ job queued/processing sau ~5 phút:
   POST /ai/{projectId}/analyze/jobs/{jobId}/cancel
 - Export PDF:
   GET /ai/{projectId}/reports/{reportId}/export/pdf

@@ -79,7 +79,8 @@ namespace Service.Helpers
 
         public async Task<OpenAI.Chat.ChatCompletion> CompleteAsync(
             IEnumerable<ChatMessage> messages,
-            ChatCompletionOptions? options = null)
+            ChatCompletionOptions? options = null,
+            CancellationToken cancellationToken = default)
         {
             if (_candidates.Count == 0)
             {
@@ -97,6 +98,9 @@ namespace Service.Helpers
 
             foreach (var candidate in _candidates)
             {
+                // Bỏ qua candidate này nếu đã cancel
+                cancellationToken.ThrowIfCancellationRequested();
+
                 try
                 {
                     // Gemini OpenAI-compat thường chấp nhận system, nhưng một số model/bản trả 400 — gộp system → user (cùng helper Gemma).
@@ -106,16 +110,18 @@ namespace Service.Helpers
                     if (options == null)
                     {
                         result = await GeminiRetryHelper.ExecuteAsync(
-                            () => candidate.Client.CompleteChatAsync(geminiMessages),
+                            () => candidate.Client.CompleteChatAsync(geminiMessages, cancellationToken: cancellationToken),
                             _logger,
-                            $"{_operationName} ({candidate.Label})");
+                            $"{_operationName} ({candidate.Label})",
+                            cancellationToken: cancellationToken);
                     }
                     else
                     {
                         result = await GeminiRetryHelper.ExecuteAsync(
-                            () => candidate.Client.CompleteChatAsync(geminiMessages, options),
+                            () => candidate.Client.CompleteChatAsync(geminiMessages, options, cancellationToken),
                             _logger,
-                            $"{_operationName} ({candidate.Label})");
+                            $"{_operationName} ({candidate.Label})",
+                            cancellationToken: cancellationToken);
                     }
 
                     return result.Value;
@@ -139,10 +145,19 @@ namespace Service.Helpers
                 }
             }
 
-            if (lastError is ClientResultException cre && cre.Status == (int)HttpStatusCode.TooManyRequests)
+            if (lastError is ClientResultException cre)
             {
-                _logger.LogWarning("{Operation} vẫn 429 sau toàn bộ fallback model/key.", _operationName);
-                throw new InvalidOperationException("AI đang quá tải, vui lòng thử lại sau khoảng 1 phút.");
+                if (cre.Status == (int)HttpStatusCode.TooManyRequests)
+                {
+                    _logger.LogWarning("{Operation} vẫn 429 sau toàn bộ fallback model/key.", _operationName);
+                    throw new InvalidOperationException("AI đang quá tải (429). Vui lòng thử lại sau khoảng 1–2 phút.");
+                }
+
+                if (cre.Status == (int)HttpStatusCode.ServiceUnavailable)
+                {
+                    _logger.LogWarning("{Operation} vẫn 503 sau toàn bộ fallback model/key.", _operationName);
+                    throw new InvalidOperationException("Dịch vụ AI tạm thời không khả dụng (503). Vui lòng thử lại sau ít phút.");
+                }
             }
 
             _logger.LogError(lastError, "{Operation} thất bại với toàn bộ fallback model/key.", _operationName);

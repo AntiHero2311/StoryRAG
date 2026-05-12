@@ -153,7 +153,7 @@ Authorization: Bearer <access_token>
 | `POST` | `/ai/{projectId}/analyze/jobs` | Tạo job phân tích async (khuyến nghị) |
 | `GET` | `/ai/{projectId}/analyze/jobs/{jobId}` | Lấy trạng thái tiến độ job |
 | `GET` | `/ai/{projectId}/analyze/jobs/{jobId}/result` | Lấy kết quả report khi job hoàn tất |
-| `POST` | `/ai/{projectId}/analyze/jobs/{jobId}/cancel` | Hủy job đang chờ |
+| `POST` | `/ai/{projectId}/analyze/jobs/{jobId}/cancel` | Hủy job `Queued`/`Processing` sau khi đã chạy ~5 phút |
 | `POST` | `/ai/{projectId}/analyze` | Phân tích đồng bộ (tương thích ngược) |
 | `GET` | `/ai/{projectId}/reports` | Danh sách báo cáo phân tích |
 | `GET` | `/ai/{projectId}/reports/{reportId}` | Chi tiết báo cáo |
@@ -452,7 +452,7 @@ Nếu bạn reset DB bằng `supabase_full_reset.sql`, cần đảm bảo migrat
 | `ChunkingService` | 1500 ký tự, overlap 150, ưu tiên cắt tại `\n\n` → `.` → space |
 | `AiWritingService` | Viết mới, tiếp nối, rất trau chuốt — tích hợp kỹ thuật **Show Don't Tell** & **Pacing** |
 | `ProjectReportService` | Rubric **5 điểm** (1-Kém → 5-Xuất sắc), phát hiện **4 loại cảnh báo** (INCOMPLETE/REPETITION/PLAGIARISM\_RISK/INCONSISTENCY), **Zero Hallucination**, chấm theo **Thể loại**; phân tích ưu tiên Analyze key, fallback sang Chat key; model fallback `gemini-3-flash-preview` -> `gemini-2.5-flash` |
-| `ProjectAnalysisJobService` | Điều phối queue async cho phân tích: enqueue/status/result/cancel, chống enqueue trùng theo `ProjectVersionHash` |
+| `ProjectAnalysisJobService` | Điều phối queue async cho phân tích: enqueue/status/result/cancel (rule hủy sau ~5 phút), chống enqueue trùng theo `ProjectVersionHash` |
 | `GeminiRetryHelper` | Backoff [10s, 30s, 65s] cho 429; throw lỗi thân thiện sau 3 lần |
 | `EncryptionHelper` | AES-256 với user DEK + Master Key |
 

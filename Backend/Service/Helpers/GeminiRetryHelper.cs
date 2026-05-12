@@ -22,7 +22,8 @@ namespace Service.Helpers
             Func<Task<T>> action,
             ILogger logger,
             string operationName = "Gemini",
-            int maxRetries = 4)
+            int maxRetries = 4,
+            CancellationToken cancellationToken = default)
         {
             for (var attempt = 0; attempt <= maxRetries; attempt++)
             {
@@ -30,13 +31,13 @@ namespace Service.Helpers
                 {
                     return await action();
                 }
-                catch (Exception ex) when (attempt < maxRetries && IsTransient(ex))
+                catch (Exception ex) when (attempt < maxRetries && IsTransient(ex) && !cancellationToken.IsCancellationRequested)
                 {
                     var wait = GetWaitSeconds(ex, attempt);
                     var label = DescribeTransient(ex);
                     logger.LogWarning("{Op} gặp lỗi tạm thời ({Label}) (lần {Attempt}/{Max}). Chờ {Wait}s rồi retry...",
                         operationName, label, attempt + 1, maxRetries, wait);
-                    await Task.Delay(TimeSpan.FromSeconds(wait));
+                    await Task.Delay(TimeSpan.FromSeconds(wait), cancellationToken);
                 }
             }
 

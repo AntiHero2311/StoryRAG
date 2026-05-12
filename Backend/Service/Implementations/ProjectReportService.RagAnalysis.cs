@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -84,7 +85,22 @@ namespace Service.Implementations
 
                 var ranked = RagChunkRanking.TopKByCosine(chunkEntities, ordinalByChunkId, queryEmbedding, topK);
                 if (ranked.Count == 0)
-                    throw new InvalidOperationException($"RAG: không lấy được chunk cho tiêu chí {key}.");
+                {
+                    _logger.LogWarning("RAG: không lấy được chunk nào cho tiêu chí {Key} — dùng score mặc định 0.", key);
+                    aiScores.Add(new AiScoreItem
+                    {
+                        Key = key,
+                        Score = 0,
+                        MaxScore = max,
+                        Feedback = "Không đủ dữ liệu để đánh giá tiêu chí này (không tìm được đoạn văn phù hợp).",
+                        Evidence = string.Empty,
+                        BibleComparison = null,
+                        Errors = ["Không có chunk phù hợp được truy xuất bởi RAG cho tiêu chí này."],
+                        Suggestions = ["Hãy đảm bảo các chương đã được chunk và embed trước khi phân tích."],
+                    });
+                    reportItems.Add(new ReportItem { CriterionKey = key, EvidenceChunkIds = [] });
+                    continue;
+                }
 
                 var contextParts = new List<string>(ranked.Count);
                 foreach (var (ch, ord) in ranked)

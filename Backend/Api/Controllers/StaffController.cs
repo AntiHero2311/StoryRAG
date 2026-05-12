@@ -131,6 +131,54 @@ namespace Api.Controllers
             return Ok(result);
         }
 
+        [HttpGet("analyses/{reportId:guid}/review")]
+        public async Task<IActionResult> GetAnalysisReviewSingle(Guid reportId)
+        {
+            var result = await _staffService.GetAnalysisReviewsAsync(reportId, 1, 1);
+            return Ok(result);
+        }
+
+        /// <summary>Staff lấy chi tiết một report phân tích để xem/chỉnh sửa (bao gồm CriteriaJson gốc AI).</summary>
+        [HttpGet("analyses/{reportId:guid}")]
+        public async Task<IActionResult> GetReportDetail(Guid reportId)
+        {
+            try
+            {
+                var result = await _staffService.GetReportDetailAsync(reportId);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Staff chỉnh sửa nội dung text của các tiêu chí trong report (không thay đổi điểm số AI).
+        /// Sau khi chỉnh sửa, có thể phát hành (Release) cho user xem ngay.
+        /// </summary>
+        [HttpPatch("analyses/{reportId:guid}/edit")]
+        public async Task<IActionResult> EditReport(Guid reportId, [FromBody] StaffEditReportRequest request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            var staffId = GetUserId();
+            if (staffId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+            try
+            {
+                var result = await _staffService.EditReportAsync(reportId, staffId.Value, request);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
         // GET /api/staff/analysis-jobs?status=failed,stale
         [HttpGet("analysis-jobs")]
         public async Task<IActionResult> GetAnalysisJobs([FromQuery] string? status)

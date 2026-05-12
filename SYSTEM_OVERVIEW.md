@@ -258,7 +258,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | GET    | `/{projectId}/analyze/jobs/latest` | Job phân tích gần nhất của project |
 | GET    | `/{projectId}/analyze/jobs/{jobId}` | Trạng thái job phân tích       |
 | GET    | `/{projectId}/analyze/jobs/{jobId}/result` | Kết quả job đã hoàn thành |
-| POST   | `/{projectId}/analyze/jobs/{jobId}/cancel` | Hủy job đang chờ xử lý |
+| POST   | `/{projectId}/analyze/jobs/{jobId}/cancel` | Hủy job `Queued/Processing` sau ~5 phút kể từ lúc enqueue |
 | POST   | `/{projectId}/rewrite`            | Rewrite đoạn văn                |
 | GET    | `/{projectId}/rewrite/history`    | Lịch sử viết AI (mới/tiếp/trau chuốt) |
 | POST   | `/{projectId}/write`              | AI viết mới theo instruction    |

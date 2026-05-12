@@ -19,6 +19,8 @@ namespace Service.Implementations
         private const string StatusCompleted = "Completed";
         private const string StatusFailed = "Failed";
         private const string StatusCancelled = "Cancelled";
+        private static readonly TimeSpan CancelAllowedAfter = TimeSpan.FromMinutes(5);
+        private const string UserCancelledMessage = "Người dùng đã hủy job phân tích.";
 
         private const string StageQueued = "Queued";
         private const string StagePreparing = "Preparing";
@@ -31,17 +33,20 @@ namespace Service.Implementations
         private readonly AppDbContext _context;
         private readonly IProjectReportService _projectReportService;
         private readonly IAnalysisJobQueue _analysisJobQueue;
+        private readonly IAnalysisJobCancellationRegistry _analysisJobCancellationRegistry;
         private readonly ILogger<ProjectAnalysisJobService> _logger;
 
         public ProjectAnalysisJobService(
             AppDbContext context,
             IProjectReportService projectReportService,
             IAnalysisJobQueue analysisJobQueue,
+            IAnalysisJobCancellationRegistry analysisJobCancellationRegistry,
             ILogger<ProjectAnalysisJobService> logger)
         {
             _context = context;
             _projectReportService = projectReportService;
             _analysisJobQueue = analysisJobQueue;
+            _analysisJobCancellationRegistry = analysisJobCancellationRegistry;
             _logger = logger;
         }
 
@@ -196,18 +201,33 @@ namespace Service.Implementations
                     j.UserId == userId, cancellationToken)
                 ?? throw new KeyNotFoundException("Không tìm thấy job phân tích.");
 
-            if (job.Status == StatusProcessing)
-                throw new InvalidOperationException("Job đang xử lý, chưa thể hủy.");
+            if (job.Status == StatusCancelled)
+                return ToResponse(job);
 
-            if (job.Status == StatusQueued)
+            if (job.Status == StatusCompleted || job.Status == StatusFailed)
+                throw new InvalidOperationException("Job đã kết thúc, không thể hủy.");
+
+            if (job.Status != StatusQueued && job.Status != StatusProcessing)
+                throw new InvalidOperationException("Job hiện không ở trạng thái có thể hủy.");
+
+            var elapsed = DateTime.UtcNow - job.CreatedAt;
+            if (elapsed < CancelAllowedAfter)
             {
-                job.Status = StatusCancelled;
-                job.Stage = StageCancelled;
-                job.Progress = 100;
-                job.CompletedAt = DateTime.UtcNow;
-                job.UpdatedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync(cancellationToken);
+                var remaining = CancelAllowedAfter - elapsed;
+                var roundedRemaining = TimeSpan.FromSeconds(Math.Ceiling(remaining.TotalSeconds));
+                throw new InvalidOperationException(
+                    $"Bạn có thể hủy sau khoảng 5 phút kể từ lúc gửi yêu cầu. Còn lại {roundedRemaining:mm\\:ss}.");
             }
+
+            job.Status = StatusCancelled;
+            job.Stage = StageCancelled;
+            job.Progress = 100;
+            job.ErrorMessage = UserCancelledMessage;
+            job.CompletedAt = DateTime.UtcNow;
+            job.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync(cancellationToken);
+
+            _analysisJobCancellationRegistry.RequestCancellation(job.Id);
 
             return ToResponse(job);
         }
@@ -220,25 +240,33 @@ namespace Service.Implementations
             if (job == null || job.Status != StatusQueued)
                 return;
 
-            job.Status = StatusProcessing;
-            job.Stage = StagePreparing;
-            job.Progress = 10;
-            job.StartedAt = DateTime.UtcNow;
-            job.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync(cancellationToken);
+            var processingToken = _analysisJobCancellationRegistry.Register(jobId, cancellationToken);
 
             try
             {
+                await ThrowIfJobCancelledAsync(jobId, processingToken);
+
+                job.Status = StatusProcessing;
+                job.Stage = StagePreparing;
+                job.Progress = 10;
+                job.StartedAt = DateTime.UtcNow;
+                job.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync(processingToken);
+
+                await ThrowIfJobCancelledAsync(jobId, processingToken);
+
                 job.Stage = StageAnalyzing;
                 job.Progress = 20;
                 job.UpdatedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync(cancellationToken);
+                await _context.SaveChangesAsync(processingToken);
 
                 var report = await _projectReportService.AnalyzeAsync(
                     job.ProjectId,
                     job.UserId,
                     async (progress, _, token) =>
                     {
+                        await ThrowIfJobCancelledAsync(jobId, token);
+
                         var safeProgress = Math.Clamp(progress, 20, 85);
                         if (job.Progress == safeProgress)
                             return;
@@ -248,13 +276,17 @@ namespace Service.Implementations
                         job.UpdatedAt = DateTime.UtcNow;
                         await _context.SaveChangesAsync(token);
                     },
-                    cancellationToken,
+                    processingToken,
                     job.Id);
+
+                await ThrowIfJobCancelledAsync(jobId, processingToken);
 
                 job.Stage = StageSaving;
                 job.Progress = 90;
                 job.UpdatedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync(cancellationToken);
+                await _context.SaveChangesAsync(processingToken);
+
+                await ThrowIfJobCancelledAsync(jobId, processingToken);
 
                 job.Status = StatusCompleted;
                 job.Stage = StageCompleted;
@@ -263,10 +295,17 @@ namespace Service.Implementations
                 job.ErrorMessage = null;
                 job.CompletedAt = DateTime.UtcNow;
                 job.UpdatedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync(cancellationToken);
+                await _context.SaveChangesAsync(processingToken);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
+                var latestStatus = await GetCurrentJobStatusAsync(jobId, CancellationToken.None);
+                if (latestStatus == StatusCancelled)
+                    return;
+
+                if (!cancellationToken.IsCancellationRequested)
+                    throw;
+
                 job.Status = StatusQueued;
                 job.Stage = StageQueued;
                 job.Progress = 0;
@@ -276,6 +315,10 @@ namespace Service.Implementations
             }
             catch (Exception ex)
             {
+                var latestStatus = await GetCurrentJobStatusAsync(jobId, CancellationToken.None);
+                if (latestStatus == StatusCancelled)
+                    return;
+
                 _logger.LogError(ex, "Project analysis job {JobId} failed.", jobId);
 
                 job.Status = StatusFailed;
@@ -286,6 +329,27 @@ namespace Service.Implementations
                 job.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync(CancellationToken.None);
             }
+            finally
+            {
+                _analysisJobCancellationRegistry.Unregister(jobId);
+            }
+        }
+
+        private async Task ThrowIfJobCancelledAsync(Guid jobId, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var currentStatus = await GetCurrentJobStatusAsync(jobId, cancellationToken);
+            if (currentStatus == StatusCancelled)
+                throw new OperationCanceledException("Job đã bị hủy bởi người dùng.", cancellationToken);
+        }
+
+        private async Task<string?> GetCurrentJobStatusAsync(Guid jobId, CancellationToken cancellationToken)
+        {
+            return await _context.ProjectAnalysisJobs
+                .AsNoTracking()
+                .Where(j => j.Id == jobId)
+                .Select(j => j.Status)
+                .FirstOrDefaultAsync(cancellationToken);
         }
 
         private async Task VerifyOwnershipAsync(Guid projectId, Guid userId, CancellationToken cancellationToken)

@@ -20,6 +20,13 @@ import { appNotificationService } from '../services/appNotificationService';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 const ANALYSIS_SELECTED_PROJECT_KEY = 'analysis:selectedProjectId';
+const ANALYZE_CANCEL_AFTER_SECONDS = 5 * 60;
+const formatCooldown = (seconds: number) => {
+    const safe = Math.max(0, seconds);
+    const minutes = Math.floor(safe / 60);
+    const remainingSeconds = safe % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+};
 
 // ─── Main content ─────────────────────────────────────────────────────────────
 function AnalysisContent() {
@@ -305,10 +312,12 @@ function AnalysisContent() {
                 throw lastResultError ?? new Error('Không thể tải kết quả job phân tích đã hoàn thành.');
             }
 
-            if (job.status === 'Failed' || job.status === 'Cancelled') {
-                throw new Error(job.errorMessage || (job.status === 'Cancelled'
-                    ? 'Job phân tích đã bị hủy.'
-                    : 'Phân tích thất bại. Vui lòng thử lại.'));
+            if (job.status === 'Cancelled') {
+                throw new Error('Job phân tích đã bị hủy.');
+            }
+
+            if (job.status === 'Failed') {
+                throw new Error(job.errorMessage || 'Phân tích thất bại. Vui lòng thử lại.');
             }
 
             await new Promise(resolve => setTimeout(resolve, 3000));
@@ -448,9 +457,17 @@ function AnalysisContent() {
     };
 
     const handleCancelAnalyzeJob = async () => {
-        if (!selectedId || !analysisJob || analysisJob.status !== 'Queued' || cancelingJob) return;
+        const isActiveJob = analysisJob?.status === 'Queued' || analysisJob?.status === 'Processing';
+        const isCancellationLocked = (() => {
+            if (!analysisJob || !isActiveJob) return true;
+            const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(analysisJob.createdAt).getTime()) / 1000));
+            return elapsedSeconds < ANALYZE_CANCEL_AFTER_SECONDS;
+        })();
+
+        if (!selectedId || !analysisJob || !isActiveJob || cancelingJob || isCancellationLocked) return;
         setCancelingJob(true);
         setError(null);
+        setAnalysisStatus({ type: 'info', message: 'Đang gửi yêu cầu hủy job phân tích...' });
         try {
             const cancelledJob = await reportService.cancelAnalyzeJob(selectedId, analysisJob.jobId);
             setAnalysisJob(cancelledJob);
@@ -550,6 +567,16 @@ function AnalysisContent() {
         ? Math.min((subscription.usedAnalysisCount / subscription.maxAnalysisCount) * 100, 100)
         : 0;
     const canExportReportPdf = subscription?.price !== 0;
+    const activeCancelableJob = analysisJob && (analysisJob.status === 'Queued' || analysisJob.status === 'Processing')
+        ? analysisJob
+        : null;
+    const cancelElapsedSeconds = activeCancelableJob
+        ? Math.max(0, Math.floor((Date.now() - new Date(activeCancelableJob.createdAt).getTime()) / 1000))
+        : 0;
+    const cancelCooldownSeconds = activeCancelableJob
+        ? Math.max(0, ANALYZE_CANCEL_AFTER_SECONDS - cancelElapsedSeconds)
+        : 0;
+    const canCancelCurrentJob = !!activeCancelableJob && cancelCooldownSeconds === 0;
 
     return (
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
@@ -782,13 +809,17 @@ function AnalysisContent() {
                                             Đã chờ: <span className="text-amber-400 font-semibold">{elapsed}s</span>
                                         </p>
                                     </div>
-                                    {analysisJob?.status === 'Queued' && (
+                                    {activeCancelableJob && (
                                         <button
                                             onClick={handleCancelAnalyzeJob}
-                                            disabled={cancelingJob}
+                                            disabled={cancelingJob || !canCancelCurrentJob}
                                             className="h-8 px-3 rounded-lg text-xs font-semibold transition-opacity disabled:opacity-60"
                                             style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}>
-                                            {cancelingJob ? 'Đang hủy...' : 'Hủy hàng chờ'}
+                                            {cancelingJob
+                                                ? 'Đang hủy...'
+                                                : canCancelCurrentJob
+                                                    ? 'Hủy phân tích'
+                                                    : `Hủy sau ${formatCooldown(cancelCooldownSeconds)}`}
                                         </button>
                                     )}
                                 </div>
