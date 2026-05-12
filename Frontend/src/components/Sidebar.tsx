@@ -6,13 +6,13 @@ import {
     Bug, HelpCircle, BookOpen, AlertTriangle, MessageSquare, CircleHelp, Sparkles, Activity,
 } from 'lucide-react';
 import { feedbackService } from '../services/feedbackService';
+import BugReportModal from './BugReportModal';
 
 type NavItem = { key: string; label: string; icon: typeof LayoutDashboard; path: string };
 
 const NAV_AUTHOR: NavItem[] = [
     { key: 'dashboard',    label: 'Trang chủ',  icon: LayoutDashboard, path: '/home' },
     { key: 'analysis',     label: 'Phân tích',  icon: BarChart2,       path: '/analysis' },
-    { key: 'feedback',     label: 'Feedback',   icon: MessageSquare,   path: '/feedback' },
     { key: 'subscription', label: 'Gói dịch vụ',icon: CreditCard,      path: '/subscription' },
     { key: 'profile',      label: 'Hồ sơ',      icon: User,            path: '/profile' },
     { key: 'settings',     label: 'Cài đặt',    icon: Settings,        path: '/settings' },
@@ -58,6 +58,7 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
     const location = useLocation();
     const [collapsed, setCollapsed] = useState(false);
     const [unreadFeedback, setUnreadFeedback] = useState(0);
+    const [bugModalOpen, setBugModalOpen] = useState(false);
 
     const navBadgeMap = useMemo(() => {
         return {
@@ -112,14 +113,11 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
                 >
                     {/* Logo with glow */}
                     <div className="relative shrink-0">
-                        <div className="absolute inset-0 rounded-xl blur-lg opacity-50"
-                            style={{ background: 'var(--gradient-brand)' }}
+                        <img 
+                            src="/logo.png" 
+                            alt="StoryNest" 
+                            className="w-9 h-9 rounded-xl object-contain shadow-[0_4px_20px_-6px_rgba(99,102,241,0.45)] ring-1 ring-white/10" 
                         />
-                        <div className="relative w-8 h-8 rounded-xl flex items-center justify-center"
-                            style={{ background: 'var(--gradient-brand)' }}
-                        >
-                            <BookOpen className="w-4 h-4 text-white" />
-                        </div>
                     </div>
 
                     {!collapsed && (
@@ -134,7 +132,7 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
                                 className="text-[10px] truncate mt-0.5"
                                 style={{ color: 'var(--text-tertiary)' }}
                             >
-                                AI Writing Platform
+                                AI Writing Workspace
                             </p>
                         </div>
                     )}
@@ -245,16 +243,17 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
                                 </p>
                             </div>
                             <p className="text-[10px] mb-3" style={{ color: 'var(--text-tertiary)' }}>
-                                Liên hệ với chúng tôi qua trung tâm hỗ trợ.
+                                Liên hệ với chúng tôi để báo lỗi hoặc cần hỗ trợ.
                             </p>
                             <button
+                                onClick={() => setBugModalOpen(true)}
                                 className="w-full py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 hover:opacity-90"
                                 style={{
                                     background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
                                     color: '#ffffff',
                                 }}
                             >
-                                Trung tâm hỗ trợ
+                                Hỗ trợ & Báo lỗi
                             </button>
                         </div>
                     </div>
@@ -277,6 +276,8 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
                     : <ChevronLeft  className="w-3 h-3" />
                 }
             </button>
+            {/* ── Bug Report Modal ── */}
+            {bugModalOpen && <BugReportModal onClose={() => setBugModalOpen(false)} />}
         </aside>
     );
 }

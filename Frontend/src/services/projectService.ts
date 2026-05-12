@@ -37,6 +37,16 @@ export interface UpdateProjectRequest {
     genreIds?: number[];
 }
 
+export interface ProjectImportResult {
+    projectId: string;
+    projectTitle: string;
+    chaptersImported: number;
+    charactersExtracted: number;
+    settingsExtracted: number;
+    timelineEventsExtracted: number;
+    summary: string | null;
+}
+
 export const projectService = {
     getProjects: () =>
         api.get<ProjectResponse[]>('/projects').then(r => r.data),
@@ -65,6 +75,16 @@ export const projectService = {
         URL.revokeObjectURL(url);
     },
 
+    importFromManuscript: async (file: File): Promise<ProjectImportResult> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await api.post<ProjectImportResult>('/projects/import', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return response.data;
+    },
+
     getStats: () =>
         api.get<{ totalChapters: number; totalAnalysesUsed: number; totalChatMessages: number }>('/projects/stats').then(r => r.data),
 };
+

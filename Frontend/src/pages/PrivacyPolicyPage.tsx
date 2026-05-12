@@ -151,7 +151,7 @@ export default function PrivacyPolicyPage() {
             </header>
 
             <div className="relative z-10 max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
-                
+
                 {/* Hero Section */}
                 <div className={`text-center max-w-3xl mx-auto mb-20 transition-all duration-1000 transform ${mounted ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[11px] font-black uppercase tracking-[0.2em] mb-8 shadow-[0_0_20px_rgba(99,102,241,0.2)]">
@@ -169,18 +169,18 @@ export default function PrivacyPolicyPage() {
                 </div>
 
                 <div className="flex flex-col lg:flex-row gap-12 lg:gap-16 items-start">
-                    
+
                     {/* Sidebar Table of Contents */}
                     <aside className="hidden lg:block w-[280px] shrink-0 sticky top-28 transition-all duration-700 delay-300 transform opacity-100">
                         <div className="glass-card rounded-[2rem] p-6 shadow-2xl">
                             <p className="text-[11px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-6 px-2">Danh mục chính sách</p>
                             <nav className="space-y-1.5 relative">
                                 {/* Animated active background indicator */}
-                                <div className="absolute left-0 w-full h-[40px] bg-white/5 border border-white/10 rounded-xl transition-all duration-300 ease-out pointer-events-none" 
-                                    style={{ 
+                                <div className="absolute left-0 w-full h-[40px] bg-white/5 border border-white/10 rounded-xl transition-all duration-300 ease-out pointer-events-none"
+                                    style={{
                                         top: `${Math.max(0, sections.findIndex(s => s.id === activeId)) * 46}px`,
                                         opacity: activeId ? 1 : 0
-                                    }} 
+                                    }}
                                 />
 
                                 {sections.map((s, index) => {
@@ -190,9 +190,8 @@ export default function PrivacyPolicyPage() {
                                         <button
                                             key={s.id}
                                             onClick={() => scrollTo(s.id)}
-                                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-left text-[14px] font-bold transition-colors duration-200 relative z-10 h-[40px] ${
-                                                isActive ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
-                                            }`}
+                                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-left text-[14px] font-bold transition-colors duration-200 relative z-10 h-[40px] ${isActive ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+                                                }`}
                                         >
                                             <div className="flex items-center gap-3 truncate">
                                                 <Icon className="w-4 h-4 shrink-0 transition-colors" style={{ color: isActive ? s.color : 'currentColor' }} />
@@ -233,7 +232,7 @@ export default function PrivacyPolicyPage() {
                                                 {s.content}
                                             </p>
                                         )}
-                                        
+
                                         {'items' in s && (
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                                                 {s.items!.map((item, i) => (
@@ -257,14 +256,14 @@ export default function PrivacyPolicyPage() {
                         {/* Awesome CTA Footer */}
                         <div className={`mt-16 rounded-[2rem] p-10 text-center relative overflow-hidden glass-card transition-all duration-1000 delay-1000 ${mounted ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`} style={{ border: '1px solid rgba(99,102,241,0.3)' }}>
                             <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-indigo-500/10 opacity-50" />
-                            
+
                             <div className="relative z-10">
                                 <div className="w-16 h-16 rounded-full bg-indigo-500/20 flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(99,102,241,0.4)]">
                                     <Shield className="w-8 h-8 text-indigo-400" />
                                 </div>
                                 <h3 className="text-2xl font-black text-white mb-3">An toàn và Chuyên nghiệp</h3>
                                 <p className="text-zinc-400 text-base font-medium max-w-md mx-auto mb-8">Bắt đầu kể câu chuyện của riêng bạn với sự hỗ trợ của trí tuệ nhân tạo và bảo mật hàng đầu.</p>
-                                
+
                                 <Link
                                     to="/register"
                                     className="inline-flex items-center gap-3 px-8 py-4 rounded-xl font-bold text-white shadow-[0_10px_40px_-5px_rgba(99,102,241,0.6)] transform hover:-translate-y-1 transition-all duration-300"

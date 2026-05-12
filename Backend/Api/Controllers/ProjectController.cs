@@ -13,11 +13,16 @@ namespace Api.Controllers
     {
         private readonly IProjectService _projectService;
         private readonly IProjectReportService _reportService;
+        private readonly IProjectImportService _importService;
 
-        public ProjectController(IProjectService projectService, IProjectReportService reportService)
+        public ProjectController(
+            IProjectService projectService,
+            IProjectReportService reportService,
+            IProjectImportService importService)
         {
             _projectService = projectService;
             _reportService = reportService;
+            _importService = importService;
         }
 
         /// <summary>
@@ -189,6 +194,39 @@ namespace Api.Controllers
             catch (KeyNotFoundException ex)
             {
                 return NotFound(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
+        // ── Helper ───────────────────────────────────────────────────────────────
+
+        /// <summary>Import bản thảo (.txt/.docx/.pdf) → tạo Project + Chapters + AI trích xuất.</summary>
+        [HttpPost("import")]
+        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
+        public async Task<IActionResult> ImportProject([FromForm] IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { Message = "Vui lòng chọn file để import (.txt, .docx, .pdf)." });
+
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                using var ms = new MemoryStream();
+                await file.CopyToAsync(ms);
+                var fileBytes = ms.ToArray();
+
+                var result = await _importService.ImportFromManuscriptAsync(
+                    userId.Value,
+                    file.FileName,
+                    file.ContentType,
+                    fileBytes);
+
+                return Ok(result);
             }
             catch (Exception ex)
             {

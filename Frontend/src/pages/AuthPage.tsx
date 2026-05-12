@@ -202,62 +202,62 @@ export default function AuthPage() {
                 {/* Cột trái: cùng nhịp dọc với form — không dùng justify-between (tránh headline bị kéo xuống giữa màn hình) */}
                 <section className="relative hidden flex-col border-r border-white/[0.06] px-10 pb-12 pt-10 xl:px-14 xl:pb-14 xl:pt-12 before:pointer-events-none before:absolute before:right-0 before:top-[18%] before:z-0 before:h-[52%] before:w-px before:bg-gradient-to-b before:from-transparent before:via-indigo-400/35 before:to-transparent lg:flex">
                     <header className="relative z-10 flex min-h-[52px] shrink-0 items-center">
-                        <Link to="/" className="flex items-center gap-3 transition-opacity hover:opacity-90">
-                            <img src="/logo.png" alt="StoryNest" className="h-11 w-11 rounded-xl object-contain shadow-[0_4px_22px_-8px_rgba(99,102,241,0.45)] ring-1 ring-white/10" />
-                            <span className="bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-2xl font-black tracking-tight text-transparent">StoryNest</span>
-                        </Link>
-                    </header>
-
-                    <div className="relative z-10 mt-6 flex max-w-xl flex-1 flex-col">
-                        <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-gradient-to-r from-indigo-500/14 via-fuchsia-500/10 to-transparent px-4 py-2 text-sm font-bold text-indigo-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md">
-                            <Sparkles className="h-4 w-4 shrink-0 text-fuchsia-300 drop-shadow-[0_0_8px_rgba(232,121,249,0.45)]" />
-                            Workspace RAG cho truyện dài
-                        </div>
-                        <h1 className="mt-8 text-balance text-5xl font-black leading-[1.05] tracking-tight xl:text-[3.35rem] xl:leading-[1.08]">
-                            <span className="bg-gradient-to-br from-white via-[#ecebff] to-[#a5b4fc] bg-clip-text text-transparent">Đăng nhập vào </span>
-                            <span className="bg-gradient-to-r from-indigo-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-transparent">workspace của bạn.</span>
-                        </h1>
-                        <p className="mt-8 text-pretty text-lg leading-8 text-zinc-400">
-                            Soạn thảo chương trong workspace, quản lý Story Bible, đồng bộ chunk/embed và xem báo cáo rubric — có chat RAG và phân tích, không có chế độ AI viết thay bạn.
-                        </p>
-
-                        <div className="mt-12 grid w-full max-w-xl grid-cols-3 gap-4">
-                            <AuthMetric icon={Layers3} label="Context" value="Vector + Bible" />
-                            <AuthMetric icon={BarChart3} label="Rubric" value="100 điểm" />
-                            <AuthMetric icon={ShieldCheck} label="Mã hóa" value="AES-256" />
-                        </div>
-
-                        <div className="relative mt-auto max-w-xl overflow-hidden rounded-[2rem] border border-white/[0.1] bg-gradient-to-b from-white/[0.06] to-white/[0.02] p-5 pt-10 shadow-[0_24px_70px_-32px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.05] backdrop-blur-md">
-                            <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
-                            <div className="mb-4 flex items-center gap-3">
-                                <div className="rounded-2xl bg-gradient-to-br from-indigo-500/25 to-fuchsia-600/15 p-3 text-white shadow-[0_6px_24px_-10px_rgba(99,102,241,0.45)] ring-1 ring-white/10">
-                                    <BrainCircuit className="h-6 w-6" />
-                                </div>
-                                <div>
-                                    <p className="font-black">Ngữ cảnh đã đồng bộ</p>
-                                    <p className="text-sm text-zinc-400">Chunk đã embed · lore · nhân vật</p>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-3 gap-3 text-center">
-                                {['Soạn thảo', 'Chat RAG', 'Phân tích'].map((item) => (
-                                <div key={item} className="rounded-2xl border border-white/[0.06] bg-white/[0.04] px-3 py-3 text-xs font-black text-zinc-300 shadow-inner shadow-black/20 transition hover:border-indigo-500/25 hover:bg-white/[0.07]">
-                                        {item}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                {/* Cột phải: căn giữa khối form trong nửa màn hình để không thừa khoảng trống một bên */}
-                <section className="flex flex-col px-5 pb-14 pt-10 lg:px-8 xl:px-12 xl:pb-14 xl:pt-12 lg:items-center">
-                    <div className="w-full max-w-lg xl:max-w-xl">
-                        <div className="mb-8 flex min-h-[52px] items-center lg:mb-6 lg:hidden">
                             <Link to="/" className="flex items-center gap-3 transition-opacity hover:opacity-90">
-                                <img src="/logo.png" alt="StoryNest" className="h-10 w-10 rounded-lg object-contain ring-1 ring-white/10 shadow-[0_4px_18px_-8px_rgba(99,102,241,0.35)]" />
-                                <span className="bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-xl font-black text-transparent">StoryNest</span>
+                                <img src="/logo.png" alt="StoryNest" className="h-11 w-11 rounded-xl object-contain shadow-[0_4px_22px_-8px_rgba(99,102,241,0.45)] ring-1 ring-white/10" />
+                                <span className="bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-2xl font-black tracking-tight text-transparent">StoryNest</span>
                             </Link>
+                        </header>
+
+                        <div className="relative z-10 mt-6 flex max-w-xl flex-1 flex-col">
+                            <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-gradient-to-r from-indigo-500/14 via-fuchsia-500/10 to-transparent px-4 py-2 text-sm font-bold text-indigo-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md">
+                                <Sparkles className="h-4 w-4 shrink-0 text-fuchsia-300 drop-shadow-[0_0_8px_rgba(232,121,249,0.45)]" />
+                                Workspace RAG cho truyện dài
+                            </div>
+                            <h1 className="mt-8 text-balance text-5xl font-black leading-[1.05] tracking-tight xl:text-[3.35rem] xl:leading-[1.08]">
+                                <span className="bg-gradient-to-br from-white via-[#ecebff] to-[#a5b4fc] bg-clip-text text-transparent">Đăng nhập vào </span>
+                                <span className="bg-gradient-to-r from-indigo-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-transparent">workspace của bạn.</span>
+                            </h1>
+                            <p className="mt-8 text-pretty text-lg leading-8 text-zinc-400">
+                                Soạn thảo chương trong workspace, quản lý Story Bible, đồng bộ chunk/embed và xem báo cáo rubric — có chat RAG và phân tích, không có chế độ AI viết thay bạn.
+                            </p>
+
+                            <div className="mt-12 grid w-full max-w-xl grid-cols-3 gap-4">
+                                <AuthMetric icon={Layers3} label="Context" value="Vector + Bible" />
+                                <AuthMetric icon={BarChart3} label="Rubric" value="100 điểm" />
+                                <AuthMetric icon={ShieldCheck} label="Mã hóa" value="AES-256" />
+                            </div>
+
+                            <div className="relative mt-auto max-w-xl overflow-hidden rounded-[2rem] border border-white/[0.1] bg-gradient-to-b from-white/[0.06] to-white/[0.02] p-5 pt-10 shadow-[0_24px_70px_-32px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.05] backdrop-blur-md">
+                                <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+                                <div className="mb-4 flex items-center gap-3">
+                                    <div className="rounded-2xl bg-gradient-to-br from-indigo-500/25 to-fuchsia-600/15 p-3 text-white shadow-[0_6px_24px_-10px_rgba(99,102,241,0.45)] ring-1 ring-white/10">
+                                        <BrainCircuit className="h-6 w-6" />
+                                    </div>
+                                    <div>
+                                        <p className="font-black">Ngữ cảnh đã đồng bộ</p>
+                                        <p className="text-sm text-zinc-400">Chunk đã embed · lore · nhân vật</p>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-3 gap-3 text-center">
+                                    {['Soạn thảo', 'Chat RAG', 'Phân tích'].map((item) => (
+                                    <div key={item} className="rounded-2xl border border-white/[0.06] bg-white/[0.04] px-3 py-3 text-xs font-black text-zinc-300 shadow-inner shadow-black/20 transition hover:border-indigo-500/25 hover:bg-white/[0.07]">
+                                            {item}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
+                    </section>
+
+                    {/* Cột phải: căn giữa khối form trong nửa màn hình để không thừa khoảng trống một bên */}
+                    <section className="flex flex-col px-5 pb-14 pt-10 lg:px-8 xl:px-12 xl:pb-14 xl:pt-12 lg:items-center">
+                        <div className="w-full max-w-lg xl:max-w-xl">
+                            <div className="mb-8 flex min-h-[52px] items-center lg:mb-6 lg:hidden">
+                                <Link to="/" className="flex items-center gap-3 transition-opacity hover:opacity-90">
+                                    <img src="/logo.png" alt="StoryNest" className="h-10 w-10 rounded-lg object-contain ring-1 ring-white/10 shadow-[0_4px_18px_-8px_rgba(99,102,241,0.35)]" />
+                                    <span className="bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-xl font-black text-transparent">StoryNest</span>
+                                </Link>
+                            </div>
 
                         <div
                             className="mb-6 flex min-h-[52px] w-full items-center rounded-2xl border border-white/[0.09] bg-black/25 p-1 shadow-inner shadow-black/40 ring-1 ring-white/[0.05]"

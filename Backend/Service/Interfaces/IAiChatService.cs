@@ -11,6 +11,11 @@ namespace Service.Interfaces
         /// Lấy lịch sử chat của user trong một dự án, có phân trang.
         /// </summary>
         Task<ChatHistoryResult> GetChatHistoryAsync(Guid projectId, Guid userId, int page, int pageSize);
+
+        /// <summary>
+        /// Xóa một tin nhắn chat cụ thể.
+        /// </summary>
+        Task DeleteChatHistoryAsync(Guid projectId, Guid userId, Guid historyId);
     }
 
     public class AiChatResult

@@ -97,6 +97,11 @@ export const aiService = {
         return res.data;
     },
 
+    /** Xóa một lịch sử chat cụ thể. */
+    deleteChatHistory: async (projectId: string, historyId: string): Promise<void> => {
+        await api.delete(`/ai/${projectId}/chat/history/${historyId}`);
+    },
+
     /** Viết lại đoạn văn bằng AI. */
     rewrite: async (projectId: string, request: RewriteRequest): Promise<RewriteResult> => {
         const res = await api.post<RewriteResult>(`/ai/${projectId}/rewrite`, request);

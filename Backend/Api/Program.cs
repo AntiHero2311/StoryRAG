@@ -253,6 +253,7 @@ builder.Services.AddScoped<IExportService, ExportService>();
 builder.Services.AddScoped<INarrativeAnalyticsService, NarrativeAnalyticsService>();
 builder.Services.AddScoped<IReportExportService, ReportExportService>();
 builder.Services.AddScoped<IProjectAnalysisJobService, ProjectAnalysisJobService>();
+builder.Services.AddScoped<IProjectImportService, ProjectImportService>();
 builder.Services.AddSingleton<IAnalysisJobQueue, AnalysisJobQueue>();
 builder.Services.AddSingleton<IAnalysisJobCancellationRegistry, AnalysisJobCancellationRegistry>();
 builder.Services.AddHostedService<ProjectAnalysisJobWorker>();

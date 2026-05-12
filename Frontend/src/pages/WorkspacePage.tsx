@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, type ClipboardEvent 
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     ArrowLeft, Plus, Sparkles, History, Bold,
-    Italic, Underline, ChevronDown, Sunset, Wind,
+    Italic, Underline, ChevronDown,
     ChevronsLeft, ChevronsRight, Trash2, FileText, X,
     Undo2, Redo2, Save, Check, Loader2, Scissors,
     Clock, Pencil, GitBranch, Zap, Type, Bot,
@@ -10,10 +10,8 @@ import {
     Download, Upload, Globe, MapPin, Shield, Scroll,
 } from 'lucide-react';
 import { getUserInfo } from '../utils/jwtHelper';
-import RewritePanel from '../components/RewritePanel';
 import ChatPanel from '../components/workspace/ChatPanel';
 import ChatHistoryPanel from '../components/workspace/ChatHistoryPanel';
-import AiWriterPanel from '../components/workspace/AiWriterPanel';
 import TimelinePanel from '../components/workspace/TimelinePanel';
 
 import {
@@ -266,18 +264,6 @@ export default function WorkspacePage() {
 
     // Chat state is now managed inside ChatPanel / ChatHistoryPanel components
 
-    // ── Polish selected text ────────────────────────────────────────────────
-    const [polishPanelOpen, setPolishPanelOpen] = useState(false);
-    const [polishPanelMode, setPolishPanelMode] = useState<'polish' | 'rewrite'>('polish');
-    const [polishSelectedText, setPolishSelectedText] = useState('');
-    const [selectionToolbar, setSelectionToolbar] = useState<{ visible: boolean; x: number; y: number }>({ visible: false, x: 0, y: 0 });
-    const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const polishSelectionRangeRef = useRef<Range | null>(null);
-
-    // ── Continue Writing ───────────────────────────────────────────────────
-    const [isContinuingWriting, setIsContinuingWriting] = useState(false);
-    const [showFloatingAiBtn, setShowFloatingAiBtn] = useState(false);
-    const [continueMenuOpen, setContinueMenuOpen] = useState(false);
     const editorScrollRef = useRef<HTMLDivElement | null>(null);
 
 
@@ -416,7 +402,7 @@ export default function WorkspacePage() {
             title: 'Xác nhận xóa chương',
             message: `Bạn có chắc chắn muốn xóa chương "${chapterName}"?\n\nToàn bộ nội dung và các phiên bản của chương này sẽ bị xóa vĩnh viễn.`,
             confirmText: 'Xóa chương',
-            requireTyping: true,
+            requireTyping: false,
             typingConfirmText: 'XOA',
             showWarnings: true,
             warnings: [
@@ -469,45 +455,7 @@ export default function WorkspacePage() {
         }
     };
 
-    // ── Continue Writing ────────────────────────────────────────────────────
-    const handleContinueWriting = async (mode: 'normal' | 'epilogue' | 'open' | 'twist' = 'normal') => {
-        if (!projectId || !activeChapter || !editorRef.current) return;
-        setContinueMenuOpen(false);
-        setIsContinuingWriting(true);
-        try {
-            const previousText = (editorRef.current.innerText || '').slice(-1500);
-
-            let instruction = "Hãy viết tiếp đoạn mạch truyện này một cách tự nhiên, chú ý giữ nguyên văn phong và nhịp truyện nội dung ở trên.";
-            switch (mode) {
-                case 'epilogue':
-                    instruction = "Truyện đã kết thúc. Hãy viết một đoạn ngoại truyện (epilogue) ngắn, kể về cuộc sống sau này của các nhân vật sau khi mọi sóng gió đã qua, mang lại cảm giác trọn vẹn và thỏa mãn cho người đọc.";
-                    break;
-                case 'open':
-                    instruction = "Đây là phần kết mở của câu chuyện. TUYỆT ĐỐI KHÔNG giải đáp bí ẩn hay viết thêm biến cố mới để giải quyết xung đột. Hãy viết thêm một đoạn miêu tả cảm xúc, cảnh vật, hoặc một hành động nhỏ đầy ẩn ý để tô đậm sự day dứt và để lại câu hỏi ngỏ cho độc giả tự suy ngẫm.";
-                    break;
-                case 'twist':
-                    instruction = "Tạo ra một plot-twist (cú lừa/bước ngoặt) bất ngờ ngay tại đoạn kết này. Hãy lật ngược một sự thật tưởng chừng như đã rõ ràng, tạo ra một cliffhanger (cái kết treo) gây sốc để mở đường cho phần tiếp theo.";
-                    break;
-            }
-
-            const res = await aiService.continueWriting(
-                projectId,
-                previousText,
-                instruction,
-                activeChapter.id
-            );
-            if (res.generatedText) {
-                let textToAppend = res.generatedText;
-                editorRef.current.innerHTML += `<br><br>${textToAppend.replace(/\n/g, '<br>')}`;
-                markEditorDirty();
-            }
-        } catch (e: any) {
-            toast.error(e?.response?.data?.message ?? 'AI không thể viết tiếp lúc này. Hãy thử lại.');
-        } finally {
-            setIsContinuingWriting(false);
-        }
-    };
-
+    
     const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !projectId) return;
@@ -772,7 +720,6 @@ export default function WorkspacePage() {
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
             if (autoEmbedTimerRef.current) clearTimeout(autoEmbedTimerRef.current);
             if (aiSyncResetTimerRef.current) clearTimeout(aiSyncResetTimerRef.current);
-            if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
         };
     }, []);
 
@@ -788,41 +735,7 @@ export default function WorkspacePage() {
         return () => window.removeEventListener('keydown', handler);
     }, [doSave]);
 
-    // ── Selection toolbar (polish only) ────────────────────────────────────
-    useEffect(() => {
-        const handleSelection = () => {
-            if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
-            selectionTimerRef.current = setTimeout(() => {
-                const sel = window.getSelection();
-                const text = sel?.toString().trim() ?? '';
-                if (
-                    polishPanelOpen ||
-                    !activeChapter ||
-                    !text ||
-                    text.length < 5 ||
-                    !editorRef.current?.contains(sel?.anchorNode ?? null)
-                ) {
-                    setSelectionToolbar(prev => ({ ...prev, visible: false }));
-                    return;
-                }
-
-                const range = sel!.getRangeAt(0);
-                const rect = range.getBoundingClientRect();
-                setSelectionToolbar({
-                    visible: true,
-                    x: rect.left + rect.width / 2,
-                    y: rect.top - 8,
-                });
-            }, 200);
-        };
-
-        document.addEventListener('selectionchange', handleSelection);
-        return () => {
-            document.removeEventListener('selectionchange', handleSelection);
-            if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
-        };
-    }, [activeChapter, polishPanelOpen]);
-
+    
     // AI Chat logic is now inside ChatPanel / ChatHistoryPanel components
 
     // ── Create new version ─────────────────────────────────────────────────
@@ -1042,62 +955,7 @@ export default function WorkspacePage() {
     return (
         <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
 
-            {/* ── Floating selection toolbar (Trau chuốt only) ── */}
-            {selectionToolbar.visible && !polishPanelOpen && (
-                <div
-                    className="fixed z-40 -translate-x-1/2 -translate-y-full flex items-center px-2 py-1.5 rounded-xl shadow-xl"
-                    style={{
-                        left: selectionToolbar.x,
-                        top: selectionToolbar.y,
-                        background: 'var(--bg-surface)',
-                        border: '1px solid var(--border-color)',
-                    }}
-                    onMouseDown={e => e.preventDefault()}
-                >
-                        <button
-                            onClick={() => {
-                                const selection = window.getSelection();
-                                const selectedText = selection?.toString().trim() ?? '';
-                                if (selectedText.length >= 5) {
-                                    polishSelectionRangeRef.current = selection && selection.rangeCount > 0
-                                        ? selection.getRangeAt(0).cloneRange()
-                                        : null;
-                                    setPolishSelectedText(selectedText);
-                                    setPolishPanelMode('polish');
-                                    setPolishPanelOpen(true);
-                                    setSelectionToolbar(prev => ({ ...prev, visible: false }));
-                                }
-                            }}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all hover:bg-[var(--accent)]/10"
-                            style={{ color: 'var(--accent-text)' }}
-                        >
-                            <Sparkles className="w-3 h-3" />
-                            Trau chuốt
-                        </button>
-                        <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
-                        <button
-                            onClick={() => {
-                                const selection = window.getSelection();
-                                const selectedText = selection?.toString().trim() ?? '';
-                                if (selectedText.length >= 5) {
-                                    polishSelectionRangeRef.current = selection && selection.rangeCount > 0
-                                        ? selection.getRangeAt(0).cloneRange()
-                                        : null;
-                                    setPolishSelectedText(selectedText);
-                                    setPolishPanelMode('rewrite');
-                                    setPolishPanelOpen(true);
-                                    setSelectionToolbar(prev => ({ ...prev, visible: false }));
-                                }
-                            }}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all hover:bg-[var(--accent)]/10"
-                            style={{ color: 'var(--accent-text)' }}
-                        >
-                            <Wand2 className="w-3 h-3" />
-                            Viết lại
-                        </button>
-                </div>
-            )}
-
+            
             {/* ── Export Modal ── */}
             {exportModal.open && (
                 <ExportModal
@@ -1122,40 +980,7 @@ export default function WorkspacePage() {
                 />
             )}
 
-            {/* ── Polish Panel ── */}
-            {projectId && polishPanelOpen && (
-                <RewritePanel
-                    projectId={projectId}
-                    chapterId={activeChapter?.id}
-                    selectedText={polishSelectedText}
-                    mode={polishPanelMode}
-                    onAccept={(rewritten) => {
-                        const range = polishSelectionRangeRef.current;
-                        if (range && editorRef.current?.contains(range.commonAncestorContainer)) {
-                            range.deleteContents();
-                            range.insertNode(document.createTextNode(rewritten));
-                            polishSelectionRangeRef.current = null;
-                            markEditorDirty();
-                            return;
-                        }
-
-                        const sel = window.getSelection();
-                        if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
-                            const fallbackRange = sel.getRangeAt(0);
-                            fallbackRange.deleteContents();
-                            fallbackRange.insertNode(document.createTextNode(rewritten));
-                            sel.removeAllRanges();
-                            polishSelectionRangeRef.current = null;
-                            markEditorDirty();
-                        }
-                    }}
-                    onClose={() => {
-                        polishSelectionRangeRef.current = null;
-                        setPolishPanelOpen(false);
-                    }}
-                />
-            )}
-
+            
             {/* ── Top Nav ── */}
             <nav className="flex items-center gap-4 px-5 shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-topbar)]" style={{ height: '60px' }}>
                 <button
@@ -1228,15 +1053,7 @@ export default function WorkspacePage() {
                             >
                                 <Save className="w-3.5 h-3.5" /> Lưu ngay (Ctrl+S)
                             </button>
-                            <button
-                                onClick={doForceEmbedNow}
-                                disabled={aiSyncState === 'syncing'}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:scale-100"
-                                title={aiSyncState === 'syncing' ? 'Đang đồng bộ...' : 'Đồng bộ AI ngay (bỏ qua cooldown)'}
-                            >
-                                {aiSyncState === 'syncing' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
-                                {aiSyncState === 'syncing' ? 'Đang nhúng...' : 'Embed ngay'}
-                            </button>
+
                         </>
                     )}
                 </div>
@@ -1440,8 +1257,7 @@ export default function WorkspacePage() {
                                         { tab: 'themes' as ActiveTab, label: 'Chủ đề', desc: 'Ghi chú thông điệp cốt lõi và ẩn ý tác phẩm', icon: Sparkles, color: '#10b981' },
                                         { tab: 'plotTimeline' as ActiveTab, label: 'Tuyến truyện', desc: 'Cấu trúc cốt truyện & trình tự sự kiện', icon: Map, color: '#f59e0b' },
                                         { tab: 'aiInstructions' as ActiveTab, label: 'Ghi chú AI', desc: 'Cung cấp bối cảnh đặc biệt để AI hiểu đúng ý', icon: Bot, color: '#34d399' },
-                                        { tab: 'aiWriter' as ActiveTab, label: 'AI Writer', desc: 'Trợ lý AI giúp viết, trau chuốt và nảy ý tưởng', icon: Wand2, color: '#ec4899' },
-                                    ] as const).map(item => {
+                                                                            ] as const).map(item => {
                                         const isActive = activeTab === item.tab && rightPanelOpen;
                                         const Icon = item.icon;
                                         return (
@@ -1613,10 +1429,6 @@ export default function WorkspacePage() {
                             <div
                                 ref={editorScrollRef}
                                 className="flex-1 overflow-y-auto flex justify-center p-6 lg:p-12 scrollbar-thin"
-                                onScroll={(e) => {
-                                    const scrolled = (e.currentTarget as HTMLDivElement).scrollTop > 200;
-                                    setShowFloatingAiBtn(scrolled);
-                                }}
                             >
                                 <div className="w-full max-w-3xl relative">
                                     {activeChapter ? (
@@ -1677,17 +1489,7 @@ export default function WorkspacePage() {
                                                 <div className="flex-1" />
 
                                                 <span className="hidden xl:inline text-[10px] text-[var(--text-secondary)] opacity-60">Alt+↑/↓ chuyển nhanh chương</span>
-                                                <button
-                                                    onClick={() => handleContinueWriting('normal')}
-                                                    disabled={isContinuingWriting}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all shadow-md shadow-[var(--accent)]/10 disabled:opacity-50 ml-2"
-                                                    style={{ background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)' }}
-                                                    title="AI đọc 1500 ký tự cuối và viết tiếp"
-                                                >
-                                                    {isContinuingWriting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bot className="w-3.5 h-3.5" />}
-                                                    AI Viết tiếp
-                                                </button>
-                                            </div>
+                                                                                            </div>
                                             {/* Editor */}
                                             <div
                                                 ref={editorRef}
@@ -1723,56 +1525,7 @@ export default function WorkspacePage() {
                                 </div>
                             </div>
 
-                            {/* Floating AI Viết tiếp - Confined to editor area only */}
-                            {showFloatingAiBtn && activeChapter && !selectionToolbar.visible && !polishPanelOpen && (
-                                <div className="absolute bottom-20 right-8 z-50 pointer-events-none">
-                                    <div className="relative pointer-events-auto">
-                                        <div className="flex rounded-xl shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200" style={{ background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', boxShadow: '0 12px 32px rgba(139,92,246,0.5)' }}>
-                                            <button
-                                                onClick={() => handleContinueWriting('normal')}
-                                                disabled={isContinuingWriting}
-                                                className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50 border-r border-white/20 hover:bg-white/10 rounded-l-xl"
-                                                title="AI đọc 1500 ký tự cuối và viết tiếp"
-                                            >
-                                                {isContinuingWriting
-                                                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Đang viết...</>
-                                                    : <><Bot className="w-4 h-4" /> AI Viết tiếp</>}
-                                            </button>
-                                            <button
-                                                onClick={() => setContinueMenuOpen(!continueMenuOpen)}
-                                                disabled={isContinuingWriting}
-                                                className="px-2 py-2.5 text-white hover:bg-white/10 transition-colors rounded-r-xl disabled:opacity-50 flex items-center justify-center"
-                                                title="Tùy chọn kiểu viết tiếp"
-                                            >
-                                                <ChevronDown className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                        {continueMenuOpen && (
-                                            <>
-                                                <div className="fixed inset-0 z-40" onClick={() => setContinueMenuOpen(false)} />
-                                                <div className="absolute bottom-full right-0 mb-2 w-64 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-2xl z-50 overflow-hidden py-1">
-                                                    <button onClick={() => handleContinueWriting('normal')} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left hover:bg-[var(--hover-bg)] text-[var(--text-primary)]">
-                                                        <Bot className="w-4 h-4 text-violet-400 shrink-0" />
-                                                        <span>Viết tiếp mạch truyện</span>
-                                                    </button>
-                                                    <button onClick={() => handleContinueWriting('epilogue')} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left hover:bg-[var(--hover-bg)] text-[var(--text-primary)]">
-                                                        <Sunset className="w-4 h-4 text-orange-400 shrink-0" />
-                                                        <span>Viết Ngoại truyện (Epilogue)</span>
-                                                    </button>
-                                                    <button onClick={() => handleContinueWriting('open')} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left hover:bg-[var(--hover-bg)] text-[var(--text-primary)]">
-                                                        <Wind className="w-4 h-4 text-emerald-400 shrink-0" />
-                                                        <span>Giữ nguyên Kết Mở</span>
-                                                    </button>
-                                                    <button onClick={() => handleContinueWriting('twist')} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left hover:bg-[var(--hover-bg)] text-[var(--text-primary)]">
-                                                        <Zap className="w-4 h-4 text-rose-400 shrink-0" />
-                                                        <span>Tạo Twist / Cú lừa phút chót</span>
-                                                    </button>
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
+
                         </>
                     </div>
                 </div>
@@ -2064,19 +1817,7 @@ export default function WorkspacePage() {
                             <AiInstructionsPanel projectId={projectId} />
                         )}
 
-                        {/* ── AI Writer Tab ── */}
-                        {activeTab === 'aiWriter' && projectId && (
-                            <AiWriterPanel
-                                projectId={projectId}
-                                onApplyContent={(content) => {
-                                    if (editorRef.current) {
-                                        editorRef.current.innerHTML += (editorRef.current.innerHTML.endsWith('<br>') ? '' : '<br><br>') + content.replace(/\n/g, '<br>');
-                                        markEditorDirty();
-                                    }
-                                }}
-                            />
-                        )}
-                    </div>
+                                            </div>
                 )}
             </div>
 

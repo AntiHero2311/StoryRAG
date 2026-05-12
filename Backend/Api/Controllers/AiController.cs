@@ -105,6 +105,22 @@ namespace Api.Controllers
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
 
+        /// <summary>Xóa một tin nhắn chat cụ thể.</summary>
+        [HttpDelete("{projectId:guid}/chat/history/{historyId:guid}")]
+        public async Task<IActionResult> DeleteChatHistory(Guid projectId, Guid historyId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                await _aiChatService.DeleteChatHistoryAsync(projectId, userId.Value, historyId);
+                return Ok(new { Message = "Đã xóa lịch sử thành công." });
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
         private Guid? GetUserId()
         {
             var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value

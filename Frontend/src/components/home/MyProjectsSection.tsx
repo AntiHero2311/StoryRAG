@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
-    Plus, Pencil, Trash2, AlertTriangle, Loader2, MoreHorizontal, X, FolderOpen, Info, Search, ChevronDown, Check, Download,
+    Plus, Pencil, Trash2, AlertTriangle, Loader2, MoreHorizontal, X, FolderOpen, Info, Search, ChevronDown, Check, Download, Upload, Sparkles,
 } from 'lucide-react';
 import {
     projectService,
@@ -9,6 +9,7 @@ import {
     type CreateProjectRequest,
     type UpdateProjectRequest,
     type GenreResponse,
+    type ProjectImportResult,
 } from '../../services/projectService';
 import { genreService } from '../../services/genreService';
 
@@ -393,7 +394,7 @@ function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
     const color = hashColor(project.id);
     const createdDate = new Date(project.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const [menuOpen, setMenuOpen] = useState(false);
-    const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+    const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
     const menuBtnRef = useRef<HTMLButtonElement>(null);
     const [isHovered, setIsHovered] = useState(false);
     const BOOK_W = 195;
@@ -536,6 +537,9 @@ export default function MyProjectsSection({ onNavigate, createRequestToken, onPr
     const [deleteTarget, setDeleteTarget] = useState<ProjectResponse | null>(null);
     const [infoTarget, setInfoTarget] = useState<ProjectResponse | null>(null);
     const [modalLoading, setModalLoading] = useState(false);
+    const [importLoading, setImportLoading] = useState(false);
+    const [importResult, setImportResult] = useState<ProjectImportResult | null>(null);
+    const importInputRef = useRef<HTMLInputElement>(null);
 
     const fetchProjects = async () => {
         try {
@@ -619,6 +623,25 @@ export default function MyProjectsSection({ onNavigate, createRequestToken, onPr
         }
     };
 
+    const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        // Reset input so same file can be selected again
+        e.target.value = '';
+        setImportLoading(true);
+        try {
+            const result = await projectService.importFromManuscript(file);
+            setImportResult(result);
+            // Refresh project list
+            const data = await projectService.getProjects();
+            setProjects(data);
+        } catch (err: any) {
+            alert(err?.response?.data?.message ?? err?.message ?? 'Import thất bại. Vui lòng thử lại.');
+        } finally {
+            setImportLoading(false);
+        }
+    };
+
     return (
         <>
             <div className="rounded-2xl p-6" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
@@ -627,13 +650,31 @@ export default function MyProjectsSection({ onNavigate, createRequestToken, onPr
                         <h3 className="text-[var(--text-primary)] font-bold text-xl">Dự án của tôi</h3>
                         <p className="text-[var(--text-secondary)] text-sm mt-0.5">{projects.length} dự án</p>
                     </div>
-                    <button
-                        onClick={() => setShowCreate(true)}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white transition-all hover:scale-105 active:scale-95"
-                        style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}>
-                        <Plus className="w-4 h-4" />
-                        Tạo dự án mới
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <input
+                            ref={importInputRef}
+                            type="file"
+                            accept=".txt,.docx,.pdf"
+                            className="hidden"
+                            onChange={handleImportFile}
+                        />
+                        <button
+                            onClick={() => importInputRef.current?.click()}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all hover:scale-105 active:scale-95"
+                            style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}
+                            title="Import từ bản thảo (.txt, .docx, .pdf)"
+                        >
+                            <Upload className="w-4 h-4" />
+                            Import bản thảo
+                        </button>
+                        <button
+                            onClick={() => setShowCreate(true)}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white transition-all hover:scale-105 active:scale-95"
+                            style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}>
+                            <Plus className="w-4 h-4" />
+                            Tạo dự án mới
+                        </button>
+                    </div>
                 </div>
 
                 {loading && (
@@ -725,6 +766,49 @@ export default function MyProjectsSection({ onNavigate, createRequestToken, onPr
                     project={infoTarget}
                     onClose={() => setInfoTarget(null)}
                 />
+            )}
+
+            {/* Import loading overlay */}
+            {importLoading && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#090514]/80 backdrop-blur-md">
+                    <div className="glass-card rounded-3xl p-8 flex flex-col items-center gap-4 shadow-2xl border border-white/10 max-w-xs w-full mx-4">
+                        <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+                            <Sparkles className="w-7 h-7 text-white animate-pulse" />
+                        </div>
+                        <div className="text-center">
+                            <p className="text-white font-bold text-lg">AI đang đọc bản thảo...</p>
+                            <p className="text-[var(--text-secondary)] text-sm mt-1">Quá trình này có thể mất 1-2 phút.<br />Vui lòng không đóng trang.</p>
+                        </div>
+                        <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
+                    </div>
+                </div>
+            )}
+
+            {/* Import success toast */}
+            {importResult && (
+                <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full">
+                    <div className="glass-card rounded-2xl p-5 border border-emerald-500/30 shadow-2xl" style={{ background: 'var(--bg-surface)' }}>
+                        <div className="flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0">
+                                <Sparkles className="w-4 h-4 text-emerald-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-white font-bold text-sm">Import thành công!</p>
+                                <p className="text-emerald-400 text-xs mt-0.5 font-semibold">“{importResult.projectTitle}”
+                                </p>
+                                <p className="text-[var(--text-secondary)] text-xs mt-1.5 leading-relaxed">
+                                    ✔️ {importResult.chaptersImported} chương
+                                    {importResult.charactersExtracted > 0 && ` • ✔️ ${importResult.charactersExtracted} nhân vật`}
+                                    {importResult.settingsExtracted > 0 && ` • ✔️ ${importResult.settingsExtracted} bối cảnh`}
+                                    {importResult.timelineEventsExtracted > 0 && ` • ✔️ ${importResult.timelineEventsExtracted} sự kiện`}
+                                </p>
+                            </div>
+                            <button onClick={() => setImportResult(null)} className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-white hover:bg-white/10 transition-colors shrink-0">
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </>
     );

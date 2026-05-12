@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { Clock, Loader2, Bot, Search, Sparkles, User, Copy, Check, AlertCircle, MessageSquare, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Clock, Loader2, Bot, Search, Sparkles, User, Copy, Check, AlertCircle, MessageSquare, RotateCcw, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { aiService, type ChatHistoryItem } from '../../services/aiService';
 import { sanitizeAiResponseForDisplay } from '../../utils/aiResponseSanitizer';
 
@@ -10,7 +10,6 @@ const WRITE_NEW_PREFIX = '[Viết mới]';
 const REWRITE_PREFIX = '[Viết lại]';
 const REWRITE_PREFIX_LEGACY = '[Rewrite]';
 
-type HistoryMode = 'all' | 'chat' | 'continue' | 'polish';
 
 // ── Inline markdown renderer ───────────────────────────────────────────────
 function renderMd(text: string): ReactNode {
@@ -70,8 +69,6 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [query, setQuery] = useState('');
-    const [mode, setMode] = useState<HistoryMode>('all');
-
     const load = async (p = 1) => {
         const isLoadMore = p > 1;
         if (isLoadMore) setLoadingMore(true);
@@ -93,14 +90,23 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
         }
     };
 
+    const handleDeleteHistory = async (historyId: string) => {
+        try {
+            await aiService.deleteChatHistory(projectId, historyId);
+            setItems(prev => prev.filter(item => item.id !== historyId));
+            setTotal(prev => Math.max(0, prev - 1));
+        } catch (e: any) {
+            console.error('Lỗi khi xóa lịch sử chat:', e);
+        }
+    };
+
     useEffect(() => {
         setQuery('');
-        setMode('all');
     }, [projectId]);
 
     useEffect(() => {
         if (projectId) load(1);
-    }, [projectId, mode]);
+    }, [projectId]);
 
     const filteredItems = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
@@ -112,21 +118,13 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
             const isRewrite = item.question.startsWith(REWRITE_PREFIX) || item.question.startsWith(REWRITE_PREFIX_LEGACY);
             const isRewriteRelated = isPolish || isRewrite || isWriteNew;
 
-            if (mode === 'chat') {
-                if (isContinue || isRewriteRelated) return false;
-            } else if (mode === 'continue') {
-                if (!isContinue) return false;
-            } else if (mode === 'polish') {
-                if (!isRewriteRelated) return false;
-            } else if (mode === 'all') {
-                if (isRewriteRelated) return false;
-            }
+            if (isContinue || isRewriteRelated) return false;
 
             if (!normalizedQuery) return true;
             return item.question.toLowerCase().includes(normalizedQuery) || 
                    item.answer.toLowerCase().includes(normalizedQuery);
         });
-    }, [items, mode, query]);
+    }, [items, query]);
 
     const groupedItems = useMemo(() => {
         const groups = new Map<string, ChatHistoryItem[]>();
@@ -144,12 +142,6 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
         }));
     }, [filteredItems]);
 
-    const modeButtonClass = (target: HistoryMode, activeColor: string) =>
-        `h-7 px-2.5 rounded-lg text-[10px] font-semibold transition-all border ${
-            mode === target
-                ? activeColor
-                : 'text-[var(--text-secondary)] border-[var(--border-color)] bg-[var(--bg-app)]'
-        }`;
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -183,13 +175,6 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
                         style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}
                     />
                 </div>
-
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                    <button onClick={() => setMode('all')} className={modeButtonClass('all', 'text-[var(--accent-text)] border-[var(--accent)]/35 bg-[var(--accent)]/10')}>Tất cả</button>
-                    <button onClick={() => setMode('chat')} className={modeButtonClass('chat', 'text-sky-300 border-sky-400/35 bg-sky-400/10')}>Chat thường</button>
-                    <button onClick={() => setMode('continue')} className={modeButtonClass('continue', 'text-amber-300 border-amber-400/35 bg-amber-400/10')}>Viết tiếp</button>
-                    <button onClick={() => setMode('polish')} className={modeButtonClass('polish', 'text-emerald-300 border-emerald-400/35 bg-emerald-400/10')}>Viết lại / Trau chuốt</button>
-                </div>
             </div>
 
             {/* List */}
@@ -216,7 +201,7 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
                                 </div>
                                 <div className="space-y-4">
                                     {group.items.map(item => (
-                                        <HistoryItemRow key={item.id} item={item} />
+                                        <HistoryItemRow key={item.id} item={item} onDelete={() => handleDeleteHistory(item.id)} />
                                     ))}
                                 </div>
                             </section>
@@ -239,7 +224,7 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
 }
 
 // ── Sub-component for individual history item ───────────────────────────
-function HistoryItemRow({ item }: { item: ChatHistoryItem }) {
+function HistoryItemRow({ item, onDelete }: { item: ChatHistoryItem, onDelete?: () => void }) {
     const isContinue = item.question.startsWith(CONTINUE_PREFIX);
     const isPolish = item.question.startsWith(POLISH_PREFIX);
     const isRewrite = item.question.startsWith(REWRITE_PREFIX) || item.question.startsWith(REWRITE_PREFIX_LEGACY);
@@ -279,88 +264,84 @@ function HistoryItemRow({ item }: { item: ChatHistoryItem }) {
     };
 
     return (
-        <article className="group relative rounded-2xl overflow-hidden border border-[var(--border-color)] hover:border-[var(--accent)]/30 transition-all duration-300"
-            style={{ background: 'var(--bg-app)' }}>
-            
-            <div className="p-3.5 space-y-4">
-                {/* User side */}
-                <div className="flex flex-col items-end gap-2">
-                    <div className="flex items-center gap-2 pr-1">
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                            isContinue ? 'text-amber-200 bg-amber-400/20' : 
-                            (isPolish || isRewrite) ? 'text-emerald-200 bg-emerald-400/20' : 
-                            'text-indigo-200 bg-indigo-400/20'
-                        }`}>
-                            {isContinue ? 'Viết tiếp' : (isPolish || isRewrite) ? 'Viết lại' : 'Chat'}
-                        </span>
-                        <span className="text-[10px] font-bold opacity-40 uppercase tracking-tighter">Bạn</span>
+        <div className="flex flex-col gap-5 py-4 border-b border-[var(--border-color)]/50 last:border-0">
+            {/* User Message */}
+            <div className="flex justify-end pr-1">
+                <div className="flex flex-col items-end max-w-[85%]">
+                    <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-2xl rounded-tr-sm px-4 py-3 text-[12px] shadow-sm">
+                         {getDisplayQuestion()}
                     </div>
-                    <div className="max-w-[90%] rounded-2xl px-3.5 py-2.5 text-[11px]"
-                        style={{ 
-                            background: 'var(--bg-surface)', 
-                            border: '1px solid var(--border-color)',
-                            borderBottomRightRadius: '4px'
-                        }}>
-                        {getDisplayQuestion()}
-                    </div>
+                    {/* Tiny legacy badge if it's not normal chat */}
+                    {(isContinue || isPolish || isRewrite) && (
+                         <span className="text-[9px] text-[var(--text-secondary)] mt-1.5 uppercase font-semibold tracking-wider opacity-60">
+                             {isContinue ? 'Viết tiếp (Legacy)' : 'Chỉnh sửa (Legacy)'}
+                         </span>
+                    )}
                 </div>
+            </div>
 
-                {/* AI side */}
-                <div className="flex flex-col items-start gap-2">
-                    <div className="flex items-center gap-2 pl-1">
-                        <div className="w-5 h-5 rounded-lg bg-[var(--accent)]/10 flex items-center justify-center">
-                            <Bot className="w-3 h-3 text-[var(--accent-text)]" />
-                        </div>
-                        <span className="text-[10px] font-bold text-[var(--text-primary)] opacity-80 uppercase tracking-tighter">AI Assistant</span>
-                    </div>
-                    
+            {/* AI Message */}
+            <div className="flex gap-3 pl-1">
+                <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-[#8b5cf6] to-[#7c3aed] flex items-center justify-center shrink-0 shadow-md mt-0.5">
+                    <Bot className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1 flex flex-col items-start min-w-0 pt-0.5">
                     <div className="relative w-full">
-                        <div className={`max-w-[95%] rounded-2xl px-3.5 py-3 text-[11px] leading-[1.8] border border-[var(--border-color)] transition-all duration-500 overflow-hidden ${!expanded ? 'max-h-[120px]' : ''}`}
-                            style={{ 
-                                background: 'linear-gradient(to bottom right, var(--bg-surface), var(--bg-app))',
-                                borderBottomLeftRadius: '4px'
-                            }}>
-                            <div className="text-[var(--text-secondary)]">
-                                {renderMd(sanitizeAiResponseForDisplay(item.answer))}
-                            </div>
-                            
-                            {!expanded && item.answer.length > 250 && (
-                                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[var(--bg-app)] to-transparent pointer-events-none" />
-                            )}
+                        <div className={`text-[13px] leading-relaxed text-[var(--text-primary)] transition-all duration-300 overflow-hidden ${!expanded && item.answer.length > 300 ? 'max-h-[200px]' : ''}`}>
+                             {renderMd(sanitizeAiResponseForDisplay(item.answer))}
                         </div>
-                        
-                        {item.answer.length > 250 && (
-                            <button 
-                                onClick={() => setExpanded(!expanded)}
-                                className="mt-2 text-[10px] font-bold text-[var(--accent-text)] hover:underline flex items-center gap-1"
-                            >
-                                {expanded ? 'Thu gọn' : 'Xem thêm toàn bộ'}
-                                {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                            </button>
+                        {!expanded && item.answer.length > 300 && (
+                             <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[var(--bg-app)] to-transparent pointer-events-none" />
                         )}
                     </div>
-                </div>
-            </div>
+                    
+                    {/* Action Bar beneath AI Message */}
+                    <div className="flex flex-wrap items-center gap-3 mt-3 w-full">
+                        {!expanded && item.answer.length > 300 && (
+                            <button 
+                                onClick={() => setExpanded(true)}
+                                className="text-[11px] font-bold text-[var(--accent-text)] hover:text-white transition-colors flex items-center gap-1 bg-[var(--accent)]/10 px-3 py-1.5 rounded-lg border border-[var(--accent)]/20 hover:bg-[var(--accent)]/20"
+                            >
+                                Đọc tiếp <ChevronDown className="w-3 h-3" />
+                            </button>
+                        )}
+                        {expanded && item.answer.length > 300 && (
+                            <button 
+                                onClick={() => setExpanded(false)}
+                                className="text-[11px] font-bold text-[var(--text-secondary)] hover:text-white transition-colors flex items-center gap-1 bg-[var(--bg-surface)] px-3 py-1.5 rounded-lg border border-[var(--border-color)] hover:bg-[var(--hover-bg)]"
+                            >
+                                Thu gọn <ChevronUp className="w-3 h-3" />
+                            </button>
+                        )}
+                        
+                        <button
+                            onClick={handleCopy}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${copied ? 'text-emerald-400 bg-emerald-400/10 border border-emerald-400/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--bg-surface)] border border-[var(--border-color)] hover:bg-[var(--hover-bg)]'}`}
+                        >
+                            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copied ? 'Đã copy' : 'Copy'}
+                        </button>
 
-            {/* Footer actions */}
-            <div className="px-3.5 py-2 bg-[var(--bg-surface)]/50 border-t border-[var(--border-color)] flex items-center justify-between">
-                <div className="flex items-center gap-3 opacity-40">
-                    <span className="text-[9px]">{new Date(item.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
-                    <span className="text-[9px]">{item.totalTokens.toLocaleString()} tokens</span>
+                        {onDelete && (
+                            <button
+                                onClick={onDelete}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-[var(--text-secondary)] hover:text-red-400 bg-[var(--bg-surface)] border border-[var(--border-color)] hover:border-red-400/30 hover:bg-red-400/10 transition-all ml-1"
+                                title="Xóa lịch sử"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Xóa
+                            </button>
+                        )}
+                        
+                        <div className="flex items-center gap-2 text-[10px] text-[var(--text-secondary)] opacity-50 ml-auto font-medium">
+                            <span>{new Date(item.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+                            <span>•</span>
+                            <span>{item.totalTokens.toLocaleString()} tk</span>
+                        </div>
+                    </div>
                 </div>
-                <button
-                    onClick={handleCopy}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all"
-                    style={{ 
-                        background: copied ? 'rgba(16,185,129,0.1)' : 'var(--accent-subtle)',
-                        color: copied ? '#10b981' : 'var(--accent-text)' 
-                    }}
-                >
-                    {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                    {copied ? 'Đã copy' : 'Copy'}
-                </button>
             </div>
-        </article>
+        </div>
     );
 }
 

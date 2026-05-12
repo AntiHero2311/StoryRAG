@@ -177,15 +177,8 @@ namespace Service.Implementations
         {
             var chapter = await GetChapterWithOwnerCheckAsync(chapterId, userId);
 
-            // Phá vòng phụ thuộc Chapter <-> CurrentVersion trước khi xóa.
-            if (chapter.CurrentVersionId.HasValue)
-            {
-                chapter.CurrentVersionId = null;
-                chapter.UpdatedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync();
-            }
-
-            // Xóa toàn bộ dữ liệu gắn trực tiếp với chapter để tránh rác RAG.
+            // Xóa cứng toàn bộ dữ liệu Vector (Chunks) để tiết kiệm bộ nhớ AI,
+            // nhưng giữ lại Chapter, Versions, Rewrite/Analysis Histories (Xóa mềm).
             var versions = await _context.ChapterVersions
                 .Where(v => v.ChapterId == chapterId)
                 .ToListAsync();
@@ -201,31 +194,18 @@ namespace Service.Implementations
                 if (chunks.Count > 0)
                     _context.ChapterChunks.RemoveRange(chunks);
 
-                _context.ChapterVersions.RemoveRange(versions);
+                // Reset cờ Chunked/Embedded để nếu user Restore chapter, AI sẽ biết cần nhúng lại.
+                foreach (var v in versions)
+                {
+                    v.IsChunked = false;
+                    v.IsEmbedded = false;
+                }
             }
 
-            var rewriteHistories = await _context.RewriteHistories
-                .Where(r => r.ChapterId == chapterId)
-                .ToListAsync();
-            if (rewriteHistories.Count > 0)
-                _context.RewriteHistories.RemoveRange(rewriteHistories);
+            // Thực hiện Xóa Mềm Chapter
+            chapter.IsDeleted = true;
+            chapter.UpdatedAt = DateTime.UtcNow;
 
-            try
-            {
-                var analysisHistories = await _context.AiAnalysisHistories
-                    .Where(r => r.ChapterId == chapterId)
-                    .ToListAsync();
-                if (analysisHistories.Count > 0)
-                    _context.AiAnalysisHistories.RemoveRange(analysisHistories);
-            }
-            catch (PostgresException ex)
-                when (ex.SqlState == "42P01" &&
-                      ex.MessageText.Contains("AiAnalysisHistories", StringComparison.Ordinal))
-            {
-                // Tương thích schema cũ: một số DB chưa có bảng lịch sử phân tích AI.
-            }
-
-            _context.Chapters.Remove(chapter);
             await _context.SaveChangesAsync();
         }
 

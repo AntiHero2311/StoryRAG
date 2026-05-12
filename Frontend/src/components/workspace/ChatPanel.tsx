@@ -121,13 +121,6 @@ export default function ChatPanel({ projectId, isEmbedded, onEmbed, isSyncing }:
                         style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.2), rgba(139,92,246,0.1))' }}>
                         <Sparkles className="w-3 h-3 text-[var(--accent-text)]" />
                     </div>
-                    <span className="text-xs font-bold text-[var(--text-primary)]">AI Chat</span>
-                    {isEmbedded && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold"
-                            style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
-                            ● Sẵn sàng
-                        </span>
-                    )}
                 </div>
                 {messages.length > 0 && (
                     <button onClick={() => setMessages([])} title="Xóa lịch sử chat"
@@ -154,41 +147,12 @@ export default function ChatPanel({ projectId, isEmbedded, onEmbed, isSyncing }:
                         <div>
                             <p className="text-[var(--text-primary)] text-xs font-bold mb-1">Hỏi về nội dung truyện</p>
                             <p className="text-[var(--text-secondary)] text-[10px] leading-relaxed max-w-[200px]">
-                                {isEmbedded
-                                    ? 'Hỏi bất cứ điều gì về nhân vật, cốt truyện, bối cảnh...'
-                                    : 'Nội dung chưa được đồng bộ với AI. Hãy embed để bắt đầu.'}
+                                Hỏi bất cứ điều gì về nhân vật, cốt truyện, bối cảnh...
                             </p>
                         </div>
 
-                        {/* Embed button for ChatPanel context */}
-                        {!isEmbedded && onEmbed && (
-                            <button
-                                onClick={onEmbed}
-                                disabled={isSyncing}
-                                className="group relative flex items-center gap-2 px-6 py-2.5 rounded-2xl font-bold text-xs transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:scale-100 overflow-hidden"
-                                style={{
-                                    background: 'linear-gradient(135deg, #10b981, #059669)',
-                                    color: '#fff',
-                                    boxShadow: '0 4px 15px rgba(16,185,129,0.25)',
-                                }}
-                            >
-                                {isSyncing ? (
-                                    <>
-                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                        <span>ĐANG ĐỒNG BỘ...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Sparkles className="w-3.5 h-3.5" />
-                                        <span>EMBED NGAY</span>
-                                    </>
-                                )}
-                                <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 skew-x-[-20deg]" />
-                            </button>
-                        )}
                         {/* Suggestion cards */}
-                        {isEmbedded && (
-                            <div className="flex flex-col gap-1.5 w-full px-1">
+                        <div className="flex flex-col gap-1.5 w-full px-1">
                                 {SUGGESTIONS.map(s => (
                                     <button key={s.text} onClick={() => setInput(s.text)}
                                         className="group text-left text-[10px] px-3 py-2 rounded-xl transition-all flex items-center gap-2"
@@ -212,7 +176,6 @@ export default function ChatPanel({ projectId, isEmbedded, onEmbed, isSyncing }:
                                     </button>
                                 ))}
                             </div>
-                        )}
                     </div>
                 )}
 
@@ -296,8 +259,8 @@ export default function ChatPanel({ projectId, isEmbedded, onEmbed, isSyncing }:
                         value={input}
                         onChange={e => setInput(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doChat(); } }}
-                        placeholder={isEmbedded ? 'Nhập câu hỏi... (Enter để gửi)' : 'Embed chương để dùng AI Chat'}
-                        disabled={!isEmbedded || loading}
+                        placeholder="Nhập câu hỏi... (Enter để gửi)"
+                        disabled={loading}
                         rows={1}
                         className="w-full bg-transparent resize-none text-xs text-[var(--text-primary)] placeholder-[var(--text-secondary)] outline-none px-3 pt-2.5 pb-1"
                         style={{ maxHeight: '120px' }}
@@ -307,10 +270,10 @@ export default function ChatPanel({ projectId, isEmbedded, onEmbed, isSyncing }:
                             {input.length > 0 ? `${input.length} ký tự` : 'Shift+Enter xuống dòng'}
                         </span>
                         <button onClick={doChat}
-                            disabled={!input.trim() || !isEmbedded || loading}
+                            disabled={!input.trim() || loading}
                             className="w-7 h-7 flex items-center justify-center rounded-lg shrink-0 transition-all disabled:opacity-25"
                             style={{
-                                background: input.trim() && isEmbedded
+                                background: input.trim()
                                     ? 'linear-gradient(135deg, rgba(139,92,246,0.9), rgba(99,102,241,0.9))'
                                     : 'rgba(139,92,246,0.15)',
                                 color: input.trim() ? '#fff' : 'var(--accent)',

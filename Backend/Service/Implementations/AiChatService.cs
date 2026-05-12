@@ -321,7 +321,35 @@ namespace Service.Implementations
             };
         }
 
+        public async Task DeleteChatHistoryAsync(Guid projectId, Guid userId, Guid historyId)
+        {
+            // Kiểm tra chat message
+            var chatMsg = await _context.ChatMessages
+                .FirstOrDefaultAsync(m => m.Id == historyId && m.ProjectId == projectId && m.UserId == userId);
+
+            if (chatMsg != null)
+            {
+                _context.ChatMessages.Remove(chatMsg);
+                await _context.SaveChangesAsync();
+                return;
+            }
+
+            // Nếu không tìm thấy, thử tìm trong RewriteHistory (vì history panel mix cả 2)
+            var rewriteMsg = await _context.RewriteHistories
+                .FirstOrDefaultAsync(r => r.Id == historyId && r.ProjectId == projectId && r.UserId == userId);
+                
+            if (rewriteMsg != null)
+            {
+                _context.RewriteHistories.Remove(rewriteMsg);
+                await _context.SaveChangesAsync();
+                return;
+            }
+
+            throw new KeyNotFoundException("Không tìm thấy mục lịch sử này hoặc bạn không có quyền xóa.");
+        }
+
         private static string BuildSystemPrompt(string projectTitle, string? projectSummary, string? aiInstructions, List<string> contextChunks, List<string> worldbuildingItems, List<string> characterItems)
+
         {
             var summarySection = !string.IsNullOrWhiteSpace(projectSummary)
                 ? projectSummary
