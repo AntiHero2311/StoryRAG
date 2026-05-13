@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Repository.Data;
 using Repository.Entities;
 using Service.DTOs;
+using Service.Helpers;
 using Service.Interfaces;
 using System.Security.Cryptography;
 using System.Text;
@@ -21,6 +22,7 @@ namespace Service.Implementations
         private const string StatusCancelled = "Cancelled";
         private static readonly TimeSpan CancelAllowedAfter = TimeSpan.FromMinutes(5);
         private const string UserCancelledMessage = "Người dùng đã hủy job phân tích.";
+        private const string ReviewPendingMessage = "AI đã phân tích xong, đang kiểm tra bước cuối cùng bởi đội ngũ staff.";
 
         private const string StageQueued = "Queued";
         private const string StagePreparing = "Preparing";
@@ -56,8 +58,9 @@ namespace Service.Implementations
             CancellationToken cancellationToken = default)
         {
             await VerifyOwnershipAsync(projectId, userId, cancellationToken);
-            await EnsureCanAnalyzeAsync(userId, cancellationToken);
+            var subscription = await EnsureCanAnalyzeAsync(userId, cancellationToken);
             await EnsureProjectHasEmbeddedContentAsync(projectId, cancellationToken);
+            var priority = AnalysisJobPriorityHelper.CalculatePriority(subscription);
 
             var activeJob = await _context.ProjectAnalysisJobs
                 .Where(j =>
@@ -75,7 +78,7 @@ namespace Service.Implementations
                 }
 
                 if (activeJob.Status == StatusQueued)
-                    await _analysisJobQueue.EnqueueAsync(activeJob.Id, CancellationToken.None);
+                    await _analysisJobQueue.EnqueueAsync(activeJob.Id, priority, CancellationToken.None);
 
                 return ToResponse(activeJob, isExistingJob: true);
             }
@@ -95,10 +98,37 @@ namespace Service.Implementations
             };
 
             _context.ProjectAnalysisJobs.Add(job);
-            await _context.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                // Race condition: 2 request enqueue đồng thời cho cùng user.
+                var existingActiveJob = await _context.ProjectAnalysisJobs
+                    .Where(j =>
+                        j.UserId == userId &&
+                        (j.Status == StatusQueued || j.Status == StatusProcessing))
+                    .OrderByDescending(j => j.CreatedAt)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (existingActiveJob == null)
+                    throw;
+
+                if (existingActiveJob.ProjectId != projectId)
+                {
+                    throw new InvalidOperationException(
+                        "Bạn đang có một job phân tích khác đang chạy. Vui lòng đợi hoàn thành trước khi phân tích dự án mới.");
+                }
+
+                if (existingActiveJob.Status == StatusQueued)
+                    await _analysisJobQueue.EnqueueAsync(existingActiveJob.Id, priority, CancellationToken.None);
+
+                return ToResponse(existingActiveJob, isExistingJob: true);
+            }
 
             // Queue in memory for immediate processing.
-            await _analysisJobQueue.EnqueueAsync(job.Id, CancellationToken.None);
+            await _analysisJobQueue.EnqueueAsync(job.Id, priority, CancellationToken.None);
 
             return ToResponse(job, isExistingJob: false);
         }
@@ -179,6 +209,18 @@ namespace Service.Implementations
 
             if (job.Status != StatusCompleted || !job.ReportId.HasValue)
                 throw new InvalidOperationException("Job chưa hoàn thành nên chưa có kết quả.");
+
+            var reviewStatus = await _context.ProjectReports
+                .AsNoTracking()
+                .Where(r => r.Id == job.ReportId.Value)
+                .Select(r => r.ReviewStatus)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (string.Equals(reviewStatus, "PendingStaffReview", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(reviewStatus, "StaffReviewing", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(ReviewPendingMessage);
+            }
 
             var report = await _projectReportService.GetByIdAsync(job.ReportId.Value, projectId, userId)
                 ?? throw new KeyNotFoundException("Không tìm thấy báo cáo kết quả của job.");
@@ -361,7 +403,7 @@ namespace Service.Implementations
                 throw new KeyNotFoundException("Dự án không tồn tại hoặc bạn không có quyền truy cập.");
         }
 
-        private async Task EnsureCanAnalyzeAsync(Guid userId, CancellationToken cancellationToken)
+        private async Task<UserSubscription> EnsureCanAnalyzeAsync(Guid userId, CancellationToken cancellationToken)
         {
             var sub = await _context.UserSubscriptions
                 .Include(s => s.Plan)
@@ -372,6 +414,8 @@ namespace Service.Implementations
 
             if (sub.UsedAnalysisCount >= sub.Plan.MaxAnalysisCount)
                 throw new InvalidOperationException($"Bạn đã dùng hết {sub.Plan.MaxAnalysisCount} lần phân tích trong kỳ này.");
+
+            return sub;
         }
 
         private async Task EnsureProjectHasEmbeddedContentAsync(Guid projectId, CancellationToken cancellationToken)

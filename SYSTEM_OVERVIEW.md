@@ -257,7 +257,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | GET    | `/analyze/jobs/active`            | Job phân tích đang chạy của user |
 | GET    | `/{projectId}/analyze/jobs/latest` | Job phân tích gần nhất của project |
 | GET    | `/{projectId}/analyze/jobs/{jobId}` | Trạng thái job phân tích       |
-| GET    | `/{projectId}/analyze/jobs/{jobId}/result` | Kết quả job đã hoàn thành |
+| GET    | `/{projectId}/analyze/jobs/{jobId}/result` | Kết quả job đã hoàn thành (hoặc 409 khi đang chờ staff review cuối) |
 | POST   | `/{projectId}/analyze/jobs/{jobId}/cancel` | Hủy job `Queued/Processing` sau ~5 phút kể từ lúc enqueue |
 | POST   | `/{projectId}/rewrite`            | Rewrite đoạn văn                |
 | GET    | `/{projectId}/rewrite/history`    | Lịch sử viết AI (mới/tiếp/trau chuốt) |
@@ -365,8 +365,10 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | PUT/DELETE | `/feedback/{feedbackId}` | Cập nhật / xóa phản hồi |
 | GET/POST | `/knowledge-base` | Xem / tạo bài tri thức |
 | PUT/DELETE | `/knowledge-base/{id}` | Cập nhật / xóa bài tri thức |
+| GET    | `/analyses/pending` | Danh sách report đang chờ staff review cuối |
 | GET    | `/analyses/reviews` | Danh sách review phân tích |
 | POST   | `/analyses/{reportId}/review` | Duyệt/chỉnh/yêu cầu chạy lại báo cáo |
+| PATCH  | `/analyses/{reportId}/edit` | Staff chỉnh sửa report + release cho user |
 
 ---
 

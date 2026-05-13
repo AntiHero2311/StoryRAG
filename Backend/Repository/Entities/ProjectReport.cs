@@ -28,7 +28,8 @@ namespace Repository.Entities
 
         /// <summary>
         /// Trạng thái review của staff:
-        /// null / "Pending"       → chưa qua review staff, user thấy ngay sau khi AI xong
+        /// null                   → dữ liệu cũ (backward-compatible), user vẫn thấy
+        /// "PendingStaffReview"   → AI xong, đang chờ staff kiểm tra bước cuối
         /// "StaffReviewing"       → staff đang xem xét
         /// "Released"             → staff đã duyệt/chỉnh sửa và phát hành cho user
         /// </summary>

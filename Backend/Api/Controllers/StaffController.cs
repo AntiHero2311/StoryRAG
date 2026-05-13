@@ -120,6 +120,13 @@ namespace Api.Controllers
             return Ok(result);
         }
 
+        [HttpGet("analyses/pending")]
+        public async Task<IActionResult> GetPendingReports([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        {
+            var result = await _staffService.GetPendingReportsAsync(page, pageSize);
+            return Ok(result);
+        }
+
         [HttpPost("analyses/{reportId:guid}/review")]
         public async Task<IActionResult> ReviewAnalysis(Guid reportId, [FromBody] ReviewAnalysisRequest request)
         {
@@ -175,7 +182,7 @@ namespace Api.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { Message = ex.Message });
+                return Conflict(new { Message = ex.Message });
             }
         }
 

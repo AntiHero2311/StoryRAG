@@ -381,6 +381,67 @@ namespace Service.Implementations
             };
         }
 
+        public async Task<StaffPagedResponse<StaffPendingReportItem>> GetPendingReportsAsync(int page, int pageSize)
+        {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, 100);
+
+            var pendingStatuses = new[]
+            {
+                ProjectReportService.ReviewStatusPendingStaff,
+                ProjectReportService.ReviewStatusStaffReviewing
+            };
+
+            var query = _db.ProjectReports
+                .AsNoTracking()
+                .Include(r => r.Project)
+                    .ThenInclude(p => p.Author)
+                .Where(r => pendingStatuses.Contains(r.ReviewStatus ?? string.Empty))
+                .OrderByDescending(r => r.UpdatedAt ?? r.CreatedAt);
+
+            var total = await query.CountAsync();
+            var reports = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var masterKey = _config["Security:MasterKey"] ?? throw new InvalidOperationException("Thiếu cấu hình Security:MasterKey.");
+            var items = reports.Select(report =>
+            {
+                var projectTitle = "[Encrypted Title]";
+                if (!string.IsNullOrWhiteSpace(report.Project?.Author?.DataEncryptionKey))
+                {
+                    var authorDek = EncryptionHelper.DecryptWithMasterKey(report.Project.Author.DataEncryptionKey, masterKey);
+                    projectTitle = EncryptionHelper.DecryptWithMasterKey(report.Project.Title, authorDek);
+                }
+                else if (report.Project != null)
+                {
+                    projectTitle = report.Project.Title;
+                }
+
+                return new StaffPendingReportItem
+                {
+                    ReportId = report.Id,
+                    ProjectId = report.ProjectId,
+                    ProjectTitle = projectTitle,
+                    AuthorId = report.UserId,
+                    AuthorName = report.Project?.Author?.FullName ?? string.Empty,
+                    TotalScore = report.TotalScore,
+                    ReviewStatus = report.ReviewStatus ?? ProjectReportService.ReviewStatusPendingStaff,
+                    CreatedAt = report.CreatedAt,
+                    UpdatedAt = report.UpdatedAt,
+                };
+            }).ToList();
+
+            return new StaffPagedResponse<StaffPendingReportItem>
+            {
+                Items = items,
+                TotalCount = total,
+                Page = page,
+                PageSize = pageSize,
+            };
+        }
+
         public async Task<StaffAnalysisReviewResponse> ReviewAnalysisAsync(Guid reportId, Guid staffId, ReviewAnalysisRequest request)
         {
             var report = await _db.ProjectReports
@@ -425,6 +486,15 @@ namespace Service.Implementations
                 var rerun = await _projectReportService.AnalyzeAsync(report.ProjectId, report.Project.AuthorId);
                 review.RerunReportId = rerun.Id;
             }
+
+            if (request.Action == "Verified")
+                report.ReviewStatus = ProjectReportService.ReviewStatusReleased;
+            else if (request.Action == "Adjusted")
+                report.ReviewStatus = ProjectReportService.ReviewStatusStaffReviewing;
+            else if (request.Action == "RerunRequested")
+                report.ReviewStatus = ProjectReportService.ReviewStatusPendingStaff;
+
+            report.UpdatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
             return MapReview(review);
@@ -499,6 +569,14 @@ namespace Service.Implementations
                 .FirstOrDefaultAsync(j => j.Id == jobId)
                 ?? throw new KeyNotFoundException("Không tìm thấy job phân tích.");
 
+            var activeSub = await _db.UserSubscriptions
+                .AsNoTracking()
+                .Include(s => s.Plan)
+                .Where(s => s.UserId == oldJob.UserId && s.Status == "Active" && s.EndDate >= DateTime.UtcNow)
+                .OrderByDescending(s => s.EndDate)
+                .FirstOrDefaultAsync();
+            var priority = AnalysisJobPriorityHelper.CalculatePriority(activeSub);
+
             // Create new queued job referencing the old one.
             var now = DateTime.UtcNow;
             var newJob = new ProjectAnalysisJob
@@ -532,7 +610,7 @@ namespace Service.Implementations
             await _db.SaveChangesAsync();
 
             // Queue for immediate processing.
-            await _analysisJobQueue.EnqueueAsync(newJob.Id, CancellationToken.None);
+            await _analysisJobQueue.EnqueueAsync(newJob.Id, priority, CancellationToken.None);
 
             return new StaffAnalysisJobItem
             {
@@ -585,6 +663,18 @@ namespace Service.Implementations
                 throw new InvalidOperationException("Chỉ có thể chỉnh sửa report đã hoàn tất (Completed/MockData).");
             }
 
+            var currentVersion = report.UpdatedAt ?? report.CreatedAt;
+            if (request.ExpectedUpdatedAt.HasValue)
+            {
+                var expected = request.ExpectedUpdatedAt.Value.ToUniversalTime();
+                var actual = currentVersion.ToUniversalTime();
+                if (expected != actual)
+                {
+                    throw new InvalidOperationException(
+                        "Report đã được staff khác cập nhật trước đó. Vui lòng tải lại dữ liệu mới nhất trước khi lưu.");
+                }
+            }
+
             // Parse AI CriteriaJson gốc
             var sourceCriteriaJson = report.StaffEditedCriteriaJson ?? report.CriteriaJson;
             List<System.Text.Json.Nodes.JsonObject>? criteriaList = null;
@@ -630,8 +720,28 @@ namespace Service.Implementations
             ).ToJsonString();
 
             report.StaffEditedCriteriaJson = editedJson;
-            report.ReviewStatus = request.ReleaseToUser ? "Released" : "StaffReviewing";
+            report.ReviewStatus = request.ReleaseToUser
+                ? ProjectReportService.ReviewStatusReleased
+                : ProjectReportService.ReviewStatusStaffReviewing;
             report.UpdatedAt = DateTime.UtcNow;
+
+            if (!string.IsNullOrWhiteSpace(request.FeedbackMessage))
+            {
+                var feedback = new StaffFeedback
+                {
+                    Id = Guid.NewGuid(),
+                    ProjectId = report.ProjectId,
+                    ChapterId = null,
+                    AuthorId = report.Project.AuthorId,
+                    StaffId = staffId,
+                    Content = request.FeedbackMessage.Trim(),
+                    Status = "Open",
+                    StaffNote = "Tạo tự động từ review report phân tích.",
+                    CreatedAt = DateTime.UtcNow,
+                    ReadAt = null,
+                };
+                _db.StaffFeedbacks.Add(feedback);
+            }
 
             await _db.SaveChangesAsync();
 

@@ -476,15 +476,15 @@ namespace Service.Implementations
 
         private List<string> GetKeysForUseCase(EmbeddingUseCase useCase)
         {
+            _ = useCase;
             if (!string.IsNullOrWhiteSpace(_embeddingApiKey))
             {
                 // Khi có key chuyên biệt cho embedding, chỉ dùng key này cho mọi tác vụ embed.
                 return new List<string> { _embeddingApiKey! };
             }
 
-            var ordered = useCase == EmbeddingUseCase.ChatQuery
-                ? new[] { _chatApiKey, _analyzeApiKey }
-                : new[] { _analyzeApiKey, _chatApiKey };
+            // Khi không có key chuyên biệt, mọi embedding đều ưu tiên ChatApiKey rồi mới fallback AnalyzeApiKey.
+            var ordered = new[] { _chatApiKey, _analyzeApiKey };
 
             return ordered
                 .Where(k => !string.IsNullOrWhiteSpace(k))

@@ -453,6 +453,10 @@ Tạo job phân tích bất đồng bộ cho dự án.
 
 **Auth:** Bắt buộc.
 
+**Lưu ý:**
+- Mỗi user chỉ có tối đa **1 job active** (`Queued`/`Processing`) tại một thời điểm.
+- Hệ thống worker sẽ ưu tiên xử lý job theo **gói subscription** (plan cao xử lý trước), sau đó mới theo thời điểm tạo.
+
 **Response `202`:**
 ```json
 {
@@ -502,7 +506,38 @@ Lấy kết quả báo cáo sau khi job hoàn tất.
 
 **Response `200`:** `ProjectReportResponse`
 
-**Response `409`:** Nếu job chưa hoàn thành.
+**Response `409`:**
+- Nếu job chưa hoàn thành.
+- Hoặc AI đã xong nhưng report đang ở bước **staff review cuối** (user sẽ nhận thông báo "đang kiểm tra bước cuối cùng").
+
+---
+
+### GET `/api/staff/analyses/pending?page={n}&pageSize={m}`
+Staff/Admin lấy danh sách report đang chờ review cuối (`PendingStaffReview` / `StaffReviewing`).
+
+**Auth:** Bắt buộc, role `Staff` hoặc `Admin`.
+
+**Response `200`:**
+```json
+{
+  "items": [
+    {
+      "report_id": "guid",
+      "project_id": "guid",
+      "project_title": "string",
+      "author_id": "guid",
+      "author_name": "string",
+      "total_score": 78.5,
+      "review_status": "PendingStaffReview",
+      "created_at": "datetime",
+      "updated_at": "datetime | null"
+    }
+  ],
+  "totalCount": 1,
+  "page": 1,
+  "pageSize": 20
+}
+```
 
 ---
 

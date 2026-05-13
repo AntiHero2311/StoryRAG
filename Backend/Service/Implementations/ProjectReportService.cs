@@ -23,6 +23,9 @@ namespace Service.Implementations
         private readonly ISystemConfigService _sysConfig;
         private const int DefaultAnalyzeBatchSize = 12;
         private const int DefaultAnalyzeRpmLimit = 15;
+        internal const string ReviewStatusPendingStaff = "PendingStaffReview";
+        internal const string ReviewStatusStaffReviewing = "StaffReviewing";
+        internal const string ReviewStatusReleased = "Released";
         private static readonly SemaphoreSlim AnalyzeRpmLock = new(1, 1);
         private static readonly Queue<DateTime> AnalyzeCallTimestamps = [];
 
@@ -338,6 +341,7 @@ namespace Service.Implementations
                 ProjectId = projectId,
                 UserId = userId,
                 Status = reportStatus,
+                ReviewStatus = ReviewStatusPendingStaff,
                 ProjectVersion = projectVersion,
                 TotalScore = total,
                 CriteriaJson = BuildStoredCriteriaJson(criteria, warnings, overallFeedback),
@@ -387,7 +391,7 @@ namespace Service.Implementations
             var report = await _context.ProjectReports
                 .Include(r => r.Project)
                 .Include(r => r.ReportItems)
-                .Where(r => r.ProjectId == projectId)
+                .Where(r => r.ProjectId == projectId && (r.ReviewStatus == null || r.ReviewStatus == "" || r.ReviewStatus == ReviewStatusReleased))
                 .OrderByDescending(r => r.CreatedAt)
                 .FirstOrDefaultAsync();
 
@@ -430,7 +434,7 @@ namespace Service.Implementations
             await VerifyOwnershipAsync(projectId, userId);
 
             var reports = await _context.ProjectReports
-                .Where(r => r.ProjectId == projectId)
+                .Where(r => r.ProjectId == projectId && (r.ReviewStatus == null || r.ReviewStatus == "" || r.ReviewStatus == ReviewStatusReleased))
                 .OrderByDescending(r => r.CreatedAt)
                 .Select(r => new
                 {
@@ -460,7 +464,7 @@ namespace Service.Implementations
             var report = await _context.ProjectReports
                 .Include(r => r.Project)
                 .Include(r => r.ReportItems)
-                .FirstOrDefaultAsync(r => r.Id == reportId && r.ProjectId == projectId);
+                .FirstOrDefaultAsync(r => r.Id == reportId && r.ProjectId == projectId && (r.ReviewStatus == null || r.ReviewStatus == "" || r.ReviewStatus == ReviewStatusReleased));
 
             if (report == null) return null;
 

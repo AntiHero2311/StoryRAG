@@ -52,6 +52,11 @@ npm run dev
   2. Chunk (`POST .../chunk`)
   3. Embed (`POST /api/ai/chapters/{chapterId}/embed`)
   4. Chat/Analyze truy hoi context tu active version + Story Bible
+- **Luong analyze async**:
+  - Moi user chi co 1 job active.
+  - Worker uu tien job theo goi subscription (plan cao duoc xu ly truoc).
+  - Sau khi AI cham xong, report vao trang thai cho staff review cuoi; user thay thong bao "dang kiem tra buoc cuoi cung" den khi staff release.
+- **Thu tu API key embedding**: uu tien `Gemini:EmbeddingApiKey`; neu khong co thi dung `Gemini:ChatApiKey` roi moi fallback `Gemini:AnalyzeApiKey`.
 - **Bao mat route frontend** da duoc ap dung bang `RouteGuard`, `RoleGuard`, va `ErrorBoundary`.
 
 ---

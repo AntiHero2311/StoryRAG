@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Repository.Data;
+using Service.Helpers;
 using Service.Interfaces;
 
 namespace Api.Workers
@@ -83,18 +84,41 @@ namespace Api.Workers
             }
 
             // Re-enqueue tất cả jobs ở trạng thái Queued (bao gồm cả những job vừa reset ở trên).
-            var pendingJobIds = await context.ProjectAnalysisJobs
+            var pendingJobs = await context.ProjectAnalysisJobs
                 .AsNoTracking()
                 .Where(j => j.Status == "Queued")
                 .OrderBy(j => j.CreatedAt)
-                .Select(j => j.Id)
                 .ToListAsync(cancellationToken);
 
-            foreach (var jobId in pendingJobIds)
-                await _analysisJobQueue.EnqueueAsync(jobId, cancellationToken);
+            var pendingUserIds = pendingJobs
+                .Select(j => j.UserId)
+                .Distinct()
+                .ToList();
 
-            if (pendingJobIds.Count > 0)
-                _logger.LogInformation("Re-enqueued {Count} pending analysis jobs on startup.", pendingJobIds.Count);
+            var subscriptions = await context.UserSubscriptions
+                .AsNoTracking()
+                .Include(s => s.Plan)
+                .Where(s =>
+                    pendingUserIds.Contains(s.UserId) &&
+                    s.Status == "Active" &&
+                    s.EndDate >= DateTime.UtcNow)
+                .OrderByDescending(s => s.EndDate)
+                .ToListAsync(cancellationToken);
+
+            var priorityByUser = subscriptions
+                .GroupBy(s => s.UserId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => AnalysisJobPriorityHelper.CalculatePriority(g.First()));
+
+            foreach (var job in pendingJobs)
+            {
+                var priority = priorityByUser.GetValueOrDefault(job.UserId, 10);
+                await _analysisJobQueue.EnqueueAsync(job.Id, priority, cancellationToken);
+            }
+
+            if (pendingJobs.Count > 0)
+                _logger.LogInformation("Re-enqueued {Count} pending analysis jobs on startup.", pendingJobs.Count);
         }
     }
 }

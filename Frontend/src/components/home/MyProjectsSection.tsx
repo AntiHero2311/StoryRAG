@@ -400,6 +400,9 @@ function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
     const BOOK_W = 195;
     const BOOK_H = 290;
     const SPINE_W = 38;
+    const MENU_W = 144;
+    const MENU_H = 168;
+    const VIEWPORT_GAP = 8;
 
     return (
         <div
@@ -476,7 +479,17 @@ function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
                                     onClick={() => {
                                         if (!menuOpen && menuBtnRef.current) {
                                             const rect = menuBtnRef.current.getBoundingClientRect();
-                                            setMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+                                            const openDown = rect.bottom + 6 + MENU_H <= window.innerHeight - VIEWPORT_GAP;
+                                            const top = openDown
+                                                ? rect.bottom + 6
+                                                : Math.max(VIEWPORT_GAP, rect.top - MENU_H - 6);
+                                            const minRight = VIEWPORT_GAP;
+                                            const maxRight = window.innerWidth - MENU_W - VIEWPORT_GAP;
+                                            const right = Math.min(
+                                                Math.max(minRight, window.innerWidth - rect.right),
+                                                Math.max(minRight, maxRight)
+                                            );
+                                            setMenuPos({ top, right });
                                         }
                                         setMenuOpen(v => !v);
                                     }}
@@ -488,8 +501,14 @@ function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
                                     <>
                                         <div className="fixed inset-0 z-[200]" onClick={() => setMenuOpen(false)} />
                                         <div
-                                            className="fixed w-36 rounded-xl shadow-2xl overflow-hidden z-[201]"
-                                            style={{ top: menuPos.top, right: menuPos.right, background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
+                                            className="fixed w-36 rounded-xl shadow-2xl z-[201] overflow-y-auto"
+                                            style={{
+                                                top: menuPos.top,
+                                                right: menuPos.right,
+                                                maxHeight: `calc(100vh - ${VIEWPORT_GAP * 2}px)`,
+                                                background: 'var(--bg-surface)',
+                                                border: '1px solid var(--border-color)',
+                                            }}
                                         >
                                             <button onClick={() => { onInfo(project); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
                                                 <Info className="w-3.5 h-3.5" /> Thông tin

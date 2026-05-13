@@ -206,7 +206,8 @@ namespace Api.Controllers
         /// <summary>Import bản thảo (.txt/.docx/.pdf) → tạo Project + Chapters + AI trích xuất.</summary>
         [HttpPost("import")]
         [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
-        public async Task<IActionResult> ImportProject([FromForm] IFormFile file)
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> ImportProject(IFormFile file)
         {
             if (file == null || file.Length == 0)
                 return BadRequest(new { Message = "Vui lòng chọn file để import (.txt, .docx, .pdf)." });

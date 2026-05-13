@@ -1,21 +1,50 @@
 using Service.Interfaces;
-using System.Threading.Channels;
 
 namespace Service.Implementations
 {
     public class AnalysisJobQueue : IAnalysisJobQueue
     {
-        private readonly Channel<Guid> _queue = Channel.CreateUnbounded<Guid>(new UnboundedChannelOptions
+        private readonly object _sync = new();
+        private readonly PriorityQueue<Guid, int> _queue = new();
+        private readonly HashSet<Guid> _queuedJobIds = [];
+        private readonly SemaphoreSlim _signal = new(0);
+
+        public ValueTask EnqueueAsync(Guid jobId, int priority = 0, CancellationToken cancellationToken = default)
         {
-            SingleReader = true,
-            SingleWriter = false,
-            AllowSynchronousContinuations = false,
-        });
+            cancellationToken.ThrowIfCancellationRequested();
 
-        public ValueTask EnqueueAsync(Guid jobId, CancellationToken cancellationToken = default)
-            => _queue.Writer.WriteAsync(jobId, cancellationToken);
+            var added = false;
+            lock (_sync)
+            {
+                if (_queuedJobIds.Add(jobId))
+                {
+                    // PriorityQueue lấy số nhỏ nhất trước, nên đảo dấu để ưu tiên giá trị lớn hơn.
+                    _queue.Enqueue(jobId, -priority);
+                    added = true;
+                }
+            }
 
-        public ValueTask<Guid> DequeueAsync(CancellationToken cancellationToken)
-            => _queue.Reader.ReadAsync(cancellationToken);
+            if (added)
+                _signal.Release();
+
+            return ValueTask.CompletedTask;
+        }
+
+        public async ValueTask<Guid> DequeueAsync(CancellationToken cancellationToken)
+        {
+            while (true)
+            {
+                await _signal.WaitAsync(cancellationToken);
+
+                lock (_sync)
+                {
+                    if (_queue.TryDequeue(out var jobId, out _))
+                    {
+                        _queuedJobIds.Remove(jobId);
+                        return jobId;
+                    }
+                }
+            }
+        }
     }
 }

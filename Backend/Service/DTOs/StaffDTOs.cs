@@ -163,6 +163,36 @@ namespace Service.DTOs
         public DateTime? UpdatedAt { get; set; }
     }
 
+    public class StaffPendingReportItem
+    {
+        [JsonPropertyName("report_id")]
+        public Guid ReportId { get; set; }
+
+        [JsonPropertyName("project_id")]
+        public Guid ProjectId { get; set; }
+
+        [JsonPropertyName("project_title")]
+        public string ProjectTitle { get; set; } = string.Empty;
+
+        [JsonPropertyName("author_id")]
+        public Guid AuthorId { get; set; }
+
+        [JsonPropertyName("author_name")]
+        public string AuthorName { get; set; } = string.Empty;
+
+        [JsonPropertyName("total_score")]
+        public decimal TotalScore { get; set; }
+
+        [JsonPropertyName("review_status")]
+        public string ReviewStatus { get; set; } = string.Empty;
+
+        [JsonPropertyName("created_at")]
+        public DateTime CreatedAt { get; set; }
+
+        [JsonPropertyName("updated_at")]
+        public DateTime? UpdatedAt { get; set; }
+    }
+
     public class StaffPagedResponse<T>
     {
         public IReadOnlyList<T> Items { get; set; } = [];
@@ -226,6 +256,16 @@ namespace Service.DTOs
 
         /// <summary>Sau khi edit xong có phát hành cho user không. Mặc định true.</summary>
         public bool ReleaseToUser { get; set; } = true;
+
+        /// <summary>
+        /// Optional optimistic concurrency marker.
+        /// Nếu có giá trị, backend sẽ từ chối cập nhật khi report đã bị staff khác sửa trước đó.
+        /// </summary>
+        public DateTime? ExpectedUpdatedAt { get; set; }
+
+        /// <summary>Optional: feedback gửi cho tác giả sau khi staff chỉnh sửa.</summary>
+        [MaxLength(3000)]
+        public string? FeedbackMessage { get; set; }
     }
 
     /// <summary>
@@ -254,4 +294,3 @@ namespace Service.DTOs
         public DateTime? UpdatedAt { get; set; }
     }
 }
-

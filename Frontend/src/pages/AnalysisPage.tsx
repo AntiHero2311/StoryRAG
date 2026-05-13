@@ -73,6 +73,16 @@ function AnalysisContent() {
         || err?.response?.data?.Message
         || err?.message
         || fallback;
+    const getPendingFinalReviewMessage = (err: any) => {
+        const status = err?.response?.status;
+        const message = getApiErrorMessage(err, '');
+        if (status !== 409) return null;
+        if (!message) return 'AI đã phân tích xong, đang kiểm tra bước cuối cùng bởi đội ngũ staff.';
+        if (message.toLowerCase().includes('kiểm tra bước cuối cùng') || message.toLowerCase().includes('staff')) {
+            return message;
+        }
+        return null;
+    };
 
     const stopElapsedTimer = () => {
         if (elapsedRef.current) {
@@ -229,7 +239,13 @@ function AnalysisContent() {
             if (!effectiveLatest && effectiveHistory.length === 0 && latestJob?.status === 'Completed') {
                 const recovered = await reportService
                     .getAnalyzeJobResult(projectId, latestJob.jobId)
-                    .catch(() => null);
+                    .catch((err) => {
+                        const pendingMessage = getPendingFinalReviewMessage(err);
+                        if (pendingMessage && mountedRef.current && !cancelled) {
+                            setAnalysisStatus({ type: 'info', message: pendingMessage });
+                        }
+                        return null;
+                    });
                 if (recovered && mountedRef.current && !cancelled) {
                     effectiveLatest = recovered;
                     effectiveHistory = mergeHistory(all, recovered);
@@ -305,6 +321,12 @@ function AnalysisContent() {
                     } catch (err: any) {
                         lastResultError = err;
                         const status = err?.response?.status;
+                        const pendingMessage = getPendingFinalReviewMessage(err);
+                        if (pendingMessage) {
+                            const pendingError = new Error(pendingMessage) as Error & { code?: string };
+                            pendingError.code = 'PENDING_STAFF_REVIEW';
+                            throw pendingError;
+                        }
                         if (status !== 404 && status !== 409) throw err;
                         await new Promise(resolve => setTimeout(resolve, 1500));
                     }
@@ -369,6 +391,23 @@ function AnalysisContent() {
                 );
             }
         } catch (e: any) {
+            if (e?.code === 'PENDING_STAFF_REVIEW') {
+                const pendingMessage = getApiErrorMessage(
+                    e,
+                    'AI đã phân tích xong, đang kiểm tra bước cuối cùng bởi đội ngũ staff.'
+                );
+                setError(null);
+                setAnalysisStatus({ type: 'info', message: pendingMessage });
+                toast.info(pendingMessage);
+                appNotificationService.add({
+                    type: 'info',
+                    title: 'Phân tích đã hoàn tất bước AI',
+                    message: pendingMessage,
+                    tag: `analysis-pending-staff-${job.jobId}`,
+                });
+                return;
+            }
+
             const message = getApiErrorMessage(e, 'Phân tích thất bại. Vui lòng thử lại.');
             const isCancelled = message === 'Job phân tích đã bị hủy.';
             setError(isCancelled ? null : message);

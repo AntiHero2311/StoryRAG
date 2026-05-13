@@ -158,6 +158,11 @@ Authorization: Bearer <access_token>
 | `GET` | `/ai/{projectId}/reports` | Danh sách báo cáo phân tích |
 | `GET` | `/ai/{projectId}/reports/{reportId}` | Chi tiết báo cáo |
 
+**Behavior mới của Analyze async:**
+- Mỗi user chỉ có tối đa **1 job active**.
+- Worker ưu tiên xử lý job theo **gói subscription** (plan cao trước).
+- Khi AI hoàn tất, report vào trạng thái **PendingStaffReview**. User sẽ thấy thông báo "đang kiểm tra bước cuối cùng" cho tới khi staff release.
+
 **AI Context được đưa vào khi phân tích:**
 - `WorldbuildingEntries` — Nhóm 8: Xây dựng thế giới
 - `CharacterEntries` — Nhóm 2: Nhân vật
@@ -195,6 +200,13 @@ Authorization: Bearer <access_token>
       ]
     }
   ]
+}
+```
+
+**Response `GET /analyze/jobs/{jobId}/result` (`409`)**
+```json
+{
+  "message": "AI đã phân tích xong, đang kiểm tra bước cuối cùng bởi đội ngũ staff."
 }
 ```
 
@@ -389,8 +401,10 @@ Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 
 | Method | Route | Mô tả |
 |--------|-------|-------|
+| `GET` | `/staff/analyses/pending` | Danh sách report chờ review cuối (`?page=&pageSize=`) |
 | `GET` | `/staff/analyses/reviews` | Danh sách lịch sử review (`?projectId=&page=&pageSize=`) |
 | `POST` | `/staff/analyses/{reportId}/review` | Review một report |
+| `PATCH` | `/staff/analyses/{reportId}/edit` | Staff chỉnh sửa nội dung report + release cho user |
 
 **Body `POST /staff/analyses/{reportId}/review`**
 ```json
@@ -402,6 +416,23 @@ Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 
 `action`: `Verified` | `Adjusted` | `RerunRequested`  
 > `RerunRequested` chỉ áp dụng cho report chưa hoàn tất hoặc bị flag `INCOMPLETE`.
+
+**Body `PATCH /staff/analyses/{reportId}/edit` (mới)**
+```json
+{
+  "editedCriteria": [
+    {
+      "key": "1.1",
+      "feedback": "Staff chỉnh lại diễn đạt cho rõ nghĩa.",
+      "errors": ["..."],
+      "suggestions": ["..."]
+    }
+  ],
+  "releaseToUser": true,
+  "expectedUpdatedAt": "2026-05-13T06:00:00Z",
+  "feedbackMessage": "Đã bổ sung góp ý chi tiết ở từng tiêu chí quan trọng."
+}
+```
 
 ---
 

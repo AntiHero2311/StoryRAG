@@ -60,11 +60,13 @@ Hệ thống cung cấp hàng loạt công cụ RAG / AI Writing.
 - **FE:** Ở `AnalysisPage.tsx`, chọn phân tích dự án.
 - **BE (`AnalysisJobQueue` & `ProjectAnalysisJobService`):**
   - Đây là Job quá lớn để chạy trực tiếp (kéo dài cả tiếng đồng hồ nếu truyện dài).
-  - C# đẩy job vào Background Channel (`AnalysisJobQueue.cs`).
+  - C# đẩy job vào Background Queue ưu tiên (`AnalysisJobQueue.cs`), mỗi user chỉ có tối đa 1 job active.
+  - Worker ưu tiên lấy job theo tier gói subscription trước, sau đó theo thời điểm tạo.
   - Phản hồi `202 Accepted` kèm theo JobId.
   - Trình worker ngầm lấy toàn bộ các chương đã Embed -> Tiến hành chấm dứt điểm từng tiêu chí (Character, Plot, Pacing, Style) -> Kết xuất Report lớn định dạng JSON.
 - **FE:** Sử dụng cơ chế Long-polling hoặc Fetch lại trạng thái `GetActiveAnalyzeJob` 10s/lần để vẽ thanh ProgressBar.
-- **Staff Review:** Staff/Admin có thể xem danh sách review qua `/api/staff/analyses/reviews` và gửi quyết định duyệt/chỉnh/yêu cầu chạy lại qua `/api/staff/analyses/{reportId}/review`.
+- **Staff Review gate:** Sau khi AI hoàn tất, report vào trạng thái `PendingStaffReview`; user nhận thông báo "đang kiểm tra bước cuối cùng".
+- **Staff Review:** Staff/Admin lấy queue review qua `/api/staff/analyses/pending`, có thể review qua `/api/staff/analyses/{reportId}/review`, chỉnh sửa nội dung qua `/api/staff/analyses/{reportId}/edit` rồi release cho user.
 
 ## 6. Luồng Xóa Dữ Liệu (Deletion Flows)
 **Tên chức năng:** Soft Delete vs Hard Delete
