@@ -418,6 +418,32 @@ Embed tất cả chunks của current version của chương vào vector DB.
 
 **Response `200`:** `{ "message": "Embedding hoàn tất." }`
 
+---
+
+## Feedback Staff ↔ Author
+
+### Staff tạo feedback từ report phân tích
+
+Khi staff chỉnh report bằng `PATCH /api/staff/analyses/{reportId}/edit` và gửi `feedbackMessage`, backend tự tạo `StaffFeedback` gắn với `ProjectReportId` của report đó.
+
+### Author phản hồi feedback staff
+
+| Method | Route | Mô tả |
+|--------|-------|-------|
+| `GET` | `/me/feedback` | Danh sách feedback của author |
+| `POST` | `/me/feedback/{id}/mark-read` | Đánh dấu đã đọc |
+| `POST` | `/me/feedback/{id}/respond` | Like/Dislike + reply cho feedback |
+
+**Body `POST /me/feedback/{id}/respond`**
+```json
+{
+  "reaction": "Like",
+  "content": "Cảm ơn staff, phần này sẽ được chỉnh lại."
+}
+```
+
+`reaction`: `Like` | `Dislike`
+
 **Response `400`:** Nếu chương chưa được chunk.
 
 **Response `404`:** Nếu không tìm thấy chương.
@@ -456,6 +482,7 @@ Tạo job phân tích bất đồng bộ cho dự án.
 **Lưu ý:**
 - Mỗi user chỉ có tối đa **1 job active** (`Queued`/`Processing`) tại một thời điểm.
 - Hệ thống worker sẽ ưu tiên xử lý job theo **gói subscription** (plan cao xử lý trước), sau đó mới theo thời điểm tạo.
+- Trước khi vào rubric, worker chốt snapshot toàn bộ truyện; chapter active nào chưa chunk/embed đủ sẽ được tự repair rồi mới tiếp tục phân tích.
 
 **Response `202`:**
 ```json
@@ -466,6 +493,7 @@ Tạo job phân tích bất đồng bộ cho dự án.
   "stage": "Queued",
   "progress": 0,
   "isExistingJob": false,
+  "projectVersionHash": "snapshot-hash",
   "createdAt": "datetime"
 }
 ```
@@ -495,7 +523,8 @@ Lấy trạng thái và tiến độ của một job phân tích.
 
 **Auth:** Bắt buộc.
 
-**Response `200`:** `ProjectAnalysisJobResponse`
+**Response `200`:** `ProjectAnalysisJobResponse`  
+`ProjectAnalysisJobResponse` có `createdAt` / `startedAt` / `completedAt` để theo dõi lịch sử chạy, và `projectVersionHash` để biết snapshot nào đang được phân tích.
 
 ---
 
@@ -504,7 +533,8 @@ Lấy kết quả báo cáo sau khi job hoàn tất.
 
 **Auth:** Bắt buộc.
 
-**Response `200`:** `ProjectReportResponse`
+**Response `200`:** `ProjectReportResponse`  
+`ProjectReportResponse` có `createdAt`, `projectVersion` và `projectVersionHash` để người dùng biết report này được tạo từ snapshot nào của toàn bộ bộ truyện.
 
 **Response `409`:**
 - Nếu job chưa hoàn thành.

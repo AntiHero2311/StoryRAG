@@ -50,6 +50,7 @@ export interface ProjectReportResponse {
     classification: 'Cần sửa lớn' | 'Trung bình' | 'Khá' | 'Xuất sắc';
     overallFeedback: string;
     projectVersion: string;
+    projectVersionHash: string;
     groups: GroupResult[];
     warnings: StoryWarning[];
     createdAt: string;
@@ -60,6 +61,7 @@ export interface ProjectReportSummary {
     status: string;
     totalScore: number;
     classification: string;
+    projectVersionHash: string;
     createdAt: string;
 }
 
@@ -67,7 +69,7 @@ export interface ProjectAnalysisJobResponse {
     jobId: string;
     projectId: string;
     status: 'Queued' | 'Processing' | 'Completed' | 'Failed' | 'Cancelled';
-    stage: 'Queued' | 'Preparing' | 'Analyzing' | 'Saving' | 'Completed' | 'Failed' | 'Cancelled';
+    stage: string;
     progress: number;
     reportId: string | null;
     errorMessage: string | null;

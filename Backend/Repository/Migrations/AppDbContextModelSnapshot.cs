@@ -1155,6 +1155,9 @@ namespace Repository.Migrations
                         .HasMaxLength(3000)
                         .HasColumnType("character varying(3000)");
 
+                    b.Property<Guid?>("ProjectReportId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -1169,6 +1172,17 @@ namespace Repository.Migrations
                     b.Property<string>("StaffNote")
                         .HasMaxLength(3000)
                         .HasColumnType("character varying(3000)");
+
+                    b.Property<string>("UserFeedback")
+                        .HasMaxLength(3000)
+                        .HasColumnType("character varying(3000)");
+
+                    b.Property<DateTime?>("UserRespondedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserReaction")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1189,9 +1203,41 @@ namespace Repository.Migrations
 
                     b.HasIndex("ChapterId");
 
+                    b.HasIndex("ProjectReportId");
+
                     b.HasIndex("ProjectId");
 
                     b.HasIndex("StaffId");
+
+                    b.HasIndex("UserReaction");
+
+                    b.HasOne("Repository.Entities.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Repository.Entities.ProjectReport", "ProjectReport")
+                        .WithMany()
+                        .HasForeignKey("ProjectReportId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Repository.Entities.Chapter", "Chapter")
+                        .WithMany()
+                        .HasForeignKey("ChapterId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Repository.Entities.User", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Repository.Entities.User", "Staff")
+                        .WithMany()
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.ToTable("StaffFeedbacks", t =>
                         {

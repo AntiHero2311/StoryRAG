@@ -62,6 +62,9 @@ namespace Service.Implementations
             await EnsureProjectHasEmbeddedContentAsync(projectId, cancellationToken);
             var priority = AnalysisJobPriorityHelper.CalculatePriority(subscription);
 
+            var currentSnapshot = await BuildProjectSnapshotAsync(projectId, cancellationToken);
+            var currentProjectVersionHash = currentSnapshot.ProjectVersionHash;
+
             var activeJob = await _context.ProjectAnalysisJobs
                 .Where(j =>
                     j.UserId == userId &&
@@ -83,7 +86,6 @@ namespace Service.Implementations
                 return ToResponse(activeJob, isExistingJob: true);
             }
 
-            var projectVersionHash = await BuildProjectVersionHashAsync(projectId, cancellationToken);
             var job = new ProjectAnalysisJob
             {
                 Id = Guid.NewGuid(),
@@ -92,7 +94,7 @@ namespace Service.Implementations
                 Status = StatusQueued,
                 Stage = StageQueued,
                 Progress = 0,
-                ProjectVersionHash = projectVersionHash,
+                ProjectVersionHash = currentProjectVersionHash,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
             };
@@ -305,7 +307,7 @@ namespace Service.Implementations
                 var report = await _projectReportService.AnalyzeAsync(
                     job.ProjectId,
                     job.UserId,
-                    async (progress, _, token) =>
+                    async (progress, message, token) =>
                     {
                         await ThrowIfJobCancelledAsync(jobId, token);
 
@@ -313,7 +315,7 @@ namespace Service.Implementations
                         if (job.Progress == safeProgress)
                             return;
 
-                        job.Stage = StageAnalyzing;
+                        job.Stage = string.IsNullOrWhiteSpace(message) ? StageAnalyzing : message;
                         job.Progress = safeProgress;
                         job.UpdatedAt = DateTime.UtcNow;
                         await _context.SaveChangesAsync(token);
@@ -334,6 +336,7 @@ namespace Service.Implementations
                 job.Stage = StageCompleted;
                 job.Progress = 100;
                 job.ReportId = report.Id;
+                job.ProjectVersionHash = report.ProjectVersionHash;
                 job.ErrorMessage = null;
                 job.CompletedAt = DateTime.UtcNow;
                 job.UpdatedAt = DateTime.UtcNow;
@@ -435,7 +438,7 @@ namespace Service.Implementations
                 throw new InvalidOperationException(MissingEmbeddedContentMessage);
         }
 
-        private async Task<string> BuildProjectVersionHashAsync(Guid projectId, CancellationToken cancellationToken)
+        private async Task<ProjectAnalysisSnapshotState> BuildProjectSnapshotAsync(Guid projectId, CancellationToken cancellationToken)
         {
             var chapters = await _context.Chapters
                 .Where(c => c.ProjectId == projectId && !c.IsDeleted)
@@ -455,30 +458,36 @@ namespace Service.Implementations
                 .Select(c => c.CurrentVersionId!.Value)
                 .ToList();
 
-            var embeddedChunkCount = activeVersionIds.Count == 0
-                ? 0
-                : await _context.ChapterChunks
-                    .Where(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId))
-                    .CountAsync(cancellationToken);
+            var versionStates = activeVersionIds.Count == 0
+                ? []
+                : await _context.ChapterVersions
+                    .Where(v => activeVersionIds.Contains(v.Id))
+                    .Select(v => new
+                    {
+                        v.Id,
+                        v.ChapterId,
+                        v.IsChunked,
+                        v.IsEmbedded,
+                        ChunkCount = v.Chunks.Count,
+                    })
+                    .ToListAsync(cancellationToken);
 
-            var seedBuilder = new StringBuilder()
-                .Append(projectId).Append('|')
-                .Append("chapters:").Append(chapters.Count).Append('|')
-                .Append("chunks:").Append(embeddedChunkCount).Append('|');
-
-            foreach (var chapter in chapters)
+            var stateByVersionId = versionStates.ToDictionary(x => x.Id);
+            var snapshots = chapters.Select(chapter =>
             {
-                seedBuilder
-                    .Append(chapter.ChapterNumber).Append(':')
-                    .Append(chapter.CurrentVersionId?.ToString() ?? "none").Append(':')
-                    .Append(chapter.WordCount).Append(':')
-                    .Append(chapter.UpdatedAt?.Ticks ?? 0).Append(':')
-                    .Append(chapter.DraftSavedAt?.Ticks ?? 0)
-                    .Append('|');
-            }
+                stateByVersionId.TryGetValue(chapter.CurrentVersionId ?? Guid.Empty, out var state);
+                return new ProjectAnalysisChapterSnapshot(
+                    chapter.ChapterNumber,
+                    chapter.CurrentVersionId,
+                    chapter.WordCount,
+                    chapter.UpdatedAt,
+                    chapter.DraftSavedAt,
+                    state?.IsChunked ?? false,
+                    state?.IsEmbedded ?? false,
+                    state?.ChunkCount ?? 0);
+            }).ToList();
 
-            var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(seedBuilder.ToString()));
-            return Convert.ToHexString(hashBytes);
+            return new ProjectAnalysisSnapshotState(snapshots, ProjectAnalysisSnapshotHelper.BuildProjectVersionHash(projectId, snapshots));
         }
 
         private static ProjectAnalysisJobResponse ToResponse(ProjectAnalysisJob job, bool isExistingJob = false)
@@ -493,6 +502,7 @@ namespace Service.Implementations
                 ReportId = job.ReportId,
                 ErrorMessage = job.ErrorMessage,
                 IsExistingJob = isExistingJob,
+                ProjectVersionHash = job.ProjectVersionHash,
                 CreatedAt = job.CreatedAt,
                 StartedAt = job.StartedAt,
                 CompletedAt = job.CompletedAt,
@@ -505,5 +515,9 @@ namespace Service.Implementations
                 return value;
             return value.Length <= maxLen ? value : value[..maxLen];
         }
+
+        private sealed record ProjectAnalysisSnapshotState(
+            IReadOnlyList<ProjectAnalysisChapterSnapshot> Chapters,
+            string ProjectVersionHash);
     }
 }

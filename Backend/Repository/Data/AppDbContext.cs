@@ -747,17 +747,27 @@ namespace Repository.Data
                 entity.Property(e => e.Content).IsRequired().HasMaxLength(3000);
                 entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue("Open");
                 entity.Property(e => e.StaffNote).HasMaxLength(3000);
+                entity.Property(e => e.UserReaction).HasMaxLength(20);
+                entity.Property(e => e.UserFeedback).HasMaxLength(3000);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
                 entity.Property(e => e.ReadAt);
                 entity.HasIndex(e => e.ProjectId);
+                entity.HasIndex(e => e.ProjectReportId);
                 entity.HasIndex(e => e.AuthorId);
                 entity.HasIndex(e => e.StaffId);
+                entity.HasIndex(e => e.UserReaction);
                 entity.ToTable(t => t.HasCheckConstraint("CK_StaffFeedback_Status", "\"Status\" IN ('Open','Resolved')"));
 
                 entity.HasOne(e => e.Project)
                       .WithMany()
                       .HasForeignKey(e => e.ProjectId)
                       .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.ProjectReport)
+                      .WithMany()
+                      .HasForeignKey(e => e.ProjectReportId)
+                      .OnDelete(DeleteBehavior.Cascade)
+                      .IsRequired(false);
 
                 entity.HasOne(e => e.Chapter)
                       .WithMany()

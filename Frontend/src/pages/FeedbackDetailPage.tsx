@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, AlertTriangle, MessageSquare, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertTriangle, MessageSquare, CheckCircle2, ThumbsUp, ThumbsDown } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { feedbackService, type StaffFeedbackResponse } from '../services/feedbackService';
 
@@ -20,6 +20,9 @@ export default function FeedbackDetailPage() {
   const [item, setItem] = useState<StaffFeedbackResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [reaction, setReaction] = useState<'Like' | 'Dislike'>('Like');
+  const [reply, setReply] = useState('');
 
   const isRead = useMemo(() => Boolean(item?.readAt), [item?.readAt]);
 
@@ -45,6 +48,8 @@ export default function FeedbackDetailPage() {
           return;
         }
         setItem(found);
+        setReaction(found.userReaction === 'Dislike' ? 'Dislike' : 'Like');
+        setReply(found.userFeedback ?? '');
 
         // Mark read idempotent
         if (!found.readAt) {
@@ -64,6 +69,25 @@ export default function FeedbackDetailPage() {
       disposed = true;
     };
   }, [id]);
+
+  const handleSubmit = async () => {
+    if (!id || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await feedbackService.respond(id, {
+        reaction,
+        content: reply.trim() || undefined,
+      });
+      setItem(updated);
+      setReaction(updated.userReaction === 'Dislike' ? 'Dislike' : 'Like');
+      setReply(updated.userFeedback ?? '');
+    } catch {
+      setError('Không thể gửi phản hồi. Vui lòng thử lại.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <MainLayout pageTitle="Chi tiết feedback">
@@ -108,6 +132,11 @@ export default function FeedbackDetailPage() {
                     <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                       {fmtDate(item.createdAt)}
                     </p>
+                    {item.projectReportId && (
+                      <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
+                        Gắn với report phân tích
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -142,6 +171,58 @@ export default function FeedbackDetailPage() {
                 </div>
               )}
 
+              <div className="space-y-3 pt-2">
+                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>
+                  Phản hồi của bạn
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setReaction('Like')}
+                    className="h-10 px-4 rounded-xl text-sm font-semibold inline-flex items-center gap-2"
+                    style={reaction === 'Like'
+                      ? { background: 'rgba(34,197,94,0.12)', color: '#86efac', border: '1px solid rgba(34,197,94,0.28)' }
+                      : { background: 'var(--input-bg)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}
+                  >
+                    <ThumbsUp className="w-4 h-4" />
+                    Thích
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReaction('Dislike')}
+                    className="h-10 px-4 rounded-xl text-sm font-semibold inline-flex items-center gap-2"
+                    style={reaction === 'Dislike'
+                      ? { background: 'rgba(239,68,68,0.12)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.28)' }
+                      : { background: 'var(--input-bg)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}
+                  >
+                    <ThumbsDown className="w-4 h-4" />
+                    Không thích
+                  </button>
+                </div>
+                <textarea
+                  value={reply}
+                  onChange={e => setReply(e.target.value)}
+                  rows={5}
+                  placeholder="Gửi thêm góp ý cho staff..."
+                  className="w-full rounded-2xl px-4 py-3 text-sm outline-none"
+                  style={{ background: 'var(--input-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                />
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {item.userRespondedAt ? `Đã phản hồi lúc ${fmtDate(item.userRespondedAt)}` : 'Bạn có thể gửi một phản hồi kèm đánh giá.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={saving}
+                    className="h-10 px-4 rounded-xl text-sm font-semibold text-white disabled:opacity-60"
+                    style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}
+                  >
+                    {saving ? 'Đang gửi...' : 'Gửi phản hồi'}
+                  </button>
+                </div>
+              </div>
+
               <div className="pt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
                 Trạng thái đọc: {item.readAt ? `Đã đọc lúc ${fmtDate(item.readAt)}` : 'Chưa đọc'}
               </div>
@@ -152,4 +233,3 @@ export default function FeedbackDetailPage() {
     </MainLayout>
   );
 }
-

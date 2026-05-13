@@ -62,9 +62,10 @@ Hệ thống cung cấp hàng loạt công cụ RAG / AI Writing.
   - Đây là Job quá lớn để chạy trực tiếp (kéo dài cả tiếng đồng hồ nếu truyện dài).
   - C# đẩy job vào Background Queue ưu tiên (`AnalysisJobQueue.cs`), mỗi user chỉ có tối đa 1 job active.
   - Worker ưu tiên lấy job theo tier gói subscription trước, sau đó theo thời điểm tạo.
-  - Phản hồi `202 Accepted` kèm theo JobId.
-  - Trình worker ngầm lấy toàn bộ các chương đã Embed -> Tiến hành chấm dứt điểm từng tiêu chí (Character, Plot, Pacing, Style) -> Kết xuất Report lớn định dạng JSON.
-- **FE:** Sử dụng cơ chế Long-polling hoặc Fetch lại trạng thái `GetActiveAnalyzeJob` 10s/lần để vẽ thanh ProgressBar.
+  - Phản hồi `202 Accepted` kèm theo JobId và `ProjectVersionHash` snapshot của toàn bộ bộ truyện.
+  - Trước khi chấm rubric, backend chốt snapshot active của toàn bộ truyện; nếu chapter nào chưa chunk/embed đủ thì worker sẽ báo rõ chapter đó, tự repair rồi mới tiếp tục.
+  - Trình worker ngầm lấy toàn bộ các chương đã embed của snapshot đó -> Tiến hành chấm điểm từng tiêu chí (Character, Plot, Pacing, Style) -> Kết xuất Report lớn định dạng JSON.
+- **FE:** Sử dụng cơ chế Long-polling hoặc Fetch lại trạng thái `GetActiveAnalyzeJob` 10s/lần để vẽ thanh ProgressBar, đồng thời hiển thị stage chi tiết khi worker đang repair chunk/embed.
 - **Staff Review gate:** Sau khi AI hoàn tất, report vào trạng thái `PendingStaffReview`; user nhận thông báo "đang kiểm tra bước cuối cùng".
 - **Staff Review:** Staff/Admin lấy queue review qua `/api/staff/analyses/pending`, có thể review qua `/api/staff/analyses/{reportId}/review`, chỉnh sửa nội dung qua `/api/staff/analyses/{reportId}/edit` rồi release cho user.
 

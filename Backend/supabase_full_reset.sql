@@ -583,17 +583,23 @@ CREATE INDEX "IX_BugReports_UserId" ON "BugReports" ("UserId");
 CREATE TABLE "StaffFeedbacks" (
     "Id"        uuid                     NOT NULL DEFAULT uuid_generate_v4(),
     "ProjectId" uuid                     NOT NULL,
+    "ProjectReportId" uuid,
     "ChapterId" uuid,
     "AuthorId"  uuid                     NOT NULL,
     "StaffId"   uuid                     NOT NULL,
     "Content"   character varying(3000)  NOT NULL,
     "Status"    character varying(20)    NOT NULL DEFAULT 'Open',
     "StaffNote" character varying(3000),
+    "UserReaction" character varying(20),
+    "UserFeedback" character varying(3000),
+    "UserRespondedAt" timestamp with time zone,
     "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
     "UpdatedAt" timestamp with time zone,
     "ReadAt"    timestamp with time zone,
     CONSTRAINT "PK_StaffFeedbacks" PRIMARY KEY ("Id"),
     CONSTRAINT "CK_StaffFeedback_Status" CHECK ("Status" IN ('Open','Resolved')),
+    CONSTRAINT "FK_StaffFeedbacks_ProjectReports_ProjectReportId" FOREIGN KEY ("ProjectReportId")
+        REFERENCES "ProjectReports" ("Id") ON DELETE CASCADE,
     CONSTRAINT "FK_StaffFeedbacks_Chapters_ChapterId" FOREIGN KEY ("ChapterId")
         REFERENCES "Chapters" ("Id") ON DELETE SET NULL,
     CONSTRAINT "FK_StaffFeedbacks_Projects_ProjectId" FOREIGN KEY ("ProjectId")
@@ -606,8 +612,10 @@ CREATE TABLE "StaffFeedbacks" (
 
 CREATE INDEX "IX_StaffFeedbacks_AuthorId" ON "StaffFeedbacks" ("AuthorId");
 CREATE INDEX "IX_StaffFeedbacks_ChapterId" ON "StaffFeedbacks" ("ChapterId");
+CREATE INDEX "IX_StaffFeedbacks_ProjectReportId" ON "StaffFeedbacks" ("ProjectReportId");
 CREATE INDEX "IX_StaffFeedbacks_ProjectId" ON "StaffFeedbacks" ("ProjectId");
 CREATE INDEX "IX_StaffFeedbacks_StaffId" ON "StaffFeedbacks" ("StaffId");
+CREATE INDEX "IX_StaffFeedbacks_UserReaction" ON "StaffFeedbacks" ("UserReaction");
 
 -- ────────────────────────────────────────────────────────────
 -- StaffKnowledgeBaseItems table

@@ -70,6 +70,8 @@ namespace Service.DTOs
         [Required]
         public Guid ProjectId { get; set; }
 
+        public Guid? ProjectReportId { get; set; }
+
         public Guid? ChapterId { get; set; }
 
         [Required]
@@ -88,6 +90,7 @@ namespace Service.DTOs
     {
         public Guid Id { get; set; }
         public Guid ProjectId { get; set; }
+        public Guid? ProjectReportId { get; set; }
         public Guid? ChapterId { get; set; }
         public Guid AuthorId { get; set; }
         public string AuthorName { get; set; } = string.Empty;
@@ -96,9 +99,28 @@ namespace Service.DTOs
         public string Content { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
         public string? StaffNote { get; set; }
+        public string? UserReaction { get; set; }
+        public string? UserFeedback { get; set; }
+        public DateTime? UserRespondedAt { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public DateTime? ReadAt { get; set; }
+    }
+
+    public class FeedbackResponseRequest : IValidatableObject
+    {
+        [Required]
+        [RegularExpression("^(Like|Dislike)$")]
+        public string Reaction { get; set; } = string.Empty;
+
+        [MaxLength(3000)]
+        public string? Content { get; set; }
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (string.IsNullOrWhiteSpace(Reaction))
+                yield return new ValidationResult("reaction là bắt buộc.", new[] { nameof(Reaction) });
+        }
     }
 
     public class StaffContentRequest

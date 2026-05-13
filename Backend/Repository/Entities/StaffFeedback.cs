@@ -12,6 +12,8 @@ namespace Repository.Entities
         [Required]
         public Guid ProjectId { get; set; }
 
+        public Guid? ProjectReportId { get; set; }
+
         public Guid? ChapterId { get; set; }
 
         [Required]
@@ -35,8 +37,19 @@ namespace Repository.Entities
         /// <summary>Thời điểm tác giả đã đọc phản hồi (null = chưa đọc).</summary>
         public DateTime? ReadAt { get; set; }
 
+        [MaxLength(20)]
+        public string? UserReaction { get; set; }
+
+        [MaxLength(3000)]
+        public string? UserFeedback { get; set; }
+
+        public DateTime? UserRespondedAt { get; set; }
+
         [ForeignKey(nameof(ProjectId))]
         public Project Project { get; set; } = null!;
+
+        [ForeignKey(nameof(ProjectReportId))]
+        public ProjectReport? ProjectReport { get; set; }
 
         [ForeignKey(nameof(ChapterId))]
         public Chapter? Chapter { get; set; }

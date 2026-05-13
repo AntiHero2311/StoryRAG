@@ -16,7 +16,7 @@
 - 🤖 Chat AI theo ngữ cảnh (RAG) — AI "đọc" nội dung truyện của bạn (chỉ tốn token)
 - 🔁 Rewrite đoạn văn theo instruction
 - ✍️ **Viết mới** từ dàn ý, **Tiếp nối** mạch truyện, **Trau chuốt** bản thảo — có tích hợp các kỹ thuật viết văn (Show don't tell, Pacing)
-- 📊 **Phân tích** chấm điểm chất lượng truyện (**Rubric 5 điểm**, 20 tiêu chí, **Zero Hallucination**, chấm theo Thể loại, phát hiện 4 cảnh báo đặc biệt)
+- 📊 **Phân tích** chấm điểm chất lượng truyện (**Rubric 5 điểm**, 20 tiêu chí, **Zero Hallucination**, chấm theo Thể loại, phát hiện 4 cảnh báo đặc biệt). Mỗi lần phân tích chạy trên **snapshot toàn bộ bộ truyện** và tự repair chapter active nào chưa chunk/embed đủ trước khi chấm.
 - 🌍 **Story Bible** chuyên sâu: Quản lý Worldbuilding, Nhân vật, Ghi chú cốt truyện (Plot Notes), Chủ đề (Themes), Cẩm nang phong cách (Style Guides) — Hỗ trợ vector embedding.
 - 📅 Quản lý **Timeline** mốc sự kiện dòng thời gian.
 - 📥📤 **Import/Export bản thảo chuyên nghiệp** (`.docx`, `.txt`), tự động tách chương theo tiêu đề.
@@ -171,12 +171,12 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | `PlotNoteEntries`      | Ghi chú cốt truyện                      | **`Embedding vector(768)`**                                                                |
 | `ChatMessages`         | Lịch sử chat AI                         | Question/Answer mã hóa AES-256                                                             |
 | `RewriteHistories`     | Lịch sử viết/trau chuốt AI              | OriginalText/RewrittenText mã hóa, phân loại qua `ActionType`                              |
-| `ProjectReports`       | Báo cáo phân tích truyện                | `CriteriaJson` (JSONB), `ProjectVersion` (v1.chương.chunks), `OverallFeedback`, `Warnings` |
-| `ProjectAnalysisJobs`  | Job phân tích bất đồng bộ               | Trạng thái/progress/result cho phân tích dài                                                |
+| `ProjectReports`       | Báo cáo phân tích truyện                | `CriteriaJson` (JSONB), `ProjectVersion` (snapshot label), `ProjectVersionHash`, `OverallFeedback`, `Warnings` |
+| `ProjectAnalysisJobs`  | Job phân tích bất đồng bộ               | Trạng thái/progress/result cho phân tích dài, `ProjectVersionHash` snapshot                |
 | `AiAnalysisHistories`  | Lịch sử phân tích cảnh/cliffhanger      | JSON kết quả và token đã dùng                                                              |
 | `Payments`             | Giao dịch thanh toán                    | PayOS/VNPay, trạng thái, transaction/order reference                                        |
 | `BugReports`           | Báo cáo lỗi từ user                     | Category, Priority, Status, StaffNote                                                      |
-| `StaffFeedbacks`       | Phản hồi chuyên môn từ Staff            | Gắn với project/user/staff                                                                  |
+| `StaffFeedbacks`       | Phản hồi chuyên môn từ Staff            | Gắn với project/report/user/staff, có like/dislike + reply từ author                      |
 | `StaffKnowledgeBaseItems` | Bài viết tri thức Staff              | Published/draft, loại nội dung                                                             |
 | `StaffAnalysisReviews` | Review báo cáo phân tích                | Verified/Adjusted/RerunRequested                                                           |
 | `Genres`               | Thể loại truyện                         | 14 thể loại mặc định                                                                       |
@@ -363,6 +363,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | GET    | `/manuscripts/flagged` | Danh sách manuscript bị flag |
 | GET/POST | `/feedback` | Xem / tạo phản hồi Staff |
 | PUT/DELETE | `/feedback/{feedbackId}` | Cập nhật / xóa phản hồi |
+| POST | `/feedback/{feedbackId}/respond` | Author like/dislike và reply feedback |
 | GET/POST | `/knowledge-base` | Xem / tạo bài tri thức |
 | PUT/DELETE | `/knowledge-base/{id}` | Cập nhật / xóa bài tri thức |
 | GET    | `/analyses/pending` | Danh sách report đang chờ staff review cuối |
@@ -687,7 +688,7 @@ builder.Services.AddSingleton<IMyService, MyService>(); // MyService inject IDbC
 | `IEmbeddingService`     | Gọi Gemini lấy embedding vector                                                                                                                                                                                                                                  |
 | `IChunkingService`      | Chia text thành chunks với overlap                                                                                                                                                                                                                               |
 | `IAiWritingService`     | Viết mới từ dàn ý, tiếp nối mạch truyện (RAG), trau chuốt bản thảo — tích hợp kỹ thuật **Show Don't Tell**, **Pacing**, lưu lịch sử bền vững                                                                                                                      |
-| `IProjectReportService` | Phân tích & chấm điểm theo **Rubric 5 điểm** (1-Kém → 5-Xuất sắc), **Zero Hallucination**, chấm theo **Thể loại**, phát hiện **4 cảnh báo** (INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY), sinh `OverallFeedback` tâm huyết, ghi `ProjectVersion` |
+| `IProjectReportService` | Phân tích & chấm điểm theo **Rubric 5 điểm** (1-Kém → 5-Xuất sắc), **Zero Hallucination**, chấm theo **Thể loại**, phát hiện **4 cảnh báo** (INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY), sinh `OverallFeedback` tâm huyết, chốt `ProjectVersionHash` snapshot của toàn bộ truyện |
 | `IProjectAnalysisJobService` | Quản lý job phân tích bất đồng bộ, progress, cancel, lấy kết quả                                                                                                                                                                                          |
 | `INarrativeAnalyticsService` | Sinh dữ liệu biểu đồ pacing, emotion, tần suất/xuất hiện nhân vật                                                                                                                                                                                        |
 | `IReportExportService` | Xuất báo cáo phân tích sang PDF                                                                                                                                                                                                                                   |

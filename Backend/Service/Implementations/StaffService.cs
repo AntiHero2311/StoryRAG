@@ -211,6 +211,17 @@ namespace Service.Implementations
                 .FirstOrDefaultAsync(p => p.Id == request.ProjectId && !p.IsDeleted)
                 ?? throw new KeyNotFoundException("Không tìm thấy dự án.");
 
+            if (request.ProjectReportId.HasValue)
+            {
+                var reportExists = await _db.ProjectReports.AnyAsync(r =>
+                    r.Id == request.ProjectReportId.Value &&
+                    r.ProjectId == request.ProjectId);
+                if (!reportExists)
+                {
+                    throw new KeyNotFoundException("Report không thuộc dự án hoặc không tồn tại.");
+                }
+            }
+
             if (request.ChapterId.HasValue)
             {
                 var chapterExists = await _db.Chapters.AnyAsync(c => c.Id == request.ChapterId.Value && c.ProjectId == request.ProjectId && !c.IsDeleted);
@@ -224,6 +235,7 @@ namespace Service.Implementations
             {
                 Id = Guid.NewGuid(),
                 ProjectId = request.ProjectId,
+                ProjectReportId = request.ProjectReportId,
                 ChapterId = request.ChapterId,
                 AuthorId = project.AuthorId,
                 StaffId = staffId,
@@ -254,6 +266,8 @@ namespace Service.Implementations
                 ?? throw new KeyNotFoundException("Không tìm thấy feedback.");
 
             feedback.StaffId = staffId;
+            if (request.ProjectReportId.HasValue)
+                feedback.ProjectReportId = request.ProjectReportId;
             feedback.Content = request.Content.Trim();
             feedback.Status = request.Status;
             feedback.StaffNote = string.IsNullOrWhiteSpace(request.StaffNote) ? null : request.StaffNote.Trim();
@@ -731,6 +745,7 @@ namespace Service.Implementations
                 {
                     Id = Guid.NewGuid(),
                     ProjectId = report.ProjectId,
+                    ProjectReportId = report.Id,
                     ChapterId = null,
                     AuthorId = report.Project.AuthorId,
                     StaffId = staffId,
@@ -778,6 +793,7 @@ namespace Service.Implementations
             {
                 Id = feedback.Id,
                 ProjectId = feedback.ProjectId,
+                ProjectReportId = feedback.ProjectReportId,
                 ChapterId = feedback.ChapterId,
                 AuthorId = feedback.AuthorId,
                 AuthorName = feedback.Author?.FullName ?? string.Empty,
@@ -786,6 +802,9 @@ namespace Service.Implementations
                 Content = feedback.Content,
                 Status = feedback.Status,
                 StaffNote = feedback.StaffNote,
+                UserReaction = feedback.UserReaction,
+                UserFeedback = feedback.UserFeedback,
+                UserRespondedAt = feedback.UserRespondedAt,
                 CreatedAt = feedback.CreatedAt,
                 UpdatedAt = feedback.UpdatedAt,
                 ReadAt = feedback.ReadAt,

@@ -18,6 +18,7 @@ namespace Service.Implementations
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
         private readonly IEmbeddingService _embeddingService;
+        private readonly IChapterService _chapterService;
         private readonly ILogger<ProjectReportService> _logger;
         private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
         private readonly ISystemConfigService _sysConfig;
@@ -66,12 +67,14 @@ namespace Service.Implementations
             AppDbContext context,
             IConfiguration config,
             IEmbeddingService embeddingService,
+            IChapterService chapterService,
             ILogger<ProjectReportService> logger,
             ISystemConfigService sysConfig)
         {
             _context = context;
             _config = config;
             _embeddingService = embeddingService;
+            _chapterService = chapterService;
             _logger = logger;
             _sysConfig = sysConfig;
             _geminiChatExecutor = new GeminiChatFailoverExecutor(
@@ -142,14 +145,15 @@ namespace Service.Implementations
             var chapterCount = chapters.Count;
             var totalWords = chapters.Sum(c => c.WordCount);
 
-            // Chỉ lấy chunks thuộc active version của mỗi chương
-            var activeVersionIds = chapters
-                .Where(c => c.CurrentVersionId.HasValue)
-                .Select(c => c.CurrentVersionId!.Value)
-                .ToList();
+            var snapshot = await EnsureProjectAnalysisSnapshotAsync(
+                projectId,
+                userId,
+                chapters,
+                progressCallback,
+                cancellationToken);
 
             var chunksRaw = await _context.ChapterChunks
-                .Where(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId))
+                .Where(c => c.ProjectId == projectId && c.Embedding != null && snapshot.ActiveVersionIds.Contains(c.VersionId))
                 .ToListAsync(cancellationToken);
 
             if (chunksRaw.Count == 0)
@@ -319,7 +323,7 @@ namespace Service.Implementations
             }
 
             var reportStatus = "Completed";
-            var projectVersion = $"v1.{chapterCount}.{chunks.Count}";
+            var projectVersion = snapshot.ProjectVersionLabel;
 
             if (useRag)
             {
@@ -376,12 +380,13 @@ namespace Service.Implementations
                 if (carrier != null)
                 {
                     carrier.ReportId = report.Id;
+                    carrier.ProjectVersionHash = snapshot.ProjectVersionHash;
                     carrier.UpdatedAt = DateTime.UtcNow;
                     await _context.SaveChangesAsync(cancellationToken);
                 }
             }
 
-            return BuildResponse(report.Id, projectId, projectTitle, reportStatus, total, criteria, warnings, overallFeedback, projectVersion);
+            return BuildResponse(report.Id, projectId, projectTitle, reportStatus, total, criteria, warnings, overallFeedback, projectVersion, snapshot.ProjectVersionHash);
         }
 
         public async Task<ProjectReportResponse?> GetLatestAsync(Guid projectId, Guid userId)
@@ -426,7 +431,8 @@ namespace Service.Implementations
                     c.EvidenceChunkOrdinals = row.EvidenceChunkIds.ToList();
             }
 
-            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, mergedLatest, warnings, overallFeedback, report.ProjectVersion, report.CreatedAt);
+            var projectVersionHash = await ResolveProjectVersionHashAsync(report.Id, CancellationToken.None);
+            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, mergedLatest, warnings, overallFeedback, report.ProjectVersion, projectVersionHash, report.CreatedAt);
         }
 
         public async Task<List<ProjectReportSummary>> GetAllAsync(Guid projectId, Guid userId)
@@ -446,6 +452,24 @@ namespace Service.Implementations
                 })
                 .ToListAsync();
 
+            var reportIds = reports.Select(r => r.Id).ToList();
+            var hashes = await _context.ProjectAnalysisJobs
+                .AsNoTracking()
+                .Where(j => j.ReportId.HasValue && reportIds.Contains(j.ReportId.Value))
+                .Select(j => new
+                {
+                    ReportId = j.ReportId!.Value,
+                    j.ProjectVersionHash,
+                    j.CreatedAt
+                })
+                .ToListAsync();
+
+            var hashLookup = hashes
+                .GroupBy(x => x.ReportId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(x => x.CreatedAt).Select(x => x.ProjectVersionHash).FirstOrDefault() ?? string.Empty);
+
             return reports.Select(r => new ProjectReportSummary
             {
                 Id = r.Id,
@@ -453,6 +477,7 @@ namespace Service.Implementations
                 TotalScore = r.TotalScore,
                 Classification = Classify(r.TotalScore),
                 ProjectVersion = r.ProjectVersion,
+                ProjectVersionHash = hashLookup.GetValueOrDefault(r.Id) ?? string.Empty,
                 CreatedAt = r.CreatedAt,
             }).ToList();
         }
@@ -497,7 +522,8 @@ namespace Service.Implementations
                     c.EvidenceChunkOrdinals = row.EvidenceChunkIds.ToList();
             }
 
-            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, mergedById, warnings, overallFeedback, report.ProjectVersion, report.CreatedAt);
+            var projectVersionHash = await ResolveProjectVersionHashAsync(report.Id, CancellationToken.None);
+            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, mergedById, warnings, overallFeedback, report.ProjectVersion, projectVersionHash, report.CreatedAt);
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────────
@@ -1172,7 +1198,7 @@ namespace Service.Implementations
         private static ProjectReportResponse BuildResponse(
             Guid reportId, Guid projectId, string projectTitle,
             string status, decimal totalScore, List<CriterionResult> criteria,
-            List<StoryWarning>? warnings = null, string overallFeedback = "", string projectVersion = "v1.0", DateTime? createdAt = null)
+            List<StoryWarning>? warnings = null, string overallFeedback = "", string projectVersion = "v1.0", string projectVersionHash = "", DateTime? createdAt = null)
         {
             var groups = criteria
                 .GroupBy(c => c.GroupName)
@@ -1195,6 +1221,7 @@ namespace Service.Implementations
                 Classification = Classify(totalScore),
                 OverallFeedback = overallFeedback,
                 ProjectVersion = projectVersion,
+                ProjectVersionHash = projectVersionHash,
                 Groups = groups,
                 Warnings = warnings ?? new(),
                 CreatedAt = createdAt ?? DateTime.UtcNow,

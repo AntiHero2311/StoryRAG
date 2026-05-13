@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { MessageSquare, Loader2, AlertTriangle, CheckCircle2, ThumbsUp, ThumbsDown } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { feedbackService, type StaffFeedbackResponse } from '../services/feedbackService';
 
@@ -120,6 +120,11 @@ export default function FeedbackPage() {
                           </p>
                           <p className="text-xs shrink-0" style={{ color: 'var(--text-secondary)' }}>{fmtDate(fb.createdAt)}</p>
                         </div>
+                        {fb.projectReportId && (
+                          <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
+                            Phản hồi từ report phân tích
+                          </p>
+                        )}
                         <p className="text-sm mt-2 whitespace-pre-wrap line-clamp-3" style={{ color: 'var(--text-primary)' }}>
                           {fb.content}
                         </p>
@@ -127,6 +132,24 @@ export default function FeedbackPage() {
                           <p className="text-xs mt-2 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
                             Ghi chú: {fb.staffNote}
                           </p>
+                        )}
+                        {(fb.userReaction || fb.userFeedback) && (
+                          <div className="mt-2 flex items-center gap-2 text-xs">
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-full font-semibold"
+                              style={fb.userReaction === 'Like'
+                                ? { background: 'rgba(34,197,94,0.12)', color: '#86efac' }
+                                : { background: 'rgba(239,68,68,0.12)', color: '#fca5a5' }}
+                            >
+                              {fb.userReaction === 'Like' ? <ThumbsUp className="w-3 h-3" /> : <ThumbsDown className="w-3 h-3" />}
+                              {fb.userReaction === 'Like' ? 'Đã thích' : 'Đã không thích'}
+                            </span>
+                            {fb.userFeedback && (
+                              <span className="truncate" style={{ color: 'var(--text-secondary)' }}>
+                                {fb.userFeedback}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -140,4 +163,3 @@ export default function FeedbackPage() {
     </MainLayout>
   );
 }
-

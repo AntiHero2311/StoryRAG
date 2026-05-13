@@ -86,6 +86,9 @@ namespace Service.DTOs
         /// <summary>Phiên bản tác phẩm tại thời điểm được đánh giá</summary>
         public string ProjectVersion { get; set; } = "v1.0.0";
 
+        /// <summary>Hash snapshot của toàn bộ truyện tại thời điểm đánh giá</summary>
+        public string ProjectVersionHash { get; set; } = string.Empty;
+
         public List<GroupResult> Groups { get; set; } = new();
         /// <summary>
         /// Cảnh báo đặc biệt ngoài rubric điểm (truyện chưa xong, lặp lại, đạo nhái...).
@@ -103,6 +106,7 @@ namespace Service.DTOs
         public decimal TotalScore { get; set; }
         public string Classification { get; set; } = string.Empty;
         public string ProjectVersion { get; set; } = "v1.0.0";
+        public string ProjectVersionHash { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
     }
 
@@ -117,6 +121,7 @@ namespace Service.DTOs
         public Guid? ReportId { get; set; }
         public string? ErrorMessage { get; set; }
         public bool IsExistingJob { get; set; }
+        public string ProjectVersionHash { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
         public DateTime? StartedAt { get; set; }
         public DateTime? CompletedAt { get; set; }

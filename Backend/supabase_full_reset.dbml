@@ -279,14 +279,19 @@ Table BugReports {
 Table StaffFeedbacks {
   Id uuid [pk]
   ProjectId uuid
+  ProjectReportId uuid
   ChapterId uuid
   AuthorId uuid
   StaffId uuid
   Content varchar(3000)
   Status varchar(20)
   StaffNote varchar(3000)
+  UserReaction varchar(20)
+  UserFeedback varchar(3000)
+  UserRespondedAt timestamptz
   CreatedAt timestamptz
   UpdatedAt timestamptz
+  ReadAt timestamptz
 }
 
 Table StaffKnowledgeBaseItems {
@@ -367,6 +372,7 @@ Ref: AiAnalysisHistories.UserId > Users.Id
 Ref: BugReports.UserId > Users.Id
 Ref: BugReports.ResolvedById > Users.Id
 Ref: StaffFeedbacks.ProjectId > Projects.Id
+Ref: StaffFeedbacks.ProjectReportId > ProjectReports.Id
 Ref: StaffFeedbacks.ChapterId > Chapters.Id
 Ref: StaffFeedbacks.AuthorId > Users.Id
 Ref: StaffFeedbacks.StaffId > Users.Id

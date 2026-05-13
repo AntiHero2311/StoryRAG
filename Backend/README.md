@@ -161,6 +161,7 @@ Authorization: Bearer <access_token>
 **Behavior mới của Analyze async:**
 - Mỗi user chỉ có tối đa **1 job active**.
 - Worker ưu tiên xử lý job theo **gói subscription** (plan cao trước).
+- Job phân tích chốt snapshot toàn bộ bộ truyện bằng `ProjectVersionHash`; nếu chapter active nào chưa chunk/embed đủ thì hệ thống sẽ tự repair trước khi chạy rubric.
 - Khi AI hoàn tất, report vào trạng thái **PendingStaffReview**. User sẽ thấy thông báo "đang kiểm tra bước cuối cùng" cho tới khi staff release.
 
 **AI Context được đưa vào khi phân tích:**
@@ -218,7 +219,8 @@ Authorization: Bearer <access_token>
   "status": "Queued",
   "stage": "Queued",
   "progress": 0,
-  "isExistingJob": false
+  "isExistingJob": false,
+  "projectVersionHash": "snapshot-hash"
 }
 ```
 
@@ -378,7 +380,7 @@ Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 | Method | Route | Mô tả |
 |--------|-------|-------|
 | `GET` | `/staff/feedback` | Danh sách feedback (`?projectId=&page=&pageSize=`) |
-| `POST` | `/staff/feedback` | Tạo feedback mới cho project/chapter |
+| `POST` | `/staff/feedback` | Tạo feedback mới cho project/chapter/report |
 | `PUT` | `/staff/feedback/{feedbackId}` | Cập nhật feedback |
 | `DELETE` | `/staff/feedback/{feedbackId}` | Xóa feedback |
 
@@ -386,6 +388,7 @@ Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 ```json
 {
   "projectId": "guid",
+  "projectReportId": "guid | null",
   "chapterId": "guid | null",
   "content": "Nhận xét chi tiết cho tác giả...",
   "staffNote": "Ghi chú nội bộ staff",
@@ -394,6 +397,8 @@ Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 ```
 
 `status`: `Open` | `Resolved`
+
+Khi staff gửi `feedbackMessage` trong `PATCH /staff/analyses/{reportId}/edit`, hệ thống tự tạo `StaffFeedback` gắn với `ProjectReportId` của report đó. Author có thể like/dislike và để lại phản hồi ngay trên item feedback đó tại `/feedback`.
 
 ---
 
@@ -483,7 +488,7 @@ Nếu bạn reset DB bằng `supabase_full_reset.sql`, cần đảm bảo migrat
 | `ChunkingService` | 1500 ký tự, overlap 150, ưu tiên cắt tại `\n\n` → `.` → space |
 | `AiWritingService` | Viết mới, tiếp nối, rất trau chuốt — tích hợp kỹ thuật **Show Don't Tell** & **Pacing** |
 | `ProjectReportService` | Rubric **5 điểm** (1-Kém → 5-Xuất sắc), phát hiện **4 loại cảnh báo** (INCOMPLETE/REPETITION/PLAGIARISM\_RISK/INCONSISTENCY), **Zero Hallucination**, chấm theo **Thể loại**; phân tích ưu tiên Analyze key, fallback sang Chat key; model fallback `gemini-3-flash-preview` -> `gemini-2.5-flash` |
-| `ProjectAnalysisJobService` | Điều phối queue async cho phân tích: enqueue/status/result/cancel (rule hủy sau ~5 phút), chống enqueue trùng theo `ProjectVersionHash` |
+| `ProjectAnalysisJobService` | Điều phối queue async cho phân tích: enqueue/status/result/cancel (rule hủy sau ~5 phút), chốt snapshot bằng `ProjectVersionHash`, tự xử lý job theo snapshot hiện tại |
 | `GeminiRetryHelper` | Backoff [10s, 30s, 65s] cho 429; throw lỗi thân thiện sau 3 lần |
 | `EncryptionHelper` | AES-256 với user DEK + Master Key |
 
@@ -509,7 +514,7 @@ PlotNoteEntries         — uuid PK, FK→Projects, Type, Embedding vector(768)
 ChatMessages            — uuid PK, FK→Projects, FK→Users
 RewriteHistories        — uuid PK, FK→Projects, FK→Users
 ProjectReports          — uuid PK, FK→Projects, CriteriaJson (jsonb), ProjectVersion (text)
-StaffFeedbacks          — uuid PK, feedback staff cho author/project/chapter
+StaffFeedbacks          — uuid PK, feedback staff cho author/project/chapter/report, kèm user reaction/reply
 StaffKnowledgeBaseItems — uuid PK, FAQ/WritingTip do staff quản trị
 StaffAnalysisReviews    — uuid PK, thao tác review/rerun report của staff
  

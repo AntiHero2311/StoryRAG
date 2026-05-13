@@ -301,11 +301,22 @@ function AnalysisContent() {
             if (!mountedRef.current) return null;
 
             setAnalysisJob(job);
+            const stageText = stageLabelMap[job.stage as keyof typeof stageLabelMap] ?? job.stage;
 
             if (job.status === 'Queued' || job.stage === 'Queued' || job.stage === 'Preparing') {
-                setAnalysisStatus({ type: 'info', message: 'AI đã nhận được request. Job đang chờ xử lý...' });
+                setAnalysisStatus({
+                    type: 'info',
+                    message: stageText === 'Đang xếp hàng' || stageText === 'Chuẩn bị dữ liệu'
+                        ? 'AI đã nhận được request. Job đang chờ xử lý...'
+                        : stageText,
+                });
             } else if (job.status === 'Processing' || job.stage === 'Analyzing' || job.stage === 'Saving') {
-                setAnalysisStatus({ type: 'info', message: 'AI đang phân tích nội dung dự án...' });
+                setAnalysisStatus({
+                    type: 'info',
+                    message: stageText === 'Đang phân tích bằng AI' || stageText === 'Đang lưu kết quả'
+                        ? 'AI đang phân tích nội dung dự án...'
+                        : stageText,
+                });
                 if (interactiveJobRef.current === jobId && processingAnnouncedRef.current !== jobId) {
                     processingAnnouncedRef.current = jobId;
                     toast.info('AI đang phân tích nội dung dự án...');
@@ -574,6 +585,7 @@ function AnalysisContent() {
         status: item.status,
         totalScore: item.totalScore,
         classification: item.classification,
+        projectVersionHash: item.projectVersionHash,
         createdAt: item.createdAt,
     });
 
@@ -596,7 +608,9 @@ function AnalysisContent() {
         Failed: 'Thất bại',
         Cancelled: 'Đã hủy',
     };
-    const currentStageLabel = analysisJob ? stageLabelMap[analysisJob.stage] : 'Đang khởi tạo';
+    const currentStageLabel = analysisJob
+        ? (stageLabelMap[analysisJob.stage as keyof typeof stageLabelMap] ?? analysisJob.stage)
+        : 'Đang khởi tạo';
     const progressValue = Math.min(100, Math.max(analysisJob?.progress ?? 10, 8));
     const selectedProject = projects.find(p => p.id === selectedId) ?? null;
     const selectedProjectTitle = selectedProject?.title ?? 'Chưa chọn dự án';
