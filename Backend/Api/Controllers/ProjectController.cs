@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Service.DTOs;
 using Service.Interfaces;
 using System.Security.Claims;
@@ -14,15 +16,18 @@ namespace Api.Controllers
         private readonly IProjectService _projectService;
         private readonly IProjectReportService _reportService;
         private readonly IProjectImportService _importService;
+        private readonly ILogger<ProjectController> _logger;
 
         public ProjectController(
             IProjectService projectService,
             IProjectReportService reportService,
-            IProjectImportService importService)
+            IProjectImportService importService,
+            ILogger<ProjectController> logger)
         {
             _projectService = projectService;
             _reportService = reportService;
             _importService = importService;
+            _logger = logger;
         }
 
         /// <summary>
@@ -205,12 +210,15 @@ namespace Api.Controllers
 
         /// <summary>Import bản thảo (.txt/.docx/.pdf) → tạo Project + Chapters + AI trích xuất.</summary>
         [HttpPost("import")]
-        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
+        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongImport")]
+        [RequestSizeLimit(80 * 1024 * 1024)]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> ImportProject(IFormFile file)
         {
             if (file == null || file.Length == 0)
                 return BadRequest(new { Message = "Vui lòng chọn file để import (.txt, .docx, .pdf)." });
+            if (file.Length > 80L * 1024 * 1024)
+                return BadRequest(new { Message = "File import quá lớn. Vui lòng dùng file <= 80MB." });
 
             try
             {
@@ -229,8 +237,16 @@ namespace Api.Controllers
 
                 return Ok(result);
             }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(StatusCodes.Status408RequestTimeout, new
+                {
+                    Message = "Import mất quá nhiều thời gian do dữ liệu lớn. Vui lòng thử lại với file nhỏ hơn hoặc chia tác phẩm thành nhiều phần."
+                });
+            }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Project import failed for file {FileName}.", file.FileName);
                 return BadRequest(new { Message = ex.Message });
             }
         }

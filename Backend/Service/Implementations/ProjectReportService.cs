@@ -23,7 +23,7 @@ namespace Service.Implementations
         private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
         private readonly ISystemConfigService _sysConfig;
         private const int DefaultAnalyzeBatchSize = 12;
-        private const int DefaultAnalyzeRpmLimit = 15;
+        private const int DefaultAnalyzeRpmLimit = 8;
         internal const string ReviewStatusPendingStaff = "PendingStaffReview";
         internal const string ReviewStatusStaffReviewing = "StaffReviewing";
         internal const string ReviewStatusReleased = "Released";

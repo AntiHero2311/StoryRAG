@@ -65,6 +65,7 @@ namespace Repository.Data
         // System Config (Admin runtime configuration)
         public DbSet<SystemConfig> SystemConfigs { get; set; }
         public DbSet<AnalysisJobRerunAudit> AnalysisJobRerunAudits { get; set; }
+        public DbSet<Notification> Notifications { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -427,6 +428,39 @@ namespace Repository.Data
                 entity.HasIndex(e => e.StaffId);
                 entity.HasIndex(e => e.CreatedAt);
                 entity.ToTable("analysis_job_rerun_audits");
+            });
+
+            // ── Notification ─────────────────────────────────────────────────────
+            modelBuilder.Entity<Notification>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Type).IsRequired().HasMaxLength(20).HasDefaultValue("info");
+                entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Message).IsRequired().HasMaxLength(3000);
+                entity.Property(e => e.Tag).HasMaxLength(120);
+                entity.Property(e => e.IsRead).HasDefaultValue(false);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+                entity.ToTable(t =>
+                {
+                    t.HasCheckConstraint("CK_Notifications_Type", "\"Type\" IN ('success','error','info','warning')");
+                });
+
+                entity.HasIndex(e => new { e.UserId, e.CreatedAt });
+                entity.HasIndex(e => new { e.UserId, e.IsRead });
+                entity.HasIndex(e => new { e.UserId, e.Tag })
+                      .HasFilter("\"Tag\" IS NOT NULL");
+
+                entity.HasOne(e => e.User)
+                      .WithMany()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.CreatedByUser)
+                      .WithMany()
+                      .HasForeignKey(e => e.CreatedByUserId)
+                      .OnDelete(DeleteBehavior.SetNull)
+                      .IsRequired(false);
             });
 
             // ── ProjectAnalysisFact (Stage 1 facts, JSONB for RAG / Stage 2) ───────

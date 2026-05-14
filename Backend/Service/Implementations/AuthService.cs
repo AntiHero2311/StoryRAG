@@ -65,6 +65,9 @@ namespace Service.Implementations
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
+            // Cấp gói Free mặc định cho user mới
+            await CreateFreeSubscriptionAsync(user.Id);
+
             // Gửi email chào mừng (fire-and-forget, không ảnh hưởng response)
             _ = Task.Run(async () =>
             {
@@ -199,6 +202,9 @@ namespace Service.Implementations
 
             if (isNewUser)
             {
+                // Cấp gói Free mặc định cho user mới đăng ký qua Google
+                await CreateFreeSubscriptionAsync(user.Id);
+
                 _ = Task.Run(async () =>
                 {
                     try { await _emailService.SendWelcomeEmailAsync(user.Email, user.FullName); }
@@ -429,6 +435,42 @@ namespace Service.Implementations
             using var rng = RandomNumberGenerator.Create();
             rng.GetBytes(randomNumber);
             return Convert.ToBase64String(randomNumber);
+        }
+
+        /// <summary>
+        /// Tìm gói Free (Price == 0) và cấp cho user mới đăng ký.
+        /// Non-fatal: nếu không tìm thấy gói Free thì bỏ qua.
+        /// </summary>
+        private async Task CreateFreeSubscriptionAsync(Guid userId)
+        {
+            try
+            {
+                var freePlan = await _context.SubscriptionPlans
+                    .Where(p => p.Price == 0 && p.IsActive)
+                    .OrderBy(p => p.Id)
+                    .FirstOrDefaultAsync();
+
+                if (freePlan == null) return;
+
+                var now = DateTime.UtcNow;
+                _context.UserSubscriptions.Add(new UserSubscription
+                {
+                    UserId = userId,
+                    PlanId = freePlan.Id,
+                    StartDate = now,
+                    EndDate = now.AddYears(1),
+                    Status = "Active",
+                    UsedAnalysisCount = 0,
+                    UsedTokens = 0,
+                    CreatedAt = now,
+                });
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                // Không để lỗi cấp subscription làm fail quá trình đăng ký
+                _ = ex;
+            }
         }
     }
 }

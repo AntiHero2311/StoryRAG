@@ -148,7 +148,10 @@ builder.Services.AddSwaggerGen(c =>
 
 // Add Service Registration
 builder.Services.AddRequestTimeouts(options =>
-    options.AddPolicy("LongRunning", TimeSpan.FromMinutes(10)));
+{
+    options.AddPolicy("LongRunning", TimeSpan.FromMinutes(10));
+    options.AddPolicy("LongImport", TimeSpan.FromMinutes(30));
+});
 
 // Rate Limiting — giới hạn request đến AI endpoints, chống bot và abuse
 builder.Services.AddRateLimiter(options =>
@@ -254,6 +257,7 @@ builder.Services.AddScoped<INarrativeAnalyticsService, NarrativeAnalyticsService
 builder.Services.AddScoped<IReportExportService, ReportExportService>();
 builder.Services.AddScoped<IProjectAnalysisJobService, ProjectAnalysisJobService>();
 builder.Services.AddScoped<IProjectImportService, ProjectImportService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddSingleton<IAnalysisJobQueue, AnalysisJobQueue>();
 builder.Services.AddSingleton<IAnalysisJobCancellationRegistry, AnalysisJobCancellationRegistry>();
 builder.Services.AddHostedService<ProjectAnalysisJobWorker>();

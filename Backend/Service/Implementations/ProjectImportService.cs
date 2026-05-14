@@ -84,27 +84,35 @@ namespace Service.Implementations
             var chapterParts = ManuscriptExtractorHelper.SplitIntoChapterParts(plainText, splitByHeadings: true);
             int chaptersImported = 0;
             var chapterContentSamples = new List<string>(); // Dùng để AI đọc sau
+            var now = DateTime.UtcNow;
+            var chaptersToInsert = new List<Chapter>(chapterParts.Count);
+            var versionsToInsert = new List<ChapterVersion>(chapterParts.Count);
+            var currentVersionByChapterId = new Dictionary<Guid, Guid>(chapterParts.Count);
 
             int currentChapterNumber = 0;
             foreach (var part in chapterParts)
             {
                 currentChapterNumber++;
                 var wordCount = CountWords(part.Content);
+                var chapterId = Guid.NewGuid();
+                var versionId = Guid.NewGuid();
 
                 var chapter = new Chapter
                 {
+                    Id = chapterId,
                     ProjectId = project.Id,
                     ChapterNumber = currentChapterNumber,
                     Title = part.Title ?? $"Chương {currentChapterNumber}",
                     WordCount = wordCount,
                     CurrentVersionNum = 1,
+                    UpdatedAt = now,
                 };
-                _context.Chapters.Add(chapter);
-                await _context.SaveChangesAsync();
+                chaptersToInsert.Add(chapter);
 
                 var version = new ChapterVersion
                 {
-                    ChapterId = chapter.Id,
+                    Id = versionId,
+                    ChapterId = chapterId,
                     VersionNumber = 1,
                     Title = "Phiên bản 1",
                     Content = EncryptionHelper.EncryptWithMasterKey(part.Content, rawDek),
@@ -112,12 +120,8 @@ namespace Service.Implementations
                     TokenCount = _chunkingService.EstimateTokenCount(part.Content),
                     CreatedBy = userId,
                 };
-                _context.ChapterVersions.Add(version);
-                await _context.SaveChangesAsync();
-
-                chapter.CurrentVersionId = version.Id;
-                chapter.UpdatedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync();
+                versionsToInsert.Add(version);
+                currentVersionByChapterId[chapterId] = versionId;
 
                 chaptersImported++;
 
@@ -130,6 +134,19 @@ namespace Service.Implementations
                     chapterContentSamples.Add($"--- {part.Title ?? $"Chương {currentChapterNumber}"} ---\n{sample}");
                 }
             }
+
+            _context.Chapters.AddRange(chaptersToInsert);
+            await _context.SaveChangesAsync();
+
+            _context.ChapterVersions.AddRange(versionsToInsert);
+            await _context.SaveChangesAsync();
+
+            foreach (var chapter in chaptersToInsert)
+            {
+                if (currentVersionByChapterId.TryGetValue(chapter.Id, out var versionId))
+                    chapter.CurrentVersionId = versionId;
+            }
+            await _context.SaveChangesAsync();
 
             // ── Bước 5: AI Trích xuất thông tin ─────────────────────────────────
             int charactersExtracted = 0, settingsExtracted = 0, timelineEventsExtracted = 0;
@@ -155,17 +172,17 @@ namespace Service.Implementations
                             await _context.SaveChangesAsync();
                         }
 
-                        // Lưu Nhân vật (WorldbuildingEntry - Category: Character)
+                        // Lưu Nhân vật vào bảng CharacterEntries
                         foreach (var character in aiExtracted.Characters ?? new())
                         {
                             if (string.IsNullOrWhiteSpace(character.Name)) continue;
-                            _context.WorldbuildingEntries.Add(new WorldbuildingEntry
+                            _context.CharacterEntries.Add(new CharacterEntry
                             {
                                 Id = Guid.NewGuid(),
                                 ProjectId = project.Id,
-                                Title = EncryptionHelper.EncryptWithMasterKey(character.Name, rawDek),
-                                Content = EncryptionHelper.EncryptWithMasterKey(character.Description ?? string.Empty, rawDek),
-                                Category = "Character",
+                                Name = EncryptionHelper.EncryptWithMasterKey(character.Name, rawDek),
+                                Role = "Supporting",
+                                Description = EncryptionHelper.EncryptWithMasterKey(character.Description ?? string.Empty, rawDek),
                                 CreatedAt = DateTime.UtcNow,
                             });
                             charactersExtracted++;

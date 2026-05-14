@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Settings, Bell, ChevronDown, LogOut, User, Sparkles, X,
-    Bug, Briefcase, AlertTriangle, Loader2, CheckCircle
+    Bug, Briefcase, AlertTriangle, Loader2, CheckCircle, Plus
 } from 'lucide-react';
 import { getInitials } from '../utils/jwtHelper';
 import {
@@ -12,6 +12,7 @@ import {
     type BugReportResponse,
 } from '../services/bugReportService';
 import { appNotificationService, type AppNotificationItem } from '../services/appNotificationService';
+import { notificationService, type NotificationType } from '../services/notificationService';
 import BugReportModal from './BugReportModal';
 
 interface TopbarProps {
@@ -93,10 +94,19 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
     const [userOpen, setUserOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
     const [notifications, setNotifications] = useState<AppNotificationItem[]>(() => appNotificationService.getAll());
+    const [serverNotifications, setServerNotifications] = useState<AppNotificationItem[]>([]);
+    const [notifCreateOpen, setNotifCreateOpen] = useState(false);
+    const [notifTitle, setNotifTitle] = useState('');
+    const [notifMessage, setNotifMessage] = useState('');
+    const [notifType, setNotifType] = useState<NotificationType>('info');
+    const [notifCreateLoading, setNotifCreateLoading] = useState(false);
+    const [notifCreateError, setNotifCreateError] = useState<string | null>(null);
     const [showWelcome, setShowWelcome] = useState(false);
     const [bugModalOpen, setBugModalOpen] = useState(false);
     const badge = getRoleBadge(role);
-    const unreadCount = notifications.filter(n => !n.isRead).length;
+    const mergedNotifications = [...serverNotifications, ...notifications]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const unreadCount = mergedNotifications.filter(n => !n.isRead).length;
 
     // Welcome toast — once per session
     useEffect(() => {
@@ -114,6 +124,34 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
         const sync = () => setNotifications(appNotificationService.getAll());
         sync();
         return appNotificationService.subscribe(sync);
+    }, []);
+
+    useEffect(() => {
+        let disposed = false;
+        const syncServerNotifications = async () => {
+            try {
+                const items = await notificationService.getMy(60);
+                if (disposed) return;
+                setServerNotifications(items.map(item => ({
+                    id: `server:${item.id}`,
+                    type: item.type,
+                    title: item.title,
+                    message: item.message,
+                    createdAt: item.createdAt,
+                    isRead: item.isRead,
+                    tag: item.tag,
+                })));
+            } catch {
+                if (!disposed) setServerNotifications([]);
+            }
+        };
+
+        void syncServerNotifications();
+        const intervalId = window.setInterval(() => { void syncServerNotifications(); }, 30000);
+        return () => {
+            disposed = true;
+            window.clearInterval(intervalId);
+        };
     }, []);
 
     useEffect(() => {
@@ -173,6 +211,63 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
             window.clearInterval(intervalId);
         };
     }, [role]);
+
+    const handleNotificationClick = async (item: AppNotificationItem) => {
+        if (item.isRead || !item.id.startsWith('server:')) return;
+
+        const notificationId = item.id.slice('server:'.length);
+        setServerNotifications(prev =>
+            prev.map(n => n.id === item.id ? { ...n, isRead: true } : n));
+
+        try {
+            await notificationService.markRead(notificationId);
+        } catch {
+            // Không làm gián đoạn UI nếu request mark-read lỗi tạm thời.
+        }
+    };
+
+    const handleCreateNotification = async () => {
+        const title = notifTitle.trim();
+        const message = notifMessage.trim();
+        if (!title || !message) {
+            setNotifCreateError('Vui lòng nhập tiêu đề và nội dung thông báo.');
+            return;
+        }
+
+        setNotifCreateLoading(true);
+        setNotifCreateError(null);
+        try {
+            await notificationService.create({
+                title,
+                message,
+                type: notifType,
+                targetRoles: ['Author', 'Staff', 'Admin'],
+            });
+
+            const items = await notificationService.getMy(60);
+            setServerNotifications(items.map(item => ({
+                id: `server:${item.id}`,
+                type: item.type,
+                title: item.title,
+                message: item.message,
+                createdAt: item.createdAt,
+                isRead: item.isRead,
+                tag: item.tag,
+            })));
+
+            setNotifTitle('');
+            setNotifMessage('');
+            setNotifType('info');
+            setNotifCreateOpen(false);
+        } catch (error: any) {
+            const apiMessage = error?.response?.data?.Message;
+            setNotifCreateError(typeof apiMessage === 'string' && apiMessage.trim()
+                ? apiMessage
+                : 'Không thể tạo thông báo lúc này.');
+        } finally {
+            setNotifCreateLoading(false);
+        }
+    };
 
     return (
         <>
@@ -238,7 +333,13 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                                 const nextOpen = !notifOpen;
                                 setNotifOpen(nextOpen);
                                 setUserOpen(false);
-                                if (nextOpen) appNotificationService.markAllRead();
+                                if (nextOpen) {
+                                    appNotificationService.markAllRead();
+                                    setServerNotifications(prev => prev.map(item => item.isRead ? item : { ...item, isRead: true }));
+                                    void notificationService.markAllRead();
+                                } else {
+                                    setNotifCreateOpen(false);
+                                }
                             }}
                             className="relative w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150"
                             style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}
@@ -274,13 +375,89 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                                             <Bell className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
                                             <span className="text-[var(--text-primary)] text-sm font-semibold">Thông báo</span>
                                         </div>
-                                        <button onClick={() => setNotifOpen(false)}
-                                            className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[var(--text-primary)]/5 text-[var(--text-secondary)] transition-colors">
-                                            <X className="w-3.5 h-3.5" />
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={() => {
+                                                    setNotifCreateOpen(v => !v);
+                                                    setNotifCreateError(null);
+                                                }}
+                                                className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[var(--text-primary)]/5 text-[var(--text-secondary)] transition-colors"
+                                                title="Tạo thông báo mới cho tất cả vai trò"
+                                            >
+                                                <Plus className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button onClick={() => setNotifOpen(false)}
+                                                className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[var(--text-primary)]/5 text-[var(--text-secondary)] transition-colors">
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
                                     </div>
 
-                                    {notifications.length === 0 ? (
+                                    {notifCreateOpen && (
+                                        <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                            <div className="space-y-2">
+                                                <input
+                                                    value={notifTitle}
+                                                    onChange={e => setNotifTitle(e.target.value)}
+                                                    placeholder="Tiêu đề thông báo"
+                                                    className="w-full rounded-lg px-2.5 py-2 text-xs"
+                                                    style={{
+                                                        background: 'var(--input-bg)',
+                                                        border: '1px solid var(--border-color)',
+                                                        color: 'var(--text-primary)',
+                                                    }}
+                                                />
+                                                <textarea
+                                                    value={notifMessage}
+                                                    onChange={e => setNotifMessage(e.target.value)}
+                                                    placeholder="Nội dung thông báo"
+                                                    rows={3}
+                                                    className="w-full rounded-lg px-2.5 py-2 text-xs resize-none"
+                                                    style={{
+                                                        background: 'var(--input-bg)',
+                                                        border: '1px solid var(--border-color)',
+                                                        color: 'var(--text-primary)',
+                                                    }}
+                                                />
+                                                <div className="flex items-center gap-2">
+                                                    <select
+                                                        value={notifType}
+                                                        onChange={e => setNotifType(e.target.value as NotificationType)}
+                                                        className="flex-1 rounded-lg px-2.5 py-2 text-xs"
+                                                        style={{
+                                                            background: 'var(--input-bg)',
+                                                            border: '1px solid var(--border-color)',
+                                                            color: 'var(--text-primary)',
+                                                        }}
+                                                    >
+                                                        <option value="info">Thông tin</option>
+                                                        <option value="success">Thành công</option>
+                                                        <option value="warning">Cảnh báo</option>
+                                                        <option value="error">Lỗi</option>
+                                                    </select>
+                                                    <button
+                                                        onClick={() => { void handleCreateNotification(); }}
+                                                        disabled={notifCreateLoading}
+                                                        className="px-3 py-2 rounded-lg text-xs font-medium"
+                                                        style={{
+                                                            background: 'var(--gradient-brand)',
+                                                            color: '#fff',
+                                                            opacity: notifCreateLoading ? 0.7 : 1,
+                                                        }}
+                                                    >
+                                                        {notifCreateLoading ? 'Đang gửi...' : 'Gửi'}
+                                                    </button>
+                                                </div>
+                                                {notifCreateError && (
+                                                    <p className="text-xs" style={{ color: 'var(--error)' }}>
+                                                        {notifCreateError}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {mergedNotifications.length === 0 ? (
                                         <div className="flex flex-col items-center justify-center py-10 px-4 gap-3 text-center">
                                             <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
                                                 style={{ background: 'var(--input-bg)' }}>
@@ -293,10 +470,11 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                                         </div>
                                     ) : (
                                         <div className="max-h-[320px] overflow-y-auto">
-                                            {notifications.slice(0, 12).map(item => (
+                                            {mergedNotifications.slice(0, 20).map(item => (
                                                 <div
                                                     key={item.id}
-                                                    className="px-4 py-3 border-b last:border-b-0"
+                                                    onClick={() => { void handleNotificationClick(item); }}
+                                                    className="px-4 py-3 border-b last:border-b-0 cursor-default"
                                                     style={{ borderColor: 'var(--border-color)' }}>
                                                     <div className="flex items-start gap-2.5">
                                                         <span

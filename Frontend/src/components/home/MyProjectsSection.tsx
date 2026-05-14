@@ -655,7 +655,8 @@ export default function MyProjectsSection({ onNavigate, createRequestToken, onPr
             const data = await projectService.getProjects();
             setProjects(data);
         } catch (err: any) {
-            alert(err?.response?.data?.message ?? err?.message ?? 'Import thất bại. Vui lòng thử lại.');
+            const apiMessage = err?.response?.data?.Message ?? err?.response?.data?.message;
+            alert(apiMessage ?? err?.message ?? 'Import thất bại. Vui lòng thử lại.');
         } finally {
             setImportLoading(false);
         }

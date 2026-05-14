@@ -36,6 +36,7 @@ namespace Service.Implementations
         private readonly IProjectReportService _projectReportService;
         private readonly IAnalysisJobQueue _analysisJobQueue;
         private readonly IAnalysisJobCancellationRegistry _analysisJobCancellationRegistry;
+        private readonly INotificationService _notificationService;
         private readonly ILogger<ProjectAnalysisJobService> _logger;
 
         public ProjectAnalysisJobService(
@@ -43,12 +44,14 @@ namespace Service.Implementations
             IProjectReportService projectReportService,
             IAnalysisJobQueue analysisJobQueue,
             IAnalysisJobCancellationRegistry analysisJobCancellationRegistry,
+            INotificationService notificationService,
             ILogger<ProjectAnalysisJobService> logger)
         {
             _context = context;
             _projectReportService = projectReportService;
             _analysisJobQueue = analysisJobQueue;
             _analysisJobCancellationRegistry = analysisJobCancellationRegistry;
+            _notificationService = notificationService;
             _logger = logger;
         }
 
@@ -341,6 +344,15 @@ namespace Service.Implementations
                 job.CompletedAt = DateTime.UtcNow;
                 job.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync(processingToken);
+
+                var projectTitle = await GetProjectTitleAsync(job.ProjectId, CancellationToken.None);
+                await _notificationService.CreateForUserAsync(
+                    job.UserId,
+                    "success",
+                    "Phân tích AI hoàn tất",
+                    $"Dự án \"{projectTitle}\" đã có kết quả phân tích mới.",
+                    tag: $"analysis-result:{job.Id}",
+                    cancellationToken: CancellationToken.None);
             }
             catch (OperationCanceledException)
             {
@@ -373,6 +385,16 @@ namespace Service.Implementations
                 job.CompletedAt = DateTime.UtcNow;
                 job.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync(CancellationToken.None);
+
+                var projectTitle = await GetProjectTitleAsync(job.ProjectId, CancellationToken.None);
+                var failureMessage = $"Job phân tích cho dự án \"{projectTitle}\" thất bại. Mã job: {job.Id}. Lý do: {Truncate(ex.Message, 300)}";
+                await _notificationService.CreateForRolesAsync(
+                    ["Author", "Staff", "Admin"],
+                    "error",
+                    "Phân tích AI gặp lỗi",
+                    failureMessage,
+                    tag: $"analysis-failed:{job.Id}",
+                    cancellationToken: CancellationToken.None);
             }
             finally
             {
@@ -507,6 +529,17 @@ namespace Service.Implementations
                 StartedAt = job.StartedAt,
                 CompletedAt = job.CompletedAt,
             };
+        }
+
+        private async Task<string> GetProjectTitleAsync(Guid projectId, CancellationToken cancellationToken)
+        {
+            var title = await _context.Projects
+                .AsNoTracking()
+                .Where(p => p.Id == projectId)
+                .Select(p => p.Title)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            return string.IsNullOrWhiteSpace(title) ? projectId.ToString() : title;
         }
 
         private static string? Truncate(string? value, int maxLen)

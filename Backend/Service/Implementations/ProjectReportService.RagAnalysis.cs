@@ -29,7 +29,7 @@ namespace Service.Implementations
                 throw new InvalidOperationException("Chunk entities và plaintext không khớp số lượng.");
 
             var topK             = Math.Clamp(await _sysConfig.GetAsync("rag.top_k_report", 8), 1, 64);
-            var stage1BatchChunks = ReadIntConfig("RagAnalysis:Stage1BatchChunks", 4, 1, 20);
+            var stage1BatchChunks = ReadIntConfig("RagAnalysis:Stage1BatchChunks", 8, 1, 20);
             var stage1MaxChars   = ReadIntConfig("RagAnalysis:Stage1MaxChunkChars", 900, 200, 4000);
             var factsMaxChars    = ReadIntConfig("RagAnalysis:FactsJsonMaxChars", 12000, 2000, 50000);
             var bibleMaxChars    = ReadIntConfig("RagAnalysis:BibleMaxChars", 4000, 500, 20000);

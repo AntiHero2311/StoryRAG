@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using OpenAI;
 using OpenAI.Chat;
 using System.ClientModel;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -22,12 +23,15 @@ namespace Service.Helpers
         private const string DefaultChatModels = "gemini-2.0-flash,gemini-2.5-flash,gemini-1.5-flash,gemini-3-flash-preview";
         private static readonly Uri GeminiOpenAiEndpoint = new("https://generativelanguage.googleapis.com/v1beta/openai/");
         private static readonly HttpClient TraceHttpClient = new();
+        private static readonly ConcurrentDictionary<string, DateTime> ApiKeyCooldownUntilUtc = new();
 
         private readonly ILogger _logger;
         private readonly string _operationName;
         private readonly List<GeminiChatCandidate> _candidates = [];
         private readonly bool _traceOpenAiHttp;
         private readonly int _traceBodyLimit;
+        private readonly int _globalOverloadRetryCycles;
+        private readonly int[] _globalOverloadRetryDelaysSeconds;
 
         public GeminiChatFailoverExecutor(
             IConfiguration config,
@@ -40,6 +44,12 @@ namespace Service.Helpers
             _operationName = operationName;
             _traceOpenAiHttp = ReadBool(config["Gemini:TraceOpenAiHttp"]);
             _traceBodyLimit = ReadInt(config["Gemini:TraceOpenAiHttpBodyLimit"], 16000, 500, 200000);
+            _globalOverloadRetryCycles = ReadInt(config["Gemini:GlobalOverloadRetryCycles"], 2, 0, 5);
+            _globalOverloadRetryDelaysSeconds = ReadIntList(
+                config["Gemini:GlobalOverloadRetryDelaysSeconds"],
+                [20, 45, 90],
+                min: 5,
+                max: 300);
 
             var analyzeKey = NormalizeKey(config["Gemini:AnalyzeApiKey"]);
             var chatKey = NormalizeKey(config["Gemini:ChatApiKey"]);
@@ -95,54 +105,87 @@ namespace Service.Helpers
             }
 
             Exception? lastError = null;
-
-            foreach (var candidate in _candidates)
+            for (var cycle = 0; cycle <= _globalOverloadRetryCycles; cycle++)
             {
-                // Bỏ qua candidate này nếu đã cancel
-                cancellationToken.ThrowIfCancellationRequested();
-
-                try
+                var attemptedCandidates = 0;
+                foreach (var candidate in _candidates)
                 {
-                    // Gemini OpenAI-compat thường chấp nhận system, nhưng một số model/bản trả 400 — gộp system → user (cùng helper Gemma).
-                    var geminiMessages = GeminiRetryHelper.FlattenSystemForGemma(sourceMessages);
-
-                    ClientResult<ChatCompletion> result;
-                    if (options == null)
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (TryGetKeyCooldownSeconds(candidate.ApiKey, out var cooldownSeconds))
                     {
-                        result = await GeminiRetryHelper.ExecuteAsync(
-                            () => candidate.Client.CompleteChatAsync(geminiMessages, cancellationToken: cancellationToken),
-                            _logger,
-                            $"{_operationName} ({candidate.Label})",
-                            cancellationToken: cancellationToken);
-                    }
-                    else
-                    {
-                        result = await GeminiRetryHelper.ExecuteAsync(
-                            () => candidate.Client.CompleteChatAsync(geminiMessages, options, cancellationToken),
-                            _logger,
-                            $"{_operationName} ({candidate.Label})",
-                            cancellationToken: cancellationToken);
-                    }
-
-                    return result.Value;
-                }
-                catch (Exception ex)
-                {
-                    lastError = ex;
-                    if (ex is ClientResultException clientEx)
-                    {
-                        _logger.LogWarning(
-                            "{Operation} thất bại với {Candidate}: HTTP {Status} — {Detail}",
+                        _logger.LogInformation(
+                            "{Operation} bỏ qua {Candidate} do key đang cooldown thêm {CooldownSeconds:F1}s.",
                             _operationName,
                             candidate.Label,
-                            clientEx.Status,
-                            clientEx.Message);
+                            cooldownSeconds);
+                        continue;
                     }
-                    else
+
+                    attemptedCandidates++;
+                    try
                     {
-                        _logger.LogWarning(ex, "{Operation} thất bại với {Candidate}, thử fallback.", _operationName, candidate.Label);
+                        var geminiMessages = GeminiRetryHelper.FlattenSystemForGemma(sourceMessages);
+
+                        ClientResult<ChatCompletion> result;
+                        if (options == null)
+                        {
+                            result = await GeminiRetryHelper.ExecuteAsync(
+                                () => candidate.Client.CompleteChatAsync(geminiMessages, cancellationToken: cancellationToken),
+                                _logger,
+                                $"{_operationName} ({candidate.Label})",
+                                cancellationToken: cancellationToken);
+                        }
+                        else
+                        {
+                            result = await GeminiRetryHelper.ExecuteAsync(
+                                () => candidate.Client.CompleteChatAsync(geminiMessages, options, cancellationToken),
+                                _logger,
+                                $"{_operationName} ({candidate.Label})",
+                                cancellationToken: cancellationToken);
+                        }
+
+                        ClearKeyCooldown(candidate.ApiKey);
+                        return result.Value;
+                    }
+                    catch (Exception ex)
+                    {
+                        lastError = ex;
+                        if (IsQuotaOverload(ex))
+                            SetKeyCooldown(candidate.ApiKey, TimeSpan.FromSeconds(75));
+                        else if (IsServiceBusy(ex))
+                            SetKeyCooldown(candidate.ApiKey, TimeSpan.FromSeconds(25));
+
+                        if (ex is ClientResultException clientEx)
+                        {
+                            _logger.LogWarning(
+                                "{Operation} thất bại với {Candidate}: HTTP {Status} — {Detail}",
+                                _operationName,
+                                candidate.Label,
+                                clientEx.Status,
+                                clientEx.Message);
+                        }
+                        else
+                        {
+                            _logger.LogWarning(ex, "{Operation} thất bại với {Candidate}, thử fallback.", _operationName, candidate.Label);
+                        }
                     }
                 }
+
+                var canRetryWholeCycle = cycle < _globalOverloadRetryCycles && IsRetryableAcrossCycles(lastError);
+                if (!canRetryWholeCycle)
+                    break;
+
+                var delaySeconds = _globalOverloadRetryDelaysSeconds[Math.Min(cycle, _globalOverloadRetryDelaysSeconds.Length - 1)];
+                if (attemptedCandidates == 0)
+                    delaySeconds = Math.Max(delaySeconds, 10);
+
+                _logger.LogWarning(
+                    "{Operation} vẫn quá tải sau vòng fallback {Cycle}/{MaxCycle}. Chờ {DelaySeconds}s rồi thử lại toàn bộ key/model.",
+                    _operationName,
+                    cycle + 1,
+                    _globalOverloadRetryCycles + 1,
+                    delaySeconds);
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
             }
 
             if (lastError is ClientResultException cre)
@@ -289,6 +332,75 @@ namespace Service.Helpers
                 return fallback;
 
             return Math.Clamp(value, min, max);
+        }
+
+        private static int[] ReadIntList(string? raw, int[] fallback, int min, int max)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return fallback;
+
+            var parsed = raw
+                .Split(new[] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(v => int.TryParse(v, out var num) ? Math.Clamp(num, min, max) : -1)
+                .Where(v => v >= 0)
+                .ToArray();
+
+            return parsed.Length == 0 ? fallback : parsed;
+        }
+
+        private static bool IsRetryableAcrossCycles(Exception? ex)
+        {
+            if (ex == null) return false;
+            return IsQuotaOverload(ex) || IsServiceBusy(ex);
+        }
+
+        private static bool IsQuotaOverload(Exception ex)
+        {
+            if (ex is ClientResultException cre && cre.Status == (int)HttpStatusCode.TooManyRequests)
+                return true;
+            if (ex is HttpRequestException hre && hre.StatusCode == HttpStatusCode.TooManyRequests)
+                return true;
+
+            var msg = ex.Message;
+            return msg.Contains("RESOURCE_EXHAUSTED", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("quota", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("rate limit", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsServiceBusy(Exception ex)
+        {
+            if (ex is ClientResultException cre)
+                return cre.Status == (int)HttpStatusCode.ServiceUnavailable || cre.Status == (int)HttpStatusCode.GatewayTimeout;
+            if (ex is HttpRequestException hre)
+                return hre.StatusCode == HttpStatusCode.ServiceUnavailable || hre.StatusCode == HttpStatusCode.GatewayTimeout;
+            return false;
+        }
+
+        private static void SetKeyCooldown(string apiKey, TimeSpan duration)
+        {
+            ApiKeyCooldownUntilUtc[apiKey] = DateTime.UtcNow.Add(duration);
+        }
+
+        private static bool TryGetKeyCooldownSeconds(string apiKey, out double remainingSeconds)
+        {
+            remainingSeconds = 0;
+            if (!ApiKeyCooldownUntilUtc.TryGetValue(apiKey, out var until))
+                return false;
+
+            var remaining = until - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                ApiKeyCooldownUntilUtc.TryRemove(apiKey, out _);
+                return false;
+            }
+
+            remainingSeconds = remaining.TotalSeconds;
+            return true;
+        }
+
+        private static void ClearKeyCooldown(string apiKey)
+        {
+            ApiKeyCooldownUntilUtc.TryRemove(apiKey, out _);
         }
 
         private static List<string> ReadValues(string? raw)
