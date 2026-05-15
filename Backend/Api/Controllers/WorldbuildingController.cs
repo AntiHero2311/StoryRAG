@@ -9,7 +9,7 @@ namespace Api.Controllers
     [Route("api/projects/{projectId:guid}/worldbuilding")]
     [ApiController]
     [Authorize]
-    public class WorldbuildingController : ControllerBase
+    public class WorldbuildingController : AppControllerBase
     {
         private readonly IWorldbuildingService _service;
 
@@ -103,10 +103,5 @@ namespace Api.Controllers
             catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
         }
 
-        private Guid? GetUserId()
-        {
-            var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            return Guid.TryParse(value, out var id) ? id : null;
-        }
     }
 }

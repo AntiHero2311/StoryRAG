@@ -19,6 +19,7 @@ namespace Service.Implementations
         private readonly IConfiguration _config;
         private readonly ILogger<ProjectImportService> _logger;
         private readonly IChunkingService _chunkingService;
+        private readonly INotificationService _notificationService;
         private readonly GeminiChatFailoverExecutor _gemini;
 
         // Giới hạn số chương AI đọc để tránh tốn quá nhiều token
@@ -30,12 +31,14 @@ namespace Service.Implementations
             AppDbContext context,
             IConfiguration config,
             ILogger<ProjectImportService> logger,
-            IChunkingService chunkingService)
+            IChunkingService chunkingService,
+            INotificationService notificationService)
         {
             _context = context;
             _config = config;
             _logger = logger;
             _chunkingService = chunkingService;
+            _notificationService = notificationService;
             _gemini = new GeminiChatFailoverExecutor(
                 config,
                 logger,
@@ -109,13 +112,14 @@ namespace Service.Implementations
                 };
                 chaptersToInsert.Add(chapter);
 
+                var htmlContent = PlainTextToHtml(part.Content);
                 var version = new ChapterVersion
                 {
                     Id = versionId,
                     ChapterId = chapterId,
                     VersionNumber = 1,
                     Title = "Phiên bản 1",
-                    Content = EncryptionHelper.EncryptWithMasterKey(part.Content, rawDek),
+                    Content = EncryptionHelper.EncryptWithMasterKey(htmlContent, rawDek),
                     WordCount = wordCount,
                     TokenCount = _chunkingService.EstimateTokenCount(part.Content),
                     CreatedBy = userId,
@@ -232,7 +236,7 @@ namespace Service.Implementations
                 }
             }
 
-            return new ProjectImportResult
+            var result = new ProjectImportResult
             {
                 ProjectId = project.Id,
                 ProjectTitle = projectTitle,
@@ -242,6 +246,28 @@ namespace Service.Implementations
                 TimelineEventsExtracted = timelineEventsExtracted,
                 Summary = extractedSummary,
             };
+
+            // ── Bước 6: Gửi notification vào chuông ─────────────────────────────
+            try
+            {
+                var details = new List<string> { $"{chaptersImported} chương" };
+                if (charactersExtracted > 0) details.Add($"{charactersExtracted} nhân vật");
+                if (settingsExtracted > 0) details.Add($"{settingsExtracted} bối cảnh");
+                if (timelineEventsExtracted > 0) details.Add($"{timelineEventsExtracted} sự kiện");
+
+                await _notificationService.CreateForUserAsync(
+                    userId,
+                    type: "success",
+                    title: "Import bản thảo thành công",
+                    message: $"Đã nhập \"{projectTitle}\" — {string.Join(", ", details)}.",
+                    tag: $"import:{project.Id}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to create import notification for project {ProjectId}.", project.Id);
+            }
+
+            return result;
         }
 
         // ── Private helpers ──────────────────────────────────────────────────────
@@ -320,6 +346,41 @@ namespace Service.Implementations
         {
             if (string.IsNullOrWhiteSpace(text)) return 0;
             return text.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+        }
+
+        /// <summary>
+        /// Chuyển plain text (newline-separated) sang HTML tương thích với contenteditable editor.
+        /// \n\n → thẻ &lt;p&gt; mới; \n đơn → &lt;br&gt;; ký tự đặc biệt được escape.
+        /// </summary>
+        private static string PlainTextToHtml(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "<p></p>";
+
+            // Chuẩn hoá line endings
+            var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
+
+            // Tách thành đoạn văn theo \n\n
+            var paragraphs = normalized.Split(new[] { "\n\n" }, StringSplitOptions.None);
+
+            var sb = new StringBuilder();
+            foreach (var para in paragraphs)
+            {
+                var trimmed = para.Trim('\n');
+                if (string.IsNullOrWhiteSpace(trimmed)) continue;
+
+                // Escape HTML entities
+                var escaped = trimmed
+                    .Replace("&", "&amp;")
+                    .Replace("<", "&lt;")
+                    .Replace(">", "&gt;");
+
+                // \n đơn trong đoạn → <br>
+                escaped = escaped.Replace("\n", "<br>");
+
+                sb.Append($"<p>{escaped}</p>");
+            }
+
+            return sb.Length > 0 ? sb.ToString() : "<p></p>";
         }
 
         // ── Internal DTOs for AI JSON parsing ───────────────────────────────────

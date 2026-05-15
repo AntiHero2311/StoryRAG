@@ -10,7 +10,7 @@ namespace Api.Controllers
     [Route("api/projects/{projectId:guid}/chapters")]
     [ApiController]
     [Authorize]
-    public class ChapterController : ControllerBase
+    public class ChapterController : AppControllerBase
     {
         private readonly IChapterService _chapterService;
 
@@ -299,11 +299,6 @@ namespace Api.Controllers
 
         // ── Helper ─────────────────────────────────────────────────────────────
 
-        private Guid? GetUserId()
-        {
-            var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            return Guid.TryParse(value, out var id) ? id : null;
-        }
 
         public class ImportManuscriptFormRequest
         {

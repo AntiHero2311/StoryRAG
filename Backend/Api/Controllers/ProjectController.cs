@@ -11,7 +11,7 @@ namespace Api.Controllers
     [Route("api/projects")]
     [ApiController]
     [Authorize(Roles = "Author")]
-    public class ProjectController : ControllerBase
+    public class ProjectController : AppControllerBase
     {
         private readonly IProjectService _projectService;
         private readonly IProjectReportService _reportService;
@@ -253,10 +253,5 @@ namespace Api.Controllers
 
         // ── Helper ───────────────────────────────────────────────────────────────
 
-        private Guid? GetUserId()
-        {
-            var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            return Guid.TryParse(value, out var id) ? id : null;
-        }
     }
 }

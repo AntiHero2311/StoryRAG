@@ -991,8 +991,8 @@ export default function WorkspacePage() {
                 </button>
 
                 <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center">
-                        <BookOpen className="w-4 h-4" />
+                    <div className="w-8 h-8 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">
+                        <img src="/logo.png" alt="StoryNest" className="w-8 h-8 object-contain" />
                     </div>
                     <span className="text-[var(--text-primary)] font-bold text-[15px] truncate max-w-xs tracking-tight">{projectTitle}</span>
                     <button

@@ -9,7 +9,7 @@ namespace Api.Controllers
     [Route("api/staff")]
     [ApiController]
     [Authorize(Roles = "Staff,Admin")]
-    public class StaffController : ControllerBase
+    public class StaffController : AppControllerBase
     {
         private readonly IStaffService _staffService;
 
@@ -212,11 +212,5 @@ namespace Api.Controllers
             }
         }
 
-        private Guid? GetUserId()
-        {
-            var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                     ?? User.FindFirst("sub")?.Value;
-            return Guid.TryParse(claim, out var id) ? id : null;
-        }
     }
 }

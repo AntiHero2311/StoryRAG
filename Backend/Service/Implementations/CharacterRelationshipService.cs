@@ -11,25 +11,22 @@ using System.Text.Json;
 
 namespace Service.Implementations
 {
-    public class CharacterRelationshipService : ICharacterRelationshipService
+    public class CharacterRelationshipService : ServiceBase, ICharacterRelationshipService
     {
         private static readonly string[] AllowedRelationTypes =
         [
             "family", "friend", "rival", "romantic", "mentor", "colleague", "unknown"
         ];
 
-        private readonly AppDbContext _db;
-        private readonly IConfiguration _config;
         private readonly ILogger<CharacterRelationshipService> _logger;
         private readonly GeminiChatFailoverExecutor _gemini;
 
         public CharacterRelationshipService(
-            AppDbContext db,
+            AppDbContext context,
             IConfiguration config,
             ILogger<CharacterRelationshipService> logger)
+            : base(context, config)
         {
-            _db = db;
-            _config = config;
             _logger = logger;
             _gemini = new GeminiChatFailoverExecutor(
                 config,
@@ -46,7 +43,7 @@ namespace Service.Implementations
         {
             await VerifyOwnershipAsync(projectId, userId, cancellationToken);
 
-            var rows = await _db.CharacterRelationships
+            var rows = await _context.CharacterRelationships
                 .AsNoTracking()
                 .Where(r => r.ProjectId == projectId)
                 .OrderByDescending(r => r.StrengthScore)
@@ -74,10 +71,10 @@ namespace Service.Implementations
         {
             await VerifyOwnershipAsync(projectId, userId, cancellationToken);
 
-            var user = await _db.Users.AsNoTracking().FirstAsync(u => u.Id == userId, cancellationToken);
-            var rawDek = GetDek(user);
+            var user = await _context.Users.AsNoTracking().FirstAsync(u => u.Id == userId, cancellationToken);
+            var rawDek = GetRawDek(user);
 
-            var chars = await _db.CharacterEntries
+            var chars = await _context.CharacterEntries
                 .AsNoTracking()
                 .Where(c => c.ProjectId == projectId)
                 .OrderBy(c => c.CreatedAt)
@@ -115,7 +112,7 @@ namespace Service.Implementations
             }
 
             // Load & decrypt chunks; create an ordinal per chunk for evidence ids.
-            var chapters = await _db.Chapters
+            var chapters = await _context.Chapters
                 .AsNoTracking()
                 .Where(c => c.ProjectId == projectId && !c.IsDeleted)
                 .ToListAsync(cancellationToken);
@@ -128,7 +125,7 @@ namespace Service.Implementations
 
             // Match the same ordinal logic as evidence chunks endpoint:
             // chapterNumber asc, then ChunkIndex asc (only embedded chunks of active versions).
-            var chunksRaw = await _db.ChapterChunks
+            var chunksRaw = await _context.ChapterChunks
                 .AsNoTracking()
                 .Where(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId))
                 .ToListAsync(cancellationToken);
@@ -237,7 +234,7 @@ namespace Service.Implementations
                     evidence = cand.Evidence.Take(3).ToList();
                 }
 
-                var entity = await _db.CharacterRelationships
+                var entity = await _context.CharacterRelationships
                     .FirstOrDefaultAsync(r => r.ProjectId == projectId && r.CharAId == cand.A && r.CharBId == cand.B, cancellationToken);
 
                 if (entity == null)
@@ -253,7 +250,7 @@ namespace Service.Implementations
                         EvidenceChunkIds = evidence,
                         CreatedAt = DateTime.UtcNow
                     };
-                    _db.CharacterRelationships.Add(entity);
+                    _context.CharacterRelationships.Add(entity);
                 }
                 else
                 {
@@ -268,7 +265,7 @@ namespace Service.Implementations
 
             if (upserted > 0)
             {
-                await _db.SaveChangesAsync(cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
             }
 
             result.Upserted = upserted;
@@ -356,19 +353,6 @@ Các chunk co-mention (id: {ids}):
         private static (Guid A, Guid B) NormalizePair(Guid a, Guid b)
             => a.CompareTo(b) < 0 ? (a, b) : (b, a);
 
-        private async Task VerifyOwnershipAsync(Guid projectId, Guid userId, CancellationToken cancellationToken)
-        {
-            var ok = await _db.Projects
-                .AsNoTracking()
-                .AnyAsync(p => p.Id == projectId && !p.IsDeleted && p.AuthorId == userId, cancellationToken);
-            if (!ok) throw new KeyNotFoundException("Dự án không tồn tại hoặc bạn không có quyền truy cập.");
-        }
-
-        private string GetDek(User user)
-        {
-            var masterKey = _config["Security:MasterKey"]!;
-            return EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
-        }
 
         private sealed class AiRelationshipOutput
         {

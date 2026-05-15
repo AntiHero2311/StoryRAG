@@ -10,7 +10,7 @@ namespace Api.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
-    public class UserController : ControllerBase
+    public class UserController : AppControllerBase
     {
         private readonly IUserService _userService;
 
@@ -27,11 +27,10 @@ namespace Api.Controllers
         {
             try
             {
-                var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out Guid userId))
-                    return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
 
-                var profile = await _userService.GetUserProfileAsync(userId);
+                var profile = await _userService.GetUserProfileAsync(userId.Value);
                 return Ok(profile);
             }
             catch (Exception ex)
@@ -51,11 +50,10 @@ namespace Api.Controllers
 
             try
             {
-                var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out Guid userId))
-                    return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
 
-                var updated = await _userService.UpdateUserProfileAsync(userId, request);
+                var updated = await _userService.UpdateUserProfileAsync(userId.Value, request);
                 return Ok(updated);
             }
             catch (Exception ex)

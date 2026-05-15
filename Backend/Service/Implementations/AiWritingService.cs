@@ -11,18 +11,15 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
-    public class AiWritingService : IAiWritingService
+    public class AiWritingService : ServiceBase, IAiWritingService
     {
-        private readonly AppDbContext _context;
-        private readonly IConfiguration _config;
         private readonly ILogger<AiWritingService> _logger;
         private readonly IEmbeddingService _embeddingService;
         private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
 
         public AiWritingService(AppDbContext context, IConfiguration config, ILogger<AiWritingService> logger, IEmbeddingService embeddingService)
+            : base(context, config)
         {
-            _context = context;
-            _config = config;
             _logger = logger;
             _embeddingService = embeddingService;
             _geminiChatExecutor = new GeminiChatFailoverExecutor(
@@ -125,9 +122,7 @@ namespace Service.Implementations
             
             await DeductTokenAsync(userId, tokens);
 
-            var masterKey = _config["Security:MasterKey"]!;
-            var user = await _context.Users.FindAsync(userId) ?? throw new KeyNotFoundException("Người dùng không tồn tại.");
-            var rawDek = EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
+            var rawDek = await GetRawDekAsync(userId);
 
             var history = new Repository.Entities.RewriteHistory
             {
@@ -150,10 +145,7 @@ namespace Service.Implementations
             await CheckAndDeductTokenAsync(projectId, userId);
 
             // ── RAG: lấy context từ các chương ĐÃ VIẾT TRƯỚC để tránh lặp tình tiết / mâu thuẫn ──
-            var masterKey = _config["Security:MasterKey"]!;
-            var user = await _context.Users.FindAsync(userId)
-                ?? throw new KeyNotFoundException("Người dùng không tồn tại.");
-            var rawDek = EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
+            var rawDek = await GetRawDekAsync(userId);
 
             string ragContext = string.Empty;
             try
@@ -282,10 +274,7 @@ namespace Service.Implementations
 
             await DeductTokenAsync(userId, tokens);
 
-            var masterKey = _config["Security:MasterKey"] ?? throw new InvalidOperationException("Master key not configured.");
-            var user = await _context.Users.FindAsync(userId)
-                ?? throw new KeyNotFoundException("Người dùng không tồn tại.");
-            var rawDek = EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
+            var rawDek = await GetRawDekAsync(userId);
 
             var history = new Repository.Entities.RewriteHistory
             {

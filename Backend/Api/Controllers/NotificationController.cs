@@ -9,7 +9,7 @@ namespace Api.Controllers
     [Route("api/notifications")]
     [ApiController]
     [Authorize(Roles = "Author,Staff,Admin")]
-    public class NotificationController : ControllerBase
+    public class NotificationController : AppControllerBase
     {
         private readonly INotificationService _notificationService;
 
@@ -68,11 +68,5 @@ namespace Api.Controllers
             return Ok(new { ReadCount = count });
         }
 
-        private Guid? GetUserId()
-        {
-            var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                     ?? User.FindFirst("sub")?.Value;
-            return Guid.TryParse(claim, out var id) ? id : null;
-        }
     }
 }

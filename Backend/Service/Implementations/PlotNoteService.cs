@@ -13,16 +13,13 @@ using System.Threading.Tasks;
 
 namespace Service.Implementations
 {
-    public class PlotNoteService : IPlotNoteService
+    public class PlotNoteService : ServiceBase, IPlotNoteService
     {
-        private readonly AppDbContext _context;
-        private readonly IConfiguration _config;
         private readonly IEmbeddingService _embeddingService;
 
         public PlotNoteService(AppDbContext context, IConfiguration config, IEmbeddingService embeddingService)
+            : base(context, config)
         {
-            _context = context;
-            _config = config;
             _embeddingService = embeddingService;
         }
 
@@ -30,7 +27,7 @@ namespace Service.Implementations
         {
             await VerifyOwnershipAsync(projectId, userId);
             var user = await GetUserAsync(userId);
-            var rawDek = GetDek(user);
+            var rawDek = GetRawDek(user);
 
             return await _context.PlotNoteEntries
                 .Where(e => e.ProjectId == projectId)
@@ -47,7 +44,7 @@ namespace Service.Implementations
             if (entry == null) return null;
 
             var user = await GetUserAsync(userId);
-            var rawDek = GetDek(user);
+            var rawDek = GetRawDek(user);
             return MapToResponse(entry, rawDek);
         }
 
@@ -55,7 +52,7 @@ namespace Service.Implementations
         {
             await VerifyOwnershipAsync(projectId, userId);
             var user = await GetUserAsync(userId);
-            var rawDek = GetDek(user);
+            var rawDek = GetRawDek(user);
 
             var entry = new PlotNoteEntry
             {
@@ -84,7 +81,7 @@ namespace Service.Implementations
         {
             await VerifyOwnershipAsync(projectId, userId);
             var user = await GetUserAsync(userId);
-            var rawDek = GetDek(user);
+            var rawDek = GetRawDek(user);
 
             var entry = await _context.PlotNoteEntries.FirstOrDefaultAsync(e => e.Id == id && e.ProjectId == projectId)
                 ?? throw new KeyNotFoundException("Plot note not found");
@@ -129,7 +126,7 @@ namespace Service.Implementations
                 ?? throw new KeyNotFoundException("Plot note not found");
 
             var user = await GetUserAsync(userId);
-            var rawDek = GetDek(user);
+            var rawDek = GetRawDek(user);
             var title = EncryptionHelper.DecryptWithMasterKey(entry.Title, rawDek);
             var content = EncryptionHelper.DecryptWithMasterKey(entry.Content, rawDek);
             var embeddingVector = await EmbedDocumentAsync(entry.Type, title, content);
@@ -139,26 +136,6 @@ namespace Service.Implementations
             await _context.SaveChangesAsync();
 
             return MapToResponse(entry, rawDek);
-        }
-
-        // ── Helpers ───────────────────────────────────────────────────────────────
-
-        private async Task VerifyOwnershipAsync(Guid projectId, Guid userId)
-        {
-            var exists = await _context.Projects
-                .AnyAsync(p => p.Id == projectId && !p.IsDeleted && p.AuthorId == userId);
-            if (!exists)
-                throw new KeyNotFoundException("Dự án không tồn tại hoặc bạn không có quyền truy cập.");
-        }
-
-        private async Task<Repository.Entities.User> GetUserAsync(Guid userId) =>
-            await _context.Users.FindAsync(userId)
-                ?? throw new KeyNotFoundException("User không tồn tại.");
-
-        private string GetDek(Repository.Entities.User user)
-        {
-            var masterKey = _config["Security:MasterKey"]!;
-            return EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
         }
 
         private async Task<float[]> EmbedDocumentAsync(string type, string title, string content)

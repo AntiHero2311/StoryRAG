@@ -10,7 +10,7 @@ namespace Api.Controllers
     [Route("api/me")]
     [ApiController]
     [Authorize(Roles = "Author")]
-    public class MeController : ControllerBase
+    public class MeController : AppControllerBase
     {
         private readonly AppDbContext _db;
 
@@ -84,12 +84,6 @@ namespace Api.Controllers
             return Ok(MapFeedback(feedback));
         }
 
-        private Guid? GetUserId()
-        {
-            var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                     ?? User.FindFirst("sub")?.Value;
-            return Guid.TryParse(claim, out var id) ? id : null;
-        }
 
         private static StaffFeedbackResponse MapFeedback(Repository.Entities.StaffFeedback feedback)
         {

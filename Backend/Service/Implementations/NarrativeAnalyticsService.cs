@@ -13,10 +13,8 @@ using OpenAI.Chat;
 
 namespace Service.Implementations
 {
-    public class NarrativeAnalyticsService : INarrativeAnalyticsService
+    public class NarrativeAnalyticsService : ServiceBase, INarrativeAnalyticsService
     {
-        private readonly AppDbContext _context;
-        private readonly IConfiguration _config;
         private readonly ILogger<NarrativeAnalyticsService> _logger;
         private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
 
@@ -45,9 +43,8 @@ namespace Service.Implementations
         };
 
         public NarrativeAnalyticsService(AppDbContext context, IConfiguration config, ILogger<NarrativeAnalyticsService> logger)
+            : base(context, config)
         {
-            _context = context;
-            _config = config;
             _logger = logger;
             _geminiChatExecutor = new GeminiChatFailoverExecutor(
                 config,
@@ -59,7 +56,7 @@ namespace Service.Implementations
 
         public async Task<NarrativeChartsResponse> GetNarrativeChartsAsync(Guid projectId, Guid userId, Guid? chapterId = null)
         {
-            await EnsureProjectOwnershipAsync(projectId, userId);
+            await VerifyOwnershipAsync(projectId, userId);
             var rawDek = await GetRawDekAsync(userId);
 
             var chaptersQuery = _context.Chapters
@@ -330,28 +327,6 @@ QUY TẮC BẮT BUỘC:
                        .ToList();
         }
 
-        private async Task EnsureProjectOwnershipAsync(Guid projectId, Guid userId)
-        {
-            var exists = await _context.Projects
-                .AnyAsync(p => p.Id == projectId && p.AuthorId == userId && !p.IsDeleted);
-
-            if (!exists)
-                throw new KeyNotFoundException("Dự án không tồn tại hoặc bạn không có quyền truy cập.");
-        }
-
-        private async Task<string> GetRawDekAsync(Guid userId)
-        {
-            var user = await _context.Users.FindAsync(userId)
-                ?? throw new KeyNotFoundException("Người dùng không tồn tại.");
-
-            if (string.IsNullOrWhiteSpace(user.DataEncryptionKey))
-                throw new Exception("Khóa mã hóa người dùng chưa được thiết lập.");
-
-            var masterKey = _config["Security:MasterKey"]
-                ?? throw new Exception("MasterKey không tìm thấy trong cấu hình.");
-
-            return EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey, masterKey);
-        }
 
         private async Task<List<string>> LoadCharacterNamesAsync(Guid projectId, string rawDek)
         {

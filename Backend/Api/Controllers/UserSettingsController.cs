@@ -9,7 +9,7 @@ namespace Api.Controllers
     [Route("api/settings")]
     [ApiController]
     [Authorize]
-    public class UserSettingsController : ControllerBase
+    public class UserSettingsController : AppControllerBase
     {
         private readonly IUserSettingsService _service;
 
@@ -38,11 +38,5 @@ namespace Api.Controllers
             return Ok(result);
         }
 
-        private Guid? GetUserId()
-        {
-            var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                     ?? User.FindFirst("sub")?.Value;
-            return Guid.TryParse(claim, out var id) ? id : null;
-        }
     }
 }

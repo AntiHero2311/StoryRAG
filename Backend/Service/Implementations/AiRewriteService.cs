@@ -9,17 +9,14 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
-    public class AiRewriteService : IAiRewriteService
+    public class AiRewriteService : ServiceBase, IAiRewriteService
     {
-        private readonly AppDbContext _context;
-        private readonly IConfiguration _config;
         private readonly ILogger<AiRewriteService> _logger;
         private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
 
         public AiRewriteService(AppDbContext context, IConfiguration config, ILogger<AiRewriteService> logger)
+            : base(context, config)
         {
-            _context = context;
-            _config = config;
             _logger = logger;
             _geminiChatExecutor = new GeminiChatFailoverExecutor(
                 config,
@@ -53,10 +50,7 @@ namespace Service.Implementations
                 throw new InvalidOperationException($"Bạn đã dùng hết token tháng này ({sub.Plan.MaxTokenLimit:N0} token). Vui lòng nâng cấp gói.");
 
             // 3. Lấy user + DEK
-            var masterKey = _config["Security:MasterKey"] ?? throw new InvalidOperationException("Master key not configured.");
-            var user = await _context.Users.FindAsync(userId)
-                ?? throw new KeyNotFoundException("Người dùng không tồn tại.");
-            var rawDek = EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
+            var rawDek = await GetRawDekAsync(userId);
 
             // 3. Build prompt — sanitize user input trước khi nhúng vào LLM
             var sanitizedInstruction = PromptSanitizer.SanitizeAndWarn(instruction, _logger, $"Rewrite/Instruction/Project:{projectId}");
@@ -126,10 +120,7 @@ namespace Service.Implementations
                 .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted && p.AuthorId == userId)
                 ?? throw new KeyNotFoundException("Dự án không tồn tại.");
 
-            var masterKey = _config["Security:MasterKey"] ?? throw new InvalidOperationException("Master key not configured.");
-            var user = await _context.Users.FindAsync(userId)
-                ?? throw new KeyNotFoundException("Người dùng không tồn tại.");
-            var rawDek = EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
+            var rawDek = await GetRawDekAsync(userId);
 
             var query = _context.RewriteHistories
                 .Where(r => r.ProjectId == projectId && r.UserId == userId);

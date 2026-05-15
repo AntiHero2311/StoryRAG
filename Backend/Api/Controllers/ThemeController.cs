@@ -12,7 +12,7 @@ namespace Api.Controllers
     [ApiController]
     [Route("api/projects/{projectId}/themes")]
     [Authorize]
-    public class ThemeController : ControllerBase
+    public class ThemeController : AppControllerBase
     {
         private readonly IThemeService _service;
 
@@ -21,11 +21,6 @@ namespace Api.Controllers
             _service = service;
         }
 
-        private Guid? GetUserId()
-        {
-            var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            return Guid.TryParse(value, out var id) ? id : null;
-        }
 
         [HttpGet]
         public async Task<IActionResult> GetEntries(Guid projectId)

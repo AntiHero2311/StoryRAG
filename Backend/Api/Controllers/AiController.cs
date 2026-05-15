@@ -11,7 +11,7 @@ namespace Api.Controllers
     [Route("api/ai")]
     [ApiController]
     [Authorize]
-    public class AiController : ControllerBase
+    public class AiController : AppControllerBase
     {
         private readonly IEmbeddingService _embeddingService;
         private readonly IAiChatService _aiChatService;
@@ -121,12 +121,6 @@ namespace Api.Controllers
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
 
-        private Guid? GetUserId()
-        {
-            var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                     ?? User.FindFirst("sub")?.Value;
-            return Guid.TryParse(claim, out var id) ? id : null;
-        }
 
         // ── Project Report endpoints ───────────────────────────────────────────────
 

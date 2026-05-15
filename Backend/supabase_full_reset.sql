@@ -9,7 +9,14 @@
 -- BƯỚC 1: XÓA TOÀN BỘ (CASCADE để tránh lỗi FK)
 -- ────────────────────────────────────────────────────────────
 
+DROP TABLE IF EXISTS "Notifications"         CASCADE;
 DROP TABLE IF EXISTS "Payments"              CASCADE;
+DROP TABLE IF EXISTS "character_relationships"   CASCADE;
+DROP TABLE IF EXISTS "analysis_job_rerun_audits" CASCADE;
+DROP TABLE IF EXISTS "writing_tips"              CASCADE;
+DROP TABLE IF EXISTS "faqs"                      CASCADE;
+DROP TABLE IF EXISTS "system_config"             CASCADE;
+DROP TABLE IF EXISTS "BugReports"            CASCADE;
 DROP TABLE IF EXISTS "StaffAnalysisReviews"  CASCADE;
 DROP TABLE IF EXISTS "StaffKnowledgeBaseItems" CASCADE;
 DROP TABLE IF EXISTS "StaffFeedbacks"        CASCADE;
@@ -345,6 +352,7 @@ CREATE TABLE "ProjectAnalysisJobs" (
     "Progress"           integer                  NOT NULL DEFAULT 0,
     "ProjectVersionHash" character varying(128)   NOT NULL DEFAULT '',
     "ReportId"           uuid,
+    "RetriedFromId"      uuid,
     "ErrorMessage"       character varying(2000),
     "CreatedAt"          timestamp with time zone NOT NULL DEFAULT NOW(),
     "StartedAt"          timestamp with time zone,
@@ -370,6 +378,7 @@ CREATE INDEX "IX_ProjectAnalysisJobs_ReportId" ON "ProjectAnalysisJobs" ("Report
 CREATE UNIQUE INDEX "IX_ProjectAnalysisJobs_UserId_Active"
     ON "ProjectAnalysisJobs" ("UserId")
     WHERE "Status" IN ('Queued','Processing');
+CREATE INDEX "IX_ProjectAnalysisJobs_RetriedFromId" ON "ProjectAnalysisJobs" ("RetriedFromId");
 
 -- ── ProjectAnalysisFacts (Stage 1 extraction JSONB, RAG / Stage 2) ──
 CREATE TABLE "ProjectAnalysisFacts" (
@@ -740,6 +749,90 @@ CREATE UNIQUE INDEX "IX_Payments_TransactionId"  ON "Payments" ("TransactionId")
 CREATE INDEX        "IX_Payments_Status"         ON "Payments" ("Status");
 CREATE INDEX        "IX_Payments_CreatedAt"      ON "Payments" ("CreatedAt" DESC);
 
+-- ── character_relationships ───────────────────────────────────
+CREATE TABLE "character_relationships" (
+    "Id"               uuid                     NOT NULL DEFAULT uuid_generate_v4(),
+    "ProjectId"        uuid                     NOT NULL,
+    "CharAId"          uuid                     NOT NULL,
+    "CharBId"          uuid                     NOT NULL,
+    "RelationType"     character varying(50)    NOT NULL DEFAULT 'Other',
+    "StrengthScore"    real                     NOT NULL DEFAULT 0,
+    "EvidenceChunkIds" jsonb,
+    "CreatedAt"        timestamp with time zone NOT NULL DEFAULT NOW(),
+    CONSTRAINT "PK_character_relationships" PRIMARY KEY ("Id"),
+    CONSTRAINT "CK_CharacterRelationships_CharOrder" CHECK ("CharAId" < "CharBId"),
+    CONSTRAINT "FK_character_relationships_Projects_ProjectId" FOREIGN KEY ("ProjectId")
+        REFERENCES "Projects" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_character_relationships_CharacterEntries_CharAId" FOREIGN KEY ("CharAId")
+        REFERENCES "CharacterEntries" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_character_relationships_CharacterEntries_CharBId" FOREIGN KEY ("CharBId")
+        REFERENCES "CharacterEntries" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_character_relationships_ProjectId" ON "character_relationships" ("ProjectId");
+CREATE INDEX "IX_character_relationships_CharAId"   ON "character_relationships" ("CharAId");
+CREATE INDEX "IX_character_relationships_CharBId"   ON "character_relationships" ("CharBId");
+CREATE UNIQUE INDEX "IX_character_relationships_ProjectId_CharAId_CharBId"
+    ON "character_relationships" ("ProjectId", "CharAId", "CharBId");
+
+-- ── analysis_job_rerun_audits ─────────────────────────────────
+CREATE TABLE "analysis_job_rerun_audits" (
+    "Id"        uuid                     NOT NULL DEFAULT uuid_generate_v4(),
+    "OldJobId"  uuid                     NOT NULL,
+    "NewJobId"  uuid                     NOT NULL,
+    "StaffId"   uuid                     NOT NULL,
+    "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
+    CONSTRAINT "PK_analysis_job_rerun_audits" PRIMARY KEY ("Id")
+);
+
+CREATE INDEX        "IX_analysis_job_rerun_audits_OldJobId"  ON "analysis_job_rerun_audits" ("OldJobId");
+CREATE UNIQUE INDEX "IX_analysis_job_rerun_audits_NewJobId"  ON "analysis_job_rerun_audits" ("NewJobId");
+CREATE INDEX        "IX_analysis_job_rerun_audits_StaffId"   ON "analysis_job_rerun_audits" ("StaffId");
+CREATE INDEX        "IX_analysis_job_rerun_audits_CreatedAt" ON "analysis_job_rerun_audits" ("CreatedAt");
+
+-- ── system_config ─────────────────────────────────────────────
+CREATE TABLE "system_config" (
+    "Key"       character varying(200) NOT NULL,
+    "Value"     jsonb                  NOT NULL DEFAULT 'null',
+    "UpdatedBy" uuid,
+    "UpdatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
+    CONSTRAINT "PK_system_config" PRIMARY KEY ("Key"),
+    CONSTRAINT "FK_system_config_Users_UpdatedBy" FOREIGN KEY ("UpdatedBy")
+        REFERENCES "Users" ("Id") ON DELETE SET NULL
+);
+
+CREATE INDEX "IX_system_config_UpdatedBy" ON "system_config" ("UpdatedBy");
+
+-- ── faqs ──────────────────────────────────────────────────────
+CREATE TABLE "faqs" (
+    "Id"        uuid                     NOT NULL DEFAULT uuid_generate_v4(),
+    "Question"  character varying(300)   NOT NULL,
+    "Answer"    character varying(5000)  NOT NULL,
+    "Category"  character varying(50)    NOT NULL DEFAULT 'General',
+    "Order"     integer                  NOT NULL DEFAULT 0,
+    "Published" boolean                  NOT NULL DEFAULT FALSE,
+    "UpdatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
+    CONSTRAINT "PK_faqs" PRIMARY KEY ("Id")
+);
+
+CREATE INDEX "IX_faqs_Category_Published_Order" ON "faqs" ("Category", "Published", "Order");
+CREATE INDEX "IX_faqs_UpdatedAt"                ON "faqs" ("UpdatedAt");
+
+-- ── writing_tips ──────────────────────────────────────────────
+CREATE TABLE "writing_tips" (
+    "Id"        uuid                     NOT NULL DEFAULT uuid_generate_v4(),
+    "Title"     character varying(200)   NOT NULL,
+    "Content"   character varying(8000)  NOT NULL,
+    "Tags"      text[]                   NOT NULL DEFAULT '{}'::text[],
+    "Published" boolean                  NOT NULL DEFAULT FALSE,
+    "UpdatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
+    CONSTRAINT "PK_writing_tips" PRIMARY KEY ("Id")
+);
+
+CREATE INDEX "IX_writing_tips_Published" ON "writing_tips" ("Published");
+CREATE INDEX "IX_writing_tips_UpdatedAt" ON "writing_tips" ("UpdatedAt");
+CREATE INDEX "IX_writing_tips_Tags_gin"  ON "writing_tips" USING GIN ("Tags");
+
 -- ────────────────────────────────────────────────────────────
 -- BƯỚC 5: SEED DATA
 -- ────────────────────────────────────────────────────────────
@@ -793,4 +886,12 @@ INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
     ('20260428181448_AddPasswordFormatVersion', '9.0.0'),
     ('20260503030041_AddProjectAnalysisFact', '9.0.0'),
     ('20260503031424_AddReportItemEvidenceChunkIds', '9.0.0'),
+    ('20260503060214_AddSystemConfig', '9.0.0'),
+    ('20260504165836_AddProjectAbuseFlags', '9.0.0'),
+    ('20260505183000_AddStaffFeedbackReadAt', '9.0.0'),
+    ('20260508003000_EnsureFaqsTable', '9.0.0'),
+    ('20260508004000_EnsureWritingTipsTable', '9.0.0'),
+    ('20260508005500_AddAnalysisJobRerunAudit', '9.0.0'),
+    ('20260508134500_AddCharacterRelationships', '9.0.0'),
+    ('20260513231800_AddStaffFeedbackResponseFields', '9.0.0'),
     ('20260514104000_AddNotifications', '9.0.0');

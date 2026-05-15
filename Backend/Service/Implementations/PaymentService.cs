@@ -139,7 +139,7 @@ namespace Service.Implementations
 
             var payOsResponse = await CreatePayOsLinkAsync(payOsRequest);
             payment.UpdatedAt = DateTime.UtcNow;
-            if (!string.IsNullOrWhiteSpace(payOsResponse.Data.PaymentLinkId))
+            if (!string.IsNullOrWhiteSpace(payOsResponse.Data?.PaymentLinkId))
             {
                 payment.Description = $"PayOS order {orderCodeText} | Link {payOsResponse.Data.PaymentLinkId}";
             }
@@ -151,8 +151,8 @@ namespace Service.Implementations
             {
                 PaymentId = payment.Id,
                 OrderCode = orderCode,
-                CheckoutUrl = payOsResponse.Data.CheckoutUrl,
-                QrCode = payOsResponse.Data.QrCode,
+                CheckoutUrl = payOsResponse.Data?.CheckoutUrl ?? string.Empty,
+                QrCode = payOsResponse.Data?.QrCode ?? string.Empty,
                 Amount = payment.Amount,
                 Description = description
             };

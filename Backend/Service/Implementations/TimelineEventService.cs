@@ -12,16 +12,10 @@ using System.Threading.Tasks;
 
 namespace Service.Implementations
 {
-    public class TimelineEventService : ITimelineEventService
+    public class TimelineEventService : ServiceBase, ITimelineEventService
     {
-        private readonly AppDbContext _context;
-        private readonly IConfiguration _config;
-
         public TimelineEventService(AppDbContext context, IConfiguration config)
-        {
-            _context = context;
-            _config = config;
-        }
+            : base(context, config) { }
 
         private static TimelineEventDto MapToDto(TimelineEvent e, string rawDek) => new TimelineEventDto
         {
@@ -29,7 +23,7 @@ namespace Service.Implementations
             ProjectId = e.ProjectId,
             Category = e.Category,
             Title = EncryptionHelper.DecryptWithMasterKey(e.Title, rawDek),
-            Description = e.Description != null ? EncryptionHelper.DecryptWithMasterKey(e.Description, rawDek) : null,
+            Description = EncryptionHelper.DecryptWithMasterKey(e.Description, rawDek),
             TimeLabel = e.TimeLabel != null ? EncryptionHelper.DecryptWithMasterKey(e.TimeLabel, rawDek) : null,
             SortOrder = e.SortOrder,
             Importance = e.Importance,
@@ -41,7 +35,7 @@ namespace Service.Implementations
         {
             await VerifyOwnershipAsync(projectId, userId);
             var user = await GetUserAsync(userId);
-            var rawDek = GetDek(user);
+            var rawDek = GetRawDek(user);
 
             var entities = await _context.TimelineEvents
                 .Where(e => e.ProjectId == projectId)
@@ -56,7 +50,7 @@ namespace Service.Implementations
         {
             await VerifyOwnershipAsync(projectId, userId);
             var user = await GetUserAsync(userId);
-            var rawDek = GetDek(user);
+            var rawDek = GetRawDek(user);
 
             int sortOrder = request.SortOrder;
             if (sortOrder == 0)
@@ -73,7 +67,7 @@ namespace Service.Implementations
                 ProjectId = projectId,
                 Category = request.Category,
                 Title = EncryptionHelper.EncryptWithMasterKey(request.Title, rawDek),
-                Description = request.Description != null ? EncryptionHelper.EncryptWithMasterKey(request.Description, rawDek) : null,
+                Description = EncryptionHelper.EncryptWithMasterKey(request.Description ?? string.Empty, rawDek),
                 TimeLabel = request.TimeLabel != null ? EncryptionHelper.EncryptWithMasterKey(request.TimeLabel, rawDek) : null,
                 SortOrder = sortOrder,
                 Importance = request.Importance,
@@ -89,7 +83,7 @@ namespace Service.Implementations
         {
             await VerifyOwnershipAsync(projectId, userId);
             var user = await GetUserAsync(userId);
-            var rawDek = GetDek(user);
+            var rawDek = GetRawDek(user);
 
             var entity = await _context.TimelineEvents.FirstOrDefaultAsync(e => e.Id == id && e.ProjectId == projectId)
                 ?? throw new KeyNotFoundException("Timeline event not found");
@@ -130,24 +124,5 @@ namespace Service.Implementations
             return true;
         }
 
-        // ── Helpers ───────────────────────────────────────────────────────────────
-
-        private async Task VerifyOwnershipAsync(Guid projectId, Guid userId)
-        {
-            var exists = await _context.Projects
-                .AnyAsync(p => p.Id == projectId && !p.IsDeleted && p.AuthorId == userId);
-            if (!exists)
-                throw new KeyNotFoundException("Dự án không tồn tại hoặc bạn không có quyền truy cập.");
-        }
-
-        private async Task<Repository.Entities.User> GetUserAsync(Guid userId) =>
-            await _context.Users.FindAsync(userId)
-                ?? throw new KeyNotFoundException("User không tồn tại.");
-
-        private string GetDek(Repository.Entities.User user)
-        {
-            var masterKey = _config["Security:MasterKey"]!;
-            return EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
-        }
     }
 }

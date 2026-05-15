@@ -8,7 +8,7 @@ namespace Api.Controllers
 {
     [Route("api/subscription")]
     [ApiController]
-    public class SubscriptionController : ControllerBase
+    public class SubscriptionController : AppControllerBase
     {
         private readonly ISubscriptionService _subscriptionService;
 
@@ -143,10 +143,5 @@ namespace Api.Controllers
 
         // ── Helper ────────────────────────────────────────────────────────────
 
-        private Guid? GetUserId()
-        {
-            var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            return Guid.TryParse(value, out var id) ? id : null;
-        }
     }
 }

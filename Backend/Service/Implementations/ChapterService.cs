@@ -19,16 +19,13 @@ using UglyToad.PdfPig;
 
 namespace Service.Implementations
 {
-    public class ChapterService : IChapterService
+    public class ChapterService : ServiceBase, IChapterService
     {
-        private readonly AppDbContext _context;
-        private readonly IConfiguration _config;
         private readonly IChunkingService _chunkingService;
 
         public ChapterService(AppDbContext context, IConfiguration config, IChunkingService chunkingService)
+            : base(context, config)
         {
-            _context = context;
-            _config = config;
             _chunkingService = chunkingService;
         }
 
@@ -622,19 +619,6 @@ namespace Service.Implementations
             return chapter;
         }
 
-        private async Task<string> GetRawDekAsync(Guid userId)
-        {
-            var user = await _context.Users.FindAsync(userId)
-                ?? throw new Exception("Người dùng không tồn tại.");
-
-            if (string.IsNullOrEmpty(user.DataEncryptionKey))
-                throw new Exception("Khóa mã hóa người dùng chưa được thiết lập.");
-
-            string masterKey = _config["Security:MasterKey"]
-                ?? throw new Exception("MasterKey không tìm thấy trong cấu hình.");
-
-            return EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey, masterKey);
-        }
 
         private static int CountWords(string text)
         {

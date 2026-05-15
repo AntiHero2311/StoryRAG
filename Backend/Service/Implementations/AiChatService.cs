@@ -14,10 +14,8 @@ using System.Text.RegularExpressions;
 
 namespace Service.Implementations
 {
-    public class AiChatService : IAiChatService
+    public class AiChatService : ServiceBase, IAiChatService
     {
-        private readonly AppDbContext _context;
-        private readonly IConfiguration _config;
         private readonly IEmbeddingService _embeddingService;
         private readonly ILogger<AiChatService> _logger;
         private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
@@ -48,9 +46,8 @@ namespace Service.Implementations
         ];
 
         public AiChatService(AppDbContext context, IConfiguration config, IEmbeddingService embeddingService, ILogger<AiChatService> logger)
+            : base(context, config)
         {
-            _context = context;
-            _config = config;
             _embeddingService = embeddingService;
             _logger = logger;
             _geminiChatExecutor = new GeminiChatFailoverExecutor(
@@ -119,9 +116,7 @@ namespace Service.Implementations
                 throw new InvalidOperationException("Chưa có nội dung được embed trong dự án này. Hãy chunk và embed các chương trước.");
 
             // 5. Decrypt chunk content để làm context
-            var user = await _context.Users.FindAsync(userId)!;
-            var masterKey = _config["Security:MasterKey"]!;
-            var rawDek = EncryptionHelper.DecryptWithMasterKey(user!.DataEncryptionKey!, masterKey);
+            var rawDek = await GetRawDekAsync(userId);
 
             // Decrypt project summary and AI instructions (always included as context)
             var projectSummary = contextProfile.IncludeSummary && !string.IsNullOrEmpty(project.Summary)
@@ -238,7 +233,7 @@ namespace Service.Implementations
                 .Select(m => new
                 {
                     m.Id,
-                    Question = m.Question,
+                    Question = (string?)m.Question,
                     Answer = m.Answer,
                     m.TotalTokens,
                     m.CreatedAt,
@@ -258,8 +253,8 @@ namespace Service.Implementations
                     r.TotalTokens,
                     r.CreatedAt,
                     Type = r.ActionType,
-                    OriginalText = r.OriginalText,
-                    Instruction = r.Instruction
+                    OriginalText = (string?)r.OriginalText,
+                    Instruction = (string?)r.Instruction
                 });
 
             // 3. Union + Sort + Paginate
@@ -272,9 +267,7 @@ namespace Service.Implementations
                 .ToListAsync();
 
             // 4. Decrypt and Map
-            var user = await _context.Users.FindAsync(userId);
-            var masterKey = _config["Security:MasterKey"]!;
-            var rawDek = EncryptionHelper.DecryptWithMasterKey(user!.DataEncryptionKey!, masterKey);
+            var rawDek = await GetRawDekAsync(userId);
 
             var items = rows.Select(r =>
             {

@@ -1,26 +1,19 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Service.Interfaces;
-using System.Security.Claims;
 
 namespace Api.Controllers
 {
     [Route("api/export")]
     [ApiController]
     [Authorize]
-    public class ExportController : ControllerBase
+    public class ExportController : AppControllerBase
     {
         private readonly IExportService _exportService;
 
         public ExportController(IExportService exportService)
         {
             _exportService = exportService;
-        }
-
-        private Guid? GetUserId()
-        {
-            var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
-            return Guid.TryParse(claim, out var id) ? id : null;
         }
 
         [HttpGet("{projectId:guid}")]

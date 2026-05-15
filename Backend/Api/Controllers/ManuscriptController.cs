@@ -9,7 +9,7 @@ namespace Api.Controllers
     [Route("api/manuscript")]
     [ApiController]
     [Authorize]
-    public class ManuscriptController : ControllerBase
+    public class ManuscriptController : AppControllerBase
     {
         private readonly IChapterService _chapterService;
         private readonly IExportService _exportService;
@@ -94,12 +94,6 @@ namespace Api.Controllers
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
 
-        private Guid? GetUserId()
-        {
-            var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                     ?? User.FindFirst("sub")?.Value;
-            return Guid.TryParse(claim, out var id) ? id : null;
-        }
 
         public class UploadManuscriptFormRequest
         {

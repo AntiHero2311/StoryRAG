@@ -9,16 +9,13 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
-    public class CharacterService : ICharacterService
+    public class CharacterService : ServiceBase, ICharacterService
     {
-        private readonly AppDbContext _context;
-        private readonly IConfiguration _config;
         private readonly IEmbeddingService _embeddingService;
 
         public CharacterService(AppDbContext context, IConfiguration config, IEmbeddingService embeddingService)
+            : base(context, config)
         {
-            _context = context;
-            _config = config;
             _embeddingService = embeddingService;
         }
 
@@ -27,7 +24,7 @@ namespace Service.Implementations
             await VerifyOwnershipAsync(projectId, userId);
 
             var user = await GetUserAsync(userId);
-            var rawDek = GetDek(user);
+            var rawDek = GetRawDek(user);
 
             return await _context.CharacterEntries
                 .Where(c => c.ProjectId == projectId)
@@ -46,7 +43,7 @@ namespace Service.Implementations
             if (entry == null) return null;
 
             var user = await GetUserAsync(userId);
-            var rawDek = GetDek(user);
+            var rawDek = GetRawDek(user);
             return MapToResponse(entry, rawDek);
         }
 
@@ -55,7 +52,7 @@ namespace Service.Implementations
             await VerifyOwnershipAsync(projectId, userId);
 
             var user = await GetUserAsync(userId);
-            var rawDek = GetDek(user);
+            var rawDek = GetRawDek(user);
 
             var entry = new CharacterEntry
             {
@@ -94,7 +91,7 @@ namespace Service.Implementations
                 ?? throw new KeyNotFoundException("Không tìm thấy nhân vật.");
 
             var user = await GetUserAsync(userId);
-            var rawDek = GetDek(user);
+            var rawDek = GetRawDek(user);
 
             bool contentChanged = false;
 
@@ -150,7 +147,7 @@ namespace Service.Implementations
                 ?? throw new KeyNotFoundException("Không tìm thấy nhân vật.");
 
             var user = await GetUserAsync(userId);
-            var rawDek = GetDek(user);
+            var rawDek = GetRawDek(user);
 
             var name = EncryptionHelper.DecryptWithMasterKey(entry.Name, rawDek);
             var description = EncryptionHelper.DecryptWithMasterKey(entry.Description, rawDek);
@@ -162,26 +159,6 @@ namespace Service.Implementations
 
             await _context.SaveChangesAsync();
             return MapToResponse(entry, rawDek);
-        }
-
-        // ── Helpers ───────────────────────────────────────────────────────────────
-
-        private async Task VerifyOwnershipAsync(Guid projectId, Guid userId)
-        {
-            var exists = await _context.Projects
-                .AnyAsync(p => p.Id == projectId && !p.IsDeleted && p.AuthorId == userId);
-            if (!exists)
-                throw new KeyNotFoundException("Dự án không tồn tại hoặc bạn không có quyền truy cập.");
-        }
-
-        private async Task<Repository.Entities.User> GetUserAsync(Guid userId) =>
-            await _context.Users.FindAsync(userId)
-                ?? throw new KeyNotFoundException("User không tồn tại.");
-
-        private string GetDek(Repository.Entities.User user)
-        {
-            var masterKey = _config["Security:MasterKey"]!;
-            return EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
         }
 
         private async Task<float[]> EmbedDocumentAsync(string name, string role, string description, string background)

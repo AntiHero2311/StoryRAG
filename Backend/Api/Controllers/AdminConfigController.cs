@@ -9,7 +9,7 @@ namespace Api.Controllers
     [Route("api/admin/rag-config")]
     [ApiController]
     [Authorize(Roles = "Admin")]
-    public class AdminConfigController : ControllerBase
+    public class AdminConfigController : AppControllerBase
     {
         private readonly ISystemConfigService _sysConfig;
 
@@ -82,15 +82,14 @@ namespace Api.Controllers
                 return BadRequest(new { Message = "Validation thất bại.", Errors = errors });
 
             // Parse admin identity
-            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (!Guid.TryParse(userIdStr, out var userId))
-                return Unauthorized(new { Message = "Không xác định được danh tính admin." });
+            var userId = GetUserId();
+            if (userId == null) return Unauthorized(new { Message = "Không xác định được danh tính admin." });
 
-            await _sysConfig.SetAsync(KeyChunkSize,    req.ChunkSize,    userId);
-            await _sysConfig.SetAsync(KeyChunkOverlap, req.ChunkOverlap, userId);
-            await _sysConfig.SetAsync(KeyTopKChat,     req.TopKChat,     userId);
-            await _sysConfig.SetAsync(KeyTopKReport,   req.TopKReport,   userId);
-            await _sysConfig.SetAsync(KeySplitter,     req.Splitter!.ToLower(), userId);
+            await _sysConfig.SetAsync(KeyChunkSize,    req.ChunkSize,    userId.Value);
+            await _sysConfig.SetAsync(KeyChunkOverlap, req.ChunkOverlap, userId.Value);
+            await _sysConfig.SetAsync(KeyTopKChat,     req.TopKChat,     userId.Value);
+            await _sysConfig.SetAsync(KeyTopKReport,   req.TopKReport,   userId.Value);
+            await _sysConfig.SetAsync(KeySplitter,     req.Splitter!.ToLower(), userId.Value);
 
             return Ok(new { Message = "Cấu hình RAG đã được cập nhật thành công." });
         }

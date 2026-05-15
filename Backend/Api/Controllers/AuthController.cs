@@ -8,7 +8,7 @@ namespace Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class AuthController : ControllerBase
+    public class AuthController : AppControllerBase
     {
         private readonly IAuthService _authService;
 
@@ -109,13 +109,10 @@ namespace Api.Controllers
 
             try
             {
-                var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out Guid userId))
-                {
-                    return Unauthorized(new { Message = "Không thể xác thực người dùng." });
-                }
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
 
-                await _authService.ChangePasswordAsync(userId, request);
+                await _authService.ChangePasswordAsync(userId.Value, request);
                 return Ok(new { Message = "Đổi mật khẩu thành công." });
             }
             catch (Exception ex)

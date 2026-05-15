@@ -11,7 +11,7 @@ namespace Api.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Authorize(AuthenticationSchemes = "Bearer")]
-    public class PaymentController : ControllerBase
+    public class PaymentController : AppControllerBase
     {
         private readonly IPaymentService _paymentService;
         private readonly ILogger<PaymentController> _logger;
@@ -22,13 +22,6 @@ namespace Api.Controllers
             _logger = logger;
         }
 
-        private Guid GetUserId()
-        {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
-                throw new UnauthorizedAccessException("Invalid user context");
-            return userId;
-        }
 
         /// <summary>Tạo payment record mới</summary>
         [HttpPost("create")]
@@ -36,7 +29,7 @@ namespace Api.Controllers
         {
             try
             {
-                var userId = GetUserId();
+                var userId = GetRequiredUserId();
                 var payment = await _paymentService.CreatePaymentAsync(userId, request);
                 return Ok(new { success = true, data = payment });
             }
@@ -55,7 +48,7 @@ namespace Api.Controllers
         {
             try
             {
-                var userId = GetUserId();
+                var userId = GetRequiredUserId();
                 var payment = await _paymentService.UpdatePaymentStatusAsync(paymentId, userId, request);
                 return Ok(new { success = true, data = payment });
             }
@@ -72,7 +65,7 @@ namespace Api.Controllers
         {
             try
             {
-                var userId = GetUserId();
+                var userId = GetRequiredUserId();
                 var history = await _paymentService.GetPaymentHistoryAsync(userId, page, pageSize);
                 return Ok(new { success = true, data = history });
             }
@@ -89,7 +82,7 @@ namespace Api.Controllers
         {
             try
             {
-                var userId = GetUserId();
+                var userId = GetRequiredUserId();
                 var payment = await _paymentService.GetPaymentByIdAsync(paymentId, userId);
                 return Ok(new { success = true, data = payment });
             }
@@ -124,7 +117,7 @@ namespace Api.Controllers
         {
             try
             {
-                var userId = GetUserId();
+                var userId = GetRequiredUserId();
                 var payment = await _paymentService.RefundPaymentAsync(paymentId, userId);
                 return Ok(new { success = true, data = payment });
             }
@@ -141,7 +134,7 @@ namespace Api.Controllers
         {
             try
             {
-                var userId = GetUserId();
+                var userId = GetRequiredUserId();
                 var result = await _paymentService.CreatePayOsPaymentLinkAsync(userId, request);
                 return Ok(new { success = true, data = result });
             }
@@ -180,7 +173,7 @@ namespace Api.Controllers
         {
             try
             {
-                var userId = GetUserId();
+                var userId = GetRequiredUserId();
                 var result = await _paymentService.GetPayOsOrderStatusAsync(userId, orderCode);
                 return Ok(new { success = true, data = result });
             }
@@ -197,7 +190,7 @@ namespace Api.Controllers
         {
             try
             {
-                var userId = GetUserId();
+                var userId = GetRequiredUserId();
                 var result = await _paymentService.CreateVnPayPaymentUrlAsync(userId, request);
                 return Ok(new { success = true, data = result });
             }
@@ -232,7 +225,7 @@ namespace Api.Controllers
         {
             try
             {
-                var userId = GetUserId();
+                var userId = GetRequiredUserId();
                 var result = await _paymentService.GetVnPayOrderStatusAsync(userId, txnRef);
                 return Ok(new { success = true, data = result });
             }

@@ -11,7 +11,7 @@ namespace Api.Controllers
     [Route("api/bug-reports")]
     [ApiController]
     [Authorize]
-    public class BugReportController : ControllerBase
+    public class BugReportController : AppControllerBase
     {
         private readonly IBugReportService _service;
 
@@ -106,11 +106,5 @@ namespace Api.Controllers
             }
         }
 
-        private Guid? GetUserId()
-        {
-            var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                     ?? User.FindFirst("sub")?.Value;
-            return Guid.TryParse(claim, out var id) ? id : null;
-        }
     }
 }

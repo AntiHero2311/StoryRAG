@@ -9,7 +9,7 @@ namespace Api.Controllers
     [Route("api/projects/{projectId:guid}/character")]
     [ApiController]
     [Authorize]
-    public class CharacterController : ControllerBase
+    public class CharacterController : AppControllerBase
     {
         private readonly ICharacterService _service;
         private readonly ICharacterRelationshipService _relationshipService;
@@ -134,10 +134,5 @@ namespace Api.Controllers
             catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
         }
 
-        private Guid? GetUserId()
-        {
-            var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            return Guid.TryParse(value, out var id) ? id : null;
-        }
     }
 }

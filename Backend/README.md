@@ -482,6 +482,8 @@ Nếu bạn reset DB bằng `supabase_full_reset.sql`, cần đảm bảo migrat
 
 | Service | Vai trò |
 |---------|---------|
+| `ServiceBase` | **Base class** cho tất cả service cần DB + mã hoá: cung cấp `VerifyOwnershipAsync`, `GetUserAsync`, `GetRawDek`, `GetRawDekAsync` — loại bỏ code trùng lặp ở 13 service |
+| `AppControllerBase` | **Base controller** cho tất cả controller cần xác thực: cung cấp `GetUserId()` (nullable) và `GetRequiredUserId()` (throw nếu chưa đăng nhập) — loại bỏ code trùng lặp ở 21 controller |
 | `EmbeddingService` | `batchEmbedContents` với batch/token throttling (config qua `Gemini:Embedding*`), ưu tiên key chuyên embed `Gemini:EmbeddingApiKey`; nếu không có thì fallback theo use-case giữa `Gemini:AnalyzeApiKey` và `Gemini:ChatApiKey` |
 | `AiChatService` | Gemini-only chat, lưu lịch sử |
 | `AiRewriteService` | Gemini-only rewrite, lưu lịch sử |
