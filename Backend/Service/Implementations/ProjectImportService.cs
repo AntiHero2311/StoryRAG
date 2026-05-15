@@ -19,6 +19,7 @@ namespace Service.Implementations
         private readonly IConfiguration _config;
         private readonly ILogger<ProjectImportService> _logger;
         private readonly IChunkingService _chunkingService;
+        private readonly IEmbeddingService _embeddingService;
         private readonly INotificationService _notificationService;
         private readonly GeminiChatFailoverExecutor _gemini;
 
@@ -32,19 +33,23 @@ namespace Service.Implementations
             IConfiguration config,
             ILogger<ProjectImportService> logger,
             IChunkingService chunkingService,
+            IEmbeddingService embeddingService,
             INotificationService notificationService)
         {
             _context = context;
             _config = config;
             _logger = logger;
             _chunkingService = chunkingService;
+            _embeddingService = embeddingService;
             _notificationService = notificationService;
+            // Dùng ImportModels (gemini flash, RPM cao) thay vì ChatModels (gemma, 15 RPM)
             _gemini = new GeminiChatFailoverExecutor(
                 config,
                 logger,
                 "Project Import AI Extraction",
                 GeminiPrimaryKeyRole.Analyze,
-                TimeSpan.FromMinutes(5));
+                TimeSpan.FromMinutes(8),
+                modelsConfigKey: "Gemini:ImportModels");
         }
 
         public async Task<ProjectImportResult> ImportFromManuscriptAsync(
@@ -87,6 +92,7 @@ namespace Service.Implementations
             var chapterParts = ManuscriptExtractorHelper.SplitIntoChapterParts(plainText, splitByHeadings: true);
             int chaptersImported = 0;
             var chapterContentSamples = new List<string>(); // Dùng để AI đọc sau
+            var plainContentByVersionId = new Dictionary<Guid, string>(); // plain text để chunk
             var now = DateTime.UtcNow;
             var chaptersToInsert = new List<Chapter>(chapterParts.Count);
             var versionsToInsert = new List<ChapterVersion>(chapterParts.Count);
@@ -126,10 +132,9 @@ namespace Service.Implementations
                 };
                 versionsToInsert.Add(version);
                 currentVersionByChapterId[chapterId] = versionId;
-
+                plainContentByVersionId[versionId] = part.Content;
                 chaptersImported++;
 
-                // Lấy mẫu tối đa MaxChaptersForAiScan chương đầu để AI phân tích
                 if (currentChapterNumber <= MaxChaptersForAiScan)
                 {
                     var sample = part.Content.Length > MaxCharsPerChapterSummary
@@ -152,15 +157,122 @@ namespace Service.Implementations
             }
             await _context.SaveChangesAsync();
 
-            // ── Bước 5: AI Trích xuất thông tin ─────────────────────────────────
-            int charactersExtracted = 0, settingsExtracted = 0, timelineEventsExtracted = 0;
+            // ── Bước 5: Trích xuất nhanh bằng logic (không cần AI) ──────────────
+            // Điền placeholder tức thì để project có dữ liệu ngay cả khi AI thất bại sau này.
+            int timelineEventsExtracted = 0;
             string? extractedSummary = null;
+
+            // Summary heuristic: ưu tiên tóm tắt/lời mở đầu của tác giả trước Chương 1
+            var heuristicSummary = ExtractHeuristicSummary(plainText, chapterParts);
+            if (!string.IsNullOrWhiteSpace(heuristicSummary))
+            {
+                extractedSummary = heuristicSummary;
+                project.Summary = EncryptionHelper.EncryptWithMasterKey(heuristicSummary, rawDek);
+            }
+
+            // Genre heuristic: parse "Thể loại: X, Y" rồi match với DB
+            int genresLinked = 0;
+            var genreNames = ExtractGenreNames(plainText);
+            if (genreNames.Count > 0)
+            {
+                var allGenres = await _context.Genres.ToListAsync();
+                foreach (var rawName in genreNames)
+                {
+                    var normalized = NormalizeForMatch(rawName);
+                    var match = allGenres.FirstOrDefault(g =>
+                        NormalizeForMatch(g.Name).Contains(normalized) ||
+                        normalized.Contains(NormalizeForMatch(g.Name)) ||
+                        NormalizeForMatch(g.Slug).Contains(normalized) ||
+                        normalized.Contains(NormalizeForMatch(g.Slug)));
+
+                    if (match == null) continue;
+
+                    // Không thêm trùng
+                    var alreadyAdded = _context.ProjectGenres.Local
+                        .Any(pg => pg.ProjectId == project.Id && pg.GenreId == match.Id);
+                    if (alreadyAdded) continue;
+
+                    _context.ProjectGenres.Add(new ProjectGenre
+                    {
+                        ProjectId = project.Id,
+                        GenreId = match.Id,
+                    });
+                    genresLinked++;
+                }
+                if (genresLinked > 0)
+                    await _context.SaveChangesAsync();
+            }
+
+            // Timeline heuristic: tên chương làm sự kiện
+            int sortOrder = 0;
+            foreach (var part in chapterParts)
+            {
+                var chapterTitle = part.Title ?? $"Chương {sortOrder + 1}";
+                _context.TimelineEvents.Add(new TimelineEvent
+                {
+                    ProjectId = project.Id,
+                    Title = EncryptionHelper.EncryptWithMasterKey(chapterTitle, rawDek),
+                    Description = EncryptionHelper.EncryptWithMasterKey(string.Empty, rawDek),
+                    SortOrder = sortOrder++,
+                    Category = "Story",
+                    Importance = "Normal",
+                    CreatedAt = DateTime.UtcNow,
+                });
+                timelineEventsExtracted++;
+            }
+            await _context.SaveChangesAsync();
+
+            // ── Bước 6: Chunk tất cả chương ─────────────────────────────────────
+            _logger.LogInformation("Import {ProjectId}: bắt đầu chunk {Count} chương.", project.Id, versionsToInsert.Count);
+            var chunksToInsert = new List<ChapterChunk>();
+            foreach (var version in versionsToInsert)
+            {
+                if (!plainContentByVersionId.TryGetValue(version.Id, out var plainContent))
+                    continue;
+
+                var textChunks = _chunkingService.SplitIntoChunks(plainContent);
+                var chunkEntities = textChunks.Select((chunkText, idx) => new ChapterChunk
+                {
+                    VersionId = version.Id,
+                    ProjectId = project.Id,
+                    ChunkIndex = idx,
+                    Content = EncryptionHelper.EncryptWithMasterKey(chunkText, rawDek),
+                    TokenCount = _chunkingService.EstimateTokenCount(chunkText),
+                }).ToList();
+
+                chunksToInsert.AddRange(chunkEntities);
+                version.IsChunked = true;
+                version.IsEmbedded = false;
+                version.UpdatedAt = DateTime.UtcNow;
+            }
+            if (chunksToInsert.Count > 0)
+                _context.ChapterChunks.AddRange(chunksToInsert);
+            await _context.SaveChangesAsync();
+
+            // ── Bước 7: Embed tất cả chương ─────────────────────────────────────
+            _logger.LogInformation("Import {ProjectId}: bắt đầu embed {Count} chương.", project.Id, chaptersToInsert.Count);
+            int embeddedChapters = 0;
+            foreach (var chapter in chaptersToInsert)
+            {
+                try
+                {
+                    await _embeddingService.EmbedChapterAsync(chapter.Id, userId);
+                    embeddedChapters++;
+                }
+                catch (Exception ex)
+                {
+                    // Embed thất bại không fatal: AutoEmbeddingWorker sẽ retry sau
+                    _logger.LogWarning(ex, "Import {ProjectId}: embed chương {ChapterId} thất bại, worker sẽ retry.", project.Id, chapter.Id);
+                }
+            }
+            _logger.LogInformation("Import {ProjectId}: đã embed {Done}/{Total} chương.", project.Id, embeddedChapters, chaptersToInsert.Count);
+
+            // ── Bước 8: AI trích xuất sau khi embed xong ────────────────────────
+            int charactersExtracted = 0, settingsExtracted = 0;
             bool aiExtractionFailed = false;
             string? aiExtractionError = null;
 
-            // Kiểm tra subscription token budget (non-fatal nếu không có)
             bool hasTokenBudget = await CheckTokenBudgetAsync(userId);
-
             if (hasTokenBudget && chapterContentSamples.Count > 0)
             {
                 try
@@ -170,25 +282,57 @@ namespace Service.Implementations
 
                     if (aiExtracted != null)
                     {
-                        var counts = await ApplyAiExtractionAsync(project, aiExtracted, rawDek, isReExtract: false);
-                        extractedSummary = counts.Summary;
-                        charactersExtracted = counts.Characters;
-                        settingsExtracted = counts.Settings;
-                        timelineEventsExtracted = counts.Timeline;
+                        // AI ghi đè summary và thêm nhân vật/bối cảnh; timeline đã có heuristic nên skip
+                        if (!string.IsNullOrWhiteSpace(aiExtracted.Summary))
+                        {
+                            extractedSummary = aiExtracted.Summary;
+                            project.Summary = EncryptionHelper.EncryptWithMasterKey(aiExtracted.Summary, rawDek);
+                        }
+
+                        foreach (var character in aiExtracted.Characters ?? new())
+                        {
+                            if (string.IsNullOrWhiteSpace(character.Name)) continue;
+                            _context.CharacterEntries.Add(new CharacterEntry
+                            {
+                                Id = Guid.NewGuid(),
+                                ProjectId = project.Id,
+                                Name = EncryptionHelper.EncryptWithMasterKey(character.Name, rawDek),
+                                Role = "Supporting",
+                                Description = EncryptionHelper.EncryptWithMasterKey(character.Description ?? string.Empty, rawDek),
+                                CreatedAt = DateTime.UtcNow,
+                            });
+                            charactersExtracted++;
+                        }
+
+                        foreach (var setting in aiExtracted.Settings ?? new())
+                        {
+                            if (string.IsNullOrWhiteSpace(setting.Name)) continue;
+                            _context.WorldbuildingEntries.Add(new WorldbuildingEntry
+                            {
+                                Id = Guid.NewGuid(),
+                                ProjectId = project.Id,
+                                Title = EncryptionHelper.EncryptWithMasterKey(setting.Name, rawDek),
+                                Content = EncryptionHelper.EncryptWithMasterKey(setting.Description ?? string.Empty, rawDek),
+                                Category = "World",
+                                CreatedAt = DateTime.UtcNow,
+                            });
+                            settingsExtracted++;
+                        }
+
+                        await _context.SaveChangesAsync();
                     }
                 }
                 catch (Exception ex)
                 {
-                    // AI extraction là non-fatal: project và chapter đã được tạo xong
                     aiExtractionFailed = true;
                     aiExtractionError = ex.Message;
-                    _logger.LogWarning(ex, "AI extraction failed for project import. Project {ProjectId} still created. Use /reextract to retry.", project.Id);
+                    _logger.LogWarning(ex, "AI extraction failed after embed for project {ProjectId}. Use /reextract to retry.", project.Id);
                 }
             }
             else if (!hasTokenBudget)
             {
                 aiExtractionFailed = true;
-                aiExtractionError = "Vượt giới hạn token subscription. Nâng cấp gói để dùng tính năng trích xuất AI.";
+                aiExtractionError = "Vượt giới hạn token subscription.";
             }
 
             var result = new ProjectImportResult
@@ -199,15 +343,17 @@ namespace Service.Implementations
                 CharactersExtracted = charactersExtracted,
                 SettingsExtracted = settingsExtracted,
                 TimelineEventsExtracted = timelineEventsExtracted,
+                GenresLinked = genresLinked,
                 Summary = extractedSummary,
                 AiExtractionFailed = aiExtractionFailed,
                 AiExtractionError = aiExtractionError,
             };
 
-            // ── Bước 6: Gửi notification vào chuông ─────────────────────────────
+            // ── Bước 9: Gửi notification ─────────────────────────────────────────
             try
             {
                 var details = new List<string> { $"{chaptersImported} chương" };
+                if (genresLinked > 0) details.Add($"{genresLinked} thể loại");
                 if (charactersExtracted > 0) details.Add($"{charactersExtracted} nhân vật");
                 if (settingsExtracted > 0) details.Add($"{settingsExtracted} bối cảnh");
                 if (timelineEventsExtracted > 0) details.Add($"{timelineEventsExtracted} sự kiện");
@@ -466,6 +612,181 @@ namespace Service.Implementations
                 _logger.LogWarning(ex, "Failed to parse AI extraction JSON. Raw: {Raw}", rawJson[..Math.Min(500, rawJson.Length)]);
                 return null;
             }
+        }
+
+        // Từ khóa nhận diện trường tóm tắt/nội dung của tác giả (dùng cả dạng "Key:" và dạng heading)
+        private static readonly string[] SummaryFieldKeywords =
+        [
+            "nội dung", "noi dung", "tóm tắt", "tom tat",
+            "mô tả", "mo ta", "giới thiệu", "gioi thieu",
+            "lời mở đầu", "loi mo dau", "lời tựa", "loi tua",
+            "synopsis", "summary", "description", "introduction", "preface", "about", "blurb",
+        ];
+
+        /// <summary>
+        /// Tìm tóm tắt/lời mở đầu do tác giả cung cấp theo thứ tự ưu tiên:
+        /// 1) Dòng dạng "Nội Dung: [giá trị]" hoặc "Tóm Tắt: [giá trị]" trước Chương 1
+        ///    — bao gồm nội dung nhiều dòng tiếp theo cho đến dòng trống hoặc field khác.
+        /// 2) Đoạn văn tự do (không có nhãn) trước Chương 1 nếu đủ dài.
+        /// 3) Đoạn đầu tiên của Chương 1 làm fallback.
+        /// </summary>
+        private static string? ExtractHeuristicSummary(
+            string fullPlainText,
+            IReadOnlyList<ManuscriptExtractorHelper.ManuscriptChapterPart> chapterParts)
+        {
+            const int maxSummaryLen = 800;
+
+            var preChapterText = ExtractPreChapterText(fullPlainText);
+
+            if (!string.IsNullOrWhiteSpace(preChapterText))
+            {
+                var lines = preChapterText
+                    .Replace("\r\n", "\n").Replace('\r', '\n')
+                    .Split('\n');
+
+                // ── Ưu tiên 1: tìm dòng dạng "Key: Value" ───────────────────────
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    var line = lines[i];
+                    var colonIdx = line.IndexOf(':');
+                    if (colonIdx <= 0) continue;
+
+                    var key = line[..colonIdx].Trim().ToLowerInvariant();
+                    // Loại bỏ dấu tiếng Việt khi so sánh
+                    if (!SummaryFieldKeywords.Any(kw => key.Contains(kw)))
+                        continue;
+
+                    // Lấy giá trị sau dấu ":"
+                    var inlineValue = colonIdx + 1 < line.Length
+                        ? line[(colonIdx + 1)..].Trim()
+                        : string.Empty;
+
+                    // Thu thập thêm các dòng tiếp theo (multi-line value)
+                    var valueBuilder = new StringBuilder();
+                    if (!string.IsNullOrWhiteSpace(inlineValue))
+                        valueBuilder.Append(inlineValue);
+
+                    for (var j = i + 1; j < lines.Length; j++)
+                    {
+                        var nextLine = lines[j].Trim();
+                        // Dừng khi gặp dòng trống (blank separator) hoặc field mới
+                        if (string.IsNullOrWhiteSpace(nextLine)) break;
+                        var nextColon = nextLine.IndexOf(':');
+                        if (nextColon > 0)
+                        {
+                            var nextKey = nextLine[..nextColon].Trim().ToLowerInvariant();
+                            // Là field mới nếu key ngắn (tên trường thường < 30 ký tự)
+                            if (nextKey.Length < 30) break;
+                        }
+                        if (valueBuilder.Length > 0) valueBuilder.Append(' ');
+                        valueBuilder.Append(nextLine);
+                    }
+
+                    var value = valueBuilder.ToString().Trim();
+                    if (!string.IsNullOrWhiteSpace(value))
+                        return value.Length <= maxSummaryLen ? value : value[..maxSummaryLen] + "...";
+                }
+
+                // ── Ưu tiên 2: đoạn văn tự do đủ dài trước Chương 1 ─────────────
+                var paragraphs = preChapterText
+                    .Replace("\r\n", "\n").Replace('\r', '\n')
+                    .Split(new[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
+
+                foreach (var para in paragraphs)
+                {
+                    var trimmed = para.Trim();
+                    // Bỏ qua đoạn ngắn kiểu "Tên truyện: ...", "Thể loại: ..."
+                    if (trimmed.Length < 80) continue;
+                    return trimmed.Length <= maxSummaryLen ? trimmed : trimmed[..maxSummaryLen] + "...";
+                }
+            }
+
+            // ── Fallback: đoạn đầu chương 1 ─────────────────────────────────────
+            var firstContent = chapterParts.FirstOrDefault()?.Content ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(firstContent)) return null;
+
+            var ch1Paras = firstContent.Replace("\r\n", "\n").Replace('\r', '\n')
+                .Split(new[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var para in ch1Paras)
+            {
+                var trimmed = para.Trim();
+                if (trimmed.Length < 30) continue;
+                return trimmed.Length <= maxSummaryLen ? trimmed : trimmed[..maxSummaryLen] + "...";
+            }
+
+            return null;
+        }
+
+        // Từ khóa nhận diện trường thể loại
+        private static readonly string[] GenreFieldKeywords =
+            ["thể loại", "the loai", "genre", "genres", "category", "categories", "loại", "loai"];
+
+        /// <summary>
+        /// Parse danh sách thể loại từ dòng dạng "Thể loại: Fantasy, Phiêu Lưu" trước Chương 1.
+        /// Tách theo dấu phẩy, gạch ngang, dấu chấm phẩy.
+        /// </summary>
+        private static List<string> ExtractGenreNames(string fullPlainText)
+        {
+            var preText = ExtractPreChapterText(fullPlainText);
+            if (string.IsNullOrWhiteSpace(preText)) return [];
+
+            var lines = preText.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+            foreach (var line in lines)
+            {
+                var colonIdx = line.IndexOf(':');
+                if (colonIdx <= 0) continue;
+
+                var key = line[..colonIdx].Trim().ToLowerInvariant();
+                if (!GenreFieldKeywords.Any(kw => key.Contains(kw))) continue;
+
+                var value = line[(colonIdx + 1)..].Trim();
+                if (string.IsNullOrWhiteSpace(value)) continue;
+
+                return value
+                    .Split(new[] { ',', ';', '/', '|' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim())
+                    .Where(s => s.Length > 0)
+                    .ToList();
+            }
+            return [];
+        }
+
+        /// <summary>
+        /// Chuẩn hóa chuỗi để so sánh: chuyển thường, bỏ dấu tiếng Việt, bỏ ký tự đặc biệt.
+        /// </summary>
+        private static string NormalizeForMatch(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+
+            var normalized = input.ToLowerInvariant().Trim();
+
+            // Bỏ dấu tiếng Việt
+            normalized = System.Text.RegularExpressions.Regex.Replace(
+                normalized.Normalize(System.Text.NormalizationForm.FormD),
+                @"\p{Mn}", string.Empty);
+
+            // Bỏ ký tự đặc biệt, chỉ giữ chữ cái và số
+            normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"[^a-z0-9\s]", " ");
+            normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"\s+", " ").Trim();
+
+            return normalized;
+        }
+
+        /// <summary>Lấy toàn bộ văn bản trước tiêu đề "Chương X" đầu tiên.</summary>
+        private static string ExtractPreChapterText(string fullText)
+        {
+            if (string.IsNullOrWhiteSpace(fullText)) return string.Empty;
+
+            var normalized = fullText.Replace("\r\n", "\n").Replace('\r', '\n');
+            var chapterHeadingRegex = new System.Text.RegularExpressions.Regex(
+                @"(?im)^\s*(chapter|ch(?:u|ư)(?:o|ơ)ng)\s+([0-9ivxlcdm]+)\b",
+                System.Text.RegularExpressions.RegexOptions.Compiled);
+
+            var firstMatch = chapterHeadingRegex.Match(normalized);
+            if (!firstMatch.Success) return string.Empty;
+
+            return normalized[..firstMatch.Index].Trim();
         }
 
         private static int CountWords(string text)

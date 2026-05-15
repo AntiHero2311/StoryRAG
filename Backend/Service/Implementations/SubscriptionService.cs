@@ -9,10 +9,12 @@ namespace Service.Implementations
     public class SubscriptionService : ISubscriptionService
     {
         private readonly AppDbContext _db;
+        private readonly INotificationService _notificationService;
 
-        public SubscriptionService(AppDbContext db)
+        public SubscriptionService(AppDbContext db, INotificationService notificationService)
         {
             _db = db;
+            _notificationService = notificationService;
         }
 
         // ── Plans ─────────────────────────────────────────────────────────────
@@ -109,7 +111,18 @@ namespace Service.Implementations
                     };
                     _db.UserSubscriptions.Add(newSub);
                     await _db.SaveChangesAsync();
-                    
+
+                    try
+                    {
+                        await _notificationService.CreateForUserAsync(
+                            userId,
+                            "info",
+                            "Gói đã được hạ cấp",
+                            $"Gói của bạn đã được chuyển sang \"{nextPlan.PlanName}\". Gói mới có hiệu lực từ hôm nay đến {now.AddMonths(1):dd/MM/yyyy}.",
+                            tag: $"subscription-downgrade-activated-{newSub.Id}");
+                    }
+                    catch { /* Không để lỗi notification chặn luồng chính */ }
+
                     newSub.Plan = nextPlan;
                     return MapSubscription(newSub);
                 }
@@ -177,6 +190,17 @@ namespace Service.Implementations
             _db.UserSubscriptions.Add(newSub);
             await _db.SaveChangesAsync();
 
+            try
+            {
+                await _notificationService.CreateForUserAsync(
+                    userId,
+                    "success",
+                    "Đăng ký gói thành công",
+                    $"Bạn đã đăng ký thành công gói \"{plan.PlanName}\". Gói có hiệu lực đến {newSub.EndDate:dd/MM/yyyy}.",
+                    tag: $"subscription-new-{newSub.Id}");
+            }
+            catch { /* Không để lỗi notification chặn luồng chính */ }
+
             // Load navigation property
             newSub.Plan = plan;
             return MapSubscription(newSub);
@@ -212,6 +236,18 @@ namespace Service.Implementations
                     if (p != null) { p.SubscriptionId = current.Id; p.UpdatedAt = DateTime.UtcNow; }
                     
                     await _db.SaveChangesAsync();
+
+                    try
+                    {
+                        await _notificationService.CreateForUserAsync(
+                            userId,
+                            "success",
+                            "Gia hạn gói thành công",
+                            $"Bạn đã gia hạn thành công gói \"{plan.PlanName}\". Gói hiện có hiệu lực đến {current.EndDate:dd/MM/yyyy}.",
+                            tag: $"subscription-renew-{current.Id}-{current.EndDate:yyyyMMdd}");
+                    }
+                    catch { /* Không để lỗi notification chặn luồng chính */ }
+
                     return MapSubscription(current);
                 }
                 
@@ -221,10 +257,21 @@ namespace Service.Implementations
                     current.NextPlanId = planId;
                     
                     var p = await _db.Payments.FindAsync(paymentId);
-                    if (p != null) { p.UpdatedAt = DateTime.UtcNow; } // Downgrade payment logic might need more thought, but following request
+                    if (p != null) { p.UpdatedAt = DateTime.UtcNow; }
                     
                     await _db.SaveChangesAsync();
-                    
+
+                    try
+                    {
+                        await _notificationService.CreateForUserAsync(
+                            userId,
+                            "warning",
+                            "Hạ cấp gói đã được lên lịch",
+                            $"Yêu cầu hạ cấp xuống gói \"{plan.PlanName}\" đã được ghi nhận. Gói mới sẽ có hiệu lực sau khi gói \"{current.Plan.PlanName}\" hiện tại hết hạn vào {current.EndDate:dd/MM/yyyy}.",
+                            tag: $"subscription-downgrade-scheduled-{current.Id}");
+                    }
+                    catch { /* Không để lỗi notification chặn luồng chính */ }
+
                     // Load NextPlan for mapping
                     current.NextPlan = plan;
                     return MapSubscription(current);
@@ -258,6 +305,30 @@ namespace Service.Implementations
                 payment.UpdatedAt = DateTime.UtcNow;
                 await _db.SaveChangesAsync();
             }
+
+            try
+            {
+                var isUpgrade = current != null;
+                if (isUpgrade)
+                {
+                    await _notificationService.CreateForUserAsync(
+                        userId,
+                        "success",
+                        "Nâng cấp gói thành công",
+                        $"Bạn đã nâng cấp thành công lên gói \"{plan.PlanName}\". Gói mới có hiệu lực ngay từ hôm nay đến {newSub.EndDate:dd/MM/yyyy}.",
+                        tag: $"subscription-upgrade-{newSub.Id}");
+                }
+                else
+                {
+                    await _notificationService.CreateForUserAsync(
+                        userId,
+                        "success",
+                        "Đăng ký gói thành công",
+                        $"Bạn đã đăng ký thành công gói \"{plan.PlanName}\". Gói có hiệu lực đến {newSub.EndDate:dd/MM/yyyy}.",
+                        tag: $"subscription-new-{newSub.Id}");
+                }
+            }
+            catch { /* Không để lỗi notification chặn luồng chính */ }
 
             newSub.Plan = plan;
             return MapSubscription(newSub);

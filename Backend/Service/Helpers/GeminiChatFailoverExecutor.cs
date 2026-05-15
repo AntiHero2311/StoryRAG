@@ -19,8 +19,12 @@ namespace Service.Helpers
 
     public sealed class GeminiChatFailoverExecutor
     {
-        /// <summary>Ưu tiên model ổn định; preview đặt cuối vì nhiều key/API trả 400 nếu chưa bật model.</summary>
-        private const string DefaultChatModels = "gemini-2.0-flash,gemini-2.5-flash,gemini-1.5-flash,gemini-3-flash-preview";
+        /// <summary>
+        /// Fallback cuối cùng khi ChatModels config trống.
+        /// Chỉ dùng các model flash có quota thực tế; KHÔNG dùng gemini-2.0-flash hoặc gemini-2.5-flash
+        /// vì quota = 0 trên nhiều project key.
+        /// </summary>
+        private const string DefaultChatModels = "gemini-3.1-flash-lite,gemini-3-flash-preview,gemini-2.5-flash-lite";
         private static readonly Uri GeminiOpenAiEndpoint = new("https://generativelanguage.googleapis.com/v1beta/openai/");
         private static readonly HttpClient TraceHttpClient = new();
         private static readonly ConcurrentDictionary<string, DateTime> ApiKeyCooldownUntilUtc = new();
@@ -33,12 +37,17 @@ namespace Service.Helpers
         private readonly int _globalOverloadRetryCycles;
         private readonly int[] _globalOverloadRetryDelaysSeconds;
 
+        /// <param name="modelsConfigKey">
+        /// Config key để đọc danh sách model (ví dụ "Gemini:ImportModels").
+        /// Nếu null hoặc key trống thì dùng "Gemini:ChatModels" → fallback DefaultChatModels.
+        /// </param>
         public GeminiChatFailoverExecutor(
             IConfiguration config,
             ILogger logger,
             string operationName,
             GeminiPrimaryKeyRole primaryRole,
-            TimeSpan networkTimeout)
+            TimeSpan networkTimeout,
+            string? modelsConfigKey = null)
         {
             _logger = logger;
             _operationName = operationName;
@@ -53,7 +62,13 @@ namespace Service.Helpers
 
             var analyzeKey = NormalizeKey(config["Gemini:AnalyzeApiKey"]);
             var chatKey = NormalizeKey(config["Gemini:ChatApiKey"]);
-            var chatModels = ReadValues(config["Gemini:ChatModels"]);
+
+            // Ưu tiên modelsConfigKey → "Gemini:ChatModels" → DefaultChatModels
+            var chatModels = !string.IsNullOrWhiteSpace(modelsConfigKey)
+                ? ReadValues(config[modelsConfigKey])
+                : new List<string>();
+            if (chatModels.Count == 0)
+                chatModels = ReadValues(config["Gemini:ChatModels"]);
             if (chatModels.Count == 0)
                 chatModels = ReadValues(DefaultChatModels);
 

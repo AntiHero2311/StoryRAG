@@ -55,6 +55,7 @@ namespace Service.DTOs
         public int CharactersExtracted { get; set; }
         public int SettingsExtracted { get; set; }
         public int TimelineEventsExtracted { get; set; }
+        public int GenresLinked { get; set; }
         public string? Summary { get; set; }
         /// <summary>true nếu bước AI trích xuất bị lỗi (quá tải key). Dùng /reextract để thử lại.</summary>
         public bool AiExtractionFailed { get; set; }
