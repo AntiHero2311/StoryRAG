@@ -37,6 +37,10 @@ namespace Service.Implementations
         private static int _usedTokensInWindow;
         private static int _usedRequestsInWindow;
 
+        // Round-robin counter: luân phiên primary key giữa ChatApiKey và AnalyzeApiKey
+        // khi không có EmbeddingApiKey chuyên biệt, giúp phân tải thực sự.
+        private static int _embeddingKeyRoundRobinIndex;
+
         // Chống xung đột: không cho phép 2 task cùng embed 1 chapter cùng lúc
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte> ProcessingChapters = new();
 
@@ -479,18 +483,33 @@ namespace Service.Implementations
             _ = useCase;
             if (!string.IsNullOrWhiteSpace(_embeddingApiKey))
             {
-                // Khi có key chuyên biệt cho embedding, chỉ dùng key này cho mọi tác vụ embed.
+                // Khi có key chuyên biệt cho embedding, chỉ dùng key này — tách hoàn toàn khỏi analysis.
                 return new List<string> { _embeddingApiKey! };
             }
 
-            // Khi không có key chuyên biệt, mọi embedding đều ưu tiên ChatApiKey rồi mới fallback AnalyzeApiKey.
-            var ordered = new[] { _chatApiKey, _analyzeApiKey };
-
-            return ordered
+            // Khi không có EmbeddingApiKey: luân phiên primary giữa ChatApiKey và AnalyzeApiKey
+            // mỗi lần gọi, tránh cả 2 loại task cùng dồn lên 1 key.
+            var keys = new[] { _chatApiKey, _analyzeApiKey }
                 .Where(k => !string.IsNullOrWhiteSpace(k))
                 .Select(k => k!)
                 .Distinct(StringComparer.Ordinal)
-                .ToList();
+                .ToArray();
+
+            if (keys.Length <= 1)
+                return keys.ToList();
+
+            // Atomic increment → chỉ số lấy theo round-robin
+            var idx = Interlocked.Increment(ref _embeddingKeyRoundRobinIndex) & int.MaxValue;
+            var primaryIdx = idx % keys.Length;
+
+            // Xếp primary key lên đầu, các key còn lại giữ nguyên thứ tự làm fallback
+            var ordered = new List<string>(keys.Length);
+            ordered.Add(keys[primaryIdx]);
+            for (var i = 0; i < keys.Length; i++)
+            {
+                if (i != primaryIdx) ordered.Add(keys[i]);
+            }
+            return ordered;
         }
 
         private static string? NormalizeKey(string? raw)

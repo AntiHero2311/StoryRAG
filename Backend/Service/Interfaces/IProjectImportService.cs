@@ -13,5 +13,11 @@ namespace Service.Interfaces
             string fileName,
             string? contentType,
             byte[] fileBytes);
+
+        /// <summary>
+        /// Thử lại bước AI trích xuất (Summary/Nhân vật/Bối cảnh/Timeline) cho project đã import.
+        /// Chỉ bổ sung các trường còn trống — không xóa dữ liệu người dùng đã chỉnh sửa.
+        /// </summary>
+        Task<ReExtractResult> ReExtractAsync(Guid projectId, Guid userId);
     }
 }

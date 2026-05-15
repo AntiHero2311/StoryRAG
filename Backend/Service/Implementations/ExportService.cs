@@ -188,7 +188,7 @@ namespace Service.Implementations
                         new RunProperties(
                             new RunFonts { Ascii = "Times New Roman", HighAnsi = "Times New Roman" },
                             new FontSize { Val = "20" },
-                            new Color { Val = "888888" }
+                            new DocumentFormat.OpenXml.Wordprocessing.Color { Val = "888888" }
                         ),
                         new Text("StoryNest")
                     )
@@ -252,7 +252,7 @@ namespace Service.Implementations
 
                 // Cài đặt trang A4
                 body.AppendChild(new SectionProperties(
-                    new PageSize { Width = 11906, Height = 16838 },
+                    new DocumentFormat.OpenXml.Wordprocessing.PageSize { Width = 11906, Height = 16838 },
                     new PageMargin { Top = 1440, Bottom = 1440, Left = 1701, Right = 1701 }
                 ));
 

@@ -251,6 +251,40 @@ namespace Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Thử lại bước AI trích xuất (Summary/Nhân vật/Bối cảnh/Timeline) cho project đã import.
+        /// Dùng khi import báo AiExtractionFailed=true hoặc kết quả trống do key quá tải.
+        /// </summary>
+        [HttpPost("{id:guid}/reextract")]
+        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongImport")]
+        public async Task<IActionResult> ReExtractProject(Guid id)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var result = await _importService.ReExtractAsync(id, userId.Value);
+                if (result.AiExtractionFailed)
+                    return StatusCode(503, new { Message = result.AiExtractionError ?? "AI đang quá tải, vui lòng thử lại sau." });
+
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(StatusCodes.Status408RequestTimeout, new { Message = "AI mất quá nhiều thời gian. Vui lòng thử lại." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ReExtract failed for project {ProjectId}.", id);
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
         // ── Helper ───────────────────────────────────────────────────────────────
 
     }

@@ -43,7 +43,7 @@ namespace Service.Implementations
                 config,
                 logger,
                 "Project Import AI Extraction",
-                GeminiPrimaryKeyRole.Chat,
+                GeminiPrimaryKeyRole.Analyze,
                 TimeSpan.FromMinutes(5));
         }
 
@@ -155,6 +155,8 @@ namespace Service.Implementations
             // ── Bước 5: AI Trích xuất thông tin ─────────────────────────────────
             int charactersExtracted = 0, settingsExtracted = 0, timelineEventsExtracted = 0;
             string? extractedSummary = null;
+            bool aiExtractionFailed = false;
+            string? aiExtractionError = null;
 
             // Kiểm tra subscription token budget (non-fatal nếu không có)
             bool hasTokenBudget = await CheckTokenBudgetAsync(userId);
@@ -168,72 +170,25 @@ namespace Service.Implementations
 
                     if (aiExtracted != null)
                     {
-                        // Cập nhật Project Summary
-                        if (!string.IsNullOrWhiteSpace(aiExtracted.Summary))
-                        {
-                            extractedSummary = aiExtracted.Summary;
-                            project.Summary = EncryptionHelper.EncryptWithMasterKey(aiExtracted.Summary, rawDek);
-                            await _context.SaveChangesAsync();
-                        }
-
-                        // Lưu Nhân vật vào bảng CharacterEntries
-                        foreach (var character in aiExtracted.Characters ?? new())
-                        {
-                            if (string.IsNullOrWhiteSpace(character.Name)) continue;
-                            _context.CharacterEntries.Add(new CharacterEntry
-                            {
-                                Id = Guid.NewGuid(),
-                                ProjectId = project.Id,
-                                Name = EncryptionHelper.EncryptWithMasterKey(character.Name, rawDek),
-                                Role = "Supporting",
-                                Description = EncryptionHelper.EncryptWithMasterKey(character.Description ?? string.Empty, rawDek),
-                                CreatedAt = DateTime.UtcNow,
-                            });
-                            charactersExtracted++;
-                        }
-
-                        // Lưu Bối cảnh (WorldbuildingEntry - Category: Setting)
-                        foreach (var setting in aiExtracted.Settings ?? new())
-                        {
-                            if (string.IsNullOrWhiteSpace(setting.Name)) continue;
-                            _context.WorldbuildingEntries.Add(new WorldbuildingEntry
-                            {
-                                Id = Guid.NewGuid(),
-                                ProjectId = project.Id,
-                                Title = EncryptionHelper.EncryptWithMasterKey(setting.Name, rawDek),
-                                Content = EncryptionHelper.EncryptWithMasterKey(setting.Description ?? string.Empty, rawDek),
-                                Category = "World",
-                                CreatedAt = DateTime.UtcNow,
-                            });
-                            settingsExtracted++;
-                        }
-
-                        // Lưu Timeline Events
-                        int sortOrder = 0;
-                        foreach (var evt in aiExtracted.Timeline ?? new())
-                        {
-                            if (string.IsNullOrWhiteSpace(evt.Title)) continue;
-                            _context.TimelineEvents.Add(new TimelineEvent
-                            {
-                                ProjectId = project.Id,
-                                Title = EncryptionHelper.EncryptWithMasterKey(evt.Title, rawDek),
-                                Description = EncryptionHelper.EncryptWithMasterKey(evt.Description ?? string.Empty, rawDek),
-                                SortOrder = sortOrder++,
-                                Category = "Story",
-                                Importance = "Normal",
-                                CreatedAt = DateTime.UtcNow,
-                            });
-                            timelineEventsExtracted++;
-                        }
-
-                        await _context.SaveChangesAsync();
+                        var counts = await ApplyAiExtractionAsync(project, aiExtracted, rawDek, isReExtract: false);
+                        extractedSummary = counts.Summary;
+                        charactersExtracted = counts.Characters;
+                        settingsExtracted = counts.Settings;
+                        timelineEventsExtracted = counts.Timeline;
                     }
                 }
                 catch (Exception ex)
                 {
                     // AI extraction là non-fatal: project và chapter đã được tạo xong
-                    _logger.LogWarning(ex, "AI extraction failed for project import. Project {ProjectId} still created.", project.Id);
+                    aiExtractionFailed = true;
+                    aiExtractionError = ex.Message;
+                    _logger.LogWarning(ex, "AI extraction failed for project import. Project {ProjectId} still created. Use /reextract to retry.", project.Id);
                 }
+            }
+            else if (!hasTokenBudget)
+            {
+                aiExtractionFailed = true;
+                aiExtractionError = "Vượt giới hạn token subscription. Nâng cấp gói để dùng tính năng trích xuất AI.";
             }
 
             var result = new ProjectImportResult
@@ -245,6 +200,8 @@ namespace Service.Implementations
                 SettingsExtracted = settingsExtracted,
                 TimelineEventsExtracted = timelineEventsExtracted,
                 Summary = extractedSummary,
+                AiExtractionFailed = aiExtractionFailed,
+                AiExtractionError = aiExtractionError,
             };
 
             // ── Bước 6: Gửi notification vào chuông ─────────────────────────────
@@ -270,7 +227,176 @@ namespace Service.Implementations
             return result;
         }
 
+        // ── ReExtract ────────────────────────────────────────────────────────────
+
+        public async Task<ReExtractResult> ReExtractAsync(Guid projectId, Guid userId)
+        {
+            var masterKey = _config["Security:MasterKey"]
+                ?? throw new InvalidOperationException("MasterKey không tìm thấy trong cấu hình.");
+
+            var user = await _context.Users.FindAsync(userId)
+                ?? throw new KeyNotFoundException("Người dùng không tồn tại.");
+
+            var project = await _context.Projects
+                .FirstOrDefaultAsync(p => p.Id == projectId && p.AuthorId == userId && !p.IsDeleted)
+                ?? throw new KeyNotFoundException("Project không tồn tại hoặc bạn không có quyền truy cập.");
+
+            var rawDek = EncryptionHelper.DecryptWithMasterKey(user.DataEncryptionKey!, masterKey);
+            var projectTitle = EncryptionHelper.DecryptWithMasterKey(project.Title, rawDek);
+
+            // Lấy nội dung tối đa MaxChaptersForAiScan chương đầu
+            var chapters = await _context.Chapters
+                .Where(c => c.ProjectId == projectId && !c.IsDeleted)
+                .OrderBy(c => c.ChapterNumber)
+                .Take(MaxChaptersForAiScan)
+                .Include(c => c.CurrentVersion)
+                .ToListAsync();
+
+            var samples = new List<string>();
+            foreach (var ch in chapters)
+            {
+                if (ch.CurrentVersion == null) continue;
+                var plainHtml = EncryptionHelper.DecryptWithMasterKey(ch.CurrentVersion.Content, rawDek);
+                // Strip HTML tags để AI đọc plain text
+                var plainText = System.Text.RegularExpressions.Regex.Replace(plainHtml, "<[^>]+>", " ");
+                var sample = plainText.Length > MaxCharsPerChapterSummary
+                    ? plainText[..MaxCharsPerChapterSummary]
+                    : plainText;
+                var chapterTitle = string.IsNullOrWhiteSpace(ch.Title) ? $"Chương {ch.ChapterNumber}" : ch.Title;
+                samples.Add($"--- {chapterTitle} ---\n{sample}");
+            }
+
+            if (samples.Count == 0)
+                throw new InvalidOperationException("Project không có chapter nào để trích xuất.");
+
+            var combinedContent = string.Join("\n\n", samples);
+            AiExtractionResponse? aiExtracted;
+            try
+            {
+                aiExtracted = await ExtractProjectInfoWithAiAsync(combinedContent, projectTitle);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "ReExtract AI call failed for project {ProjectId}.", projectId);
+                return new ReExtractResult
+                {
+                    ProjectId = projectId,
+                    AiExtractionFailed = true,
+                    AiExtractionError = ex.Message,
+                };
+            }
+
+            if (aiExtracted == null)
+                return new ReExtractResult { ProjectId = projectId, AiExtractionFailed = true, AiExtractionError = "AI không trả về kết quả hợp lệ." };
+
+            var counts = await ApplyAiExtractionAsync(project, aiExtracted, rawDek, isReExtract: true);
+
+            return new ReExtractResult
+            {
+                ProjectId = projectId,
+                Summary = counts.Summary,
+                CharactersExtracted = counts.Characters,
+                SettingsExtracted = counts.Settings,
+                TimelineEventsExtracted = counts.Timeline,
+                AiExtractionFailed = false,
+            };
+        }
+
         // ── Private helpers ──────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Ghi kết quả AI extraction vào DB.
+        /// isReExtract=true: ghi đè Summary (nếu có), thêm mới Character/Setting/Timeline chưa có.
+        /// isReExtract=false: luôn ghi (import lần đầu).
+        /// </summary>
+        private async Task<(string? Summary, int Characters, int Settings, int Timeline)> ApplyAiExtractionAsync(
+            Project project,
+            AiExtractionResponse aiExtracted,
+            string rawDek,
+            bool isReExtract)
+        {
+            string? extractedSummary = null;
+            int charactersExtracted = 0, settingsExtracted = 0, timelineEventsExtracted = 0;
+
+            if (!string.IsNullOrWhiteSpace(aiExtracted.Summary))
+            {
+                // isReExtract: chỉ cập nhật nếu Summary hiện tại trống
+                var currentSummaryEmpty = string.IsNullOrWhiteSpace(project.Summary);
+                if (!isReExtract || currentSummaryEmpty)
+                {
+                    extractedSummary = aiExtracted.Summary;
+                    project.Summary = EncryptionHelper.EncryptWithMasterKey(aiExtracted.Summary, rawDek);
+                }
+            }
+
+            // isReExtract: chỉ thêm nhân vật nếu chưa có nhân vật nào
+            bool hasExistingCharacters = isReExtract && await _context.CharacterEntries.AnyAsync(c => c.ProjectId == project.Id);
+            if (!hasExistingCharacters)
+            {
+                foreach (var character in aiExtracted.Characters ?? new())
+                {
+                    if (string.IsNullOrWhiteSpace(character.Name)) continue;
+                    _context.CharacterEntries.Add(new CharacterEntry
+                    {
+                        Id = Guid.NewGuid(),
+                        ProjectId = project.Id,
+                        Name = EncryptionHelper.EncryptWithMasterKey(character.Name, rawDek),
+                        Role = "Supporting",
+                        Description = EncryptionHelper.EncryptWithMasterKey(character.Description ?? string.Empty, rawDek),
+                        CreatedAt = DateTime.UtcNow,
+                    });
+                    charactersExtracted++;
+                }
+            }
+
+            // isReExtract: chỉ thêm bối cảnh nếu chưa có
+            bool hasExistingSettings = isReExtract && await _context.WorldbuildingEntries.AnyAsync(w => w.ProjectId == project.Id);
+            if (!hasExistingSettings)
+            {
+                foreach (var setting in aiExtracted.Settings ?? new())
+                {
+                    if (string.IsNullOrWhiteSpace(setting.Name)) continue;
+                    _context.WorldbuildingEntries.Add(new WorldbuildingEntry
+                    {
+                        Id = Guid.NewGuid(),
+                        ProjectId = project.Id,
+                        Title = EncryptionHelper.EncryptWithMasterKey(setting.Name, rawDek),
+                        Content = EncryptionHelper.EncryptWithMasterKey(setting.Description ?? string.Empty, rawDek),
+                        Category = "World",
+                        CreatedAt = DateTime.UtcNow,
+                    });
+                    settingsExtracted++;
+                }
+            }
+
+            // isReExtract: chỉ thêm timeline nếu chưa có
+            bool hasExistingTimeline = isReExtract && await _context.TimelineEvents.AnyAsync(t => t.ProjectId == project.Id);
+            if (!hasExistingTimeline)
+            {
+                int sortOrder = isReExtract
+                    ? (await _context.TimelineEvents.Where(t => t.ProjectId == project.Id).MaxAsync(t => (int?)t.SortOrder) ?? -1) + 1
+                    : 0;
+
+                foreach (var evt in aiExtracted.Timeline ?? new())
+                {
+                    if (string.IsNullOrWhiteSpace(evt.Title)) continue;
+                    _context.TimelineEvents.Add(new TimelineEvent
+                    {
+                        ProjectId = project.Id,
+                        Title = EncryptionHelper.EncryptWithMasterKey(evt.Title, rawDek),
+                        Description = EncryptionHelper.EncryptWithMasterKey(evt.Description ?? string.Empty, rawDek),
+                        SortOrder = sortOrder++,
+                        Category = "Story",
+                        Importance = "Normal",
+                        CreatedAt = DateTime.UtcNow,
+                    });
+                    timelineEventsExtracted++;
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            return (extractedSummary, charactersExtracted, settingsExtracted, timelineEventsExtracted);
+        }
 
         private async Task<bool> CheckTokenBudgetAsync(Guid userId)
         {
