@@ -93,7 +93,7 @@ function PublishToggle({ value, onChange }: { value: boolean; onChange: (v: bool
   );
 }
 
-export default function StaffFaqPage() {
+export default function StaffFaqPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const [items, setItems] = useState<Faq[]>([]);
   const [loading, setLoading] = useState(true);
@@ -243,10 +243,8 @@ export default function StaffFaqPage() {
     }
   };
 
-  return (
-    <MainLayout pageTitle="Quản lý FAQs">
-      {() => (
-        <div className="p-6 max-w-6xl mx-auto w-full space-y-5">
+  const body = (
+        <div className={embedded ? 'w-full space-y-5' : 'p-6 max-w-6xl mx-auto w-full space-y-5'}>
           <div
             className="rounded-3xl p-5 flex items-center justify-between"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
@@ -479,7 +477,12 @@ export default function StaffFaqPage() {
             </Modal>
           )}
         </div>
-      )}
+  );
+
+  if (embedded) return body;
+  return (
+    <MainLayout pageTitle="Quản lý FAQs">
+      {() => body}
     </MainLayout>
   );
 }

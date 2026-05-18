@@ -59,11 +59,14 @@ namespace Repository.Data
         public DbSet<StaffKnowledgeBaseItem> StaffKnowledgeBaseItems { get; set; }
         public DbSet<StaffAnalysisReview> StaffAnalysisReviews { get; set; }
         public DbSet<ProjectAbuseFlag> ProjectAbuseFlags { get; set; }
+        public DbSet<SupportTicket> SupportTickets { get; set; }
+        public DbSet<AuthorAppeal> AuthorAppeals { get; set; }
         public DbSet<Faq> Faqs { get; set; }
         public DbSet<WritingTip> WritingTips { get; set; }
 
         // System Config (Admin runtime configuration)
         public DbSet<SystemConfig> SystemConfigs { get; set; }
+        public DbSet<SystemLog> SystemLogs { get; set; }
         public DbSet<AnalysisJobRerunAudit> AnalysisJobRerunAudits { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -786,6 +789,58 @@ namespace Repository.Data
                       .OnDelete(DeleteBehavior.Restrict);
             });
 
+            // ── SupportTicket ─────────────────────────────────────────────────────
+            modelBuilder.Entity<SupportTicket>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Category).IsRequired().HasMaxLength(30).HasDefaultValue("Other");
+                entity.Property(e => e.Subject).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Description).IsRequired();
+                entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue("Open");
+                entity.Property(e => e.StaffReply).HasMaxLength(3000);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.Category);
+                entity.ToTable(t =>
+                {
+                    t.HasCheckConstraint("CK_SupportTickets_Category",
+                        "\"Category\" IN ('Payment','Subscription','Usage','DataDeletion','BanRecommendation','Other')");
+                    t.HasCheckConstraint("CK_SupportTickets_Status",
+                        "\"Status\" IN ('Open','InProgress','Resolved','Closed')");
+                });
+                entity.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.AssignedStaff).WithMany().HasForeignKey(e => e.AssignedStaffId)
+                    .OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            });
+
+            // ── AuthorAppeal ──────────────────────────────────────────────────────
+            modelBuilder.Entity<AuthorAppeal>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.AppealType).IsRequired().HasMaxLength(30);
+                entity.Property(e => e.Reason).IsRequired().HasMaxLength(3000);
+                entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue("Pending");
+                entity.Property(e => e.StaffNote).HasMaxLength(3000);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+                entity.HasIndex(e => e.AuthorId);
+                entity.HasIndex(e => e.ProjectId);
+                entity.HasIndex(e => e.Status);
+                entity.ToTable(t =>
+                {
+                    t.HasCheckConstraint("CK_AuthorAppeals_Type",
+                        "\"AppealType\" IN ('ProjectFlag','StaffFeedback','ReportReview')");
+                    t.HasCheckConstraint("CK_AuthorAppeals_Status",
+                        "\"Status\" IN ('Pending','Approved','Rejected')");
+                });
+                entity.HasOne(e => e.Author).WithMany().HasForeignKey(e => e.AuthorId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Project).WithMany().HasForeignKey(e => e.ProjectId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.ReviewedByStaff).WithMany().HasForeignKey(e => e.ReviewedByStaffId)
+                    .OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            });
+
             // ── StaffKnowledgeBaseItem ────────────────────────────────────────────
             modelBuilder.Entity<StaffKnowledgeBaseItem>(entity =>
             {
@@ -906,6 +961,27 @@ namespace Repository.Data
                       .WithMany()
                       .HasForeignKey(e => e.UserId)
                       .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── SystemLog ─────────────────────────────────────────────────────────
+            modelBuilder.Entity<SystemLog>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Level).IsRequired().HasMaxLength(20);
+                entity.Property(e => e.Category).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.Action).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.Message).IsRequired().HasMaxLength(1000);
+                entity.Property(e => e.MetadataJson).HasColumnType("jsonb");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+                entity.ToTable("system_logs");
+                entity.HasIndex(e => e.CreatedAt);
+                entity.HasIndex(e => e.Category);
+
+                entity.HasOne(e => e.Actor)
+                      .WithMany()
+                      .HasForeignKey(e => e.ActorId)
+                      .OnDelete(DeleteBehavior.SetNull)
+                      .IsRequired(false);
             });
 
             // ── SystemConfig ──────────────────────────────────────────────────────

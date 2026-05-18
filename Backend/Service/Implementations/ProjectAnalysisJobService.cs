@@ -315,7 +315,7 @@ namespace Service.Implementations
                         if (job.Progress == safeProgress)
                             return;
 
-                        job.Stage = string.IsNullOrWhiteSpace(message) ? StageAnalyzing : message;
+                        job.Stage = StageAnalyzing;
                         job.Progress = safeProgress;
                         job.UpdatedAt = DateTime.UtcNow;
                         await _context.SaveChangesAsync(token);

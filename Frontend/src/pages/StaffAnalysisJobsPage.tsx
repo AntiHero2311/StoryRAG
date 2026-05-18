@@ -108,7 +108,7 @@ export default function StaffAnalysisJobsPage() {
   };
 
   return (
-    <MainLayout pageTitle="Analysis Jobs (Failed/Stale)">
+    <MainLayout pageTitle="Phân tích lỗi / treo">
       {() => (
         <div className="p-6 max-w-6xl mx-auto w-full space-y-5">
           <div className="rounded-3xl p-5 flex items-center justify-between" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
@@ -117,7 +117,7 @@ export default function StaffAnalysisJobsPage() {
                 <Activity className="w-5 h-5 text-amber-400" />
               </div>
               <div>
-                <p className="text-sm font-bold" style={{ color: 'var(--text-bright)' }}>Staff Analysis Jobs</p>
+                <p className="text-sm font-bold" style={{ color: 'var(--text-bright)' }}>Job phân tích lỗi hoặc treo</p>
                 <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                   Tổng: {stats.total} · Failed: {stats.failed} · Processing: {stats.processing}
                 </p>

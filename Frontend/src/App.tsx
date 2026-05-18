@@ -10,6 +10,10 @@ const HomePage = lazy(() => import('./pages/HomePage'));
 const AuthPage = lazy(() => import('./pages/AuthPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
+const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage'));
+const AdminSystemPage = lazy(() => import('./pages/admin/AdminSystemPage'));
+const AdminLogsPage = lazy(() => import('./pages/admin/AdminLogsPage'));
+const AdminRevenueDashboardPage = lazy(() => import('./pages/AdminRevenueDashboardPage'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
@@ -19,16 +23,22 @@ const PaymentSuccessPage = lazy(() => import('./pages/PaymentSuccessPage'));
 const PaymentCancelPage = lazy(() => import('./pages/PaymentCancelPage'));
 const AdminSubscriptionPage = lazy(() => import('./pages/AdminSubscriptionPage'));
 const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
+const StaffOverviewPage = lazy(() => import('./pages/staff/StaffOverviewPage'));
+const StaffContentPage = lazy(() => import('./pages/staff/StaffContentPage'));
 const StaffDashboardPage = lazy(() => import('./pages/StaffDashboardPage'));
 const StaffFlaggedPage = lazy(() => import('./pages/StaffFlaggedPage'));
-const StaffFaqPage = lazy(() => import('./pages/StaffFaqPage'));
-const StaffWritingTipPage = lazy(() => import('./pages/StaffWritingTipPage'));
 const StaffAnalysisJobsPage = lazy(() => import('./pages/StaffAnalysisJobsPage'));
+const StaffFeedbacksPage = lazy(() => import('./pages/StaffFeedbacksPage'));
+const StaffPerformancePage = lazy(() => import('./pages/StaffPerformancePage'));
+const StaffSupportTicketsPage = lazy(() => import('./pages/StaffSupportTicketsPage'));
+const StaffAppealsPage = lazy(() => import('./pages/StaffAppealsPage'));
+const SupportPage = lazy(() => import('./pages/SupportPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 const FeedbackDetailPage = lazy(() => import('./pages/FeedbackDetailPage'));
+const HelpPage = lazy(() => import('./pages/HelpPage'));
 
 // A simple fallback for Suspense
 const PageLoader = () => (
@@ -65,6 +75,7 @@ function App() {
             <Route path="/analysis" element={<RouteGuard><AnalysisPage /></RouteGuard>} />
             <Route path="/feedback" element={<RouteGuard><FeedbackPage /></RouteGuard>} />
             <Route path="/feedback/:id" element={<RouteGuard><FeedbackDetailPage /></RouteGuard>} />
+            <Route path="/support" element={<RouteGuard><SupportPage /></RouteGuard>} />
 
             {/* Admin routes */}
             <Route 
@@ -87,6 +98,19 @@ function App() {
                 </RouteGuard>
               } 
             />
+            <Route
+              path="/admin/revenue"
+              element={
+                <RouteGuard>
+                  <RoleGuard allowedRoles={['Admin']}>
+                    <AdminRevenueDashboardPage />
+                  </RoleGuard>
+                </RouteGuard>
+              }
+            />
+            <Route path="/admin/users" element={<RouteGuard><RoleGuard allowedRoles={['Admin']}><AdminUsersPage /></RoleGuard></RouteGuard>} />
+            <Route path="/admin/system" element={<RouteGuard><RoleGuard allowedRoles={['Admin']}><AdminSystemPage /></RoleGuard></RouteGuard>} />
+            <Route path="/admin/logs" element={<RouteGuard><RoleGuard allowedRoles={['Admin']}><AdminLogsPage /></RoleGuard></RouteGuard>} />
 
             {/* Staff routes — cụ thể trước /staff để khớp đúng */}
             <Route
@@ -99,26 +123,32 @@ function App() {
                 </RouteGuard>
               }
             />
+            <Route path="/staff/faqs" element={<Navigate to="/staff/content?tab=faq" replace />} />
+            <Route path="/staff/writing-tips" element={<Navigate to="/staff/content?tab=tips" replace />} />
             <Route
-              path="/staff/faqs"
+              path="/staff/content"
               element={
                 <RouteGuard>
                   <RoleGuard allowedRoles={['Staff', 'Admin']}>
-                    <StaffFaqPage />
+                    <StaffContentPage />
                   </RoleGuard>
                 </RouteGuard>
               }
             />
             <Route
-              path="/staff/writing-tips"
+              path="/staff/bugs"
               element={
                 <RouteGuard>
                   <RoleGuard allowedRoles={['Staff', 'Admin']}>
-                    <StaffWritingTipPage />
+                    <StaffDashboardPage />
                   </RoleGuard>
                 </RouteGuard>
               }
             />
+            <Route path="/staff/feedbacks" element={<RouteGuard><RoleGuard allowedRoles={['Staff', 'Admin']}><StaffFeedbacksPage /></RoleGuard></RouteGuard>} />
+            <Route path="/staff/support-tickets" element={<RouteGuard><RoleGuard allowedRoles={['Staff', 'Admin']}><StaffSupportTicketsPage /></RoleGuard></RouteGuard>} />
+            <Route path="/staff/appeals" element={<RouteGuard><RoleGuard allowedRoles={['Staff', 'Admin']}><StaffAppealsPage /></RoleGuard></RouteGuard>} />
+            <Route path="/staff/performance" element={<RouteGuard><RoleGuard allowedRoles={['Staff', 'Admin']}><StaffPerformancePage /></RoleGuard></RouteGuard>} />
             <Route
               path="/staff/analysis-jobs"
               element={
@@ -129,16 +159,17 @@ function App() {
                 </RouteGuard>
               }
             />
-            <Route 
-              path="/staff" 
+            <Route
+              path="/staff"
               element={
                 <RouteGuard>
                   <RoleGuard allowedRoles={['Staff', 'Admin']}>
-                    <StaffDashboardPage />
+                    <StaffOverviewPage />
                   </RoleGuard>
                 </RouteGuard>
-              } 
+              }
             />
+            <Route path="/help" element={<RouteGuard><HelpPage /></RouteGuard>} />
 
             {/* 404 */}
             <Route path="*" element={<NotFoundPage />} />

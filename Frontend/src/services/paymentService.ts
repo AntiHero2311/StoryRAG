@@ -1,17 +1,21 @@
 import { api } from './api';
 
-export interface CreatePayOsPaymentLinkResponse {
+export interface CreateVnPayPaymentUrlResponse {
     paymentId: string;
-    orderCode: number;
+    txnRef: string;
     checkoutUrl: string;
-    qrCode?: string | null;
     amount: number;
     description: string;
 }
 
-export interface PayOsOrderStatusResponse {
-    orderCode: number;
+export interface VnPayOrderStatusResponse {
+    txnRef: string;
     status: string;
+}
+
+export interface VnPayIpnAcknowledgeResponse {
+    rspCode: string;
+    message: string;
 }
 
 export interface PaymentResponse {
@@ -46,16 +50,6 @@ interface ApiResponse<T> {
 }
 
 export const paymentService = {
-    async createPayOsPaymentLink(planId: number): Promise<CreatePayOsPaymentLinkResponse> {
-        const response = await api.post<ApiResponse<CreatePayOsPaymentLinkResponse>>('/payment/payos/create-link', { planId });
-        return response.data.data;
-    },
-
-    async getPayOsOrderStatus(orderCode: number): Promise<PayOsOrderStatusResponse> {
-        const response = await api.get<ApiResponse<PayOsOrderStatusResponse>>(`/payment/payos/order/${orderCode}`);
-        return response.data.data;
-    },
-
     async createVnPayPaymentUrl(planId: number): Promise<CreateVnPayPaymentUrlResponse> {
         const response = await api.post<ApiResponse<CreateVnPayPaymentUrlResponse>>('/payment/vnpay/create-url', { planId });
         return response.data.data;
@@ -84,4 +78,3 @@ export const paymentService = {
         return response.data.data;
     },
 };
-

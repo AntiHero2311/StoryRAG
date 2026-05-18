@@ -111,6 +111,7 @@ namespace Service.Implementations
                 select new FlaggedProjectItem
                 {
                     ProjectId = f.ProjectId,
+                    AuthorId = u.Id,
                     AuthorEmail = u.Email,
                     FlagReason = f.FlagReason,
                     FlaggedAt = f.FlaggedAt,

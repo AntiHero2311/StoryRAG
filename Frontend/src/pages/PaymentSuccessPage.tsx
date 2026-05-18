@@ -8,16 +8,14 @@ import { UserInfo } from '../utils/jwtHelper';
 function PaymentSuccessContent() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const orderCode = useMemo(() => Number(searchParams.get('orderCode') ?? 0), [searchParams]);
     const txnRef = useMemo(() => searchParams.get('vnp_TxnRef') ?? '', [searchParams]);
-    const gateway = txnRef ? 'VNPay' : 'PayOS';
     const [status, setStatus] = useState<'loading' | 'completed' | 'failed' | 'pending'>('loading');
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!txnRef && (!orderCode || Number.isNaN(orderCode))) {
+        if (!txnRef) {
             setStatus('failed');
-            setError('Không tìm thấy mã giao dịch hợp lệ.');
+            setError('Không tìm thấy mã giao dịch VNPay hợp lệ.');
             return;
         }
 
@@ -27,7 +25,7 @@ function PaymentSuccessContent() {
 
         const check = async () => {
             try {
-                if (txnRef && !vnPayReturnProcessed) {
+                if (!vnPayReturnProcessed) {
                     const ipnResult = await paymentService.processVnPayReturnQuery(window.location.search);
                     if (cancelled) return;
                     if (ipnResult.rspCode !== '00') {
@@ -38,9 +36,7 @@ function PaymentSuccessContent() {
                     vnPayReturnProcessed = true;
                 }
 
-                const result = txnRef
-                    ? await paymentService.getVnPayOrderStatus(txnRef)
-                    : await paymentService.getPayOsOrderStatus(orderCode);
+                const result = await paymentService.getVnPayOrderStatus(txnRef);
                 if (cancelled) return;
 
                 if (result.status === 'Completed') {
@@ -68,7 +64,7 @@ function PaymentSuccessContent() {
             cancelled = true;
             if (timer) clearTimeout(timer);
         };
-    }, [orderCode, txnRef]);
+    }, [txnRef]);
 
     return (
         <div className="min-h-[70vh] flex items-center justify-center px-4">
@@ -84,7 +80,7 @@ function PaymentSuccessContent() {
                     <div className="space-y-4">
                         <Loader2 className="w-12 h-12 animate-spin text-amber-400 mx-auto" />
                         <p className="text-zinc-100 font-bold text-xl">Đơn hàng đang chờ xác nhận</p>
-                        <p className="text-zinc-400 text-sm">Hệ thống đang đợi webhook {gateway} để kích hoạt gói của bạn.</p>
+                        <p className="text-zinc-400 text-sm">Hệ thống đang đợi VNPay xác nhận để kích hoạt gói của bạn.</p>
                     </div>
                 )}
 
@@ -127,4 +123,3 @@ export default function PaymentSuccessPage() {
         </MainLayout>
     );
 }
-

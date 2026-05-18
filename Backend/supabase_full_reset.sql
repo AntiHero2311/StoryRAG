@@ -748,6 +748,20 @@ INSERT INTO "Genres" ("Id","Name","Slug","Color","Description") VALUES
 
 SELECT setval(pg_get_serial_sequence('"Genres"', 'Id'), 14);
 
+-- system_logs (admin audit)
+CREATE TABLE IF NOT EXISTS system_logs (
+    "Id" uuid NOT NULL PRIMARY KEY,
+    "Level" character varying(20) NOT NULL,
+    "Category" character varying(50) NOT NULL,
+    "Action" character varying(100) NOT NULL,
+    "Message" character varying(1000) NOT NULL,
+    "ActorId" uuid NULL REFERENCES "Users"("Id") ON DELETE SET NULL,
+    "MetadataJson" jsonb NULL,
+    "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS "IX_system_logs_CreatedAt" ON system_logs ("CreatedAt");
+CREATE INDEX IF NOT EXISTS "IX_system_logs_Category" ON system_logs ("Category");
+
 -- ────────────────────────────────────────────────────────────
 -- BƯỚC 6: GHI EF MIGRATIONS HISTORY
 -- (EF sẽ không chạy lại các migration này)
@@ -767,4 +781,6 @@ INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
     ('20260422192758_AddActionTypeToRewriteHistory', '9.0.0'),
     ('20260428181448_AddPasswordFormatVersion', '9.0.0'),
     ('20260503030041_AddProjectAnalysisFact', '9.0.0'),
-    ('20260503031424_AddReportItemEvidenceChunkIds', '9.0.0');
+    ('20260503031424_AddReportItemEvidenceChunkIds', '9.0.0'),
+    ('20260514120000_AddSystemLogs', '9.0.0'),
+    ('20260515130000_EnsureSystemLogsTable', '9.0.0');

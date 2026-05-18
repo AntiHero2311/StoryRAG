@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Loader2, AlertTriangle, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { Loader2, AlertTriangle, ChevronLeft, ChevronRight, ExternalLink, ShieldAlert } from 'lucide-react';
+import { staffService } from '../services/staffService';
 import { getUserInfo } from '../utils/jwtHelper';
 import MainLayout from '../layouts/MainLayout';
 import api from '../services/api';
@@ -9,6 +10,7 @@ const PAGE_SIZE = 20;
 
 export interface FlaggedProjectRow {
     project_id: string;
+    author_id: string;
     author_email: string;
     flag_reason: string;
     flagged_at: string;
@@ -44,6 +46,10 @@ export default function StaffFlaggedPage() {
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [modRow, setModRow] = useState<FlaggedProjectRow | null>(null);
+    const [warnMsg, setWarnMsg] = useState('');
+    const [banReason, setBanReason] = useState('');
+    const [modBusy, setModBusy] = useState(false);
 
     const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
@@ -127,7 +133,7 @@ export default function StaffFlaggedPage() {
                                             <th className="px-4 py-3 font-semibold">Lý do</th>
                                             <th className="px-4 py-3 font-semibold">Mức độ</th>
                                             <th className="px-4 py-3 font-semibold">Thời điểm</th>
-                                            <th className="px-4 py-3 font-semibold text-right">Chi tiết</th>
+                                            <th className="px-4 py-3 font-semibold text-right">Thao tác</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -152,14 +158,22 @@ export default function StaffFlaggedPage() {
                                                 <td className="px-4 py-3 text-[var(--text-secondary)] whitespace-nowrap">
                                                     {formatDate(r.flagged_at)}
                                                 </td>
-                                                <td className="px-4 py-3 text-right">
+                                                <td className="px-4 py-3 text-right space-x-2">
                                                     <Link
                                                         to={`/workspace/${r.project_id}`}
                                                         className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-medium text-xs"
                                                     >
-                                                        Mở dự án
+                                                        Mở
                                                         <ExternalLink className="w-3.5 h-3.5" />
                                                     </Link>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setModRow(r)}
+                                                        className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 font-medium text-xs ml-2"
+                                                    >
+                                                        <ShieldAlert className="w-3.5 h-3.5" />
+                                                        Xử lý
+                                                    </button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -193,6 +207,41 @@ export default function StaffFlaggedPage() {
                                     Sau
                                     <ChevronRight className="w-4 h-4" />
                                 </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {modRow && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={e => e.target === e.currentTarget && setModRow(null)}>
+                            <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 space-y-4">
+                                <h3 className="font-bold text-[var(--text-primary)]">Xử lý vi phạm</h3>
+                                <p className="text-xs text-[var(--text-secondary)]">{modRow.author_email}</p>
+                                <textarea value={warnMsg} onChange={e => setWarnMsg(e.target.value)} placeholder="Nội dung cảnh cáo (email)" className="w-full h-20 rounded-xl border border-[var(--border-color)] bg-[var(--input-bg)] p-3 text-sm" />
+                                <textarea value={banReason} onChange={e => setBanReason(e.target.value)} placeholder="Lý do đề xuất khóa tài khoản (Admin)" className="w-full h-16 rounded-xl border border-[var(--border-color)] bg-[var(--input-bg)] p-3 text-sm" />
+                                <div className="flex flex-col gap-2">
+                                    <button disabled={modBusy || warnMsg.length < 10} onClick={async () => {
+                                        setModBusy(true);
+                                        try {
+                                            await staffService.warnAuthor({ userId: modRow.author_id, projectId: modRow.project_id, message: warnMsg });
+                                            setWarnMsg('');
+                                        } finally { setModBusy(false); }
+                                    }} className="py-2 rounded-xl bg-amber-600/80 text-white text-sm font-semibold disabled:opacity-50">Gửi cảnh cáo email</button>
+                                    <button disabled={modBusy} onClick={async () => {
+                                        setModBusy(true);
+                                        try {
+                                            await staffService.suspendProject({ projectId: modRow.project_id, reason: modRow.flag_reason });
+                                            await load();
+                                        } finally { setModBusy(false); }
+                                    }} className="py-2 rounded-xl bg-zinc-600 text-white text-sm font-semibold">Đình chỉ dự án (Archive)</button>
+                                    <button disabled={modBusy || banReason.length < 10} onClick={async () => {
+                                        setModBusy(true);
+                                        try {
+                                            await staffService.recommendBan({ userId: modRow.author_id, reason: banReason });
+                                            setBanReason('');
+                                        } finally { setModBusy(false); }
+                                    }} className="py-2 rounded-xl bg-rose-600 text-white text-sm font-semibold disabled:opacity-50">Đề xuất Admin khóa TK</button>
+                                    <button onClick={() => setModRow(null)} className="py-2 text-sm text-[var(--text-secondary)]">Đóng</button>
+                                </div>
                             </div>
                         </div>
                     )}

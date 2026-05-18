@@ -53,6 +53,21 @@ export interface AdminOverviewStats {
     highPriorityOpenBugs: number;
 }
 
+export interface AdminCreateUserRequest {
+    fullName: string;
+    email: string;
+    password: string;
+    role: string;
+}
+
+export interface AdminUpdateUserRequest {
+    fullName: string;
+    email: string;
+    role: string;
+    isActive: boolean;
+    newPassword?: string;
+}
+
 export const adminService = {
     getUserStats: async (): Promise<UserStatsResponse> => {
         const response = await api.get<UserStatsResponse>('/admin/users/stats');
@@ -62,4 +77,105 @@ export const adminService = {
         const response = await api.get<AdminOverviewStats>('/admin/stats/overview');
         return response.data;
     },
+    getUser: async (id: string): Promise<UserSummary> => {
+        const response = await api.get<UserSummary>(`/admin/users/${id}`);
+        return response.data;
+    },
+    createUser: async (payload: AdminCreateUserRequest): Promise<UserSummary> => {
+        const response = await api.post<UserSummary>('/admin/users', payload);
+        return response.data;
+    },
+    updateUser: async (id: string, payload: AdminUpdateUserRequest): Promise<UserSummary> => {
+        const response = await api.put<UserSummary>(`/admin/users/${id}`, payload);
+        return response.data;
+    },
+    deleteUser: async (id: string): Promise<void> => {
+        await api.delete(`/admin/users/${id}`);
+    },
+    getRevenueDashboard: async (year: number, month: number, planId?: number): Promise<AdminRevenueDashboard> => {
+        const params: Record<string, number> = { year, month };
+        if (planId != null) params.planId = planId;
+        const response = await api.get<AdminRevenueDashboard>('/admin/revenue/dashboard', { params });
+        return response.data;
+    },
+    getLogs: async (page = 1, pageSize = 30, category?: string, level?: string): Promise<SystemLogsPage> => {
+        const response = await api.get<SystemLogsPage>('/admin/logs', { params: { page, pageSize, category, level } });
+        return response.data;
+    },
+    getSystemLimits: async (): Promise<SystemLimits> => {
+        const response = await api.get<SystemLimits>('/admin/system/limits');
+        return response.data;
+    },
+    updateSystemLimits: async (payload: SystemLimitsRequest): Promise<SystemLimits> => {
+        const response = await api.put<SystemLimits>('/admin/system/limits', payload);
+        return response.data;
+    },
+    setUserActive: async (id: string, isActive: boolean): Promise<UserSummary> => {
+        const response = await api.patch<UserSummary>(`/admin/users/${id}/active`, { isActive });
+        return response.data;
+    },
 };
+
+export interface SystemLogItem {
+    id: string;
+    level: string;
+    category: string;
+    action: string;
+    message: string;
+    actorId: string | null;
+    actorName: string | null;
+    createdAt: string;
+}
+
+export interface SystemLogsPage {
+    total: number;
+    page: number;
+    pageSize: number;
+    storageReady?: boolean;
+    items: SystemLogItem[];
+}
+
+export interface SystemLimits {
+    maxUploadMb: number;
+    maxProjectsPerAuthor: number;
+    maintenanceMode: boolean;
+    totalProjects: number;
+    totalChapters: number;
+    totalWordCount: number;
+}
+
+export interface SystemLimitsRequest {
+    maxUploadMb: number;
+    maxProjectsPerAuthor: number;
+    maintenanceMode: boolean;
+}
+
+export interface PlanRevenueItem {
+    planId: number;
+    planName: string;
+    revenue: number;
+    orderCount: number;
+}
+
+export interface MonthlyRevenueItem {
+    year: number;
+    month: number;
+    label: string;
+    revenue: number;
+    orderCount: number;
+    growthPercent: number | null;
+}
+
+export interface AdminRevenueDashboard {
+    year: number;
+    month: number;
+    totalRevenue: number;
+    selectedMonthRevenue: number;
+    totalCompletedOrders: number;
+    selectedMonthOrders: number;
+    revenueGrowthPercent: number | null;
+    paymentSuccessRate: number;
+    revenueByPlan: PlanRevenueItem[];
+    monthlyTrend: MonthlyRevenueItem[];
+    plans: PlanRevenueItem[];
+}

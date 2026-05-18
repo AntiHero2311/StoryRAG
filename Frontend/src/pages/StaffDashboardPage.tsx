@@ -239,7 +239,7 @@ export default function StaffDashboardPage() {
     ];
 
     return (
-        <MainLayout pageTitle="Quản lý báo cáo lỗi">
+        <MainLayout pageTitle="Báo cáo lỗi ứng dụng">
             {(userInfo) => (
             <div className="p-6 max-w-6xl mx-auto w-full space-y-6">
                 {/* Stats */}

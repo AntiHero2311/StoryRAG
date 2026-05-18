@@ -10,6 +10,9 @@ namespace Service.DTOs
         [JsonPropertyName("project_id")]
         public Guid ProjectId { get; set; }
 
+        [JsonPropertyName("author_id")]
+        public Guid AuthorId { get; set; }
+
         [JsonPropertyName("author_email")]
         public string AuthorEmail { get; set; } = string.Empty;
 
