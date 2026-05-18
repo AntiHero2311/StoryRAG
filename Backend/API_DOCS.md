@@ -470,7 +470,9 @@ AI Chat — hỏi đáp về nội dung dự án truyện (RAG).
 }
 ```
 
-**Response `400`:** Nếu chưa có dữ liệu embedding.
+**Lưu ý:** Nếu chapter active chưa chunk/embed, hệ thống sẽ tự chunk và embed lại trước khi trả lời.
+
+**Response `400`:** Chỉ khi dự án không còn chapter active nào để tạo ngữ cảnh.
 
 ---
 

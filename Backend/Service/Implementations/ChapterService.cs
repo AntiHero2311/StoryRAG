@@ -571,12 +571,13 @@ namespace Service.Implementations
                 var defaultTitle = $"Chương {currentMaxChapterNumber}";
                 var title = string.IsNullOrWhiteSpace(part.Title) ? defaultTitle : part.Title.Trim();
                 if (title.Length > 255) title = title[..255];
+                var htmlContent = PlainTextToHtml(part.Content);
 
                 var created = await CreateChapterAsync(projectId, userId, new CreateChapterRequest
                 {
                     ChapterNumber = currentMaxChapterNumber,
                     Title = title,
-                    Content = part.Content,
+                    Content = htmlContent,
                 });
 
                 importedChapters.Add(new ImportedChapterSummary
@@ -743,6 +744,32 @@ namespace Service.Implementations
             text = WebUtility.HtmlDecode(text).Replace('\u00A0', ' ');
 
             return text;
+        }
+
+        private static string PlainTextToHtml(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return "<p></p>";
+
+            var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
+            var paragraphs = normalized.Split(new[] { "\n\n" }, StringSplitOptions.None);
+
+            var sb = new StringBuilder();
+            foreach (var para in paragraphs)
+            {
+                var trimmed = para.Trim('\n');
+                if (string.IsNullOrWhiteSpace(trimmed)) continue;
+
+                var escaped = trimmed
+                    .Replace("&", "&amp;")
+                    .Replace("<", "&lt;")
+                    .Replace(">", "&gt;")
+                    .Replace("\n", "<br>");
+
+                sb.Append($"<p>{escaped}</p>");
+            }
+
+            return sb.Length > 0 ? sb.ToString() : "<p></p>";
         }
 
         private static string StripControlCharacters(string text)

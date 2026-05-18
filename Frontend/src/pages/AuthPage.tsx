@@ -218,7 +218,7 @@ export default function AuthPage() {
                                 <span className="bg-gradient-to-r from-indigo-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-transparent">workspace của bạn.</span>
                             </h1>
                             <p className="mt-8 text-pretty text-lg leading-8 text-zinc-400">
-                                Soạn thảo chương trong workspace, quản lý Story Bible, đồng bộ chunk/embed và xem báo cáo rubric — có chat RAG và phân tích, không có chế độ AI viết thay bạn.
+                                Biến việc viết truyện thành một quy trình liền mạch: soạn thảo trong workspace, quản lý Story Bible, đồng bộ chunk/embed và theo dõi rubric — kết hợp chat RAG và phân tích nội dung chuyên sâu.
                             </p>
 
                             <div className="mt-12 grid w-full max-w-xl grid-cols-3 gap-4">

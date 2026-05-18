@@ -16,6 +16,7 @@ namespace Service.Implementations
 {
     public class AiChatService : ServiceBase, IAiChatService
     {
+        private readonly IChapterService _chapterService;
         private readonly IEmbeddingService _embeddingService;
         private readonly ILogger<AiChatService> _logger;
         private readonly GeminiChatFailoverExecutor _geminiChatExecutor;
@@ -45,9 +46,15 @@ namespace Service.Implementations
             "du doan", "mau thuan", "logic", "xung dot"
         ];
 
-        public AiChatService(AppDbContext context, IConfiguration config, IEmbeddingService embeddingService, ILogger<AiChatService> logger)
+        public AiChatService(
+            AppDbContext context,
+            IConfiguration config,
+            IChapterService chapterService,
+            IEmbeddingService embeddingService,
+            ILogger<AiChatService> logger)
             : base(context, config)
         {
+            _chapterService = chapterService;
             _embeddingService = embeddingService;
             _logger = logger;
             _geminiChatExecutor = new GeminiChatFailoverExecutor(
@@ -82,12 +89,15 @@ namespace Service.Implementations
 
             // Chat chỉ kiểm tra token, không tiêu hao lượt phân tích
 
-            // 3. Embed câu hỏi
+            // 3. Chunk/embed các chapter active nếu chưa sẵn sàng
+            await EnsureProjectChapterEmbeddingsAsync(projectId, userId);
+
+            // 4. Embed câu hỏi
             var questionEmbedding = await _embeddingService.GetEmbeddingAsync(question, EmbeddingUseCase.ChatQuery);
             var queryVector = new Vector(questionEmbedding);
             var contextProfile = BuildContextProfile(question);
 
-            // 4. Vector search — lấy TopK từ 3 nguồn: chapter chunks, worldbuilding, characters
+            // 5. Vector search — lấy TopK từ 3 nguồn: chapter chunks, worldbuilding, characters
             // Chỉ tìm trong chunks thuộc active version của mỗi chương (tránh lấy chunks của version cũ)
             var activeVersionIds = await _context.Chapters
                 .Where(c => c.ProjectId == projectId && !c.IsDeleted && c.CurrentVersionId.HasValue)
@@ -113,9 +123,9 @@ namespace Service.Implementations
                 .ToListAsync();
 
             if (topChunks.Count == 0 && topWorldbuilding.Count == 0 && topCharacters.Count == 0)
-                throw new InvalidOperationException("Chưa có nội dung được embed trong dự án này. Hãy chunk và embed các chương trước.");
+                throw new InvalidOperationException("Chưa có nội dung đủ để chat trong dự án này.");
 
-            // 5. Decrypt chunk content để làm context
+            // 6. Decrypt chunk content để làm context
             var rawDek = await GetRawDekAsync(userId);
 
             // Decrypt project summary and AI instructions (always included as context)
@@ -157,7 +167,7 @@ namespace Service.Implementations
                 })
                 .ToList();
 
-            // 6. Sanitize + gọi OpenAI Chat với RAG context từ 3 nguồn
+            // 7. Sanitize + gọi OpenAI Chat với RAG context từ 3 nguồn
             var projectTitle = EncryptionHelper.DecryptWithMasterKey(project.Title, rawDek);
 
             // Sanitize câu hỏi và các context texts trước khi nhúng vào prompt
@@ -187,11 +197,11 @@ namespace Service.Implementations
             var outputTokens = completion.Usage.OutputTokenCount;
             var totalTokens = completion.Usage.TotalTokenCount;
 
-            // 7. Kiểm tra token limit
+            // 8. Kiểm tra token limit
             if (sub.UsedTokens + totalTokens > sub.Plan.MaxTokenLimit)
                 throw new InvalidOperationException($"Không đủ token. Còn lại: {sub.Plan.MaxTokenLimit - sub.UsedTokens} token.");
 
-            // 8. Lưu lịch sử chat (encrypt bằng user DEK)
+            // 9. Lưu lịch sử chat (encrypt bằng user DEK)
             _context.ChatMessages.Add(new AiChatMessage
             {
                 ProjectId = projectId,
@@ -203,11 +213,11 @@ namespace Service.Implementations
                 TotalTokens = totalTokens,
             });
 
-            // 9. Deduct token usage only (chat không tính lượt phân tích)
+            // 10. Deduct token usage only (chat không tính lượt phân tích)
             sub.UsedTokens += totalTokens;
             await _context.SaveChangesAsync();
 
-            // 10. Kiểm tra hành vi lạm dụng (fire-and-forget, không block response)
+            // 11. Kiểm tra hành vi lạm dụng (fire-and-forget, không block response)
             _ = Task.Run(() => AbuseDetector.CheckAndFlagAsync(userId, projectId, _context, _logger));
 
             return new AiChatResult
@@ -218,6 +228,43 @@ namespace Service.Implementations
                 TotalTokens = totalTokens,
                 ContextChunks = sanitizedContextTexts,
             };
+        }
+
+        private async Task EnsureProjectChapterEmbeddingsAsync(Guid projectId, Guid userId)
+        {
+            var activeChapters = await _context.Chapters
+                .Where(c => c.ProjectId == projectId && !c.IsDeleted && c.CurrentVersionId.HasValue)
+                .OrderBy(c => c.ChapterNumber)
+                .Select(c => new { c.Id, c.CurrentVersionId })
+                .ToListAsync();
+
+            if (activeChapters.Count == 0)
+                return;
+
+            var activeVersionIds = activeChapters.Select(c => c.CurrentVersionId!.Value).ToList();
+            var versionStates = await _context.ChapterVersions
+                .Where(v => activeVersionIds.Contains(v.Id))
+                .Select(v => new { v.Id, v.IsChunked, v.IsEmbedded })
+                .ToListAsync();
+
+            foreach (var chapter in activeChapters)
+            {
+                var state = versionStates.FirstOrDefault(v => v.Id == chapter.CurrentVersionId!.Value);
+                if (state == null)
+                    continue;
+
+                if (!state.IsChunked)
+                {
+                    _logger.LogInformation("AI Chat: chunk lại chapter {ChapterId} trước khi trả lời.", chapter.Id);
+                    await _chapterService.ChunkVersionAsync(chapter.Id, userId);
+                }
+
+                if (!state.IsEmbedded || !state.IsChunked)
+                {
+                    _logger.LogInformation("AI Chat: embed lại chapter {ChapterId} trước khi trả lời.", chapter.Id);
+                    await _embeddingService.EmbedChapterAsync(chapter.Id, userId);
+                }
+            }
         }
 
         public async Task<ChatHistoryResult> GetChatHistoryAsync(Guid projectId, Guid userId, int page, int pageSize)
