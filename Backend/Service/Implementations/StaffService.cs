@@ -5,6 +5,8 @@ using Repository.Entities;
 using Service.DTOs;
 using Service.Helpers;
 using Service.Interfaces;
+using System.Net;
+using System.Text.RegularExpressions;
 
 namespace Service.Implementations
 {
@@ -410,7 +412,10 @@ namespace Service.Implementations
                 .AsNoTracking()
                 .Include(r => r.Project)
                     .ThenInclude(p => p.Author)
-                .Where(r => pendingStatuses.Contains(r.ReviewStatus ?? string.Empty))
+                // Report cũ có thể chưa có ReviewStatus (null/empty) — xem như pending để staff vẫn review được.
+                .Where(r =>
+                    string.IsNullOrWhiteSpace(r.ReviewStatus) ||
+                    pendingStatuses.Contains(r.ReviewStatus))
                 .OrderByDescending(r => r.UpdatedAt ?? r.CreatedAt);
 
             var total = await query.CountAsync();
@@ -441,7 +446,9 @@ namespace Service.Implementations
                     AuthorId = report.UserId,
                     AuthorName = report.Project?.Author?.FullName ?? string.Empty,
                     TotalScore = report.TotalScore,
-                    ReviewStatus = report.ReviewStatus ?? ProjectReportService.ReviewStatusPendingStaff,
+                    ReviewStatus = string.IsNullOrWhiteSpace(report.ReviewStatus)
+                        ? ProjectReportService.ReviewStatusPendingStaff
+                        : report.ReviewStatus!,
                     CreatedAt = report.CreatedAt,
                     UpdatedAt = report.UpdatedAt,
                 };
@@ -663,6 +670,64 @@ namespace Service.Implementations
             return MapReportDetail(report, projectTitle);
         }
 
+        public async Task<StaffReportStoryResponse> GetReportStoryAsync(Guid reportId)
+        {
+            var report = await _db.ProjectReports
+                .AsNoTracking()
+                .Include(r => r.Project)
+                    .ThenInclude(p => p.Author)
+                .FirstOrDefaultAsync(r => r.Id == reportId)
+                ?? throw new KeyNotFoundException("Không tìm thấy báo cáo phân tích.");
+
+            var masterKey = _config["Security:MasterKey"] ?? throw new InvalidOperationException("Thiếu cấu hình Security:MasterKey.");
+            var projectTitle = report.Project?.Title ?? string.Empty;
+            string? authorDek = null;
+
+            if (!string.IsNullOrWhiteSpace(report.Project?.Author?.DataEncryptionKey))
+            {
+                authorDek = EncryptionHelper.DecryptWithMasterKey(report.Project.Author.DataEncryptionKey, masterKey);
+                projectTitle = EncryptionHelper.DecryptWithMasterKey(report.Project.Title, authorDek);
+            }
+
+            var chapters = await _db.Chapters
+                .AsNoTracking()
+                .Include(c => c.CurrentVersion)
+                .Where(c => c.ProjectId == report.ProjectId && !c.IsDeleted)
+                .OrderBy(c => c.ChapterNumber)
+                .ToListAsync();
+
+            var chapterItems = chapters.Select(c =>
+            {
+                var title = string.IsNullOrWhiteSpace(c.Title) ? $"Chương {c.ChapterNumber}" : c.Title!;
+                var plain = string.Empty;
+                if (c.CurrentVersion != null && !string.IsNullOrWhiteSpace(c.CurrentVersion.Content))
+                {
+                    var html = authorDek == null
+                        ? c.CurrentVersion.Content
+                        : EncryptionHelper.DecryptWithMasterKey(c.CurrentVersion.Content, authorDek);
+                    plain = HtmlToPlainText(html);
+                }
+
+                return new StaffStoryChapterItem
+                {
+                    ChapterId = c.Id,
+                    ChapterNumber = c.ChapterNumber,
+                    Title = title,
+                    Content = plain,
+                    WordCount = c.WordCount,
+                    UpdatedAt = c.UpdatedAt,
+                };
+            }).ToList();
+
+            return new StaffReportStoryResponse
+            {
+                ReportId = report.Id,
+                ProjectId = report.ProjectId,
+                ProjectTitle = projectTitle,
+                Chapters = chapterItems,
+            };
+        }
+
         public async Task<StaffReportDetailResponse> EditReportAsync(Guid reportId, Guid staffId, StaffEditReportRequest request)
         {
             var report = await _db.ProjectReports
@@ -785,6 +850,22 @@ namespace Service.Implementations
                 .Select(s => s.Trim().ToLowerInvariant())
                 .Where(s => s is "failed" or "stale")
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static string HtmlToPlainText(string html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+                return string.Empty;
+
+            var text = html;
+            text = Regex.Replace(text, @"(?is)<\s*br\s*/?\s*>", "\n");
+            text = Regex.Replace(text, @"(?is)</\s*(p|div|h[1-6]|li|tr|section|article)\s*>", "\n");
+            text = Regex.Replace(text, @"(?is)<\s*li[^>]*>", "- ");
+            text = Regex.Replace(text, @"(?is)<[^>]+>", string.Empty);
+            text = WebUtility.HtmlDecode(text).Replace('\u00A0', ' ');
+            text = Regex.Replace(text, @"\r\n|\r", "\n");
+            text = Regex.Replace(text, @"\n{3,}", "\n\n");
+            return text.Trim();
         }
 
         private static StaffFeedbackResponse MapFeedback(StaffFeedback feedback)

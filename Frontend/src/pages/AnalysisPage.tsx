@@ -68,11 +68,26 @@ function AnalysisContent() {
     const processingAnnouncedRef = useRef<string | null>(null);
     const projectPickerRef = useRef<HTMLDivElement | null>(null);
     const toast = useToast();
+    const normalizeAnalysisErrorMessage = (message?: string | null) => {
+        if (!message) return null;
+        const normalized = message.trim();
+        const lower = normalized.toLowerCase();
+
+        if (lower.includes('an error occurred while saving the entity changes')
+            || lower.includes('see the inner exception for details')
+            || lower.includes('dbupdateexception')
+            || lower.includes('violates check constraint')) {
+            return 'Hệ thống đang đồng bộ dữ liệu phân tích. Vui lòng thử lại sau ít phút.';
+        }
+
+        return normalized;
+    };
     const getApiErrorMessage = (err: any, fallback: string) =>
-        err?.response?.data?.message
-        || err?.response?.data?.Message
-        || err?.message
-        || fallback;
+        normalizeAnalysisErrorMessage(
+            err?.response?.data?.message
+            || err?.response?.data?.Message
+            || err?.message
+        ) || fallback;
     const getPendingFinalReviewMessage = (err: any) => {
         const status = err?.response?.status;
         const message = getApiErrorMessage(err, '');
@@ -275,7 +290,7 @@ function AnalysisContent() {
                 stopElapsedTimer();
 
                 if (!effectiveLatest && latestJob?.status === 'Failed' && latestJob.errorMessage) {
-                    setError(latestJob.errorMessage);
+                    setError(normalizeAnalysisErrorMessage(latestJob.errorMessage) ?? 'Phân tích thất bại. Vui lòng thử lại.');
                 }
             }
         };

@@ -315,4 +315,40 @@ namespace Service.DTOs
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
     }
+
+    public class StaffStoryChapterItem
+    {
+        [JsonPropertyName("chapter_id")]
+        public Guid ChapterId { get; set; }
+
+        [JsonPropertyName("chapter_number")]
+        public int ChapterNumber { get; set; }
+
+        [JsonPropertyName("title")]
+        public string Title { get; set; } = string.Empty;
+
+        [JsonPropertyName("content")]
+        public string Content { get; set; } = string.Empty;
+
+        [JsonPropertyName("word_count")]
+        public int WordCount { get; set; }
+
+        [JsonPropertyName("updated_at")]
+        public DateTime? UpdatedAt { get; set; }
+    }
+
+    public class StaffReportStoryResponse
+    {
+        [JsonPropertyName("report_id")]
+        public Guid ReportId { get; set; }
+
+        [JsonPropertyName("project_id")]
+        public Guid ProjectId { get; set; }
+
+        [JsonPropertyName("project_title")]
+        public string ProjectTitle { get; set; } = string.Empty;
+
+        [JsonPropertyName("chapters")]
+        public List<StaffStoryChapterItem> Chapters { get; set; } = [];
+    }
 }

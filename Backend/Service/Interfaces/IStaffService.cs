@@ -29,6 +29,9 @@ namespace Service.Interfaces
         /// <summary>Staff lấy chi tiết report để xem/chỉnh sửa (bao gồm AI CriteriaJson gốc).</summary>
         Task<StaffReportDetailResponse> GetReportDetailAsync(Guid reportId);
 
+        /// <summary>Staff lấy nội dung truyện (các chương hiện tại) theo report để đối chiếu khi review.</summary>
+        Task<StaffReportStoryResponse> GetReportStoryAsync(Guid reportId);
+
         /// <summary>Staff chỉnh sửa nội dung text của một số tiêu chí và optionally phát hành cho user.</summary>
         Task<StaffReportDetailResponse> EditReportAsync(Guid reportId, Guid staffId, StaffEditReportRequest request);
     }

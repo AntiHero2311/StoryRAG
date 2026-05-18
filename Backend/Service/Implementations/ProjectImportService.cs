@@ -91,7 +91,6 @@ namespace Service.Implementations
             // ── Bước 4: Chia chương & lưu vào DB ───────────────────────────────
             var chapterParts = ManuscriptExtractorHelper.SplitIntoChapterParts(plainText, splitByHeadings: true);
             int chaptersImported = 0;
-            var chapterContentSamples = new List<string>(); // Dùng để AI đọc sau
             var plainContentByVersionId = new Dictionary<Guid, string>(); // plain text để chunk
             var now = DateTime.UtcNow;
             var chaptersToInsert = new List<Chapter>(chapterParts.Count);
@@ -134,14 +133,6 @@ namespace Service.Implementations
                 currentVersionByChapterId[chapterId] = versionId;
                 plainContentByVersionId[versionId] = part.Content;
                 chaptersImported++;
-
-                if (currentChapterNumber <= MaxChaptersForAiScan)
-                {
-                    var sample = part.Content.Length > MaxCharsPerChapterSummary
-                        ? part.Content[..MaxCharsPerChapterSummary]
-                        : part.Content;
-                    chapterContentSamples.Add($"--- {part.Title ?? $"Chương {currentChapterNumber}"} ---\n{sample}");
-                }
             }
 
             _context.Chapters.AddRange(chaptersToInsert);
@@ -157,8 +148,7 @@ namespace Service.Implementations
             }
             await _context.SaveChangesAsync();
 
-            // ── Bước 5: Trích xuất nhanh bằng logic (không cần AI) ──────────────
-            // Điền placeholder tức thì để project có dữ liệu ngay cả khi AI thất bại sau này.
+            // ── Bước 5: Trích xuất metadata nhanh bằng heuristic (không gọi AI) ─
             int timelineEventsExtracted = 0;
             string? extractedSummary = null;
 
@@ -267,73 +257,10 @@ namespace Service.Implementations
             }
             _logger.LogInformation("Import {ProjectId}: đã embed {Done}/{Total} chương.", project.Id, embeddedChapters, chaptersToInsert.Count);
 
-            // ── Bước 8: AI trích xuất sau khi embed xong ────────────────────────
-            int charactersExtracted = 0, settingsExtracted = 0;
-            bool aiExtractionFailed = false;
-            string? aiExtractionError = null;
-
-            bool hasTokenBudget = await CheckTokenBudgetAsync(userId);
-            if (hasTokenBudget && chapterContentSamples.Count > 0)
-            {
-                try
-                {
-                    var combinedContent = string.Join("\n\n", chapterContentSamples);
-                    var aiExtracted = await ExtractProjectInfoWithAiAsync(combinedContent, projectTitle);
-
-                    if (aiExtracted != null)
-                    {
-                        // AI ghi đè summary và thêm nhân vật/bối cảnh; timeline đã có heuristic nên skip
-                        if (!string.IsNullOrWhiteSpace(aiExtracted.Summary))
-                        {
-                            extractedSummary = aiExtracted.Summary;
-                            project.Summary = EncryptionHelper.EncryptWithMasterKey(aiExtracted.Summary, rawDek);
-                        }
-
-                        foreach (var character in aiExtracted.Characters ?? new())
-                        {
-                            if (string.IsNullOrWhiteSpace(character.Name)) continue;
-                            _context.CharacterEntries.Add(new CharacterEntry
-                            {
-                                Id = Guid.NewGuid(),
-                                ProjectId = project.Id,
-                                Name = EncryptionHelper.EncryptWithMasterKey(character.Name, rawDek),
-                                Role = "Supporting",
-                                Description = EncryptionHelper.EncryptWithMasterKey(character.Description ?? string.Empty, rawDek),
-                                CreatedAt = DateTime.UtcNow,
-                            });
-                            charactersExtracted++;
-                        }
-
-                        foreach (var setting in aiExtracted.Settings ?? new())
-                        {
-                            if (string.IsNullOrWhiteSpace(setting.Name)) continue;
-                            _context.WorldbuildingEntries.Add(new WorldbuildingEntry
-                            {
-                                Id = Guid.NewGuid(),
-                                ProjectId = project.Id,
-                                Title = EncryptionHelper.EncryptWithMasterKey(setting.Name, rawDek),
-                                Content = EncryptionHelper.EncryptWithMasterKey(setting.Description ?? string.Empty, rawDek),
-                                Category = "World",
-                                CreatedAt = DateTime.UtcNow,
-                            });
-                            settingsExtracted++;
-                        }
-
-                        await _context.SaveChangesAsync();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    aiExtractionFailed = true;
-                    aiExtractionError = ex.Message;
-                    _logger.LogWarning(ex, "AI extraction failed after embed for project {ProjectId}. Use /reextract to retry.", project.Id);
-                }
-            }
-            else if (!hasTokenBudget)
-            {
-                aiExtractionFailed = true;
-                aiExtractionError = "Vượt giới hạn token subscription.";
-            }
+            // ── Bước 8: Không chạy AI khi import ────────────────────────────────
+            // Chỉ giữ logic import/chia chương/chunk/embed + heuristic metadata cơ bản.
+            int charactersExtracted = 0;
+            int settingsExtracted = 0;
 
             var result = new ProjectImportResult
             {
@@ -345,8 +272,8 @@ namespace Service.Implementations
                 TimelineEventsExtracted = timelineEventsExtracted,
                 GenresLinked = genresLinked,
                 Summary = extractedSummary,
-                AiExtractionFailed = aiExtractionFailed,
-                AiExtractionError = aiExtractionError,
+                AiExtractionFailed = false,
+                AiExtractionError = null,
             };
 
             // ── Bước 9: Gửi notification ─────────────────────────────────────────
@@ -542,25 +469,6 @@ namespace Service.Implementations
 
             await _context.SaveChangesAsync();
             return (extractedSummary, charactersExtracted, settingsExtracted, timelineEventsExtracted);
-        }
-
-        private async Task<bool> CheckTokenBudgetAsync(Guid userId)
-        {
-            try
-            {
-                var sub = await _context.UserSubscriptions
-                    .Include(s => s.Plan)
-                    .Where(s => s.UserId == userId && s.Status == "Active" && s.EndDate >= DateTime.UtcNow)
-                    .OrderByDescending(s => s.EndDate)
-                    .FirstOrDefaultAsync();
-
-                if (sub == null) return false;
-                return sub.UsedTokens < sub.Plan.MaxTokenLimit;
-            }
-            catch
-            {
-                return false;
-            }
         }
 
         private async Task<AiExtractionResponse?> ExtractProjectInfoWithAiAsync(string combinedContent, string projectTitle)

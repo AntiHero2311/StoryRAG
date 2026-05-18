@@ -24,6 +24,7 @@ const StaffFlaggedPage = lazy(() => import('./pages/StaffFlaggedPage'));
 const StaffFaqPage = lazy(() => import('./pages/StaffFaqPage'));
 const StaffWritingTipPage = lazy(() => import('./pages/StaffWritingTipPage'));
 const StaffAnalysisJobsPage = lazy(() => import('./pages/StaffAnalysisJobsPage'));
+const StaffReportReviewPage = lazy(() => import('./pages/StaffReportReviewPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
@@ -125,6 +126,16 @@ function App() {
                 <RouteGuard>
                   <RoleGuard allowedRoles={['Staff', 'Admin']}>
                     <StaffAnalysisJobsPage />
+                  </RoleGuard>
+                </RouteGuard>
+              }
+            />
+            <Route
+              path="/staff/analysis-reports/:reportId"
+              element={
+                <RouteGuard>
+                  <RoleGuard allowedRoles={['Staff', 'Admin']}>
+                    <StaffReportReviewPage />
                   </RoleGuard>
                 </RouteGuard>
               }

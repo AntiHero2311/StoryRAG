@@ -170,12 +170,12 @@ export default function StaffAnalysisJobsPage() {
                       <p className="text-xs text-[var(--text-secondary)]">Tác giả: {r.author_name} • Điểm AI: {r.total_score.toFixed(1)}</p>
                     </div>
                     <a
-                      href={`/workspace/${r.project_id}`}
+                      href={`/staff/analysis-reports/${r.report_id}`}
                       className="h-8 px-3 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5"
                       style={{ background: 'rgba(99,102,241,0.10)', border: '1px solid rgba(99,102,241,0.22)', color: 'var(--accent-text)' }}
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
-                      Mở dự án
+                      Review report
                     </a>
                   </div>
                 ))}
@@ -258,15 +258,6 @@ export default function StaffAnalysisJobsPage() {
                               {rerunLoadingId === j.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
                               Rerun
                             </button>
-                            <a
-                              className="ml-2 inline-flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-semibold transition-colors"
-                              style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}
-                              href={`/workspace/${j.project_id}`}
-                              title="Mở workspace"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                              Workspace
-                            </a>
                           </td>
                         </tr>
                       );

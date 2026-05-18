@@ -160,6 +160,21 @@ namespace Api.Controllers
             }
         }
 
+        /// <summary>Staff lấy bản truyện (các chương hiện tại) để đối chiếu khi review report.</summary>
+        [HttpGet("analyses/{reportId:guid}/story")]
+        public async Task<IActionResult> GetReportStory(Guid reportId)
+        {
+            try
+            {
+                var result = await _staffService.GetReportStoryAsync(reportId);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+        }
+
         /// <summary>
         /// Staff chỉnh sửa nội dung text của các tiêu chí trong report (không thay đổi điểm số AI).
         /// Sau khi chỉnh sửa, có thể phát hành (Release) cho user xem ngay.

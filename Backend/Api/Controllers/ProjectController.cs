@@ -208,7 +208,7 @@ namespace Api.Controllers
 
         // ── Helper ───────────────────────────────────────────────────────────────
 
-        /// <summary>Import bản thảo (.txt/.docx/.pdf) → tạo Project + Chapters + AI trích xuất.</summary>
+        /// <summary>Import bản thảo (.txt/.docx/.pdf) → tạo Project + Chapters, không chạy AI tự động.</summary>
         [HttpPost("import")]
         [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongImport")]
         [RequestSizeLimit(80 * 1024 * 1024)]

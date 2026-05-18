@@ -6,7 +6,7 @@ namespace Service.Interfaces
     {
         /// <summary>
         /// Nhận file bản thảo (.txt, .docx, .pdf), tạo Project mới, chia chương,
-        /// rồi dùng AI tự động trích xuất Summary, Nhân vật, Bối cảnh, Timeline.
+        /// và lưu nội dung vào hệ thống (không chạy AI phân tích tự động trong bước import).
         /// </summary>
         Task<ProjectImportResult> ImportFromManuscriptAsync(
             Guid userId,

@@ -37,6 +37,7 @@ namespace Service.Implementations
         private readonly IAnalysisJobQueue _analysisJobQueue;
         private readonly IAnalysisJobCancellationRegistry _analysisJobCancellationRegistry;
         private readonly INotificationService _notificationService;
+        private readonly IEmbeddingService _embeddingService;
         private readonly ILogger<ProjectAnalysisJobService> _logger;
 
         public ProjectAnalysisJobService(
@@ -45,6 +46,7 @@ namespace Service.Implementations
             IAnalysisJobQueue analysisJobQueue,
             IAnalysisJobCancellationRegistry analysisJobCancellationRegistry,
             INotificationService notificationService,
+            IEmbeddingService embeddingService,
             ILogger<ProjectAnalysisJobService> logger)
         {
             _context = context;
@@ -52,6 +54,7 @@ namespace Service.Implementations
             _analysisJobQueue = analysisJobQueue;
             _analysisJobCancellationRegistry = analysisJobCancellationRegistry;
             _notificationService = notificationService;
+            _embeddingService = embeddingService;
             _logger = logger;
         }
 
@@ -169,7 +172,12 @@ namespace Service.Implementations
             var job = await _context.ProjectAnalysisJobs
                 .AsNoTracking()
                 .Where(j => j.ProjectId == projectId && j.UserId == userId)
-                .OrderByDescending(j => j.CreatedAt)
+                // Ưu tiên job đang chạy, sau đó tới job đã hoàn thành có report.
+                // Tránh trường hợp 1 job fail mới nhất "che" mất job Completed ngay trước đó.
+                .OrderBy(j =>
+                    (j.Status == StatusQueued || j.Status == StatusProcessing) ? 0 :
+                    (j.Status == StatusCompleted && j.ReportId.HasValue) ? 1 : 2)
+                .ThenByDescending(j => j.CreatedAt)
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (job == null) return null;
@@ -298,7 +306,48 @@ namespace Service.Implementations
                 job.Progress = 10;
                 job.StartedAt = DateTime.UtcNow;
                 job.UpdatedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync(processingToken);
+                
+                try
+                {
+                    await _context.SaveChangesAsync(processingToken);
+                }
+                catch (DbUpdateException ex)
+                {
+                    _logger.LogError(ex, "Failed to update job {JobId} to Processing status. Checking for constraint violation.", jobId);
+                    
+                    // Check if there's another job in Processing status for the same user
+                    var otherProcessingJob = await _context.ProjectAnalysisJobs
+                        .FirstOrDefaultAsync(j => 
+                            j.UserId == job.UserId && 
+                            j.Id != job.Id && 
+                            j.Status == StatusProcessing, CancellationToken.None);
+                    
+                    if (otherProcessingJob != null)
+                    {
+                        _logger.LogWarning(
+                            "Found another Processing job {OtherJobId} for user {UserId}. Cancelling it.",
+                            otherProcessingJob.Id, job.UserId);
+                        
+                        // Cancel the conflicting job
+                        otherProcessingJob.Status = StatusCancelled;
+                        otherProcessingJob.Stage = StageCancelled;
+                        otherProcessingJob.Progress = 100;
+                        otherProcessingJob.ErrorMessage = "Tự động hủy do conflict với job mới. Bạn bắt đầu phân tích dự án khác.";
+                        otherProcessingJob.CompletedAt = DateTime.UtcNow;
+                        otherProcessingJob.UpdatedAt = DateTime.UtcNow;
+                        await _context.SaveChangesAsync(CancellationToken.None);
+                        
+                        // Detach the conflicting job and retry with the current job
+                        _context.Entry(otherProcessingJob).State = EntityState.Detached;
+                        
+                        // Retry the original update
+                        await _context.SaveChangesAsync(processingToken);
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
 
                 await ThrowIfJobCancelledAsync(jobId, processingToken);
 
@@ -318,10 +367,28 @@ namespace Service.Implementations
                         if (job.Progress == safeProgress)
                             return;
 
-                        job.Stage = string.IsNullOrWhiteSpace(message) ? StageAnalyzing : message;
+                        job.Stage = NormalizeStage(message);
                         job.Progress = safeProgress;
                         job.UpdatedAt = DateTime.UtcNow;
-                        await _context.SaveChangesAsync(token);
+                        
+                        try
+                        {
+                            await _context.SaveChangesAsync(token);
+                        }
+                        catch (DbUpdateConcurrencyException)
+                        {
+                            // Reload job and retry if concurrency issue
+                            await _context.Entry(job).ReloadAsync(token);
+                            job.Stage = NormalizeStage(message);
+                            job.Progress = safeProgress;
+                            job.UpdatedAt = DateTime.UtcNow;
+                            await _context.SaveChangesAsync(token);
+                        }
+                        catch (DbUpdateException ex)
+                        {
+                            // Log but don't throw - progress updates are not critical
+                            _logger.LogWarning(ex, "Failed to update progress for job {JobId}. Continuing anyway.", jobId);
+                        }
                     },
                     processingToken,
                     job.Id);
@@ -445,6 +512,10 @@ namespace Service.Implementations
 
         private async Task EnsureProjectHasEmbeddedContentAsync(Guid projectId, CancellationToken cancellationToken)
         {
+            var project = await _context.Projects
+                .FirstOrDefaultAsync(p => p.Id == projectId, cancellationToken)
+                ?? throw new KeyNotFoundException("Không tìm thấy dự án.");
+
             var activeVersionIds = await _context.Chapters
                 .Where(c => c.ProjectId == projectId && !c.IsDeleted && c.CurrentVersionId.HasValue)
                 .Select(c => c.CurrentVersionId!.Value)
@@ -453,6 +524,50 @@ namespace Service.Implementations
             if (activeVersionIds.Count == 0)
                 throw new InvalidOperationException(MissingEmbeddedContentMessage);
 
+            // Find chapters that are not fully embedded (have chunks without embeddings)
+            var chaptersWithMissingEmbeddings = await _context.Chapters
+                .Where(c => c.ProjectId == projectId && !c.IsDeleted && c.CurrentVersionId.HasValue)
+                .Select(c => new { c.Id, c.CurrentVersionId })
+                .ToListAsync(cancellationToken);
+
+            var chaptersToEmbed = new List<Guid>();
+            foreach (var chapter in chaptersWithMissingEmbeddings)
+            {
+                if (!chapter.CurrentVersionId.HasValue)
+                    continue;
+
+                var hasAllChunksEmbedded = await _context.ChapterChunks
+                    .Where(cc => cc.VersionId == chapter.CurrentVersionId.Value && cc.ProjectId == projectId)
+                    .AllAsync(cc => cc.Embedding != null, cancellationToken);
+
+                if (!hasAllChunksEmbedded)
+                {
+                    chaptersToEmbed.Add(chapter.Id);
+                }
+            }
+
+            // Auto-embed missing chapters
+            if (chaptersToEmbed.Any())
+            {
+                _logger.LogInformation(
+                    "Auto-embedding {ChapterCount} chapters for project {ProjectId} before analysis.",
+                    chaptersToEmbed.Count, projectId);
+
+                foreach (var chapterId in chaptersToEmbed)
+                {
+                    try
+                    {
+                        await _embeddingService.EmbedChapterAsync(chapterId, project.AuthorId);
+                        _logger.LogInformation("Successfully embedded chapter {ChapterId}.", chapterId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to auto-embed chapter {ChapterId}. Continuing anyway.", chapterId);
+                    }
+                }
+            }
+
+            // Final check: ensure at least some embedded content exists
             var hasEmbeddedChunks = await _context.ChapterChunks
                 .AnyAsync(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId), cancellationToken);
 
@@ -510,6 +625,29 @@ namespace Service.Implementations
             }).ToList();
 
             return new ProjectAnalysisSnapshotState(snapshots, ProjectAnalysisSnapshotHelper.BuildProjectVersionHash(projectId, snapshots));
+        }
+
+        private static string NormalizeStage(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return StageAnalyzing;
+
+            if (value.Equals(StageQueued, StringComparison.OrdinalIgnoreCase))
+                return StageQueued;
+            if (value.Equals(StagePreparing, StringComparison.OrdinalIgnoreCase))
+                return StagePreparing;
+            if (value.Equals(StageAnalyzing, StringComparison.OrdinalIgnoreCase))
+                return StageAnalyzing;
+            if (value.Equals(StageSaving, StringComparison.OrdinalIgnoreCase))
+                return StageSaving;
+            if (value.Equals(StageCompleted, StringComparison.OrdinalIgnoreCase))
+                return StageCompleted;
+            if (value.Equals(StageFailed, StringComparison.OrdinalIgnoreCase))
+                return StageFailed;
+            if (value.Equals(StageCancelled, StringComparison.OrdinalIgnoreCase))
+                return StageCancelled;
+
+            return StageAnalyzing;
         }
 
         private static ProjectAnalysisJobResponse ToResponse(ProjectAnalysisJob job, bool isExistingJob = false)

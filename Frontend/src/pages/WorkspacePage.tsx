@@ -109,6 +109,97 @@ function ExportModal({
     );
 }
 
+// ── Import Confirm Modal ───────────────────────────────────────────────────
+function ImportConfirmModal({
+    file,
+    onClose,
+    onConfirm,
+    isLoading
+}: {
+    file: File | null;
+    onClose: () => void;
+    onConfirm: () => void;
+    isLoading: boolean;
+}) {
+    if (!file) return null;
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            onClick={e => { if (e.target === e.currentTarget && !isLoading) onClose(); }}>
+            <div className="w-full max-w-sm flex flex-col rounded-2xl overflow-hidden shadow-2xl p-6"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                        <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2 mb-1">
+                            <Upload className="w-5 h-5 text-[var(--accent)]" />
+                            Import Manuscript
+                        </h3>
+                        <p className="text-sm text-[var(--text-secondary)]">
+                            Xác nhận import file này
+                        </p>
+                    </div>
+                    <button onClick={onClose} disabled={isLoading} className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:bg-[var(--text-primary)]/10 transition-colors">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+
+                <div className="mb-5 p-3 rounded-lg" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
+                    <div className="flex items-center gap-2 mb-2">
+                        <FileText className="w-4 h-4 text-[var(--accent)]" />
+                        <span className="text-sm font-semibold text-[var(--text-primary)] break-all">
+                            {file.name}
+                        </span>
+                    </div>
+                    <div className="text-xs text-[var(--text-secondary)]">
+                        <div>Kích thước: {(file.size / 1024 / 1024).toFixed(2)} MB</div>
+                        <div>Định dạng: {file.type || 'Unknown'}</div>
+                    </div>
+                </div>
+
+                <div className="mb-5 p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
+                    <div className="flex gap-2 text-sm text-blue-300">
+                        <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <span>Hệ thống sẽ tự động tách manuscript thành các chapter dựa trên heading nếu có.</span>
+                    </div>
+                </div>
+
+                <div className="flex gap-3">
+                    <button
+                        onClick={onClose}
+                        disabled={isLoading}
+                        className="flex-1 px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors"
+                        style={{ 
+                            background: 'var(--bg-app)',
+                            color: 'var(--text-primary)',
+                            border: '1px solid var(--border-color)'
+                        }}>
+                        Hủy
+                    </button>
+                    <button
+                        onClick={onConfirm}
+                        disabled={isLoading}
+                        className="flex-1 px-4 py-2.5 rounded-lg font-semibold text-sm text-white transition-all flex items-center justify-center gap-2"
+                        style={{ 
+                            background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                        }}>
+                        {isLoading ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Đang import...
+                            </>
+                        ) : (
+                            <>
+                                <Upload className="w-4 h-4" />
+                                Import
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ── Diff Modal ─────────────────────────────────────────────────────────────
 function DiffModal({
     currentVersionNum,
@@ -255,6 +346,7 @@ export default function WorkspacePage() {
     const [exportModal, setExportModal] = useState<{ open: boolean; target: 'project' | 'chapter' }>({ open: false, target: 'project' });
     const [isExporting, setIsExporting] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
+    const [importConfirmModal, setImportConfirmModal] = useState<{ open: boolean; file: File | null }>({ open: false, file: null });
 
     // ── Delete confirmation ────────────────────────────────────────────────
     const deleteConfirm = useDeleteConfirm();
@@ -475,10 +567,12 @@ export default function WorkspacePage() {
             return;
         }
 
-        if (!confirm(`Import manuscript "${file.name}" và tạo chapter mới tự động?`)) {
-            e.target.value = '';
-            return;
-        }
+        setImportConfirmModal({ open: true, file });
+    };
+
+    const handleConfirmImport = async () => {
+        const file = importConfirmModal.file;
+        if (!file || !projectId) return;
 
         setIsImporting(true);
         try {
@@ -486,11 +580,12 @@ export default function WorkspacePage() {
             const firstImportedChapterId = result.importedChapters[0]?.chapterId;
             await loadChapters(firstImportedChapterId);
             toast.success(`Đã import ${result.importedChapterCount} chapter từ file ${result.sourceFileName}.`);
+            setImportConfirmModal({ open: false, file: null });
+            if (importFileRef.current) importFileRef.current.value = '';
         } catch (e: any) {
             toast.error(e?.response?.data?.message ?? 'Không thể import file manuscript.');
         } finally {
             setIsImporting(false);
-            e.target.value = '';
         }
     };
 
@@ -977,6 +1072,19 @@ export default function WorkspacePage() {
                         await doSwitchVersion(diffModal.compareVersionNum);
                         setDiffModal(null);
                     }}
+                />
+            )}
+
+            {/* ── Import Confirm Modal ── */}
+            {importConfirmModal.open && (
+                <ImportConfirmModal
+                    file={importConfirmModal.file}
+                    isLoading={isImporting}
+                    onClose={() => {
+                        setImportConfirmModal({ open: false, file: null });
+                        if (importFileRef.current) importFileRef.current.value = '';
+                    }}
+                    onConfirm={handleConfirmImport}
                 />
             )}
 

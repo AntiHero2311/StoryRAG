@@ -796,8 +796,8 @@ export default function MyProjectsSection({ onNavigate, createRequestToken, onPr
                             <Sparkles className="w-7 h-7 text-white animate-pulse" />
                         </div>
                         <div className="text-center">
-                            <p className="text-white font-bold text-lg">AI đang đọc bản thảo...</p>
-                            <p className="text-[var(--text-secondary)] text-sm mt-1">Quá trình này có thể mất 1-2 phút.<br />Vui lòng không đóng trang.</p>
+                            <p className="text-white font-bold text-lg">Đang import bản thảo...</p>
+                            <p className="text-[var(--text-secondary)] text-sm mt-1">Hệ thống đang tách nội dung và tạo chương.<br />Vui lòng không đóng trang.</p>
                         </div>
                         <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
                     </div>

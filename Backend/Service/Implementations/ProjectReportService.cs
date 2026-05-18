@@ -82,7 +82,8 @@ namespace Service.Implementations
                 logger,
                 "Gemini Report",
                 GeminiPrimaryKeyRole.Analyze,
-                TimeSpan.FromMinutes(10)); // Tăng lên 10 phút cho các bộ truyện lớn
+                TimeSpan.FromMinutes(10),
+                modelsConfigKey: "Gemini:AnalyzeModels"); // Dùng "Gemini:AnalyzeModels" nếu có, fallback "Gemini:ChatModels"
         }
 
 
