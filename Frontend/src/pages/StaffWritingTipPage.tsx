@@ -103,7 +103,7 @@ function parseTags(raw: string): string[] {
   return out;
 }
 
-export default function StaffWritingTipPage() {
+export default function StaffWritingTipPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const [items, setItems] = useState<WritingTip[]>([]);
   const [loading, setLoading] = useState(true);
@@ -252,10 +252,8 @@ export default function StaffWritingTipPage() {
     }
   };
 
-  return (
-    <MainLayout pageTitle="Quản lý Writing Tips">
-      {() => (
-        <div className="p-6 max-w-6xl mx-auto w-full space-y-5">
+  const body = (
+        <div className={embedded ? 'w-full space-y-5' : 'p-6 max-w-6xl mx-auto w-full space-y-5'}>
           <div className="rounded-3xl p-5 flex items-center justify-between" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(168,85,247,0.12)' }}>
@@ -476,7 +474,12 @@ export default function StaffWritingTipPage() {
             </Modal>
           )}
         </div>
-      )}
+  );
+
+  if (embedded) return body;
+  return (
+    <MainLayout pageTitle="Mẹo viết truyện">
+      {() => body}
     </MainLayout>
   );
 }

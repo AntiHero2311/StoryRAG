@@ -247,6 +247,7 @@ builder.Services.AddScoped<IAiRewriteService, AiRewriteService>();
 builder.Services.AddScoped<IAiWritingService, AiWritingService>();
 builder.Services.AddScoped<IBugReportService, BugReportService>();
 builder.Services.AddScoped<IStaffService, StaffService>();
+builder.Services.AddScoped<ISupportWorkflowService, SupportWorkflowService>();
 builder.Services.AddScoped<IStyleGuideService, StyleGuideService>();
 builder.Services.AddScoped<IThemeService, ThemeService>();
 builder.Services.AddScoped<IPlotNoteService, PlotNoteService>();
@@ -264,16 +265,8 @@ builder.Services.AddHostedService<ProjectAnalysisJobWorker>();
 builder.Services.AddHostedService<AutoEmbeddingWorker>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<ISystemConfigService, SystemConfigService>();
-builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection("PayOS"));
+builder.Services.AddScoped<ISystemAuditLogService, SystemAuditLogService>();
 builder.Services.Configure<VnPayOptions>(builder.Configuration.GetSection("VNPay"));
-builder.Services.AddHttpClient("PayOS", (sp, client) =>
-{
-    var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PayOsOptions>>().Value;
-    if (!string.IsNullOrWhiteSpace(options.BaseUrl))
-    {
-        client.BaseAddress = new Uri(options.BaseUrl);
-    }
-});
 
 // Add Authentication Configuration
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

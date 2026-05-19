@@ -16,7 +16,6 @@ import {
     User,
 } from 'lucide-react';
 import { authService, LoginData, RegisterData } from '../services/authService';
-import { subscriptionService } from '../services/subscriptionService';
 
 function GoogleLoginSized({
     mode,
@@ -109,12 +108,10 @@ export default function AuthPage() {
         window.history.pushState(null, '', `/${newMode}`);
     };
 
-    const getPostLoginPath = async (role: string) => {
+    const getPostLoginPath = (role: string) => {
         if (role === 'Admin') return '/admin';
         if (role === 'Staff') return '/staff';
-
-        const activeSubscription = await subscriptionService.getMySubscription();
-        return activeSubscription ? '/home' : '/subscription';
+        return '/home';
     };
 
     const persistAuth = (response: { accessToken: string; refreshToken?: string }) => {
@@ -131,7 +128,7 @@ export default function AuthPage() {
             const data: LoginData = { email: loginEmail, password: loginPassword };
             const response = await authService.login(data);
             persistAuth(response);
-            navigate(await getPostLoginPath(response.role));
+            navigate(getPostLoginPath(response.role));
         } catch (error: any) {
             setErrorMsg(error.response?.data?.message || 'Email hoặc mật khẩu không chính xác.');
             setLoading(false);
@@ -177,7 +174,7 @@ export default function AuthPage() {
         try {
             const response = await authService.googleLogin({ idToken });
             persistAuth(response);
-            navigate(await getPostLoginPath(response.role));
+            navigate(getPostLoginPath(response.role));
         } catch (error: any) {
             setErrorMsg(error.response?.data?.message || 'Đăng nhập Google thất bại.');
             setLoading(false);

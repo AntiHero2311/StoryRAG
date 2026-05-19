@@ -1,8 +1,46 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Service.DTOs
 {
+    public class AdminCreateUserRequest
+    {
+        [Required, MaxLength(100)]
+        public string FullName { get; set; } = string.Empty;
+
+        [Required, EmailAddress, MaxLength(255)]
+        public string Email { get; set; } = string.Empty;
+
+        [Required, MinLength(6)]
+        public string Password { get; set; } = string.Empty;
+
+        [Required]
+        public string Role { get; set; } = "Author";
+    }
+
+    public class SetUserActiveRequest
+    {
+        public bool IsActive { get; set; }
+    }
+
+    public class AdminUpdateUserRequest
+    {
+        [Required, MaxLength(100)]
+        public string FullName { get; set; } = string.Empty;
+
+        [Required, EmailAddress, MaxLength(255)]
+        public string Email { get; set; } = string.Empty;
+
+        [Required]
+        public string Role { get; set; } = "Author";
+
+        public bool IsActive { get; set; } = true;
+
+        [MinLength(6)]
+        public string? NewPassword { get; set; }
+    }
+
     public class UserSummaryDto
     {
         public Guid Id { get; set; }
@@ -61,5 +99,38 @@ namespace Service.DTOs
         public int InProgressBugReports { get; set; }
         public int ResolvedBugReports { get; set; }
         public int HighPriorityOpenBugs { get; set; }
+    }
+
+    public class PlanRevenueItemDto
+    {
+        public int PlanId { get; set; }
+        public string PlanName { get; set; } = string.Empty;
+        public decimal Revenue { get; set; }
+        public int OrderCount { get; set; }
+    }
+
+    public class MonthlyRevenueItemDto
+    {
+        public int Year { get; set; }
+        public int Month { get; set; }
+        public string Label { get; set; } = string.Empty;
+        public decimal Revenue { get; set; }
+        public int OrderCount { get; set; }
+        public decimal? GrowthPercent { get; set; }
+    }
+
+    public class AdminRevenueDashboardResponse
+    {
+        public int Year { get; set; }
+        public int Month { get; set; }
+        public decimal TotalRevenue { get; set; }
+        public decimal SelectedMonthRevenue { get; set; }
+        public int TotalCompletedOrders { get; set; }
+        public int SelectedMonthOrders { get; set; }
+        public decimal? RevenueGrowthPercent { get; set; }
+        public decimal PaymentSuccessRate { get; set; }
+        public List<PlanRevenueItemDto> RevenueByPlan { get; set; } = new();
+        public List<MonthlyRevenueItemDto> MonthlyTrend { get; set; } = new();
+        public List<PlanRevenueItemDto> Plans { get; set; } = new();
     }
 }

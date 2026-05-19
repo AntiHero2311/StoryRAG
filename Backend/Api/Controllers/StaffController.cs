@@ -12,10 +12,12 @@ namespace Api.Controllers
     public class StaffController : AppControllerBase
     {
         private readonly IStaffService _staffService;
+        private readonly ISupportWorkflowService _supportWorkflow;
 
-        public StaffController(IStaffService staffService)
+        public StaffController(IStaffService staffService, ISupportWorkflowService supportWorkflow)
         {
             _staffService = staffService;
+            _supportWorkflow = supportWorkflow;
         }
 
         [HttpGet("manuscripts/flagged")]
@@ -227,5 +229,130 @@ namespace Api.Controllers
             }
         }
 
+        [HttpGet("performance")]
+        public async Task<IActionResult> GetPerformance()
+        {
+            var staffId = GetUserId();
+            if (staffId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+            var result = await _supportWorkflow.GetStaffPerformanceAsync(staffId.Value);
+            return Ok(result);
+        }
+
+        [HttpGet("support-tickets")]
+        public async Task<IActionResult> GetSupportTickets(
+            [FromQuery] string? status,
+            [FromQuery] string? category,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            var result = await _supportWorkflow.GetTicketsForStaffAsync(status, category, page, pageSize);
+            return Ok(result);
+        }
+
+        [HttpPut("support-tickets/{ticketId:guid}")]
+        public async Task<IActionResult> UpdateSupportTicket(Guid ticketId, [FromBody] UpdateSupportTicketRequest request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            var staffId = GetUserId();
+            if (staffId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+            try
+            {
+                var result = await _supportWorkflow.UpdateTicketAsync(ticketId, staffId.Value, request);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+        }
+
+        [HttpGet("appeals")]
+        public async Task<IActionResult> GetAppeals(
+            [FromQuery] string? status,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            var result = await _supportWorkflow.GetAppealsForStaffAsync(status, page, pageSize);
+            return Ok(result);
+        }
+
+        [HttpPut("appeals/{appealId:guid}/review")]
+        public async Task<IActionResult> ReviewAppeal(Guid appealId, [FromBody] ReviewAuthorAppealRequest request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            var staffId = GetUserId();
+            if (staffId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+            try
+            {
+                var result = await _supportWorkflow.ReviewAppealAsync(appealId, staffId.Value, request);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { Message = ex.Message });
+            }
+        }
+
+        [HttpPost("moderation/warn")]
+        public async Task<IActionResult> WarnAuthor([FromBody] ModerationWarnRequest request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            var staffId = GetUserId();
+            if (staffId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+            try
+            {
+                await _supportWorkflow.WarnAuthorAsync(staffId.Value, request);
+                return Ok(new { success = true });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+        }
+
+        [HttpPost("moderation/suspend-project")]
+        public async Task<IActionResult> SuspendProject([FromBody] ModerationSuspendProjectRequest request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            var staffId = GetUserId();
+            if (staffId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+            try
+            {
+                await _supportWorkflow.SuspendProjectAsync(staffId.Value, request);
+                return Ok(new { success = true });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+        }
+
+        [HttpPost("moderation/recommend-ban")]
+        public async Task<IActionResult> RecommendBan([FromBody] ModerationRecommendBanRequest request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            var staffId = GetUserId();
+            if (staffId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+            try
+            {
+                var result = await _supportWorkflow.RecommendBanAsync(staffId.Value, request);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+        }
+
+        private Guid? GetUserId()
+        {
+            var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? User.FindFirst("sub")?.Value;
+            return Guid.TryParse(claim, out var id) ? id : null;
+        }
     }
 }

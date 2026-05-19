@@ -137,7 +137,7 @@ function DashboardContent({ fullName, role, onNavigate }: {
                                 <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                                     {role === 'Admin'
                                         ? 'Quản lý người dùng & thống kê hệ thống'
-                                        : 'Báo cáo lỗi, dự án bị cờ & hỗ trợ vận hành'}
+                                        : 'Tổng quan kiểm duyệt, phân tích & hỗ trợ tác giả'}
                                 </p>
                             </div>
                         </div>

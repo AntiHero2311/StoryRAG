@@ -60,7 +60,7 @@ const plans = [
         name: 'Basic',
         price: '99,000đ',
         desc: 'Gói cân bằng khi bạn xử lý nhiều chương và chat RAG thường xuyên.',
-        perks: ['20 lượt phân tích/tháng', '150,000 token AI', 'Thanh toán PayOS/VNPay'],
+        perks: ['20 lượt phân tích/tháng', '150,000 token AI', 'Thanh toán VNPay'],
         highlighted: true,
     },
     {

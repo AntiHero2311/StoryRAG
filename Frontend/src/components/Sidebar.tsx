@@ -3,7 +3,8 @@ import { useLocation } from 'react-router-dom';
 import {
     LayoutDashboard, BarChart2, User, Settings,
     Users, CreditCard, ChevronLeft, ChevronRight,
-    Bug, HelpCircle, BookOpen, AlertTriangle, MessageSquare, CircleHelp, Sparkles, Activity,
+    Bug, HelpCircle, AlertTriangle, MessageSquare, CircleHelp, Sparkles, Activity,
+    Headphones, Scale, DollarSign,
 } from 'lucide-react';
 import { feedbackService } from '../services/feedbackService';
 import BugReportModal from './BugReportModal';
@@ -14,32 +15,34 @@ const NAV_AUTHOR: NavItem[] = [
     { key: 'dashboard',    label: 'Trang chủ',  icon: LayoutDashboard, path: '/home' },
     { key: 'analysis',     label: 'Phân tích',  icon: BarChart2,       path: '/analysis' },
     { key: 'subscription', label: 'Gói dịch vụ',icon: CreditCard,      path: '/subscription' },
+    { key: 'support',      label: 'Hỗ trợ',     icon: Headphones,      path: '/support' },
+    { key: 'help',         label: 'Trợ giúp',   icon: CircleHelp,      path: '/help' },
     { key: 'profile',      label: 'Hồ sơ',      icon: User,            path: '/profile' },
     { key: 'settings',     label: 'Cài đặt',    icon: Settings,        path: '/settings' },
 ];
 
 const NAV_STAFF: NavItem[] = [
-    { key: 'dashboard',    label: 'Trang chủ',  icon: LayoutDashboard, path: '/home' },
-    { key: 'staff-flagged', label: 'Dự án bị cờ', icon: AlertTriangle,   path: '/staff/flagged' },
-    { key: 'staff-analysis-jobs', label: 'Analysis Jobs', icon: Activity, path: '/staff/analysis-jobs' },
-    { key: 'staff-faqs',   label: 'FAQs',       icon: CircleHelp,      path: '/staff/faqs' },
-    { key: 'staff-tips',   label: 'Writing Tips', icon: Sparkles,      path: '/staff/writing-tips' },
-    { key: 'staff',        label: 'Báo cáo lỗi',icon: Bug,             path: '/staff' },
-    { key: 'profile',      label: 'Hồ sơ',      icon: User,            path: '/profile' },
-    { key: 'settings',     label: 'Cài đặt',    icon: Settings,        path: '/settings' },
+    { key: 'staff-hub', label: 'Tổng quan', icon: LayoutDashboard, path: '/staff' },
+    { key: 'staff-flagged', label: 'Dự án bị cờ', icon: AlertTriangle, path: '/staff/flagged' },
+    { key: 'staff-analysis', label: 'Phân tích lỗi', icon: Activity, path: '/staff/analysis-jobs' },
+    { key: 'staff-feedbacks', label: 'Phản hồi tác giả', icon: MessageSquare, path: '/staff/feedbacks' },
+    { key: 'staff-support', label: 'Ticket hỗ trợ', icon: Headphones, path: '/staff/support-tickets' },
+    { key: 'staff-appeals', label: 'Kháng cáo', icon: Scale, path: '/staff/appeals' },
+    { key: 'staff-content', label: 'Nội dung trợ giúp', icon: CircleHelp, path: '/staff/content' },
+    { key: 'staff-bugs', label: 'Báo cáo lỗi app', icon: Bug, path: '/staff/bugs' },
+    { key: 'profile', label: 'Hồ sơ', icon: User, path: '/profile' },
+    { key: 'settings', label: 'Cài đặt', icon: Settings, path: '/settings' },
 ];
 
 const NAV_ADMIN: NavItem[] = [
-    { key: 'dashboard',    label: 'Trang chủ',  icon: LayoutDashboard, path: '/home' },
-    { key: 'users',        label: 'Người dùng', icon: Users,           path: '/admin' },
-    { key: 'staff-flagged', label: 'Dự án bị cờ', icon: AlertTriangle,   path: '/staff/flagged' },
-    { key: 'staff-analysis-jobs', label: 'Analysis Jobs', icon: Activity, path: '/staff/analysis-jobs' },
-    { key: 'staff-faqs',   label: 'FAQs',       icon: CircleHelp,      path: '/staff/faqs' },
-    { key: 'staff-tips',   label: 'Writing Tips', icon: Sparkles,      path: '/staff/writing-tips' },
-    { key: 'staff',        label: 'Báo cáo lỗi',icon: Bug,             path: '/staff' },
-    { key: 'sub-admin',    label: 'Quản lý Plans',icon: CreditCard,    path: '/admin/subscription' },
-    { key: 'profile',      label: 'Hồ sơ',      icon: User,            path: '/profile' },
-    { key: 'settings',     label: 'Cài đặt',    icon: Settings,        path: '/settings' },
+    { key: 'admin-overview', label: 'Tổng quan',   icon: LayoutDashboard, path: '/admin' },
+    { key: 'users',          label: 'Người dùng',  icon: Users,           path: '/admin/users' },
+    { key: 'revenue',        label: 'Doanh thu',   icon: DollarSign,      path: '/admin/revenue' },
+    { key: 'sub-admin',      label: 'Gói dịch vụ', icon: CreditCard,      path: '/admin/subscription' },
+    { key: 'admin-system',   label: 'Hệ thống',    icon: Settings,        path: '/admin/system' },
+    { key: 'admin-logs',     label: 'Nhật ký',     icon: Activity,        path: '/admin/logs' },
+    { key: 'staff-ops',      label: 'Vận hành',    icon: Headphones,      path: '/staff' },
+    { key: 'profile',        label: 'Hồ sơ',       icon: User,            path: '/profile' },
 ];
 
 function getNav(role: string) {

@@ -156,6 +156,41 @@ namespace Service.Implementations
             </html>
             """;
 
+        public async Task SendModerationWarningEmailAsync(string toEmail, string fullName, string message)
+        {
+            var smtpHost = _config["Email:SmtpHost"] ?? "smtp.gmail.com";
+            var smtpPort = int.Parse(_config["Email:SmtpPort"] ?? "587");
+            var smtpUser = _config["Email:Username"] ?? "";
+            var smtpPass = _config["Email:Password"] ?? "";
+            var fromName = _config["Email:FromName"] ?? "StoryNest";
+            var fromAddress = _config["Email:FromAddress"] ?? smtpUser;
+
+            var mime = new MimeMessage();
+            mime.From.Add(new MailboxAddress(fromName, fromAddress));
+            mime.To.Add(new MailboxAddress(fullName, toEmail));
+            mime.Subject = "Thông báo từ đội ngũ StoryNest";
+
+            var safeMessage = System.Net.WebUtility.HtmlEncode(message);
+            var bodyBuilder = new BodyBuilder
+            {
+                HtmlBody = $"""
+                    <p>Chào {System.Net.WebUtility.HtmlEncode(fullName)},</p>
+                    <p>Đội ngũ StoryNest gửi bạn thông báo liên quan đến tài khoản hoặc nội dung của bạn:</p>
+                    <blockquote style="border-left:3px solid #6366f1;padding-left:12px;color:#333;">{safeMessage}</blockquote>
+                    <p>Nếu bạn cho rằng đây là nhầm lẫn, hãy phản hồi qua mục Hỗ trợ hoặc Kháng cáo trong ứng dụng.</p>
+                    <p>Trân trọng,<br/>Đội ngũ StoryNest</p>
+                    """,
+                TextBody = $"Chào {fullName},\n\n{message}\n\nTrân trọng,\nĐội ngũ StoryNest"
+            };
+            mime.Body = bodyBuilder.ToMessageBody();
+
+            using var smtp = new SmtpClient();
+            await smtp.ConnectAsync(smtpHost, smtpPort, SecureSocketOptions.StartTls);
+            await smtp.AuthenticateAsync(smtpUser, smtpPass);
+            await smtp.SendAsync(mime);
+            await smtp.DisconnectAsync(true);
+        }
+
         private static string FeatureRow(string icon, string text) =>
             $"""<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;"><span style="font-size:16px;min-width:22px;">{icon}</span><span style="font-size:14px;color:rgba(255,255,255,0.65);line-height:1.5;">{text}</span></div>""";
     }

@@ -163,7 +163,7 @@ namespace Service.Implementations
             // 3. Chỉ hỗ trợ Free plan (Price == 0)
             if (plan.Price > 0)
                 throw new InvalidOperationException(
-                    "Gói trả phí cần thanh toán qua PayOS trước khi kích hoạt.");
+                    "Gói trả phí cần thanh toán qua VNPay trước khi kích hoạt.");
 
             // 4. Hủy subscription active cũ (nếu có) trước khi tạo mới
             var oldSubs = await _db.UserSubscriptions
