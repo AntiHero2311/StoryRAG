@@ -87,12 +87,12 @@ namespace Api.Controllers
             var userId = GetUserId();
             if (userId == null) return Unauthorized(new { Message = "Không xác định được danh tính admin." });
 
-            await _sysConfig.SetAsync(KeyChunkSize,    req.ChunkSize,    userId);
-            await _sysConfig.SetAsync(KeyChunkOverlap, req.ChunkOverlap, userId);
-            await _sysConfig.SetAsync(KeyTopKChat,     req.TopKChat,     userId);
-            await _sysConfig.SetAsync(KeyTopKReport,   req.TopKReport,   userId);
-            await _sysConfig.SetAsync(KeySplitter,     req.Splitter!.ToLower(), userId);
-            await _auditLog.LogAsync("Config", "RAG", "Cập nhật cấu hình RAG", userId);
+            await _sysConfig.SetAsync(KeyChunkSize,    req.ChunkSize,    userId.Value);
+            await _sysConfig.SetAsync(KeyChunkOverlap, req.ChunkOverlap, userId.Value);
+            await _sysConfig.SetAsync(KeyTopKChat,     req.TopKChat,     userId.Value);
+            await _sysConfig.SetAsync(KeyTopKReport,   req.TopKReport,   userId.Value);
+            await _sysConfig.SetAsync(KeySplitter,     req.Splitter!.ToLower(), userId.Value);
+            await _auditLog.LogAsync("Config", "RAG", "Cập nhật cấu hình RAG", userId.Value);
 
             return Ok(new { Message = "Cấu hình RAG đã được cập nhật thành công." });
         }

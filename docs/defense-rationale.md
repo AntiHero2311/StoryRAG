@@ -46,7 +46,7 @@ phục vụ câu hỏi hội đồng trong buổi bảo vệ.
 
 ---
 
-## 4. Payment System (PayOS / VNPay)
+## 4. Payment System (VNPay)
 
 **Quyết định**: Tích hợp payment gateway vào capstone project.
 

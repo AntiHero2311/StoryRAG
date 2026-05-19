@@ -20,7 +20,7 @@
 - 🌍 **Story Bible** chuyên sâu: Quản lý Worldbuilding, Nhân vật, Ghi chú cốt truyện (Plot Notes), Chủ đề (Themes), Cẩm nang phong cách (Style Guides) — Hỗ trợ vector embedding.
 - 📅 Quản lý **Timeline** mốc sự kiện dòng thời gian.
 - 📥📤 **Import/Export bản thảo chuyên nghiệp** (`.docx`, `.txt`), tự động tách chương theo tiêu đề.
-- 💳 Tích hợp cổng thanh toán **PayOS** và **VNPay** hỗ trợ nâng cấp/gia hạn gói dịch vụ.
+- 💳 Tích hợp cổng thanh toán **VNPay** hỗ trợ nâng cấp/gia hạn gói dịch vụ.
 - 🐛 Luồng báo cáo lỗi User → Staff/Admin.
 - 🔑 Quên mật khẩu qua email (MailKit / Gmail SMTP)
 - 🔐 Mã hóa toàn bộ nội dung nhạy cảm theo từng user (AES-256)
@@ -174,7 +174,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | `ProjectReports`       | Báo cáo phân tích truyện                | `CriteriaJson` (JSONB), `ProjectVersion` (snapshot label), `ProjectVersionHash`, `OverallFeedback`, `Warnings` |
 | `ProjectAnalysisJobs`  | Job phân tích bất đồng bộ               | Trạng thái/progress/result cho phân tích dài, `ProjectVersionHash` snapshot                |
 | `AiAnalysisHistories`  | Lịch sử phân tích cảnh/cliffhanger      | JSON kết quả và token đã dùng                                                              |
-| `Payments`             | Giao dịch thanh toán                    | PayOS/VNPay, trạng thái, transaction/order reference                                        |
+| `Payments`             | Giao dịch thanh toán                    | VNPay, trạng thái, transaction/order reference                                        |
 | `BugReports`           | Báo cáo lỗi từ user                     | Category, Priority, Status, StaffNote                                                      |
 | `StaffFeedbacks`       | Phản hồi chuyên môn từ Staff            | Gắn với project/report/user/staff, có like/dislike + reply từ author                      |
 | `StaffKnowledgeBaseItems` | Bài viết tri thức Staff              | Published/draft, loại nội dung                                                             |
@@ -333,9 +333,6 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | POST   | `/vnpay/create-url` | Tạo URL thanh toán VNPay |
 | GET    | `/vnpay/ipn` | IPN callback từ VNPay |
 | GET    | `/vnpay/order/{txnRef}` | Lấy trạng thái đơn VNPay |
-| POST   | `/payos/create-link` | Tạo link checkout PayOS |
-| POST   | `/payos/webhook` | Webhook callback từ PayOS |
-| GET    | `/payos/order/{orderCode}` | Lấy trạng thái đơn PayOS |
 | GET    | `/history` | Lấy lịch sử thanh toán |
 | GET    | `/{paymentId}` | Chi tiết thanh toán |
 
@@ -491,7 +488,7 @@ Allowed Origins:
 | `Gemini:ChatModels`                   | Thứ tự fallback model chat (`gemini-3-flash-preview,gemini-2.5-flash`) |
 | `Email:Password`                      | Gmail app password                      |
 | `Cors:AllowedOrigins`                 | Domain frontend bổ sung ngoài mặc định   |
-| `PayOS:*`, `VNPay:*`                  | Cấu hình cổng thanh toán                 |
+| `VNPay:*`                  | Cấu hình cổng thanh toán                 |
 
 ---
 
@@ -679,7 +676,7 @@ builder.Services.AddSingleton<IMyService, MyService>(); // MyService inject IDbC
 | `IThemeService`         | CRUD chủ đề + embed                                                                                                                                                                                                                                              |
 | `IStyleGuideService`    | CRUD cẩm nang phong cách + embed                                                                                                                                                                                                                                 |
 | `IExportService`        | Export project/chapter ra file `.docx`, `.txt`, `.pdf`                                                                                                                                                                                                           |
-| `IPaymentService`       | Quản lý thanh toán (PayOS, VNPay), lưu lịch sử giao dịch                                                                                                                                                                                                         |
+| `IPaymentService`       | Quản lý thanh toán (VNPay), lưu lịch sử giao dịch                                                                                                                                                                                                         |
 | `IGenreService`         | Quản lý thể loại (Admin)                                                                                                                                                                                                                                         |
 | `ISubscriptionService`  | Quản lý gói dịch vụ                                                                                                                                                                                                                                              |
 | `IAiChatService`        | RAG chat, lưu lịch sử, deduct token only                                                                                                                                                                                                                         |

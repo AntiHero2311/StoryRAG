@@ -161,8 +161,6 @@ function App() {
               }
             />
             <Route
-              path="/staff"
-            <Route
               path="/staff/analysis-reports/:reportId"
               element={
                 <RouteGuard>

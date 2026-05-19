@@ -36,6 +36,7 @@ namespace Service.Helpers
         private readonly int _traceBodyLimit;
         private readonly int _globalOverloadRetryCycles;
         private readonly int[] _globalOverloadRetryDelaysSeconds;
+        private readonly bool _preferAnalyzeOnly;
 
         /// <param name="modelsConfigKey">
         /// Config key để đọc danh sách model (ví dụ "Gemini:ImportModels").
@@ -72,9 +73,21 @@ namespace Service.Helpers
             if (chatModels.Count == 0)
                 chatModels = ReadValues(DefaultChatModels);
 
+            // Nếu đang ở chế độ Analyze và AnalyzeModels được chỉ định, chỉ dùng Analyze key (không fallback sang Chat key)
+            _preferAnalyzeOnly = primaryRole == GeminiPrimaryKeyRole.Analyze && !string.IsNullOrWhiteSpace(config["Gemini:AnalyzeModels"]);
+            // Nếu preferAnalyzeOnly, ưu tiên CHỈ dùng model Analyze đầu tiên để tránh thử nhiều model khi Analyze toàn bộ dự án.
+            if (_preferAnalyzeOnly && chatModels.Count > 1)
+            {
+                chatModels = new List<string> { chatModels[0] };
+            }
             var orderedRoles = primaryRole == GeminiPrimaryKeyRole.Analyze
-                ? new[] { GeminiPrimaryKeyRole.Analyze, GeminiPrimaryKeyRole.Chat }
+                ? (_preferAnalyzeOnly ? new[] { GeminiPrimaryKeyRole.Analyze } : new[] { GeminiPrimaryKeyRole.Analyze, GeminiPrimaryKeyRole.Chat })
                 : new[] { GeminiPrimaryKeyRole.Chat, GeminiPrimaryKeyRole.Analyze };
+            // Khi đang ưu tiên Analyze only, giảm số vòng retry về 0 để tránh gọi nhiều lần khi phân tích toàn bộ dự án
+            if (_preferAnalyzeOnly)
+            {
+                _globalOverloadRetryCycles = 0;
+            }
 
             var options = new OpenAIClientOptions
             {
@@ -166,9 +179,9 @@ namespace Service.Helpers
                     {
                         lastError = ex;
                         if (IsQuotaOverload(ex))
-                            SetKeyCooldown(candidate.ApiKey, TimeSpan.FromSeconds(75));
+                            SetKeyCooldown(candidate.ApiKey, TimeSpan.FromSeconds(_preferAnalyzeOnly ? 300 : 75));
                         else if (IsServiceBusy(ex))
-                            SetKeyCooldown(candidate.ApiKey, TimeSpan.FromSeconds(25));
+                            SetKeyCooldown(candidate.ApiKey, TimeSpan.FromSeconds(_preferAnalyzeOnly ? 120 : 25));
 
                         if (ex is ClientResultException clientEx)
                         {
