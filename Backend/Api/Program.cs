@@ -247,7 +247,7 @@ builder.Services.AddScoped<IAiRewriteService, AiRewriteService>();
 builder.Services.AddScoped<IAiWritingService, AiWritingService>();
 builder.Services.AddScoped<IBugReportService, BugReportService>();
 builder.Services.AddScoped<IStaffService, StaffService>();
-builder.Services.AddScoped<ISupportWorkflowService, SupportWorkflowService>();
+builder.Services.AddScoped<IStaffModerationService, StaffModerationService>();
 builder.Services.AddScoped<IStyleGuideService, StyleGuideService>();
 builder.Services.AddScoped<IThemeService, ThemeService>();
 builder.Services.AddScoped<IPlotNoteService, PlotNoteService>();

@@ -26,11 +26,7 @@ export default function StaffPerformancePage() {
     const cards = stats ? [
         { label: 'Report đã duyệt (tháng)', value: stats.reviewsThisMonth },
         { label: 'Feedback đã đóng (tháng)', value: stats.feedbacksResolvedThisMonth },
-        { label: 'Kháng cáo đã xử lý (tháng)', value: stats.appealsReviewedThisMonth },
-        { label: 'Ticket đã giải quyết (tháng)', value: stats.ticketsResolvedThisMonth },
         { label: 'Feedback đang mở', value: stats.openFeedbacksAssigned },
-        { label: 'Kháng cáo chờ duyệt', value: stats.pendingAppeals },
-        { label: 'Ticket hỗ trợ đang mở', value: stats.openSupportTickets },
         {
             label: 'Thời gian phản hồi TB (giờ)',
             value: stats.avgFeedbackResponseHours != null ? stats.avgFeedbackResponseHours : '—',

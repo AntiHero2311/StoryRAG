@@ -30,9 +30,6 @@ const StaffFlaggedPage = lazy(() => import('./pages/StaffFlaggedPage'));
 const StaffAnalysisJobsPage = lazy(() => import('./pages/StaffAnalysisJobsPage'));
 const StaffFeedbacksPage = lazy(() => import('./pages/StaffFeedbacksPage'));
 const StaffPerformancePage = lazy(() => import('./pages/StaffPerformancePage'));
-const StaffSupportTicketsPage = lazy(() => import('./pages/StaffSupportTicketsPage'));
-const StaffAppealsPage = lazy(() => import('./pages/StaffAppealsPage'));
-const SupportPage = lazy(() => import('./pages/SupportPage'));
 const StaffReportReviewPage = lazy(() => import('./pages/StaffReportReviewPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
@@ -76,7 +73,7 @@ function App() {
             <Route path="/analysis" element={<RouteGuard><AnalysisPage /></RouteGuard>} />
             <Route path="/feedback" element={<RouteGuard><FeedbackPage /></RouteGuard>} />
             <Route path="/feedback/:id" element={<RouteGuard><FeedbackDetailPage /></RouteGuard>} />
-            <Route path="/support" element={<RouteGuard><SupportPage /></RouteGuard>} />
+            <Route path="/support" element={<Navigate to="/help" replace />} />
 
             {/* Admin routes */}
             <Route 
@@ -147,8 +144,6 @@ function App() {
               }
             />
             <Route path="/staff/feedbacks" element={<RouteGuard><RoleGuard allowedRoles={['Staff', 'Admin']}><StaffFeedbacksPage /></RoleGuard></RouteGuard>} />
-            <Route path="/staff/support-tickets" element={<RouteGuard><RoleGuard allowedRoles={['Staff', 'Admin']}><StaffSupportTicketsPage /></RoleGuard></RouteGuard>} />
-            <Route path="/staff/appeals" element={<RouteGuard><RoleGuard allowedRoles={['Staff', 'Admin']}><StaffAppealsPage /></RoleGuard></RouteGuard>} />
             <Route path="/staff/performance" element={<RouteGuard><RoleGuard allowedRoles={['Staff', 'Admin']}><StaffPerformancePage /></RoleGuard></RouteGuard>} />
             <Route
               path="/staff/analysis-jobs"

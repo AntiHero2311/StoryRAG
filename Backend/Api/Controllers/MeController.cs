@@ -3,8 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Repository.Data;
 using Service.DTOs;
-using Service.Interfaces;
-using System.Security.Claims;
 
 namespace Api.Controllers
 {
@@ -14,12 +12,10 @@ namespace Api.Controllers
     public class MeController : AppControllerBase
     {
         private readonly AppDbContext _db;
-        private readonly ISupportWorkflowService _supportWorkflow;
 
-        public MeController(AppDbContext db, ISupportWorkflowService supportWorkflow)
+        public MeController(AppDbContext db)
         {
             _db = db;
-            _supportWorkflow = supportWorkflow;
         }
 
         [HttpGet("feedback")]
@@ -85,55 +81,6 @@ namespace Api.Controllers
             await _db.SaveChangesAsync();
 
             return Ok(MapFeedback(feedback));
-        }
-
-        [HttpGet("support-tickets")]
-        public async Task<IActionResult> GetMySupportTickets()
-        {
-            var userId = GetUserId();
-            if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
-            var items = await _supportWorkflow.GetMyTicketsAsync(userId.Value);
-            return Ok(items);
-        }
-
-        [HttpPost("support-tickets")]
-        public async Task<IActionResult> CreateSupportTicket([FromBody] CreateSupportTicketRequest request)
-        {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-            var userId = GetUserId();
-            if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
-            var result = await _supportWorkflow.CreateTicketAsync(userId.Value, request);
-            return Ok(result);
-        }
-
-        [HttpGet("appeals")]
-        public async Task<IActionResult> GetMyAppeals()
-        {
-            var userId = GetUserId();
-            if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
-            var items = await _supportWorkflow.GetMyAppealsAsync(userId.Value);
-            return Ok(items);
-        }
-
-        [HttpPost("appeals")]
-        public async Task<IActionResult> CreateAppeal([FromBody] CreateAuthorAppealRequest request)
-        {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-            var userId = GetUserId();
-            if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
-            try
-            {
-                var result = await _supportWorkflow.CreateAppealAsync(userId.Value, request);
-                return Ok(result);
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { Message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Conflict(new { Message = ex.Message });
-            }
         }
 
         private static StaffFeedbackResponse MapFeedback(Repository.Entities.StaffFeedback feedback)

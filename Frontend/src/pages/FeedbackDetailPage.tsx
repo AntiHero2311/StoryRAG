@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, AlertTriangle, MessageSquare, CheckCircle2, ThumbsUp, ThumbsDown } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { feedbackService, type StaffFeedbackResponse } from '../services/feedbackService';
-import { supportService } from '../services/supportService';
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('vi-VN', {
@@ -24,9 +23,6 @@ export default function FeedbackDetailPage() {
   const [saving, setSaving] = useState(false);
   const [reaction, setReaction] = useState<'Like' | 'Dislike'>('Like');
   const [reply, setReply] = useState('');
-  const [appealReason, setAppealReason] = useState('');
-  const [appealBusy, setAppealBusy] = useState(false);
-  const [appealMsg, setAppealMsg] = useState('');
 
   const isRead = useMemo(() => Boolean(item?.readAt), [item?.readAt]);
 
@@ -225,27 +221,6 @@ export default function FeedbackDetailPage() {
                     {saving ? 'Đang gửi...' : 'Gửi phản hồi'}
                   </button>
                 </div>
-              </div>
-
-              <div className="rounded-2xl p-4 space-y-3" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}>
-                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>Kháng cáo</p>
-                <textarea value={appealReason} onChange={e => setAppealReason(e.target.value)} rows={3} placeholder="Lý do kháng cáo..." className="w-full rounded-xl px-3 py-2 text-sm" style={{ background: 'var(--input-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
-                {appealMsg && <p className="text-xs text-emerald-400">{appealMsg}</p>}
-                <button type="button" disabled={appealBusy || appealReason.trim().length < 10} onClick={async () => {
-                  if (!item) return;
-                  setAppealBusy(true);
-                  setAppealMsg('');
-                  try {
-                    await supportService.createAppeal({ projectId: item.projectId, appealType: 'StaffFeedback', referenceId: item.id, reason: appealReason.trim() });
-                    setAppealReason('');
-                    setAppealMsg('Đã gửi kháng cáo.');
-                  } catch (err: unknown) {
-                    const e = err as { response?: { data?: { message?: string } } };
-                    setAppealMsg(e?.response?.data?.message ?? 'Không gửi được kháng cáo.');
-                  } finally { setAppealBusy(false); }
-                }} className="h-9 px-4 rounded-xl text-sm font-semibold text-white disabled:opacity-50" style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
-                  {appealBusy ? 'Đang gửi…' : 'Gửi kháng cáo'}
-                </button>
               </div>
 
               <div className="pt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>

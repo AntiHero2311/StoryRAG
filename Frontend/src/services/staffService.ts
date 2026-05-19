@@ -13,45 +13,8 @@ export interface StaffPerformanceResponse {
     staffName: string;
     reviewsThisMonth: number;
     feedbacksResolvedThisMonth: number;
-    appealsReviewedThisMonth: number;
-    ticketsResolvedThisMonth: number;
     avgFeedbackResponseHours?: number | null;
     openFeedbacksAssigned: number;
-    pendingAppeals: number;
-    openSupportTickets: number;
-}
-
-export interface SupportTicketResponse {
-    id: string;
-    userId: string;
-    userName: string;
-    userEmail: string;
-    assignedStaffId?: string | null;
-    assignedStaffName?: string | null;
-    category: string;
-    subject: string;
-    description: string;
-    status: string;
-    staffReply?: string | null;
-    createdAt: string;
-    updatedAt?: string | null;
-    resolvedAt?: string | null;
-}
-
-export interface AuthorAppealResponse {
-    id: string;
-    authorId: string;
-    authorName: string;
-    projectId: string;
-    appealType: string;
-    referenceId?: string | null;
-    reason: string;
-    status: string;
-    reviewedByStaffId?: string | null;
-    reviewedByStaffName?: string | null;
-    staffNote?: string | null;
-    createdAt: string;
-    updatedAt?: string | null;
 }
 
 export const staffService = {
@@ -80,30 +43,6 @@ export const staffService = {
         return data;
     },
 
-    async getSupportTickets(status?: string, category?: string, page = 1, pageSize = 20): Promise<StaffPagedResponse<SupportTicketResponse>> {
-        const { data } = await api.get<StaffPagedResponse<SupportTicketResponse>>('/staff/support-tickets', {
-            params: { status, category, page, pageSize },
-        });
-        return data;
-    },
-
-    async updateSupportTicket(ticketId: string, payload: { status?: string; staffReply?: string }): Promise<SupportTicketResponse> {
-        const { data } = await api.put<SupportTicketResponse>(`/staff/support-tickets/${ticketId}`, payload);
-        return data;
-    },
-
-    async getAppeals(status?: string, page = 1, pageSize = 20): Promise<StaffPagedResponse<AuthorAppealResponse>> {
-        const { data } = await api.get<StaffPagedResponse<AuthorAppealResponse>>('/staff/appeals', {
-            params: { status, page, pageSize },
-        });
-        return data;
-    },
-
-    async reviewAppeal(appealId: string, payload: { status: 'Approved' | 'Rejected'; staffNote?: string }): Promise<AuthorAppealResponse> {
-        const { data } = await api.put<AuthorAppealResponse>(`/staff/appeals/${appealId}/review`, payload);
-        return data;
-    },
-
     async warnAuthor(payload: { userId: string; projectId?: string; message: string }): Promise<void> {
         await api.post('/staff/moderation/warn', payload);
     },
@@ -112,8 +51,7 @@ export const staffService = {
         await api.post('/staff/moderation/suspend-project', payload);
     },
 
-    async recommendBan(payload: { userId: string; reason: string }): Promise<SupportTicketResponse> {
-        const { data } = await api.post<SupportTicketResponse>('/staff/moderation/recommend-ban', payload);
-        return data;
+    async recommendBan(payload: { userId: string; reason: string }): Promise<void> {
+        await api.post('/staff/moderation/recommend-ban', payload);
     },
 };

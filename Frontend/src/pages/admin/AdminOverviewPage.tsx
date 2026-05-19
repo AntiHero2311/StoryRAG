@@ -14,7 +14,7 @@ const QUICK_LINKS = [
     { to: '/admin/subscription', label: 'Gói dịch vụ', desc: 'Quản lý plans', icon: CreditCard, color: 'text-emerald-400' },
     { to: '/admin/system', label: 'Hệ thống', desc: 'RAG & giới hạn lưu trữ', icon: Settings2, color: 'text-violet-400' },
     { to: '/admin/logs', label: 'Nhật ký', desc: 'Audit log hệ thống', icon: ScrollText, color: 'text-sky-400' },
-    { to: '/staff', label: 'Vận hành Staff', desc: 'Ticket, feedback, cờ dự án…', icon: Headphones, color: 'text-rose-400' },
+    { to: '/staff', label: 'Vận hành Staff', desc: 'Feedback, cờ dự án, báo lỗi…', icon: Headphones, color: 'text-rose-400' },
 ];
 
 export default function AdminOverviewPage() {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-    LayoutDashboard, AlertTriangle, MessageSquare, Headphones, Scale, Activity,
+    LayoutDashboard, AlertTriangle, MessageSquare, Activity,
     CircleHelp, Bug, RefreshCw, ChevronRight, BarChart3,
 } from 'lucide-react';
 import MainLayout from '../../layouts/MainLayout';
@@ -14,8 +14,6 @@ import api from '../../services/api';
 type HubStats = {
     flagged: number;
     openFeedbacks: number;
-    pendingAppeals: number;
-    openTickets: number;
     failedJobs: number;
     pendingReports: number;
     openBugs: number;
@@ -25,8 +23,6 @@ const QUICK_LINKS = [
     { to: '/staff/flagged', label: 'Dự án bị cờ', desc: 'Abuse / rate-limit', icon: AlertTriangle, color: 'text-amber-400', statKey: 'flagged' as const },
     { to: '/staff/analysis-jobs', label: 'Phân tích lỗi / treo', desc: 'Rerun job & report chờ duyệt', icon: Activity, color: 'text-violet-400', statKey: 'failedJobs' as const },
     { to: '/staff/feedbacks', label: 'Phản hồi tác giả', desc: 'Gửi & theo dõi feedback', icon: MessageSquare, color: 'text-indigo-400', statKey: 'openFeedbacks' as const },
-    { to: '/staff/support-tickets', label: 'Ticket hỗ trợ', desc: 'Yêu cầu từ tác giả', icon: Headphones, color: 'text-sky-400', statKey: 'openTickets' as const },
-    { to: '/staff/appeals', label: 'Kháng cáo', desc: 'Phản đối cờ / quyết định', icon: Scale, color: 'text-rose-400', statKey: 'pendingAppeals' as const },
     { to: '/staff/content?tab=faq', label: 'Nội dung trợ giúp', desc: 'FAQ & mẹo viết truyện', icon: CircleHelp, color: 'text-emerald-400' },
     { to: '/staff/bugs', label: 'Báo cáo lỗi app', desc: 'Bug / UX từ người dùng', icon: Bug, color: 'text-orange-400', statKey: 'openBugs' as const },
 ];
@@ -52,8 +48,6 @@ export default function StaffOverviewPage() {
             setStats({
                 flagged: flaggedTotal,
                 openFeedbacks: perf.openFeedbacksAssigned,
-                pendingAppeals: perf.pendingAppeals,
-                openTickets: perf.openSupportTickets,
                 failedJobs: jobs.length,
                 pendingReports: pending.totalCount ?? pending.items?.length ?? 0,
                 openBugs: bugs.open + bugs.inProgress,

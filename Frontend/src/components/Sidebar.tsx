@@ -4,7 +4,7 @@ import {
     LayoutDashboard, BarChart2, User, Settings,
     Users, CreditCard, ChevronLeft, ChevronRight,
     Bug, HelpCircle, AlertTriangle, MessageSquare, CircleHelp, Sparkles, Activity,
-    Headphones, Scale, DollarSign,
+    Headphones, DollarSign,
 } from 'lucide-react';
 import { feedbackService } from '../services/feedbackService';
 import BugReportModal from './BugReportModal';
@@ -15,7 +15,6 @@ const NAV_AUTHOR: NavItem[] = [
     { key: 'dashboard',    label: 'Trang chủ',  icon: LayoutDashboard, path: '/home' },
     { key: 'analysis',     label: 'Phân tích',  icon: BarChart2,       path: '/analysis' },
     { key: 'subscription', label: 'Gói dịch vụ',icon: CreditCard,      path: '/subscription' },
-    { key: 'support',      label: 'Hỗ trợ',     icon: Headphones,      path: '/support' },
     { key: 'help',         label: 'Trợ giúp',   icon: CircleHelp,      path: '/help' },
     { key: 'profile',      label: 'Hồ sơ',      icon: User,            path: '/profile' },
     { key: 'settings',     label: 'Cài đặt',    icon: Settings,        path: '/settings' },
@@ -26,8 +25,6 @@ const NAV_STAFF: NavItem[] = [
     { key: 'staff-flagged', label: 'Dự án bị cờ', icon: AlertTriangle, path: '/staff/flagged' },
     { key: 'staff-analysis', label: 'Phân tích lỗi', icon: Activity, path: '/staff/analysis-jobs' },
     { key: 'staff-feedbacks', label: 'Phản hồi tác giả', icon: MessageSquare, path: '/staff/feedbacks' },
-    { key: 'staff-support', label: 'Ticket hỗ trợ', icon: Headphones, path: '/staff/support-tickets' },
-    { key: 'staff-appeals', label: 'Kháng cáo', icon: Scale, path: '/staff/appeals' },
     { key: 'staff-content', label: 'Nội dung trợ giúp', icon: CircleHelp, path: '/staff/content' },
     { key: 'staff-bugs', label: 'Báo cáo lỗi app', icon: Bug, path: '/staff/bugs' },
     { key: 'profile', label: 'Hồ sơ', icon: User, path: '/profile' },
@@ -229,8 +226,8 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
                     </nav>
                 </div>
 
-                {/* ── Help card (only when expanded) ── */}
-                {!collapsed && (
+                {/* ── Help card — chỉ tác giả (Admin/Staff dùng menu vận hành) ── */}
+                {!collapsed && role === 'Author' && (
                     <div className="px-3 pb-4 shrink-0">
                         <div
                             className="rounded-2xl p-3.5"
