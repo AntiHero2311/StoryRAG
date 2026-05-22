@@ -411,16 +411,21 @@ namespace Service.Implementations
             List<AiScoreItem> aiResults;
             List<StoryWarning> warnings;
             string overallFeedback = "";
+            
+            var criteriaSource = !string.IsNullOrWhiteSpace(report.StaffEditedCriteriaJson)
+                ? report.StaffEditedCriteriaJson
+                : report.CriteriaJson;
+
             try
             {
-                var parsed = JsonSerializer.Deserialize<AiFullResponse>(report.CriteriaJson, jsonOpts);
+                var parsed = JsonSerializer.Deserialize<AiFullResponse>(criteriaSource, jsonOpts);
                 aiResults = parsed?.Criteria ?? new();
                 warnings = parsed?.Warnings ?? new();
                 overallFeedback = parsed?.OverallFeedback ?? "";
             }
             catch
             {
-                aiResults = JsonSerializer.Deserialize<List<AiScoreItem>>(report.CriteriaJson, jsonOpts) ?? new();
+                aiResults = JsonSerializer.Deserialize<List<AiScoreItem>>(criteriaSource, jsonOpts) ?? new();
                 warnings = new();
             }
 
@@ -502,16 +507,21 @@ namespace Service.Implementations
             List<AiScoreItem> aiResults;
             List<StoryWarning> warnings;
             string overallFeedback = "";
+            
+            var criteriaSource = !string.IsNullOrWhiteSpace(report.StaffEditedCriteriaJson)
+                ? report.StaffEditedCriteriaJson
+                : report.CriteriaJson;
+
             try
             {
-                var parsed = JsonSerializer.Deserialize<AiFullResponse>(report.CriteriaJson, jsonOpts);
+                var parsed = JsonSerializer.Deserialize<AiFullResponse>(criteriaSource, jsonOpts);
                 aiResults = parsed?.Criteria ?? new();
                 warnings = parsed?.Warnings ?? new();
                 overallFeedback = parsed?.OverallFeedback ?? "";
             }
             catch
             {
-                aiResults = JsonSerializer.Deserialize<List<AiScoreItem>>(report.CriteriaJson, jsonOpts) ?? new();
+                aiResults = JsonSerializer.Deserialize<List<AiScoreItem>>(criteriaSource, jsonOpts) ?? new();
                 warnings = new();
             }
 
@@ -574,7 +584,12 @@ namespace Service.Implementations
     {""key"":""8.2"",""score"":0,""maxScore"":5,""feedback"":"""",""evidence"":"""",""bibleComparison"":null,""errors"":[],""suggestions"":[]}
   ],
   ""warnings"":[
-    {""code"":""INCOMPLETE"",""severity"":""INFO"",""title"":"""",""detail"":""""}
+    {""code"":""INCOMPLETE"",""severity"":""INFO"",""title"":"""",""detail"":""""},
+    {""code"":""REPETITION"",""severity"":""WARNING"",""title"":"""",""detail"":""""},
+    {""code"":""PLAGIARISM_RISK"",""severity"":""CRITICAL"",""title"":"""",""detail"":""""},
+    {""code"":""INCONSISTENCY"",""severity"":""WARNING"",""title"":"""",""detail"":""""},
+    {""code"":""SEXUAL_CONTENT"",""severity"":""WARNING"",""title"":"""",""detail"":""""},
+    {""code"":""ANTI_STATE"",""severity"":""CRITICAL"",""title"":"""",""detail"":""""}
   ],
   ""overallFeedback"": """"
 }";
@@ -648,6 +663,25 @@ namespace Service.Implementations
                    - LƯU Ý: Do dữ liệu dạng tóm tắt Batch, đôi khi các chi tiết nhỏ có thể bị lược bỏ giữa các Batch. Chỉ báo lỗi mâu thuẫn khi có bằng chứng RÕ RÀNG (vd: Chương 1 nói nhân vật A đã chết, Chương 5 nhân vật A lại xuất hiện bình thường mà không có giải thích).
                    - Phát hiện: nhân vật mâu thuẫn tính cách cực đoan không lý do, sự kiện timeline đảo lộn vô lý, bối cảnh trái ngược hoàn toàn.
                    - Nếu phát hiện: severity theo mức độ (INFO/WARNING/CRITICAL), detail: trích dẫn mâu thuẫn cụ thể.
+
+                e) NỘI DUNG TÌNH DỤC KHÔNG PHÙ HỢP (code="SEXUAL_CONTENT"):
+                   - Phát hiện: các cảnh quan hệ tình dục được miêu tả trực tiếp, chi tiết, phô trương (explicit sexual scenes); nội dung khiêu dâm; miêu tả tình dục liên quan đến nhân vật chưa thành niên (dù có hay không có xác nhận tuổi).
+                   - PHÂN BIỆT: Cảnh lãng mạn, hôn nhẹ, ám chỉ tinh tế hoặc ngụ ý (implied) là BÌNH THƯỜNG, KHÔNG cắm cờ. Chỉ cắm khi nội dung VÀO THẲNG miêu tả hành vi tình dục một cách rõ ràng.
+                   - Nếu phát hiện:
+                     + Người lớn (adult explicit): severity="WARNING", title="Nội dung người lớn — cần dán nhãn 18+", detail: trích dẫn đoạn cụ thể
+                     + Liên quan trẻ em / nhân vật chưa thành niên: severity="CRITICAL", title="Nội dung tình dục liên quan trẻ em — vi phạm nghiêm trọng", detail: trích dẫn và giải thích rõ
+                   - Đây là cờ BẮT BUỘC xem xét — không được bỏ sót.
+
+                f) NỘI DUNG CHÍNH TRỊ NHẠY CẢM / XUYÊN TẠC / CHỐNG PHÁ (code="ANTI_STATE"):
+                   - Phát hiện các nội dung:
+                     + Phủ nhận, bác bỏ hoặc xuyên tạc lịch sử dân tộc, chủ quyền quốc gia Việt Nam
+                     + Tuyên truyền chống lại Nhà nước, Đảng Cộng sản Việt Nam hoặc chế độ chính trị
+                     + Kích động chia rẽ dân tộc, tôn giáo, vùng miền
+                     + Ca ngợi, biện hộ cho các tổ chức/cá nhân bị coi là phản quốc, khủng bố
+                     + Xuyên tạc chính sách, lãnh đạo Nhà nước một cách có chủ đích và mang tính kích động
+                   - PHÂN BIỆT: Phê phán xã hội mang tính văn học, phản ánh mặt trái cuộc sống (tham nhũng, bất công…) là BÌNH THƯỜNG nếu không có ý đồ chống phá rõ ràng. Chỉ cắm cờ khi nội dung mang tính kích động, tuyên truyền có hệ thống.
+                   - Nếu phát hiện: severity="CRITICAL", title="Nội dung chính trị nhạy cảm — cần xem xét pháp lý", detail: trích dẫn đoạn cụ thể và giải thích lý do xếp loại
+                   - Đây là cờ BẮT BUỘC xem xét — không được bỏ sót.
 
                 → Nếu KHÔNG phát hiện vấn đề nào: "warnings":[] (mảng rỗng)
                 → Nếu phát hiện nhiều: liệt kê đủ, mỗi vấn đề 1 object riêng

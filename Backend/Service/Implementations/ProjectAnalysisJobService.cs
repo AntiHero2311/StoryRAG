@@ -71,6 +71,22 @@ namespace Service.Implementations
             var currentSnapshot = await BuildProjectSnapshotAsync(projectId, cancellationToken);
             var currentProjectVersionHash = currentSnapshot.ProjectVersionHash;
 
+            // Chặn enqueue mới nếu đang có report chờ Staff duyệt cho cùng project
+            var pendingStaffReport = await _context.ProjectReports
+                .AsNoTracking()
+                .AnyAsync(r =>
+                    r.ProjectId == projectId &&
+                    r.UserId == userId &&
+                    (r.ReviewStatus == "PendingStaffReview" || r.ReviewStatus == "StaffReviewing"),
+                    cancellationToken);
+
+            if (pendingStaffReport)
+            {
+                throw new InvalidOperationException(
+                    "Báo cáo phân tích đang được đội ngũ Staff kiểm duyệt. " +
+                    "Vui lòng chờ Staff hoàn tất duyệt trước khi yêu cầu phân tích mới.");
+            }
+
             var activeJob = await _context.ProjectAnalysisJobs
                 .Where(j =>
                     j.UserId == userId &&
@@ -393,14 +409,15 @@ namespace Service.Implementations
                     processingToken,
                     job.Id);
 
-                await ThrowIfJobCancelledAsync(jobId, processingToken);
+                // ── QUAN TRỌNG: Sau khi AnalyzeAsync return, report đã được ghi vào DB
+                // và lượt phân tích đã bị trừ. Từ đây KHÔNG check cancel nữa —
+                // luôn đánh dấu job Completed để không để report mồ côi.
+                // Dùng CancellationToken.None để đảm bảo save thành công.
 
                 job.Stage = StageSaving;
                 job.Progress = 90;
                 job.UpdatedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync(processingToken);
-
-                await ThrowIfJobCancelledAsync(jobId, processingToken);
+                await _context.SaveChangesAsync(CancellationToken.None);
 
                 job.Status = StatusCompleted;
                 job.Stage = StageCompleted;
@@ -410,7 +427,7 @@ namespace Service.Implementations
                 job.ErrorMessage = null;
                 job.CompletedAt = DateTime.UtcNow;
                 job.UpdatedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync(processingToken);
+                await _context.SaveChangesAsync(CancellationToken.None);
 
                 var projectTitle = await GetProjectTitleAsync(job.ProjectId, CancellationToken.None);
                 await _notificationService.CreateForUserAsync(
@@ -423,6 +440,27 @@ namespace Service.Implementations
             }
             catch (OperationCanceledException)
             {
+                // Nếu AnalyzeAsync đã hoàn thành (report đã lưu DB) trước khi cancel:
+                // → Rescue: link report vào job, đánh Completed, không để mồ côi.
+                var orphanReport = await FindOrphanReportAsync(job.ProjectId, job.UserId, jobId);
+                if (orphanReport != null)
+                {
+                    _logger.LogWarning(
+                        "Job {JobId} cancelled but report {ReportId} already saved. Rescuing as Completed.",
+                        jobId, orphanReport.Value);
+
+                    await _context.Entry(job).ReloadAsync(CancellationToken.None);
+                    job.Status = StatusCompleted;
+                    job.Stage = StageCompleted;
+                    job.Progress = 100;
+                    job.ReportId = orphanReport.Value;
+                    job.ErrorMessage = null;
+                    job.CompletedAt = DateTime.UtcNow;
+                    job.UpdatedAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync(CancellationToken.None);
+                    return;
+                }
+
                 var latestStatus = await GetCurrentJobStatusAsync(jobId, CancellationToken.None);
                 if (latestStatus == StatusCancelled)
                     return;
@@ -484,6 +522,31 @@ namespace Service.Implementations
                 .Where(j => j.Id == jobId)
                 .Select(j => j.Status)
                 .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        /// <summary>
+        /// Tìm report mồ côi: report đã được AnalyzeAsync tạo và save vào DB
+        /// nhưng job bị cancel trước khi kịp link ReportId.
+        /// Tìm report mới nhất của project+user mà chưa có job nào trỏ tới.
+        /// </summary>
+        private async Task<Guid?> FindOrphanReportAsync(Guid projectId, Guid userId, Guid currentJobId)
+        {
+            // Lấy tất cả reportId đã được link bởi các job khác
+            var linkedReportIds = _context.ProjectAnalysisJobs
+                .Where(j => j.ReportId.HasValue && j.Id != currentJobId)
+                .Select(j => j.ReportId!.Value);
+
+            // Tìm report mới nhất chưa có job nào trỏ tới
+            var orphanReportId = await _context.ProjectReports
+                .Where(r =>
+                    r.ProjectId == projectId &&
+                    r.UserId == userId &&
+                    !linkedReportIds.Contains(r.Id))
+                .OrderByDescending(r => r.CreatedAt)
+                .Select(r => r.Id)
+                .FirstOrDefaultAsync(CancellationToken.None);
+
+            return orphanReportId == Guid.Empty ? null : orphanReportId;
         }
 
         private async Task VerifyOwnershipAsync(Guid projectId, Guid userId, CancellationToken cancellationToken)

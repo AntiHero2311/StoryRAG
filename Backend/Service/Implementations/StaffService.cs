@@ -398,6 +398,19 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>Lấy review theo ProjectReportId (khác với GetAnalysisReviewsAsync filter theo ProjectId).</summary>
+        public async Task<StaffAnalysisReviewResponse?> GetAnalysisReviewByReportIdAsync(Guid reportId)
+        {
+            var entity = await _db.StaffAnalysisReviews
+                .AsNoTracking()
+                .Where(x => x.ProjectReportId == reportId)
+                .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            return entity == null ? null : MapReview(entity);
+        }
+
+
         public async Task<StaffPagedResponse<StaffPendingReportItem>> GetPendingReportsAsync(int page, int pageSize)
         {
             page = Math.Max(1, page);
@@ -748,7 +761,8 @@ namespace Service.Implementations
             {
                 var expected = request.ExpectedUpdatedAt.Value.ToUniversalTime();
                 var actual = currentVersion.ToUniversalTime();
-                if (expected != actual)
+                // Dùng dung sai 1 giây để tránh lỗi do mất precision microsecond qua JSON serialize/deserialize
+                if (Math.Abs((expected - actual).TotalSeconds) > 1)
                 {
                     throw new InvalidOperationException(
                         "Report đã được staff khác cập nhật trước đó. Vui lòng tải lại dữ liệu mới nhất trước khi lưu.");
@@ -757,14 +771,40 @@ namespace Service.Implementations
 
             // Parse AI CriteriaJson gốc
             var sourceCriteriaJson = report.StaffEditedCriteriaJson ?? report.CriteriaJson;
+            if (string.IsNullOrWhiteSpace(sourceCriteriaJson))
+                throw new InvalidOperationException("Report chưa có dữ liệu phân tích (CriteriaJson trống).");
+
             List<System.Text.Json.Nodes.JsonObject>? criteriaList = null;
+            System.Text.Json.Nodes.JsonArray? originalWarnings = null;
+            string originalOverallFeedback = string.Empty;
 
             try
             {
-                var arr = System.Text.Json.Nodes.JsonNode.Parse(sourceCriteriaJson) as System.Text.Json.Nodes.JsonArray;
-                criteriaList = arr?
-                    .OfType<System.Text.Json.Nodes.JsonObject>()
-                    .ToList();
+                var parsedNode = System.Text.Json.Nodes.JsonNode.Parse(sourceCriteriaJson);
+                if (parsedNode is System.Text.Json.Nodes.JsonArray arr)
+                {
+                    criteriaList = arr.OfType<System.Text.Json.Nodes.JsonObject>().ToList();
+                }
+                else if (parsedNode is System.Text.Json.Nodes.JsonObject obj)
+                {
+                    var criteriaNode = obj["Criteria"] ?? obj["criteria"];
+                    if (criteriaNode is System.Text.Json.Nodes.JsonArray criteriaArr)
+                    {
+                        criteriaList = criteriaArr.OfType<System.Text.Json.Nodes.JsonObject>().ToList();
+                    }
+                    
+                    var warningsNode = obj["Warnings"] ?? obj["warnings"];
+                    if (warningsNode is System.Text.Json.Nodes.JsonArray warningsArr)
+                    {
+                        originalWarnings = warningsArr;
+                    }
+                    
+                    var overallFeedbackNode = obj["OverallFeedback"] ?? obj["overallFeedback"];
+                    if (overallFeedbackNode != null)
+                    {
+                        originalOverallFeedback = overallFeedbackNode.GetValue<string>() ?? string.Empty;
+                    }
+                }
             }
             catch
             {
@@ -772,7 +812,7 @@ namespace Service.Implementations
             }
 
             if (criteriaList == null)
-                throw new InvalidOperationException("CriteriaJson rỗng hoặc không phải mảng JSON.");
+                throw new InvalidOperationException("CriteriaJson rỗng hoặc không tìm thấy mảng criteria.");
 
             // Áp dụng các chỉnh sửa của staff
             foreach (var edit in request.EditedCriteria)
@@ -784,20 +824,44 @@ namespace Service.Implementations
                 if (target == null) continue;
 
                 if (edit.Feedback != null)
-                    target["feedback"] = edit.Feedback;
+                {
+                    if (target["feedback"] != null) target["feedback"] = edit.Feedback;
+                    else if (target["Feedback"] != null) target["Feedback"] = edit.Feedback;
+                    else target["feedback"] = edit.Feedback;
+                }
                 if (edit.Evidence != null)
-                    target["evidence"] = edit.Evidence;
+                {
+                    if (target["evidence"] != null) target["evidence"] = edit.Evidence;
+                    else if (target["Evidence"] != null) target["Evidence"] = edit.Evidence;
+                    else target["evidence"] = edit.Evidence;
+                }
                 if (edit.Errors != null)
-                    target["errors"] = new System.Text.Json.Nodes.JsonArray(
+                {
+                    var newArr = new System.Text.Json.Nodes.JsonArray(
                         edit.Errors.Select(e => (System.Text.Json.Nodes.JsonNode)System.Text.Json.Nodes.JsonValue.Create(e)!).ToArray());
+                    if (target["errors"] != null) target["errors"] = newArr;
+                    else if (target["Errors"] != null) target["Errors"] = newArr;
+                    else target["errors"] = newArr;
+                }
                 if (edit.Suggestions != null)
-                    target["suggestions"] = new System.Text.Json.Nodes.JsonArray(
+                {
+                    var newArr = new System.Text.Json.Nodes.JsonArray(
                         edit.Suggestions.Select(s => (System.Text.Json.Nodes.JsonNode)System.Text.Json.Nodes.JsonValue.Create(s)!).ToArray());
+                    if (target["suggestions"] != null) target["suggestions"] = newArr;
+                    else if (target["Suggestions"] != null) target["Suggestions"] = newArr;
+                    else target["suggestions"] = newArr;
+                }
             }
 
-            var editedJson = new System.Text.Json.Nodes.JsonArray(
+            var finalObj = new System.Text.Json.Nodes.JsonObject();
+            var criteriaJsonArray = new System.Text.Json.Nodes.JsonArray(
                 criteriaList.Cast<System.Text.Json.Nodes.JsonNode?>().ToArray()
-            ).ToJsonString();
+            );
+            finalObj["Criteria"] = criteriaJsonArray;
+            finalObj["Warnings"] = originalWarnings ?? new System.Text.Json.Nodes.JsonArray();
+            finalObj["OverallFeedback"] = originalOverallFeedback;
+
+            var editedJson = finalObj.ToJsonString();
 
             report.StaffEditedCriteriaJson = editedJson;
             report.ReviewStatus = request.ReleaseToUser
@@ -936,14 +1000,26 @@ namespace Service.Implementations
                 : report.TotalScore >= 55 ? "Trung bình"
                 : "Cần sửa lớn";
 
-            // Trích overallFeedback từ CriteriaJson nếu có
+            // Trích overallFeedback từ StaffEditedCriteriaJson hoặc CriteriaJson nếu có
             var overallFeedback = string.Empty;
             try
             {
-                using var doc = System.Text.Json.JsonDocument.Parse(report.CriteriaJson);
-                if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object &&
-                    doc.RootElement.TryGetProperty("overallFeedback", out var ofProp))
-                    overallFeedback = ofProp.GetString() ?? string.Empty;
+                var sourceJson = report.StaffEditedCriteriaJson ?? report.CriteriaJson;
+                if (!string.IsNullOrWhiteSpace(sourceJson))
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(sourceJson);
+                    if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                    {
+                        if (doc.RootElement.TryGetProperty("OverallFeedback", out var ofProp1))
+                        {
+                            overallFeedback = ofProp1.GetString() ?? string.Empty;
+                        }
+                        else if (doc.RootElement.TryGetProperty("overallFeedback", out var ofProp2))
+                        {
+                            overallFeedback = ofProp2.GetString() ?? string.Empty;
+                        }
+                    }
+                }
             }
             catch { /* ignore parse errors */ }
 
@@ -982,10 +1058,28 @@ namespace Service.Implementations
                 return "LOW_QUALITY_SCORE";
             }
 
-            if (!string.IsNullOrWhiteSpace(report.CriteriaJson) &&
-                report.CriteriaJson.Contains("INCOMPLETE", StringComparison.OrdinalIgnoreCase))
+            // Kiểm tra tất cả cờ AI trong CriteriaJson (theo thứ tự ưu tiên nghiêm trọng nhất trước)
+            if (!string.IsNullOrWhiteSpace(report.CriteriaJson))
             {
-                return "INCOMPLETE_STORY";
+                // ANTI_STATE — nghiêm trọng nhất về pháp lý, ưu tiên cao nhất
+                if (report.CriteriaJson.Contains("ANTI_STATE", StringComparison.OrdinalIgnoreCase))
+                    return "ANTI_STATE";
+
+                // SEXUAL_CONTENT — vi phạm chính sách nội dung, ưu tiên thứ hai
+                if (report.CriteriaJson.Contains("SEXUAL_CONTENT", StringComparison.OrdinalIgnoreCase))
+                    return "SEXUAL_CONTENT";
+
+                // PLAGIARISM_RISK — vi phạm bản quyền
+                if (report.CriteriaJson.Contains("PLAGIARISM_RISK", StringComparison.OrdinalIgnoreCase))
+                    return "PLAGIARISM_RISK";
+
+                // INCOMPLETE — truyện chưa kết thúc
+                if (report.CriteriaJson.Contains("\"INCOMPLETE\"", StringComparison.OrdinalIgnoreCase))
+                    return "INCOMPLETE_STORY";
+
+                // INCONSISTENCY — mâu thuẫn logic trong truyện
+                if (report.CriteriaJson.Contains("INCONSISTENCY", StringComparison.OrdinalIgnoreCase))
+                    return "INCONSISTENCY_DETECTED";
             }
 
             return null;
