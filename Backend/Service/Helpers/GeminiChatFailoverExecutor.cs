@@ -192,6 +192,13 @@ namespace Service.Helpers
                                 clientEx.Status,
                                 clientEx.Message);
                         }
+                        else if (ex is ArgumentOutOfRangeException aoex && aoex.Message.Contains("ChatFinishReason", StringComparison.OrdinalIgnoreCase))
+                        {
+                            _logger.LogWarning(
+                                "{Operation} thất bại với {Candidate}: Nội dung bị chặn bởi content filter (finish_reason=content_filter). Thử fallback.",
+                                _operationName,
+                                candidate.Label);
+                        }
                         else
                         {
                             _logger.LogWarning(ex, "{Operation} thất bại với {Candidate}, thử fallback.", _operationName, candidate.Label);
@@ -229,6 +236,12 @@ namespace Service.Helpers
                     _logger.LogWarning("{Operation} vẫn 503 sau toàn bộ fallback model/key.", _operationName);
                     throw new InvalidOperationException("Dịch vụ AI tạm thời không khả dụng (503). Vui lòng thử lại sau ít phút.");
                 }
+            }
+
+            if (lastError is ArgumentOutOfRangeException argExc && argExc.Message.Contains("ChatFinishReason", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("{Operation} nội dung bị chặn bởi content filter trên tất cả model.", _operationName);
+                throw new InvalidOperationException("Nội dung phân tích bị chặn bởi bộ lọc an toàn (content filter). Vui lòng kiểm tra lại manuscript hoặc thử lại với prompt khác.");
             }
 
             _logger.LogError(lastError, "{Operation} thất bại với toàn bộ fallback model/key.", _operationName);

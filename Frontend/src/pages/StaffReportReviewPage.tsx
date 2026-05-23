@@ -17,6 +17,8 @@ import {
   Lock,
   ShieldAlert,
   Sliders,
+  BarChart2,
+  Clock,
 } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { getUserInfo } from '../utils/jwtHelper';
@@ -25,6 +27,13 @@ import {
   type StaffReportDetail,
   type StaffReportStoryResponse,
 } from '../services/analysisJobService';
+import { reportService, type NarrativeChartsResponse } from '../services/reportService';
+import DonutChart from '../components/analysis/DonutChart';
+import RadarChart from '../components/analysis/RadarChart';
+import GroupCard from '../components/analysis/GroupCard';
+import NarrativeChartsPanel from '../components/analysis/NarrativeChartsPanel';
+import EvidenceChunksPanel from '../components/analysis/EvidenceChunksPanel';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 type EditableCriterion = {
   key: string;
@@ -36,6 +45,7 @@ type EditableCriterion = {
   evidence: string;
   errors: string[];
   suggestions: string[];
+  evidenceChunkOrdinals?: number[];
 };
 
 type EditableWarning = {
@@ -122,6 +132,11 @@ function parseCriteria(detail: StaffReportDetail): EditableCriterion[] {
       suggestions: Array.isArray(item?.suggestions)
         ? item.suggestions.map((x: any) => String(x))
         : (Array.isArray(item?.Suggestions) ? item.Suggestions.map((x: any) => String(x)) : []),
+      evidenceChunkOrdinals: Array.isArray(item?.evidenceChunkOrdinals)
+        ? item.evidenceChunkOrdinals.map((x: any) => Number(x))
+        : (Array.isArray(item?.evidence_chunk_ordinals)
+          ? item.evidence_chunk_ordinals.map((x: any) => Number(x))
+          : (Array.isArray(item?.EvidenceChunkOrdinals) ? item.EvidenceChunkOrdinals.map((x: any) => Number(x)) : [])),
     };
   })
   .filter((c: EditableCriterion) => c.key);
@@ -193,6 +208,21 @@ export default function StaffReportReviewPage() {
   const [originalCriteria, setOriginalCriteria] = useState<Record<string, { feedback: string; evidence: string; errors: string[]; suggestions: string[] }>>({});
   const [feedbackMessage, setFeedbackMessage] = useState('');
 
+  // Narrative charts state
+  const [narrativeCharts, setNarrativeCharts] = useState<NarrativeChartsResponse | null>(null);
+  const [loadingNarrativeCharts, setLoadingNarrativeCharts] = useState(false);
+
+  // Evidence panel state
+  const [evidencePanel, setEvidencePanel] = useState<{
+    ordinals: number[];
+    highlight: string;
+    label: string;
+  } | null>(null);
+
+  // Inline Rubric Editor Modal state
+  const [editingCriterionKey, setEditingCriterionKey] = useState<string | null>(null);
+  const [editingCriterionValue, setEditingCriterionValue] = useState<EditableCriterion | null>(null);
+
   // Reader states
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedChapterId, setExpandedChapterId] = useState<string | null>(null);
@@ -204,10 +234,10 @@ export default function StaffReportReviewPage() {
   const [readerFontSize, setReaderFontSize] = useState<number>(16);
   const [readerTheme, setReaderTheme] = useState<'dark' | 'cream' | 'dim'>('dark');
 
-  // Categories & Collapsibles States
-  const [activeGroup, setActiveGroup] = useState('Kỳ vọng');
-  const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
-  const [showOriginalMap, setShowOriginalMap] = useState<Record<string, boolean>>({});
+  // Tab & Collapsibles States
+  const [activeTab, setActiveTab] = useState<'rubric' | 'narrative'>('rubric');
+  const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({ 0: true });
+  const [showReleaseConfirm, setShowReleaseConfirm] = useState(false);
 
   const isReadOnly = useMemo(() => {
     return detail?.reviewStatus === 'Released';
@@ -218,36 +248,42 @@ export default function StaffReportReviewPage() {
     return parseWarnings(detail);
   }, [detail]);
 
-  // Group statistics for display in vertical tabs
-  const groupStats = useMemo(() => {
-    const stats: Record<string, { score: number; maxScore: number; count: number; modifiedCount: number }> = {};
-    RUBRIC_GROUPS.forEach(g => {
-      stats[g] = { score: 0, maxScore: 0, count: 0, modifiedCount: 0 };
-    });
-
+  // Reconstructed mapped groups exactly matching Author's report format
+  const mappedGroups = useMemo(() => {
+    if (!criteria.length) return [];
+    
+    const groupsMap = new Map<string, EditableCriterion[]>();
     criteria.forEach(c => {
       const g = c.groupName || 'Khác';
-      if (!stats[g]) {
-        stats[g] = { score: 0, maxScore: 0, count: 0, modifiedCount: 0 };
+      if (!groupsMap.has(g)) {
+        groupsMap.set(g, []);
       }
-      stats[g].score += c.score;
-      stats[g].maxScore += c.maxScore;
-      stats[g].count += 1;
-
-      // Check if modified
-      const orig = originalCriteria[c.key];
-      const isFeedbackModified = !!(orig && c.feedback !== orig.feedback);
-      const isEvidenceModified = !!(orig && c.evidence !== orig.evidence);
-      const isErrorsModified = !!(orig && JSON.stringify(c.errors) !== JSON.stringify(orig.errors));
-      const isSuggestionsModified = !!(orig && JSON.stringify(c.suggestions) !== JSON.stringify(orig.suggestions));
-      const isModified = isFeedbackModified || isEvidenceModified || isErrorsModified || isSuggestionsModified;
-      if (isModified) {
-        stats[g].modifiedCount += 1;
-      }
+      groupsMap.get(g)!.push(c);
     });
 
-    return stats;
-  }, [criteria, originalCriteria]);
+    return RUBRIC_GROUPS.map((g, idx) => {
+      const groupCriteria = groupsMap.get(g) || [];
+      const score = groupCriteria.reduce((sum, c) => sum + c.score, 0);
+      const maxScore = groupCriteria.reduce((sum, c) => sum + c.maxScore, 0);
+      
+      return {
+        name: g,
+        score,
+        maxScore,
+        criteria: groupCriteria.map(c => ({
+          key: c.key,
+          criterionName: c.criterionName,
+          score: c.score,
+          maxScore: c.maxScore,
+          feedback: c.feedback,
+          evidence: c.evidence,
+          errors: c.errors,
+          suggestions: c.suggestions,
+          evidenceChunkOrdinals: c.evidenceChunkOrdinals,
+        })),
+      };
+    }).filter(g => g.criteria.length > 0);
+  }, [criteria]);
 
   // Filter chapters based on search term
   const filteredChapters = useMemo(() => {
@@ -278,6 +314,18 @@ export default function StaffReportReviewPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const loadNarrativeCharts = async (projectId: string) => {
+    setLoadingNarrativeCharts(true);
+    try {
+      const charts = await reportService.getNarrativeCharts(projectId);
+      setNarrativeCharts(charts);
+    } catch {
+      setNarrativeCharts(null);
+    } finally {
+      setLoadingNarrativeCharts(false);
+    }
+  };
+
   const load = async (targetReportId: string) => {
     setLoading(true);
     setError('');
@@ -291,12 +339,9 @@ export default function StaffReportReviewPage() {
       setStory(storyData);
       setCriteria(parseCriteria(reportDetail));
       setOriginalCriteria(parseOriginalCriteria(reportDetail));
-      
-      // Auto expand first criterion key of first group on load
-      const parsed = parseCriteria(reportDetail);
-      if (parsed.length > 0) {
-        const firstKey = parsed[0].key;
-        setExpandedKeys({ [firstKey]: true });
+
+      if (reportDetail.projectId) {
+        void loadNarrativeCharts(reportDetail.projectId);
       }
     } catch (err: any) {
       const message = err?.response?.data?.message
@@ -327,17 +372,17 @@ export default function StaffReportReviewPage() {
     void load(reportId);
   }, [navigate, reportId]);
 
-  const updateCriterion = (index: number, patch: Partial<EditableCriterion>) => {
-    if (isReadOnly) return;
-    setCriteria(prev => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+  const handleSaveCriterionOverride = () => {
+    if (!editingCriterionKey || !editingCriterionValue || isReadOnly) return;
+    setCriteria(prev =>
+      prev.map(c => (c.key === editingCriterionKey ? editingCriterionValue : c))
+    );
+    setEditingCriterionKey(null);
+    setEditingCriterionValue(null);
   };
 
-  const toggleExpand = (key: string) => {
-    setExpandedKeys(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const toggleShowOriginal = (key: string) => {
-    setShowOriginalMap(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggleGroup = (idx: number) => {
+    setExpandedGroups(prev => ({ ...prev, [idx]: !prev[idx] }));
   };
 
   const submitEdit = async (releaseToUser: boolean) => {
@@ -381,7 +426,7 @@ export default function StaffReportReviewPage() {
   return (
     <MainLayout pageTitle="Staff Review Report">
       {() => (
-        <div className="p-6 max-w-[1400px] mx-auto w-full space-y-5">
+        <div className="p-6 max-w-[1600px] mx-auto w-full space-y-6">
           {/* Top Bar with Back Navigation */}
           <div className="flex items-center gap-3">
             <button
@@ -413,86 +458,73 @@ export default function StaffReportReviewPage() {
               <Loader2 className="w-7 h-7 animate-spin text-amber-400" />
             </div>
           ) : !detail ? null : (
-            <div className="space-y-5">
-              {/* Cockpit Header Card */}
+            <div className="space-y-6">
+              {/* Cockpit Header Card: Visual Score Overview */}
               <div
-                className="relative overflow-hidden rounded-2xl p-5 border"
+                className="relative overflow-hidden rounded-3xl p-6 border"
                 style={{
                   borderColor: 'var(--border-color)',
                   background: 'linear-gradient(145deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01) 45%, var(--bg-surface) 100%)',
                 }}
               >
-                <div className="absolute -top-10 -right-12 w-52 h-52 rounded-full blur-3xl opacity-10 pointer-events-none" style={{ background: '#f59e0b' }} />
+                <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full blur-3xl opacity-10 pointer-events-none" style={{ background: '#f59e0b' }} />
                 
                 {/* Read Only Indicator Banner */}
                 {isReadOnly && (
-                  <div className="mb-4 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-rose-500/15 border border-rose-500/20 text-rose-300 text-xs font-semibold">
+                  <div className="mb-6 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-rose-500/15 border border-rose-500/20 text-rose-300 text-xs font-semibold">
                     <Lock className="w-4 h-4 shrink-0 text-rose-400" />
                     Báo cáo này đã được phát hành cho tác giả. Dữ liệu hiện ở chế độ ĐỌC (Read-Only) để bảo vệ lịch sử.
                   </div>
                 )}
 
-                <div className="flex flex-col lg:flex-row gap-5 lg:items-center">
-                  {/* Score badge */}
-                  <div className="flex items-center gap-4 shrink-0">
-                    <div
-                      className="w-16 h-16 rounded-xl flex flex-col items-center justify-center border shadow-lg shrink-0"
-                      style={{
-                        background: 'linear-gradient(135deg, rgba(245,158,11,0.15), rgba(249,115,22,0.1))',
-                        borderColor: 'rgba(245,158,11,0.25)',
-                      }}
-                    >
-                      <span className="text-xl font-black text-amber-400 leading-none">
-                        {detail.totalScore.toFixed(0)}
-                      </span>
-                      <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider mt-1">
-                        Điểm AI
-                      </span>
-                    </div>
-                    
+                <div className="flex flex-col lg:flex-row items-center gap-8 justify-around">
+                  {/* Left: Score Donut & Radar Chart */}
+                  <div className="flex flex-col sm:flex-row items-center gap-6 shrink-0">
+                    <DonutChart score={detail.totalScore} classification={detail.classification} />
+                    <RadarChart groups={mappedGroups} />
+                  </div>
+
+                  {/* Right: Project details & status */}
+                  <div className="flex-1 w-full space-y-4">
                     <div>
-                      <h2 className="text-base font-black text-[var(--text-bright)] leading-snug truncate max-w-[320px] sm:max-w-[480px]">
+                      <h2 className="text-xl font-black text-[var(--text-bright)] leading-snug">
                         {detail.projectTitle}
                       </h2>
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                      <div className="flex flex-wrap items-center gap-3 mt-1.5">
                         <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-amber-500/10 text-amber-400 border border-amber-500/15">
                           {detail.classification}
                         </span>
-                        <span className="text-[10px] text-zinc-400">
+                        <span className="text-xs text-zinc-400">
                           Phiên bản: <span className="font-semibold text-zinc-300 font-mono">{detail.projectVersion || 'v1.0.0'}</span>
                         </span>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Status review progress indicator */}
-                  <div className="lg:ml-auto flex items-center gap-4 shrink-0">
-                    <div className="text-left lg:text-right">
-                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Trạng thái duyệt</p>
-                      <div className="flex items-center gap-2 mt-1 lg:justify-end">
-                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                          detail.reviewStatus === 'Released'
-                            ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]'
-                            : 'bg-amber-500 shadow-[0_0_8px_#f59e0b] animate-pulse'
-                        }`} />
-                        <span className="text-xs font-bold text-[var(--text-primary)]">
-                          {detail.reviewStatus === 'Released' ? 'Đã phát hành' : 
-                           detail.reviewStatus === 'StaffReviewing' ? 'Staff đang xem' : 
-                           'Chờ duyệt (Pending)'}
-                        </span>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                        detail.reviewStatus === 'Released'
+                          ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]'
+                          : 'bg-amber-500 shadow-[0_0_8px_#f59e0b] animate-pulse'
+                      }`} />
+                      <span className="text-xs font-bold text-[var(--text-primary)]">
+                        Trạng thái duyệt: {
+                          detail.reviewStatus === 'Released' ? 'Đã phát hành' : 
+                          detail.reviewStatus === 'StaffReviewing' ? 'Staff đang xem' : 
+                          'Chờ duyệt (Pending)'
+                        }
+                      </span>
+                    </div>
+
+                    {/* Overall Feedback card inside header */}
+                    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-hover)]/30 p-4 relative overflow-hidden">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] mb-1.5 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Nhận xét tổng quan của AI
+                      </p>
+                      <p className="text-xs text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed font-medium select-text">
+                        {detail.overallFeedback || 'Chưa có nhận xét tổng quan.'}
+                      </p>
                     </div>
                   </div>
-                </div>
-
-                {/* Overall Feedback card inside header */}
-                <div className="mt-4 rounded-xl border border-[var(--border-color)] bg-[var(--bg-hover)]/30 p-4 relative overflow-hidden">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] mb-1.5 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Nhận xét tổng quan của AI
-                  </p>
-                  <p className="text-xs text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed font-medium select-text">
-                    {detail.overallFeedback || 'Chưa có nhận xét tổng quan.'}
-                  </p>
                 </div>
               </div>
 
@@ -560,347 +592,70 @@ export default function StaffReportReviewPage() {
 
               {/* Main Content Workspace Layout */}
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-                {/* Left Columns (Col 1-2): Criteria Categorized Dashboard */}
+                {/* Left Columns (Col 1-2): Visual Tab Switcher Workspace */}
                 <div className="xl:col-span-2 space-y-4">
-                  <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-5 space-y-4 shadow-sm">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-[var(--border-color)] pb-3">
-                      <div>
-                        <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-                          <Sliders className="w-5 h-5 text-amber-400" />
-                          Đánh giá & Điều chỉnh Rubric chuyên sâu
-                        </h2>
-                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                          Nhấn vào từng tiêu chí để điều chỉnh Feedback, Evidence, Errors, Suggestions gửi tác giả.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-                      {/* Left vertical tabs for Rubric Groups */}
-                      <div className="md:col-span-1 flex flex-row md:flex-col overflow-x-auto md:overflow-x-visible gap-1.5 pr-0 md:pr-2 border-r-0 md:border-r border-[var(--border-color)] scrollbar-none pb-2 md:pb-0">
-                        {RUBRIC_GROUPS.map(g => {
-                          const isActive = activeGroup === g;
-                          const stat = groupStats[g] || { score: 0, maxScore: 0, count: 0, modifiedCount: 0 };
-                          if (stat.count === 0) return null; // Hide empty groups
-                          return (
-                            <button
-                              key={g}
-                              type="button"
-                              onClick={() => setActiveGroup(g)}
-                              disabled={loading}
-                              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 shrink-0 md:shrink transition-all ${
-                                isActive
-                                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                                  : 'hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] border border-transparent'
-                              }`}
-                            >
-                              <span className="truncate flex items-center gap-1.5">
-                                {g}
-                                {stat.modifiedCount > 0 && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title={`Đã sửa ${stat.modifiedCount} tiêu chí`} />
-                                )}
-                              </span>
-                              <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold ${
-                                isActive ? 'bg-amber-500/20 text-amber-300' : 'bg-[var(--bg-hover)] text-[var(--text-secondary)]'
-                              }`}>
-                                {stat.score.toFixed(1)}/{stat.maxScore}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Right criteria content edit panels */}
-                      <div className="md:col-span-3 space-y-4">
-                        {criteria.length === 0 ? (
-                          <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-sm">
-                            <AlertTriangle className="w-4 h-4 shrink-0" />
-                            Không thể tải dữ liệu criteria. Dữ liệu JSON của report có thể bị lỗi hoặc chưa có phân tích.
-                          </div>
-                        ) : (
-                          criteria
-                            .map((c, idx) => ({ c, originalIdx: idx }))
-                            .filter(({ c }) => c.groupName === activeGroup)
-                            .map(({ c, originalIdx }) => {
-                              const isExpanded = !!expandedKeys[c.key];
-                              const showOriginal = !!showOriginalMap[c.key];
-                              const orig = originalCriteria[c.key];
-                              
-                              const isFeedbackModified = !!(orig && c.feedback !== orig.feedback);
-                              const isEvidenceModified = !!(orig && c.evidence !== orig.evidence);
-                              const isErrorsModified = !!(orig && JSON.stringify(c.errors) !== JSON.stringify(orig.errors));
-                              const isSuggestionsModified = !!(orig && JSON.stringify(c.suggestions) !== JSON.stringify(orig.suggestions));
-                              const isAnyModified = isFeedbackModified || isEvidenceModified || isErrorsModified || isSuggestionsModified;
-                              
-                              return (
-                                <div
-                                  key={c.key}
-                                  className={`rounded-xl border transition-all ${
-                                    isExpanded
-                                      ? 'border-amber-500/30 bg-[var(--bg-hover)]/30 shadow-md shadow-amber-500/5'
-                                      : 'border-[var(--border-color)] bg-[var(--bg-hover)]/10 hover:bg-[var(--bg-hover)]/20'
-                                  }`}
-                                >
-                                  {/* Collapsed/Header view */}
-                                  <div
-                                    onClick={() => toggleExpand(c.key)}
-                                    className="px-4 py-3.5 flex items-center justify-between gap-3 cursor-pointer select-none"
-                                  >
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-400/5 px-2 py-0.5 rounded border border-amber-400/15">
-                                          {c.key}
-                                        </span>
-                                        <h3 className="text-xs font-bold text-[var(--text-primary)] truncate">
-                                          {c.criterionName}
-                                        </h3>
-                                      </div>
-                                      {!isExpanded && (
-                                        <p className="text-[11px] text-[var(--text-secondary)] mt-1.5 truncate leading-relaxed">
-                                          {c.feedback || 'Chưa có nhận xét.'}
-                                        </p>
-                                      )}
-                                    </div>
-
-                                    <div className="flex items-center gap-3 shrink-0">
-                                      {orig && (
-                                        isAnyModified ? (
-                                          <span className="text-[9px] px-2 py-0.5 rounded-full font-bold bg-amber-500/10 text-amber-400 border border-amber-500/25 animate-pulse shrink-0">
-                                            ✍️ Staff sửa
-                                          </span>
-                                        ) : (
-                                          <span className="text-[9px] px-2 py-0.5 rounded-full font-bold bg-zinc-800 text-zinc-400 border border-zinc-700/50 shrink-0">
-                                            🤖 Gốc AI
-                                          </span>
-                                        )
-                                      )}
-                                      <span className="text-[10px] font-bold text-[var(--text-primary)] bg-[var(--bg-hover)] px-2.5 py-1 rounded-lg border border-[var(--border-color)]">
-                                        AI: {c.score}/{c.maxScore}
-                                      </span>
-                                      <ChevronDown
-                                        className={`w-4 h-4 text-[var(--text-secondary)] transition-transform duration-200 ${
-                                          isExpanded ? 'rotate-180 text-amber-400' : ''
-                                        }`}
-                                      />
-                                    </div>
-                                  </div>
-
-                                  {/* Expanded detailed editor view */}
-                                  {isExpanded && (
-                                    <div className="px-4 pb-4 pt-1 border-t border-[var(--border-color)]/30 space-y-4">
-                                      <div className="flex items-center justify-between gap-2 border-b border-[var(--border-color)]/30 pb-2">
-                                        <span className="text-[10px] text-[var(--text-secondary)] font-medium">
-                                          Rubric: {c.groupName} &raquo; {c.criterionName}
-                                        </span>
-                                        {orig && (
-                                          <button
-                                            type="button"
-                                            onClick={() => toggleShowOriginal(c.key)}
-                                            className={`text-[10px] px-2.5 py-1 rounded-lg font-semibold inline-flex items-center gap-1.5 border transition-all ${
-                                              showOriginal
-                                                ? 'bg-amber-400/10 border-amber-400/30 text-amber-400'
-                                                : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-200'
-                                            }`}
-                                          >
-                                            {showOriginal ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                            {showOriginal ? 'Ẩn bản gốc AI' : 'Xem bản gốc AI'}
-                                          </button>
-                                        )}
-                                      </div>
-
-                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {/* Feedback & Evidence */}
-                                        <div className="space-y-3">
-                                          <label className="block">
-                                            <div className="flex items-center justify-between">
-                                              <span className="text-[10px] font-bold text-[var(--text-secondary)] flex items-center gap-1.5">
-                                                Feedback {isFeedbackModified ? (
-                                                  <span className="text-[9px] font-medium text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded border border-amber-400/20">✍️ Đã sửa</span>
-                                                ) : (
-                                                  <span className="text-[9px] font-medium text-zinc-500 bg-zinc-800 px-1.5 py-0.2 rounded">🤖 Bản gốc AI</span>
-                                                )}
-                                              </span>
-                                              {isFeedbackModified && orig && !isReadOnly && (
-                                                <button
-                                                  type="button"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    updateCriterion(originalIdx, { feedback: orig.feedback });
-                                                  }}
-                                                  className="text-[9px] font-bold text-amber-400/80 hover:text-amber-400 hover:underline inline-flex items-center gap-0.5"
-                                                >
-                                                  Khôi phục gốc
-                                                </button>
-                                              )}
-                                            </div>
-                                            <textarea
-                                              readOnly={isReadOnly}
-                                              value={c.feedback}
-                                              onChange={e => updateCriterion(originalIdx, { feedback: e.target.value })}
-                                              rows={4}
-                                              className="mt-1.5 w-full px-3 py-2 rounded-lg text-xs bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/50 transition-colors placeholder:text-zinc-600 leading-relaxed disabled:opacity-60"
-                                              placeholder="Nhận xét cụ thể về tiêu chí này..."
-                                            />
-                                          </label>
-
-                                          <label className="block">
-                                            <div className="flex items-center justify-between">
-                                              <span className="text-[10px] font-bold text-[var(--text-secondary)] flex items-center gap-1.5">
-                                                Minh chứng (Evidence) {isEvidenceModified ? (
-                                                  <span className="text-[9px] font-medium text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded border border-amber-400/20">✍️ Đã sửa</span>
-                                                ) : (
-                                                  <span className="text-[9px] font-medium text-zinc-500 bg-zinc-800 px-1.5 py-0.2 rounded">🤖 Bản gốc AI</span>
-                                                )}
-                                              </span>
-                                              {isEvidenceModified && orig && !isReadOnly && (
-                                                <button
-                                                  type="button"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    updateCriterion(originalIdx, { evidence: orig.evidence });
-                                                  }}
-                                                  className="text-[9px] font-bold text-amber-400/80 hover:text-amber-400 hover:underline inline-flex items-center gap-0.5"
-                                                >
-                                                  Khôi phục gốc
-                                                </button>
-                                              )}
-                                            </div>
-                                            <textarea
-                                              readOnly={isReadOnly}
-                                              value={c.evidence}
-                                              onChange={e => updateCriterion(originalIdx, { evidence: e.target.value })}
-                                              rows={4}
-                                              className="mt-1.5 w-full px-3 py-2 rounded-lg text-xs bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/50 transition-colors placeholder:text-zinc-600 leading-relaxed disabled:opacity-60"
-                                              placeholder="Dẫn chứng từ truyện (số chương, trích dẫn)..."
-                                            />
-                                          </label>
-                                        </div>
-
-                                        {/* Errors & Suggestions */}
-                                        <div className="space-y-3">
-                                          <label className="block">
-                                            <div className="flex items-center justify-between">
-                                              <span className="text-[10px] font-bold text-[var(--text-secondary)] flex items-center gap-1.5">
-                                                Lỗi cần sửa (Errors - mỗi dòng 1 ý) {isErrorsModified ? (
-                                                  <span className="text-[9px] font-medium text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded border border-amber-400/20">✍️ Đã sửa</span>
-                                                ) : (
-                                                  <span className="text-[9px] font-medium text-zinc-500 bg-zinc-800 px-1.5 py-0.2 rounded">🤖 Bản gốc AI</span>
-                                                )}
-                                              </span>
-                                              {isErrorsModified && orig && !isReadOnly && (
-                                                <button
-                                                  type="button"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    updateCriterion(originalIdx, { errors: orig.errors });
-                                                  }}
-                                                  className="text-[9px] font-bold text-amber-400/80 hover:text-amber-400 hover:underline inline-flex items-center gap-0.5"
-                                                >
-                                                  Khôi phục gốc
-                                                </button>
-                                              )}
-                                            </div>
-                                            <textarea
-                                              readOnly={isReadOnly}
-                                              value={c.errors.join('\n')}
-                                              onChange={e => updateCriterion(originalIdx, { errors: splitLines(e.target.value) })}
-                                              rows={4}
-                                              className="mt-1.5 w-full px-3 py-2 rounded-lg text-xs bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/50 transition-colors placeholder:text-zinc-600 leading-relaxed disabled:opacity-60"
-                                              placeholder="Các lỗi cụ thể phát hiện..."
-                                            />
-                                          </label>
-
-                                          <label className="block">
-                                            <div className="flex items-center justify-between">
-                                              <span className="text-[10px] font-bold text-[var(--text-secondary)] flex items-center gap-1.5">
-                                                Gợi ý sửa đổi (Suggestions - mỗi dòng 1 ý) {isSuggestionsModified ? (
-                                                  <span className="text-[9px] font-medium text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded border border-amber-400/20">✍️ Đã sửa</span>
-                                                ) : (
-                                                  <span className="text-[9px] font-medium text-zinc-500 bg-zinc-800 px-1.5 py-0.2 rounded">🤖 Bản gốc AI</span>
-                                                )}
-                                              </span>
-                                              {isSuggestionsModified && orig && !isReadOnly && (
-                                                <button
-                                                  type="button"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    updateCriterion(originalIdx, { suggestions: orig.suggestions });
-                                                  }}
-                                                  className="text-[9px] font-bold text-amber-400/80 hover:text-amber-400 hover:underline inline-flex items-center gap-0.5"
-                                                >
-                                                  Khôi phục gốc
-                                                </button>
-                                              )}
-                                            </div>
-                                            <textarea
-                                              readOnly={isReadOnly}
-                                              value={c.suggestions.join('\n')}
-                                              onChange={e => updateCriterion(originalIdx, { suggestions: splitLines(e.target.value) })}
-                                              rows={4}
-                                              className="mt-1.5 w-full px-3 py-2 rounded-lg text-xs bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/50 transition-colors placeholder:text-zinc-600 leading-relaxed disabled:opacity-60"
-                                              placeholder="Hướng dẫn tác giả cách sửa..."
-                                            />
-                                          </label>
-                                        </div>
-                                      </div>
-
-                                      {/* Original AI panel (Only visible when toggled) */}
-                                      {showOriginal && orig && (
-                                        <div className="mt-4 p-4 rounded-xl border border-zinc-800 bg-zinc-900/60 text-[11px] text-zinc-400 space-y-3 animate-fade-in select-none">
-                                          <p className="font-bold text-amber-500/90 uppercase tracking-wider text-[9px] border-b border-zinc-800 pb-1.5 flex items-center gap-1">
-                                            <Sparkles className="w-3 h-3" /> Bản phân tích gốc do AI tạo ra (Chỉ đọc)
-                                          </p>
-                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                              <p className="font-semibold text-zinc-300">Feedback của AI:</p>
-                                              <p className="mt-1 whitespace-pre-wrap leading-relaxed bg-black/20 p-2.5 rounded border border-zinc-800/50 select-text">{orig.feedback || '—'}</p>
-
-                                              <p className="font-semibold text-zinc-300 mt-2.5">Minh chứng của AI:</p>
-                                              <p className="mt-1 whitespace-pre-wrap leading-relaxed bg-black/20 p-2.5 rounded border border-zinc-800/50 select-text">{orig.evidence || '—'}</p>
-                                            </div>
-                                            <div>
-                                              <p className="font-semibold text-zinc-300">Lỗi do AI phát hiện:</p>
-                                              <ul className="mt-1 list-disc pl-4 space-y-1 leading-relaxed select-text">
-                                                {orig.errors.length > 0 ? orig.errors.map((x, i) => <li key={i}>{x}</li>) : <li className="italic">Không có lỗi nào</li>}
-                                              </ul>
-
-                                              <p className="font-semibold text-zinc-300 mt-2.5">Gợi ý sửa đổi từ AI:</p>
-                                              <ul className="mt-1 list-disc pl-4 space-y-1 leading-relaxed select-text">
-                                                {orig.suggestions.length > 0 ? orig.suggestions.map((x, i) => <li key={i}>{x}</li>) : <li className="italic">Không có gợi ý nào</li>}
-                                              </ul>
-                                            </div>
-                                          </div>
-                                          {!isReadOnly && (
-                                            <div className="flex justify-end gap-2 pt-1 border-t border-zinc-800/30">
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  if (confirm('Khôi phục toàn bộ Feedback, Evidence, Lỗi & Gợi ý từ bản AI gốc cho tiêu chí này?')) {
-                                                    updateCriterion(originalIdx, {
-                                                      feedback: orig.feedback,
-                                                      evidence: orig.evidence,
-                                                      errors: orig.errors,
-                                                      suggestions: orig.suggestions
-                                                    });
-                                                  }
-                                                }}
-                                                className="px-2.5 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 font-bold border border-amber-500/20 transition-all text-[10px]"
-                                              >
-                                                Khôi phục bản gốc AI
-                                              </button>
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })
-                        )}
-                      </div>
-                    </div>
+                  {/* Visual Tab Bar */}
+                  <div className="flex items-center gap-2 border-b border-[var(--border-color)] pb-px">
+                    <button
+                      onClick={() => setActiveTab('rubric')}
+                      className={`h-11 px-6 text-sm font-semibold flex items-center gap-2 border-b-2 transition-all relative ${
+                        activeTab === 'rubric'
+                          ? 'border-amber-500 text-amber-400 font-bold'
+                          : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      <Sliders className="w-4 h-4" />
+                      Chi tiết Rubric
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('narrative')}
+                      className={`h-11 px-6 text-sm font-semibold flex items-center gap-2 border-b-2 transition-all relative ${
+                        activeTab === 'narrative'
+                          ? 'border-amber-500 text-amber-400 font-bold'
+                          : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      <BarChart2 className="w-4 h-4" />
+                      Biểu đồ Cốt truyện
+                    </button>
                   </div>
+
+                  {/* Tab Contents */}
+                  {activeTab === 'rubric' ? (
+                    <div className="space-y-3">
+                      {mappedGroups.map((g, i) => (
+                        <GroupCard
+                          key={g.name}
+                          group={g}
+                          idx={i}
+                          expanded={!!expandedGroups[i]}
+                          onToggle={() => toggleGroup(i)}
+                          projectId={detail.projectId}
+                          isStaff={true}
+                          onEditCriterion={(key) => {
+                            const crit = criteria.find(c => c.key === key);
+                            if (crit) {
+                              setEditingCriterionKey(key);
+                              setEditingCriterionValue({ ...crit });
+                            }
+                          }}
+                          onViewEvidence={(ordinals, highlight, label) => {
+                            setEvidencePanel({ ordinals, highlight, label });
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-3xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="text-base font-black text-[var(--text-bright)]">Biểu đồ phân tích nhịp độ & nhân vật</h3>
+                          <p className="text-xs text-[var(--text-secondary)] mt-0.5">Phân tích dòng chảy cảm xúc, nhịp độ và tần suất xuất hiện của các nhân vật</p>
+                        </div>
+                      </div>
+                      <NarrativeChartsPanel data={narrativeCharts} loading={loadingNarrativeCharts} />
+                    </div>
+                  )}
                 </div>
 
                 {/* Right Column (Col 3): Actions and Manuscript widget */}
@@ -931,7 +686,7 @@ export default function StaffReportReviewPage() {
                         Lưu nháp Staff
                       </button>
                       <button
-                        onClick={() => void submitEdit(true)}
+                        onClick={() => setShowReleaseConfirm(true)}
                         disabled={saving || isReadOnly}
                         className="h-10 px-3 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-2 text-white disabled:opacity-60 transition-all hover:brightness-105 active:scale-98 shadow-md"
                         style={{ background: 'linear-gradient(135deg,#f59e0b,#f97316)' }}
@@ -1049,7 +804,7 @@ export default function StaffReportReviewPage() {
             </div>
           )}
 
-          {/* Fullscreen Wide Reader Modal */}
+          {/* Fullscreen Wide Book Reader Modal */}
           {isWideReaderOpen && (
             <div className="fixed inset-0 z-50 flex flex-col bg-black/60 backdrop-blur-md animate-fade-in select-none">
               <div
@@ -1285,6 +1040,134 @@ export default function StaffReportReviewPage() {
               </div>
             </div>
           )}
+
+          {/* Inline Rubric Editor Modal */}
+          {editingCriterionKey && editingCriterionValue && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 select-none animate-fade-in">
+              <div className="w-full max-w-[640px] rounded-2xl border border-amber-500/25 bg-[var(--bg-surface)] p-6 shadow-2xl space-y-4 text-left">
+                <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                      Tiêu chí {editingCriterionKey}
+                    </span>
+                    <h3 className="text-sm font-black text-[var(--text-bright)]">Điều chỉnh Đánh giá Rubric Chuyên sâu</h3>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingCriterionKey(null);
+                      setEditingCriterionValue(null);
+                    }}
+                    className="text-zinc-500 hover:text-zinc-300 text-xs font-semibold"
+                  >
+                    Đóng
+                  </button>
+                </div>
+
+                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                  <label className="block">
+                    <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Nhận xét (Feedback)</span>
+                    <textarea
+                      value={editingCriterionValue.feedback}
+                      onChange={e => setEditingCriterionValue({ ...editingCriterionValue, feedback: e.target.value })}
+                      rows={4}
+                      className="mt-1.5 w-full px-3 py-2 rounded-xl text-xs bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/40 transition-colors leading-relaxed"
+                      placeholder="Nhập nhận xét của bạn về tiêu chí này..."
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Dẫn chứng (Evidence)</span>
+                    <textarea
+                      value={editingCriterionValue.evidence}
+                      onChange={e => setEditingCriterionValue({ ...editingCriterionValue, evidence: e.target.value })}
+                      rows={3}
+                      className="mt-1.5 w-full px-3 py-2 rounded-xl text-xs bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/40 transition-colors leading-relaxed"
+                      placeholder="Các số chương, câu trích dẫn từ truyện..."
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Các lỗi cần sửa (Errors - Mỗi dòng 1 ý)</span>
+                    <textarea
+                      value={editingCriterionValue.errors.join('\n')}
+                      onChange={e => setEditingCriterionValue({
+                        ...editingCriterionValue,
+                        errors: e.target.value.split('\n').map(s => s.trim()).filter(Boolean)
+                      })}
+                      rows={3}
+                      className="mt-1.5 w-full px-3 py-2 rounded-xl text-xs bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/40 transition-colors leading-relaxed"
+                      placeholder="Các lỗi logic, ngữ pháp..."
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Gợi ý chỉnh sửa (Suggestions - Mỗi dòng 1 ý)</span>
+                    <textarea
+                      value={editingCriterionValue.suggestions.join('\n')}
+                      onChange={e => setEditingCriterionValue({
+                        ...editingCriterionValue,
+                        suggestions: e.target.value.split('\n').map(s => s.trim()).filter(Boolean)
+                      })}
+                      rows={3}
+                      className="mt-1.5 w-full px-3 py-2 rounded-xl text-xs bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/40 transition-colors leading-relaxed"
+                      placeholder="Hướng dẫn tác giả cách viết lại hay hơn..."
+                    />
+                  </label>
+                </div>
+
+                <div className="flex justify-end gap-2 border-t border-[var(--border-color)] pt-3.5 text-right">
+                  <button
+                    onClick={() => {
+                      setEditingCriterionKey(null);
+                      setEditingCriterionValue(null);
+                    }}
+                    className="h-9 px-4 rounded-xl text-xs font-semibold bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border-color)]"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    onClick={handleSaveCriterionOverride}
+                    className="h-9 px-4 rounded-xl text-xs font-bold text-white transition-all bg-amber-500 hover:brightness-105 active:scale-95 shadow-md"
+                    style={{ background: 'linear-gradient(135deg,#f59e0b,#f97316)' }}
+                  >
+                    Lưu Thay Đổi
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Evidence chunks panel */}
+          {detail && (
+            <EvidenceChunksPanel
+              open={evidencePanel !== null}
+              onClose={() => setEvidencePanel(null)}
+              projectId={detail.projectId}
+              ordinals={evidencePanel?.ordinals ?? []}
+              evidenceHighlight={evidencePanel?.highlight ?? ''}
+              criterionLabel={evidencePanel?.label ?? ''}
+            />
+          )}
+
+          <ConfirmDialog
+            isOpen={showReleaseConfirm}
+            onClose={() => setShowReleaseConfirm(false)}
+            onConfirm={async () => {
+              setShowReleaseConfirm(false);
+              await submitEdit(true);
+            }}
+            title="Xác nhận phát hành báo cáo"
+            message={(
+              <div className="space-y-2 text-left">
+                <p>Bạn có chắc chắn muốn <span className="text-amber-400 font-bold">phát hành báo cáo này</span> cho tác giả không?</p>
+                <p className="text-[11px] opacity-75">Sau khi phát hành, tác giả sẽ thấy được đầy đủ nội dung báo cáo và nhiệm vụ của bạn sẽ hoàn thành. Staff sẽ <strong>không có quyền chỉnh sửa tiếp</strong>.</p>
+              </div>
+            )}
+            confirmText="Xác nhận phát hành"
+            cancelText="Hủy"
+            variant="warning"
+            loading={saving}
+          />
         </div>
       )}
     </MainLayout>

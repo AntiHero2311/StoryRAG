@@ -756,13 +756,22 @@ namespace Service.Implementations
                 throw new InvalidOperationException("Chỉ có thể chỉnh sửa report đã hoàn tất (Completed/MockData).");
             }
 
+            if (string.Equals(report.ReviewStatus, ProjectReportService.ReviewStatusReleased, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Báo cáo đã được phát hành cho tác giả. Staff không có quyền sửa tiếp.");
+            }
+
             var currentVersion = report.UpdatedAt ?? report.CreatedAt;
             if (request.ExpectedUpdatedAt.HasValue)
             {
-                var expected = request.ExpectedUpdatedAt.Value.ToUniversalTime();
-                var actual = currentVersion.ToUniversalTime();
-                // Dùng dung sai 1 giây để tránh lỗi do mất precision microsecond qua JSON serialize/deserialize
-                if (Math.Abs((expected - actual).TotalSeconds) > 1)
+                var expected = DateTime.SpecifyKind(request.ExpectedUpdatedAt.Value, DateTimeKind.Utc);
+                var actual = DateTime.SpecifyKind(currentVersion, DateTimeKind.Utc);
+                
+                // Tránh lỗi timezone: Kiểm tra dung sai 15 giây dưới dạng UTC trực tiếp hoặc sau khi gọi ToUniversalTime()
+                var diffSecondsDirect = Math.Abs((expected - actual).TotalSeconds);
+                var diffSecondsConverted = Math.Abs((request.ExpectedUpdatedAt.Value.ToUniversalTime() - actual).TotalSeconds);
+                
+                if (diffSecondsDirect > 15 && diffSecondsConverted > 15)
                 {
                     throw new InvalidOperationException(
                         "Report đã được staff khác cập nhật trước đó. Vui lòng tải lại dữ liệu mới nhất trước khi lưu.");
@@ -855,10 +864,10 @@ namespace Service.Implementations
 
             var finalObj = new System.Text.Json.Nodes.JsonObject();
             var criteriaJsonArray = new System.Text.Json.Nodes.JsonArray(
-                criteriaList.Cast<System.Text.Json.Nodes.JsonNode?>().ToArray()
+                criteriaList.Select(c => c.DeepClone()).Cast<System.Text.Json.Nodes.JsonNode?>().ToArray()
             );
             finalObj["Criteria"] = criteriaJsonArray;
-            finalObj["Warnings"] = originalWarnings ?? new System.Text.Json.Nodes.JsonArray();
+            finalObj["Warnings"] = originalWarnings?.DeepClone() ?? new System.Text.Json.Nodes.JsonArray();
             finalObj["OverallFeedback"] = originalOverallFeedback;
 
             var editedJson = finalObj.ToJsonString();

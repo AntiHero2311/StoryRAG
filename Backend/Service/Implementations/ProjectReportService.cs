@@ -394,17 +394,28 @@ namespace Service.Implementations
         {
             await VerifyOwnershipAsync(projectId, userId);
 
-            var report = await _context.ProjectReports
+            var requestingUser = await _context.Users.FindAsync(userId);
+            var isStaffOrAdmin = requestingUser != null && (requestingUser.Role == "Staff" || requestingUser.Role == "Admin");
+
+            var query = _context.ProjectReports
                 .Include(r => r.Project)
                 .Include(r => r.ReportItems)
-                .Where(r => r.ProjectId == projectId && (r.ReviewStatus == null || r.ReviewStatus == "" || r.ReviewStatus == ReviewStatusReleased))
+                .Where(r => r.ProjectId == projectId);
+
+            if (!isStaffOrAdmin)
+            {
+                query = query.Where(r => r.ReviewStatus == null || r.ReviewStatus == "" || r.ReviewStatus == ReviewStatusReleased);
+            }
+
+            var report = await query
                 .OrderByDescending(r => r.CreatedAt)
                 .FirstOrDefaultAsync();
 
             if (report == null) return null;
 
-            var user = await _context.Users.FindAsync(userId)!;
-            var rawDek = EncryptionHelper.DecryptWithMasterKey(user!.DataEncryptionKey!, _config["Security:MasterKey"]!);
+            var author = await _context.Users.FindAsync(report.Project.AuthorId);
+            if (author == null) throw new KeyNotFoundException("Không tìm thấy tác giả của dự án.");
+            var rawDek = EncryptionHelper.DecryptWithMasterKey(author.DataEncryptionKey!, _config["Security:MasterKey"]!);
             var projectTitle = EncryptionHelper.DecryptWithMasterKey(report.Project.Title, rawDek);
 
             var jsonOpts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -445,8 +456,18 @@ namespace Service.Implementations
         {
             await VerifyOwnershipAsync(projectId, userId);
 
-            var reports = await _context.ProjectReports
-                .Where(r => r.ProjectId == projectId && (r.ReviewStatus == null || r.ReviewStatus == "" || r.ReviewStatus == ReviewStatusReleased))
+            var requestingUser = await _context.Users.FindAsync(userId);
+            var isStaffOrAdmin = requestingUser != null && (requestingUser.Role == "Staff" || requestingUser.Role == "Admin");
+
+            var query = _context.ProjectReports
+                .Where(r => r.ProjectId == projectId);
+
+            if (!isStaffOrAdmin)
+            {
+                query = query.Where(r => r.ReviewStatus == null || r.ReviewStatus == "" || r.ReviewStatus == ReviewStatusReleased);
+            }
+
+            var reports = await query
                 .OrderByDescending(r => r.CreatedAt)
                 .Select(r => new
                 {
@@ -492,15 +513,26 @@ namespace Service.Implementations
         {
             await VerifyOwnershipAsync(projectId, userId);
 
-            var report = await _context.ProjectReports
+            var requestingUser = await _context.Users.FindAsync(userId);
+            var isStaffOrAdmin = requestingUser != null && (requestingUser.Role == "Staff" || requestingUser.Role == "Admin");
+
+            var query = _context.ProjectReports
                 .Include(r => r.Project)
                 .Include(r => r.ReportItems)
-                .FirstOrDefaultAsync(r => r.Id == reportId && r.ProjectId == projectId && (r.ReviewStatus == null || r.ReviewStatus == "" || r.ReviewStatus == ReviewStatusReleased));
+                .Where(r => r.Id == reportId && r.ProjectId == projectId);
+
+            if (!isStaffOrAdmin)
+            {
+                query = query.Where(r => r.ReviewStatus == null || r.ReviewStatus == "" || r.ReviewStatus == ReviewStatusReleased);
+            }
+
+            var report = await query.FirstOrDefaultAsync();
 
             if (report == null) return null;
 
-            var user = await _context.Users.FindAsync(userId)!;
-            var rawDek = EncryptionHelper.DecryptWithMasterKey(user!.DataEncryptionKey!, _config["Security:MasterKey"]!);
+            var author = await _context.Users.FindAsync(report.Project.AuthorId);
+            if (author == null) throw new KeyNotFoundException("Không tìm thấy tác giả của dự án.");
+            var rawDek = EncryptionHelper.DecryptWithMasterKey(author.DataEncryptionKey!, _config["Security:MasterKey"]!);
             var projectTitle = EncryptionHelper.DecryptWithMasterKey(report.Project.Title, rawDek);
 
             var jsonOpts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -541,6 +573,15 @@ namespace Service.Implementations
 
         private async Task VerifyOwnershipAsync(Guid projectId, Guid userId)
         {
+            var user = await _context.Users.FindAsync(userId);
+            if (user != null && (user.Role == "Staff" || user.Role == "Admin"))
+            {
+                var projectExists = await _context.Projects.AnyAsync(p => p.Id == projectId && !p.IsDeleted);
+                if (!projectExists)
+                    throw new KeyNotFoundException("Dự án không tồn tại.");
+                return;
+            }
+
             var exists = await _context.Projects
                 .AnyAsync(p => p.Id == projectId && !p.IsDeleted && p.AuthorId == userId);
             if (!exists)

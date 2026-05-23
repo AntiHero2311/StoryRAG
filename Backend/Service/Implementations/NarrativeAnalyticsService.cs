@@ -56,8 +56,23 @@ namespace Service.Implementations
 
         public async Task<NarrativeChartsResponse> GetNarrativeChartsAsync(Guid projectId, Guid userId, Guid? chapterId = null)
         {
-            await VerifyOwnershipAsync(projectId, userId);
-            var rawDek = await GetRawDekAsync(userId);
+            var project = await _context.Projects.FindAsync(projectId);
+            if (project == null || project.IsDeleted)
+                throw new KeyNotFoundException("Dự án không tồn tại.");
+
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+                throw new KeyNotFoundException("User không tồn tại.");
+
+            var isStaffOrAdmin = user.Role == "Staff" || user.Role == "Admin";
+            if (!isStaffOrAdmin && project.AuthorId != userId)
+                throw new KeyNotFoundException("Dự án không tồn tại hoặc bạn không có quyền truy cập.");
+
+            var author = await _context.Users.FindAsync(project.AuthorId);
+            if (author == null)
+                throw new KeyNotFoundException("Không tìm thấy tác giả của dự án.");
+
+            var rawDek = EncryptionHelper.DecryptWithMasterKey(author.DataEncryptionKey!, _config["Security:MasterKey"]!);
 
             var chaptersQuery = _context.Chapters
                 .Where(c => c.ProjectId == projectId && !c.IsDeleted && c.CurrentVersionId.HasValue)
@@ -177,9 +192,15 @@ namespace Service.Implementations
                     insights.AddRange(aiInsights);
                 }
             }
+            catch (InvalidOperationException ioex) when (ioex.Message.Contains("content filter", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("Phân tích AI cho dự án {ProjectId} bị chặn bởi content filter. Hiển thị biểu đồ cơ bản mà không có insights.", projectId);
+                insights.Add("⚠️ Phân tích chuyên sâu tạm thời không khả dụng do hạn chế nội dung.");
+            }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to generate Deep AI Insights for project {ProjectId}", projectId);
+                insights.Add("⚠️ Phân tích chuyên sâu tạm thời không khả dụng.");
             }
 
             AnnotatePacingPoints(pacing, insights);
