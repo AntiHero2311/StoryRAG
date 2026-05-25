@@ -1,7 +1,7 @@
 # StoryRAG — Tổng Quan Kiến Trúc Hệ Thống
 
-> **Phiên bản tài liệu:** 1.3  
-> **Cập nhật lần cuối:** Tháng 5/2026 — Thêm Section 11b: EF Core Migrations trên Supabase
+> **Phiên bản tài liệu:** 1.4  
+> **Cập nhật lần cuối:** Tháng 5/2026 — Thêm cờ nội dung SEXUAL_CONTENT & ANTI_STATE; sửa luồng Staff review; fix 8 bugs audit
 
 
 ---
@@ -16,7 +16,7 @@
 - 🤖 Chat AI theo ngữ cảnh (RAG) — AI "đọc" nội dung truyện của bạn (chỉ tốn token)
 - 🔁 Rewrite đoạn văn theo instruction
 - ✍️ **Viết mới** từ dàn ý, **Tiếp nối** mạch truyện, **Trau chuốt** bản thảo — có tích hợp các kỹ thuật viết văn (Show don't tell, Pacing)
-- 📊 **Phân tích** chấm điểm chất lượng truyện (**Rubric 5 điểm**, 20 tiêu chí, **Zero Hallucination**, chấm theo Thể loại, phát hiện 4 cảnh báo đặc biệt). Mỗi lần phân tích chạy trên **snapshot toàn bộ bộ truyện** và tự repair chapter active nào chưa chunk/embed đủ trước khi chấm.
+- 📊 **Phân tích** chấm điểm chất lượng truyện (**Rubric 5 điểm**, 20 tiêu chí, **Zero Hallucination**, chấm theo Thể loại, phát hiện **6 cảnh báo đặc biệt**: INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY / **SEXUAL_CONTENT** / **ANTI_STATE**). Mỗi lần phân tích chạy trên **snapshot toàn bộ bộ truyện** và tự repair chapter active nào chưa chunk/embed đủ trước khi chấm.
 - 🌍 **Story Bible** chuyên sâu: Quản lý Worldbuilding, Nhân vật, Ghi chú cốt truyện (Plot Notes), Chủ đề (Themes), Cẩm nang phong cách (Style Guides) — Hỗ trợ vector embedding.
 - 📅 Quản lý **Timeline** mốc sự kiện dòng thời gian.
 - 📥📤 **Import/Export bản thảo chuyên nghiệp** (`.docx`, `.txt`), tự động tách chương theo tiêu đề.
@@ -357,7 +357,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 
 | Method | Endpoint | Mô tả |
 | ------ | -------- | ---- |
-| GET    | `/manuscripts/flagged` | Danh sách manuscript bị flag |
+| GET    | `/manuscripts/flagged` | Danh sách manuscript bị flag (NO_ANALYSIS / INCOMPLETE_ANALYSIS / LOW_QUALITY_SCORE / ANTI_STATE / SEXUAL_CONTENT / PLAGIARISM_RISK / INCOMPLETE_STORY / INCONSISTENCY_DETECTED) |
 | GET/POST | `/feedback` | Xem / tạo phản hồi Staff |
 | PUT/DELETE | `/feedback/{feedbackId}` | Cập nhật / xóa phản hồi |
 | POST | `/feedback/{feedbackId}/respond` | Author like/dislike và reply feedback |
@@ -365,8 +365,13 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | PUT/DELETE | `/knowledge-base/{id}` | Cập nhật / xóa bài tri thức |
 | GET    | `/analyses/pending` | Danh sách report đang chờ staff review cuối |
 | GET    | `/analyses/reviews` | Danh sách review phân tích |
+| GET    | `/analyses/{reportId}` | Chi tiết report (CriteriaJson + warnings) để Staff đọc |
+| GET    | `/analyses/{reportId}/review` | Review record theo reportId |
+| GET    | `/analyses/{reportId}/story` | Nội dung bản thảo (read-only) để Staff đối chiếu |
 | POST   | `/analyses/{reportId}/review` | Duyệt/chỉnh/yêu cầu chạy lại báo cáo |
 | PATCH  | `/analyses/{reportId}/edit` | Staff chỉnh sửa report + release cho user |
+| GET    | `/analyses/jobs` | Danh sách analysis jobs (filter by status) |
+| POST   | `/analyses/jobs/{jobId}/rerun` | Chạy lại một analysis job |
 
 ---
 
@@ -685,7 +690,7 @@ builder.Services.AddSingleton<IMyService, MyService>(); // MyService inject IDbC
 | `IEmbeddingService`     | Gọi Gemini lấy embedding vector                                                                                                                                                                                                                                  |
 | `IChunkingService`      | Chia text thành chunks với overlap                                                                                                                                                                                                                               |
 | `IAiWritingService`     | Viết mới từ dàn ý, tiếp nối mạch truyện (RAG), trau chuốt bản thảo — tích hợp kỹ thuật **Show Don't Tell**, **Pacing**, lưu lịch sử bền vững                                                                                                                      |
-| `IProjectReportService` | Phân tích & chấm điểm theo **Rubric 5 điểm** (1-Kém → 5-Xuất sắc), **Zero Hallucination**, chấm theo **Thể loại**, phát hiện **4 cảnh báo** (INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY), sinh `OverallFeedback` tâm huyết, chốt `ProjectVersionHash` snapshot của toàn bộ truyện |
+| `IProjectReportService` | Phân tích & chấm điểm theo **Rubric 5 điểm** (1-Kém → 5-Xuất sắc), **Zero Hallucination**, chấm theo **Thể loại**, phát hiện **6 cảnh báo** (INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY / **SEXUAL_CONTENT** / **ANTI_STATE**), sinh `OverallFeedback` tâm huyết, chốt `ProjectVersionHash` snapshot của toàn bộ truyện. Sau khi AI hoàn tất, report vào `ReviewStatus=PendingStaffReview`; Staff duyệt rồi mới release cho Author. |
 | `IProjectAnalysisJobService` | Quản lý job phân tích bất đồng bộ, progress, cancel, lấy kết quả                                                                                                                                                                                          |
 | `INarrativeAnalyticsService` | Sinh dữ liệu biểu đồ pacing, emotion, tần suất/xuất hiện nhân vật                                                                                                                                                                                        |
 | `IReportExportService` | Xuất báo cáo phân tích sang PDF                                                                                                                                                                                                                                   |

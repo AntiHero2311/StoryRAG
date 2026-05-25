@@ -10,9 +10,11 @@ interface GroupCardProps {
     onToggle: () => void;
     projectId: string;
     onViewEvidence?: (ordinals: number[], evidenceQuote: string, criterionLabel: string) => void;
+    isStaff?: boolean;
+    onEditCriterion?: (key: string) => void;
 }
 
-export default function GroupCard({ group, idx, expanded, onToggle, projectId, onViewEvidence }: GroupCardProps) {
+export default function GroupCard({ group, idx, expanded, onToggle, projectId, onViewEvidence, isStaff, onEditCriterion }: GroupCardProps) {
     const color = groupColor(idx);
     const pct = Math.round((group.score / group.maxScore) * 100);
     return (
@@ -53,6 +55,22 @@ export default function GroupCard({ group, idx, expanded, onToggle, projectId, o
                                         <span className="text-[var(--text-primary)] text-sm font-semibold">{c.criterionName}</span>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0 ml-auto">
+                                        {isStaff && onEditCriterion && (
+                                            <button
+                                                type="button"
+                                                onClick={e => {
+                                                    e.stopPropagation();
+                                                    onEditCriterion(c.key);
+                                                }}
+                                                className="text-[11px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all hover:bg-amber-500/20 active:scale-95 shrink-0"
+                                                style={{
+                                                    background: 'rgba(245,158,11,0.12)',
+                                                    color: '#f59e0b',
+                                                    border: '1px solid rgba(245,158,11,0.35)',
+                                                }}>
+                                                ✏️ Sửa Rubric
+                                            </button>
+                                        )}
                                         {onViewEvidence &&
                                             c.evidenceChunkOrdinals &&
                                             c.evidenceChunkOrdinals.length > 0 &&
@@ -77,7 +95,7 @@ export default function GroupCard({ group, idx, expanded, onToggle, projectId, o
                                                     Đoạn gốc
                                                 </button>
                                             )}
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-1.5 shrink-0">
                                             <span className="text-xs font-semibold" style={{ color: `${color}99` }}>{cpct}%</span>
                                             <span className="text-sm font-bold" style={{ color }}>
                                                 {c.score.toFixed(1)}<span className="text-[var(--text-secondary)] font-normal text-xs">/{c.maxScore}</span>

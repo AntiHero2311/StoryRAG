@@ -45,7 +45,7 @@ namespace Service.Implementations
             if (guidIds.Count == 0 && ordinalInts.Count == 0)
                 throw new ArgumentException("Cần ít nhất một tham số ids hoặc ordinals hợp lệ.");
 
-            const int maxChunks = 20;
+            const int maxChunks = 10; // Giảm từ 20 để tránh quá tải xử lý
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken)
                 ?? throw new KeyNotFoundException("Không tìm thấy người dùng.");
             var masterKey = _config["Security:MasterKey"]!;

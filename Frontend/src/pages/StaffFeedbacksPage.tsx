@@ -67,6 +67,16 @@ export default function StaffFeedbacksPage() {
             setError('Nhập Project ID và nội dung phản hồi.');
             return;
         }
+        // Basic UUID format check
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(newProjectId.trim())) {
+            setError('Project ID phải đúng định dạng UUID (VD: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).');
+            return;
+        }
+        if (newMessage.trim().length < 5) {
+            setError('Nội dung phản hồi phải tối thiểu 5 ký tự.');
+            return;
+        }
         setSaving(true);
         setError('');
         try {
@@ -75,8 +85,12 @@ export default function StaffFeedbacksPage() {
             setNewProjectId('');
             setNewMessage('');
             await load();
-        } catch {
-            setError('Không thể gửi phản hồi. Kiểm tra Project ID.');
+        } catch (e: any) {
+            const apiMsg = e?.response?.data?.message
+                || e?.response?.data?.Message
+                || e?.response?.data?.errors?.projectId?.[0]
+                || e?.response?.data?.errors?.message?.[0];
+            setError(apiMsg || 'Không thể gửi phản hồi. Kiểm tra lại Project ID.');
         } finally {
             setSaving(false);
         }
@@ -221,12 +235,18 @@ export default function StaffFeedbacksPage() {
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) setCreateOpen(false); }}>
                             <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 space-y-4">
                                 <h3 className="font-bold text-[var(--text-primary)]">Gửi phản hồi cho tác giả</h3>
-                                <input
-                                    value={newProjectId}
-                                    onChange={e => setNewProjectId(e.target.value)}
-                                    placeholder="Project ID (UUID)"
-                                    className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2 text-sm"
-                                />
+                                <div>
+                                    <label className="block text-xs text-[var(--text-secondary)] mb-1">
+                                        Project ID <span className="text-rose-400">*</span>
+                                        <span className="ml-1 text-[var(--text-tertiary)]">(UUID — lấy từ URL hoặc trang Quản lý)</span>
+                                    </label>
+                                    <input
+                                        value={newProjectId}
+                                        onChange={e => setNewProjectId(e.target.value)}
+                                        placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                                        className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2 text-sm font-mono"
+                                    />
+                                </div>
                                 <textarea
                                     value={newMessage}
                                     onChange={e => setNewMessage(e.target.value)}

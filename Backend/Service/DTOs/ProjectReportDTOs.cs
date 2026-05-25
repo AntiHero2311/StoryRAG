@@ -58,6 +58,8 @@ namespace Service.DTOs
         /// "REPETITION"       — lặp lại nội dung, cụm từ, tình tiết đáng kể
         /// "PLAGIARISM_RISK"  — nội dung giống tác phẩm đã biết, nghi đạo nhái
         /// "INCONSISTENCY"    — mâu thuẫn logic / nhân vật / bối cảnh
+        /// "SEXUAL_CONTENT"   — nội dung tình dục không phù hợp (explicit hoặc liên quan trẻ em)
+        /// "ANTI_STATE"       — nội dung chính trị nhạy cảm, xuyên tạc, chống phá
         /// "OTHER"            — vấn đề đặc biệt khác
         /// </summary>
         public string Code { get; set; } = string.Empty;

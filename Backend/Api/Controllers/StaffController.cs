@@ -143,9 +143,11 @@ namespace Api.Controllers
         [HttpGet("analyses/{reportId:guid}/review")]
         public async Task<IActionResult> GetAnalysisReviewSingle(Guid reportId)
         {
-            var result = await _staffService.GetAnalysisReviewsAsync(reportId, 1, 1);
+            var result = await _staffService.GetAnalysisReviewByReportIdAsync(reportId);
+            if (result == null) return NotFound(new { Message = "Không tìm thấy review cho report này." });
             return Ok(result);
         }
+
 
         /// <summary>Staff lấy chi tiết một report phân tích để xem/chỉnh sửa (bao gồm CriteriaJson gốc AI).</summary>
         [HttpGet("analyses/{reportId:guid}")]

@@ -57,17 +57,43 @@ Hệ thống cung cấp hàng loạt công cụ RAG / AI Writing.
 
 ## 5. Luồng Đánh giá Dự án (Big Report Generation Job)
 **Tên chức năng:** 100-Point Project Rubric Analysis (Phân tích tổng lực 100 điểm)
-- **FE:** Ở `AnalysisPage.tsx`, chọn phân tích dự án.
+- **FE:** ở `AnalysisPage.tsx`, chọn phân tích dự án.
 - **BE (`AnalysisJobQueue` & `ProjectAnalysisJobService`):**
   - Đây là Job quá lớn để chạy trực tiếp (kéo dài cả tiếng đồng hồ nếu truyện dài).
   - C# đẩy job vào Background Queue ưu tiên (`AnalysisJobQueue.cs`), mỗi user chỉ có tối đa 1 job active.
   - Worker ưu tiên lấy job theo tier gói subscription trước, sau đó theo thời điểm tạo.
   - Phản hồi `202 Accepted` kèm theo JobId và `ProjectVersionHash` snapshot của toàn bộ bộ truyện.
   - Trước khi chấm rubric, backend chốt snapshot active của toàn bộ truyện; nếu chapter nào chưa chunk/embed đủ thì worker sẽ báo rõ chapter đó, tự repair rồi mới tiếp tục.
-  - Trình worker ngầm lấy toàn bộ các chương đã embed của snapshot đó -> Tiến hành chấm điểm từng tiêu chí (Character, Plot, Pacing, Style) -> Kết xuất Report lớn định dạng JSON.
+  - Trình worker ngầm lấy toàn bộ các chương đã embed của snapshot đó → Tiến hành chấm điểm từng tiêu chí (Character, Plot, Pacing, Style) → Kết xuất Report lớn định dạng JSON.
+  - AI phát hiện **6 cảnh báo đặc biệt** (lưu trong mảng `warnings[]` của `CriteriaJson`):
+    | Code | Severity | Ý nghĩa |
+    |------|----------|----------|
+    | `INCOMPLETE` | WARNING | Truyện bị dừng đột ngột, chưa có kết thúc |
+    | `REPETITION` | WARNING | Lặp lại đoạn văn y hệt |
+    | `PLAGIARISM_RISK` | CRITICAL | Nghi đạo nhái tác phẩm khác |
+    | `INCONSISTENCY` | INFO–CRITICAL | Mâu thuẫn logic/nhân vật |
+    | `SEXUAL_CONTENT` | WARNING/CRITICAL | Nội dung tình dục không phù hợp |
+    | `ANTI_STATE` | CRITICAL | Nội dung chính trị nhạy cảm / xuyên tạc |
 - **FE:** Sử dụng cơ chế Long-polling hoặc Fetch lại trạng thái `GetActiveAnalyzeJob` 10s/lần để vẽ thanh ProgressBar, đồng thời hiển thị stage chi tiết khi worker đang repair chunk/embed.
-- **Staff Review gate:** Sau khi AI hoàn tất, report vào trạng thái `PendingStaffReview`; user nhận thông báo "đang kiểm tra bước cuối cùng".
-- **Staff Review:** Staff/Admin lấy queue review qua `/api/staff/analyses/pending`, có thể review qua `/api/staff/analyses/{reportId}/review`, chỉnh sửa nội dung qua `/api/staff/analyses/{reportId}/edit` rồi release cho user.
+- **Staff Review gate:** Sau khi AI hoàn tất, report vào trạng thái `ReviewStatus = PendingStaffReview`; user nhận thông báo "đang kiểm tra bước cuối cùng".
+- **Staff Review — luồng chi tiết:**
+  1. Lấy danh sách chờ: `GET /api/staff/analyses/pending`
+  2. Xem report + cờ AI: `GET /api/staff/analyses/{reportId}` (criteria, warnings[], overallFeedback)
+  3. Đọc bản thảo (**read-only**): `GET /api/staff/analyses/{reportId}/story` — hiển thị qua Wide Reader Modal (3 theme, font controls)
+  4. Xem review cũ: `GET /api/staff/analyses/{reportId}/review`
+  5. Hành động:
+     - **Duyệt OK:** `POST /review` với `Action=Verified` → `ReviewStatus=Released`
+     - **Chỉnh sửa văn bản:** `PATCH /edit` + nội dung mới + `releaseToUser=true/false`
+     - **Chạy lại AI:** `POST /review` với `Action=RerunRequested` (chỉ dùng khi INCOMPLETE/Failed)
+- **GetFlagReason — thứ tự ưu tiên** (xuất hiện ở `/api/staff/manuscripts/flagged`):
+  1. `ANTI_STATE` — pháp lý nghiêm trọng nhất
+  2. `SEXUAL_CONTENT` — vi phạm chính sách nội dung
+  3. `PLAGIARISM_RISK` — vi phạm bản quyền
+  4. `INCOMPLETE_STORY` — AI cắm INCOMPLETE
+  5. `INCONSISTENCY_DETECTED` — AI cắm INCONSISTENCY
+  6. `LOW_QUALITY_SCORE` — Tổng điểm < 60
+  7. `INCOMPLETE_ANALYSIS` — Job Failed/Pending
+  8. `NO_ANALYSIS` — Chưa có report nào
 
 ## 6. Luồng Xóa Dữ Liệu (Deletion Flows)
 **Tên chức năng:** Soft Delete vs Hard Delete

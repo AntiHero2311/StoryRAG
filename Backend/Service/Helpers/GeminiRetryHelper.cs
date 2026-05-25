@@ -124,6 +124,10 @@ namespace Service.Helpers
             // Timeouts / cancellations (treat as transient unless caller explicitly cancelled)
             if (ex is TaskCanceledException) return true;
 
+            // ArgumentOutOfRangeException with content_filter is non-transient (content safety issue)
+            if (ex is ArgumentOutOfRangeException aoex && aoex.Message.Contains("ChatFinishReason", StringComparison.OrdinalIgnoreCase))
+                return false;
+
             return false;
         }
 

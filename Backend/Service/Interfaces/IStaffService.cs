@@ -20,6 +20,8 @@ namespace Service.Interfaces
         Task DeleteKnowledgeBaseItemAsync(Guid id);
 
         Task<StaffPagedResponse<StaffAnalysisReviewResponse>> GetAnalysisReviewsAsync(Guid? projectId, int page, int pageSize);
+        /// <summary>Lấy review theo ProjectReportId (khác với GetAnalysisReviewsAsync filter theo ProjectId).</summary>
+        Task<StaffAnalysisReviewResponse?> GetAnalysisReviewByReportIdAsync(Guid reportId);
         Task<StaffAnalysisReviewResponse> ReviewAnalysisAsync(Guid reportId, Guid staffId, ReviewAnalysisRequest request);
         Task<StaffPagedResponse<StaffPendingReportItem>> GetPendingReportsAsync(int page, int pageSize);
 

@@ -94,7 +94,8 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
     genres, summary, characters, worldbuilding,
     style guide, themes, plot notes, ai instructions
   + batch summarize context
-  + gọi Gemini để chấm 20 tiêu chí + warnings + overallFeedback
+  + gọi Gemini để chấm 20 tiêu chí + 6 warnings + overallFeedback
+  + warnings: INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY / SEXUAL_CONTENT / ANTI_STATE
   + parse/repair JSON nếu cần
   + validate quality output (đủ key rubric, đủ errors/suggestions...)
   + retry nếu output không đạt
@@ -120,7 +121,20 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
   + dùng chapter active versions
   + tách segment từ text
   + tính pacing/emotion/character presence/relationships
-  + thêm insights (heuristic + AI deep insights)
+  + **Staff Review gate:** Sau khi AI hoàn tất, report vào trạng thái `PendingStaffReview`; user nhận thông báo "đang kiểm tra bước cuối cùng".
+- **Staff Review:** Staff/Admin lấy queue review qua `/api/staff/analyses/pending`.
+  + Xem chi tiết report (warnings, criteria) qua `GET /api/staff/analyses/{reportId}`
+  + Đọc bản thảo (read-only) qua `GET /api/staff/analyses/{reportId}/story` (Wide Reader Modal)
+  + Xem review record qua `GET /api/staff/analyses/{reportId}/review`
+  + Hành động: `POST /api/staff/analyses/{reportId}/review` (Action: Verified/Adjusted/RerunRequested)
+  + Chỉnh sửa + release cho user: `PATCH /api/staff/analyses/{reportId}/edit`
+- **GetFlagReason** — xác định manuscript cần Staff xem (thứ tự ưu tiên):
+  1. `ANTI_STATE`           — pháp lý nghiêm trọng nhất
+  2. `SEXUAL_CONTENT`       — vi phạm chính sách nội dung
+  3. `PLAGIARISM_RISK`      — vi phạm bản quyền
+  4. `INCOMPLETE_STORY`     — AI cắm INCOMPLETE
+  5. `INCONSISTENCY_DETECTED` — AI cắm INCONSISTENCY
+  + Ngoài ra: NO_ANALYSIS / INCOMPLETE_ANALYSIS / LOW_QUALITY_SCORE (score < 60)
 
 7) Luồng Scene / Cliffhanger
 - API có sẵn:
@@ -155,7 +169,11 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
   + Analysis trừ cả token + số lần phân tích
 - AbuseDetector:
   + theo dõi tần suất chat + rewrite trong cửa sổ thời gian
-  + warning/suspend user nếu vượt ngưỡng
+  + warning (>50 calls/10 phút) / suspend (>200 calls/10 phút) user nếu vượt ngưỡng
+  + ghi ProjectAbuseFlag với reason AI_RATE_LIMIT_WARNING / AI_RATE_LIMIT_SUSPEND
+- Content flags (GetFlagReason — xuất hiện trong /manuscripts/flagged):
+  + ANTI_STATE, SEXUAL_CONTENT, PLAGIARISM_RISK, INCOMPLETE_STORY, INCONSISTENCY_DETECTED
+  + NO_ANALYSIS, INCOMPLETE_ANALYSIS, LOW_QUALITY_SCORE
 
 TÓM TẮT:
 Hệ thống AI của StoryRAG vận hành theo mô hình RAG dựa trên active chapter chunks +
