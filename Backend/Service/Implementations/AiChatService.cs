@@ -276,77 +276,30 @@ namespace Service.Implementations
 
             // 1. Query ChatMessages
             var chatQuery = _context.ChatMessages
-                .Where(m => m.ProjectId == projectId && m.UserId == userId)
-                .Select(m => new
-                {
-                    m.Id,
-                    Question = (string?)m.Question,
-                    Answer = m.Answer,
-                    m.TotalTokens,
-                    m.CreatedAt,
-                    Type = "Chat",
-                    OriginalText = (string?)null,
-                    Instruction = (string?)null
-                });
+                .Where(m => m.ProjectId == projectId && m.UserId == userId);
 
-            // 2. Query RewriteHistories (Polish, ContinueWriting, WriteNew)
-            var rewriteQuery = _context.RewriteHistories
-                .Where(r => r.ProjectId == projectId && r.UserId == userId)
-                .Select(r => new
-                {
-                    r.Id,
-                    Question = (string?)null,
-                    Answer = r.RewrittenText,
-                    r.TotalTokens,
-                    r.CreatedAt,
-                    Type = r.ActionType,
-                    OriginalText = (string?)r.OriginalText,
-                    Instruction = (string?)r.Instruction
-                });
-
-            // 3. Union + Sort + Paginate
-            var combinedQuery = chatQuery.Union(rewriteQuery);
-            var totalCount = await combinedQuery.CountAsync();
-            var rows = await combinedQuery
+            var totalCount = await chatQuery.CountAsync();
+            var rows = await chatQuery
                 .OrderByDescending(x => x.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
 
-            // 4. Decrypt and Map
+            // 2. Decrypt and Map
             var rawDek = await GetRawDekAsync(userId);
 
             var items = rows.Select(r =>
             {
-                string question;
+                string question = EncryptionHelper.DecryptWithMasterKey(r.Question!, rawDek);
                 string answer = EncryptionHelper.DecryptWithMasterKey(r.Answer, rawDek);
-
-                if (r.Type == "Chat")
-                {
-                    question = EncryptionHelper.DecryptWithMasterKey(r.Question!, rawDek);
-                }
-                else
-                {
-                    // Build question based on action type
-                    var orig = r.OriginalText != null ? EncryptionHelper.DecryptWithMasterKey(r.OriginalText, rawDek) : "";
-                    var inst = r.Instruction != null ? EncryptionHelper.DecryptWithMasterKey(r.Instruction, rawDek) : "";
-
-                    question = r.Type switch
-                    {
-                        "Polish" => AiWritingService.BuildPolishHistoryQuestion(orig, inst),
-                        "ContinueWriting" => AiWritingService.BuildContinueWritingHistoryQuestion(orig, inst),
-                        "WriteNew" => AiWritingService.BuildWriteNewHistoryQuestion(inst),
-                        _ => $"[{r.Type}] {inst}"
-                    };
-                }
 
                 return new ChatHistoryItem
                 {
                     Id = r.Id,
                     Question = question,
                     Answer = answer,
-                    InputTokens = 0, // Union doesn't easily support mixed schemas with all fields
-                    OutputTokens = 0,
+                    InputTokens = r.InputTokens,
+                    OutputTokens = r.OutputTokens,
                     TotalTokens = r.TotalTokens,
                     CreatedAt = r.CreatedAt,
                 };
@@ -370,17 +323,6 @@ namespace Service.Implementations
             if (chatMsg != null)
             {
                 _context.ChatMessages.Remove(chatMsg);
-                await _context.SaveChangesAsync();
-                return;
-            }
-
-            // Nếu không tìm thấy, thử tìm trong RewriteHistory (vì history panel mix cả 2)
-            var rewriteMsg = await _context.RewriteHistories
-                .FirstOrDefaultAsync(r => r.Id == historyId && r.ProjectId == projectId && r.UserId == userId);
-                
-            if (rewriteMsg != null)
-            {
-                _context.RewriteHistories.Remove(rewriteMsg);
                 await _context.SaveChangesAsync();
                 return;
             }

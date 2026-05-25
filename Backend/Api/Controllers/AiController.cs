@@ -16,7 +16,6 @@ namespace Api.Controllers
         private readonly IEmbeddingService _embeddingService;
         private readonly IAiChatService _aiChatService;
         private readonly IProjectReportService _reportService;
-        private readonly IAiRewriteService _rewriteService;
         private readonly IAiWritingService _writingService;
         private readonly IAiAnalysisHistoryService _historyService;
         private readonly IProjectAnalysisJobService _analysisJobService;
@@ -28,7 +27,6 @@ namespace Api.Controllers
             IEmbeddingService embeddingService,
             IAiChatService aiChatService,
             IProjectReportService reportService,
-            IAiRewriteService rewriteService,
             IAiWritingService writingService,
             IAiAnalysisHistoryService historyService,
             IProjectAnalysisJobService analysisJobService,
@@ -39,7 +37,6 @@ namespace Api.Controllers
             _embeddingService = embeddingService;
             _aiChatService = aiChatService;
             _reportService = reportService;
-            _rewriteService = rewriteService;
             _writingService = writingService;
             _historyService = historyService;
             _analysisJobService = analysisJobService;
@@ -310,114 +307,7 @@ namespace Api.Controllers
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
 
-        // ── Rewrite endpoints ─────────────────────────────────────────────────────
 
-        /// <summary>Viết lại một đoạn văn bằng AI, lưu lịch sử.</summary>
-        [HttpPost("{projectId:guid}/rewrite")]
-        [EnableRateLimiting("AiRewrite")]
-        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
-        public async Task<IActionResult> Rewrite(Guid projectId, [FromBody] RewriteRequest request)
-        {
-            try
-            {
-                var userId = GetUserId();
-                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
-
-                var result = await _rewriteService.RewriteAsync(
-                    projectId, request.ChapterId, request.OriginalText, request.Instruction ?? string.Empty, userId.Value);
-                return Ok(result);
-            }
-            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
-            catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
-            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
-        }
-
-        /// <summary>Lấy lịch sử viết lại của user trong một dự án.</summary>
-        [HttpGet("{projectId:guid}/rewrite/history")]
-        public async Task<IActionResult> GetRewriteHistory(
-            Guid projectId,
-            [FromQuery] string? actionType,
-            [FromQuery] Guid? chapterId,
-            [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 20)
-        {
-            try
-            {
-                var userId = GetUserId();
-                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
-
-                pageSize = Math.Clamp(pageSize, 1, 100);
-                var result = await _rewriteService.GetHistoryAsync(projectId, userId.Value, actionType, chapterId, page, pageSize);
-                return Ok(result);
-            }
-            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
-            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
-        }
-        // ── Writing endpoints ─────────────────────────────────────────────────────
-
-        [HttpPost("{projectId:guid}/write")]
-        [EnableRateLimiting("AiRewrite")]
-        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
-        public async Task<IActionResult> WriteNew(Guid projectId, [FromBody] AiWriteRequest request)
-        {
-            try
-            {
-                var userId = GetUserId();
-                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
-
-                var result = await _writingService.WriteNewAsync(projectId, request.Instruction, userId.Value);
-                return Ok(result);
-            }
-            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
-        }
-
-        [HttpPost("{projectId:guid}/continue")]
-        [EnableRateLimiting("AiRewrite")]
-        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
-        public async Task<IActionResult> ContinueWriting(Guid projectId, [FromBody] AiContinueRequest request)
-        {
-            try
-            {
-                var userId = GetUserId();
-                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
-
-                var result = await _writingService.ContinueWritingAsync(projectId, request.PreviousText, request.Instruction, userId.Value, request.ChapterId);
-                return Ok(result);
-            }
-            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
-        }
-
-        [HttpPost("{projectId:guid}/polish")]
-        [EnableRateLimiting("AiRewrite")]
-        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
-        public async Task<IActionResult> Polish(Guid projectId, [FromBody] AiPolishRequest request)
-        {
-            try
-            {
-                var userId = GetUserId();
-                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
-
-                var result = await _writingService.PolishAsync(projectId, request.OriginalText, request.Instruction, userId.Value);
-                return Ok(result);
-            }
-            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
-        }
-
-        [HttpPost("{projectId:guid}/suggest")]
-        [EnableRateLimiting("AiRewrite")]
-        [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout("LongRunning")]
-        public async Task<IActionResult> Suggest(Guid projectId, [FromBody] AiSuggestRequest request)
-        {
-            try
-            {
-                var userId = GetUserId();
-                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
-
-                var result = await _writingService.SuggestAsync(projectId, request.Context, request.TargetType, userId.Value);
-                return Ok(result);
-            }
-            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
-        }
 
         /// <summary>Phân rã nội dung chương thành danh sách Cảnh bằng AI.</summary>
         [HttpPost("{projectId:guid}/scenes")]
@@ -495,55 +385,7 @@ namespace Api.Controllers
         public string Question { get; set; } = string.Empty;
     }
 
-    public class RewriteRequest
-    {
-        [Required]
-        [MinLength(1)]
-        [MaxLength(50_000)]
-        public string OriginalText { get; set; } = string.Empty;
 
-        [MaxLength(2000)]
-        public string? Instruction { get; set; }
-
-        public Guid? ChapterId { get; set; }
-    }
-
-    public class AiWriteRequest
-    {
-        [Required]
-        [MaxLength(5000)]
-        public string Instruction { get; set; } = string.Empty;
-    }
-
-    public class AiContinueRequest
-    {
-        [Required]
-        public string PreviousText { get; set; } = string.Empty;
-
-        [MaxLength(5000)]
-        public string Instruction { get; set; } = string.Empty;
-
-        /// <summary>ID của chương hiện tại đang viết — dùng để loại trừ chunks cùng chương khỏi RAG</summary>
-        public Guid? ChapterId { get; set; }
-    }
-
-    public class AiPolishRequest
-    {
-        [Required]
-        public string OriginalText { get; set; } = string.Empty;
-
-        [MaxLength(2000)]
-        public string Instruction { get; set; } = string.Empty;
-    }
-
-    public class AiSuggestRequest
-    {
-        [Required]
-        public string Context { get; set; } = string.Empty;
-        
-        [Required]
-        public string TargetType { get; set; } = string.Empty;
-    }
 
     public class AiAnalyzeContentRequest
     {

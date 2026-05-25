@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, AlertTriangle, MessageSquare, Activity,
-    CircleHelp, Bug, RefreshCw, ChevronRight, BarChart3,
+    CircleHelp, Bug, RefreshCw, ChevronRight,
 } from 'lucide-react';
 import MainLayout from '../../layouts/MainLayout';
 import { AdminPageShell, StatCard } from '../../components/admin/AdminShared';
@@ -15,13 +15,12 @@ type HubStats = {
     flagged: number;
     openFeedbacks: number;
     failedJobs: number;
-    pendingReports: number;
     openBugs: number;
 };
 
 const QUICK_LINKS = [
     { to: '/staff/flagged', label: 'Dự án bị cờ', desc: 'Abuse / rate-limit', icon: AlertTriangle, color: 'text-amber-400', statKey: 'flagged' as const },
-    { to: '/staff/analysis-jobs', label: 'Phân tích lỗi / treo', desc: 'Rerun job & report chờ duyệt', icon: Activity, color: 'text-violet-400', statKey: 'failedJobs' as const },
+    { to: '/staff/analysis-jobs', label: 'Phân tích lỗi / treo', desc: 'Rerun job phân tích lỗi hoặc treo', icon: Activity, color: 'text-violet-400', statKey: 'failedJobs' as const },
     { to: '/staff/feedbacks', label: 'Phản hồi tác giả', desc: 'Gửi & theo dõi feedback', icon: MessageSquare, color: 'text-indigo-400', statKey: 'openFeedbacks' as const },
     { to: '/staff/content?tab=faq', label: 'Nội dung trợ giúp', desc: 'FAQ & mẹo viết truyện', icon: CircleHelp, color: 'text-emerald-400' },
     { to: '/staff/bugs', label: 'Báo cáo lỗi app', desc: 'Bug / UX từ người dùng', icon: Bug, color: 'text-orange-400', statKey: 'openBugs' as const },
@@ -37,11 +36,10 @@ export default function StaffOverviewPage() {
         setLoading(true);
         setError('');
         try {
-            const [flaggedRes, perf, jobs, pending, bugs] = await Promise.all([
+            const [flaggedRes, perf, jobs, bugs] = await Promise.all([
                 api.get<{ total_count?: number; totalCount?: number }>('/staff/flagged-projects', { params: { page: 1, page_size: 1 } }),
                 staffService.getPerformance(),
                 analysisJobService.getFailedOrStale('failed,stale'),
-                analysisJobService.getPendingReports(1, 1),
                 bugReportService.getStats(),
             ]);
             const flaggedTotal = flaggedRes.data.total_count ?? flaggedRes.data.totalCount ?? 0;
@@ -49,7 +47,6 @@ export default function StaffOverviewPage() {
                 flagged: flaggedTotal,
                 openFeedbacks: perf.openFeedbacksAssigned,
                 failedJobs: jobs.length,
-                pendingReports: pending.totalCount ?? pending.items?.length ?? 0,
                 openBugs: bugs.open + bugs.inProgress,
             });
         } catch {
@@ -79,10 +76,9 @@ export default function StaffOverviewPage() {
                     {error && <p className="text-rose-400 text-sm">{error}</p>}
 
                     {stats && (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             <StatCard icon={AlertTriangle} label="Dự án bị cờ" value={stats.flagged} color="border-amber-500/25 text-amber-300" iconColor="bg-amber-500/10" />
                             <StatCard icon={Activity} label="Job lỗi/treo" value={stats.failedJobs} color="border-violet-500/25 text-violet-300" iconColor="bg-violet-500/10" />
-                            <StatCard icon={BarChart3} label="Report chờ duyệt" value={stats.pendingReports} color="border-indigo-500/25 text-indigo-300" iconColor="bg-indigo-500/10" />
                             <StatCard icon={MessageSquare} label="Feedback mở" value={stats.openFeedbacks} color="border-sky-500/25 text-sky-300" iconColor="bg-sky-500/10" />
                         </div>
                     )}

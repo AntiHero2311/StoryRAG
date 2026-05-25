@@ -33,14 +33,11 @@ public static class AbuseDetector
     {
         var since = DateTime.UtcNow - DetectionWindow;
 
-        // Đếm chat + rewrite trong cửa sổ
+        // Đếm chat trong cửa sổ
         var chatCount = await context.ChatMessages
             .CountAsync(m => m.UserId == userId && m.CreatedAt >= since);
 
-        var rewriteCount = await context.RewriteHistories
-            .CountAsync(r => r.UserId == userId && r.CreatedAt >= since);
-
-        var totalCalls = chatCount + rewriteCount;
+        var totalCalls = chatCount;
 
         if (totalCalls >= SuspendThreshold)
         {

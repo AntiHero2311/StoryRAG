@@ -3,26 +3,6 @@ namespace Service.Interfaces
     public interface IAiWritingService
     {
         /// <summary>
-        /// Viết mới một chương dựa trên mô tả/hướng dẫn.
-        /// </summary>
-        Task<AiWritingResult> WriteNewAsync(Guid projectId, string instruction, Guid userId);
-
-        /// <summary>
-        /// Viết tiếp từ đoạn nội dung có sẵn.
-        /// </summary>
-        Task<AiWritingResult> ContinueWritingAsync(Guid projectId, string previousText, string instruction, Guid userId, Guid? chapterId = null);
-
-        /// <summary>
-        /// Rà soát, trau chuốt lại văn bản như một editor.
-        /// </summary>
-        Task<AiWritingResult> PolishAsync(Guid projectId, string originalText, string instruction, Guid userId);
-
-        /// <summary>
-        /// Gợi ý tự động từ AI (tên truyện, nhân vật, bối cảnh...).
-        /// </summary>
-        Task<AiSuggestionResult> SuggestAsync(Guid projectId, string context, string targetType, Guid userId);
-
-        /// <summary>
         /// Phân rã nội dung chương thành danh sách các Cảnh (Scenes/Beats).
         /// AI đọc nội dung và chia tách thành các phân cảnh rõ ràng.
         /// </summary>
@@ -32,19 +12,6 @@ namespace Service.Interfaces
         /// Phân tích cấu trúc 3 hồi và phát hiện điểm Hạ hồi phân giải (Cliffhanger) của chương.
         /// </summary>
         Task<AiCliffhangerResult> AnalyzeCliffhangerAsync(Guid projectId, string chapterContent, Guid userId);
-    }
-
-    public class AiWritingResult
-    {
-        public string GeneratedText { get; set; } = string.Empty;
-        public int TotalTokens { get; set; }
-    }
-
-    public class AiSuggestionResult
-    {
-        public List<string> Suggestions { get; set; } = new();
-        public string Analysis { get; set; } = string.Empty;
-        public int TotalTokens { get; set; }
     }
 
     /// <summary>Kết quả phân rã nội dung chương thành các Cảnh</summary>

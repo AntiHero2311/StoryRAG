@@ -35,8 +35,6 @@ namespace Repository.Data
         // Chat History
         public DbSet<AiChatMessage> ChatMessages { get; set; }
 
-        // Rewrite History
-        public DbSet<RewriteHistory> RewriteHistories { get; set; }
 
         // Ai Analysis History
         public DbSet<AiAnalysisHistory> AiAnalysisHistories { get; set; }
@@ -676,36 +674,6 @@ namespace Repository.Data
                       .OnDelete(DeleteBehavior.Cascade);
             });
 
-            // ── RewriteHistory ─────────────────────────────────────────────────────
-            modelBuilder.Entity<RewriteHistory>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.OriginalText).IsRequired();
-                entity.Property(e => e.RewrittenText).IsRequired();
-                entity.Property(e => e.Instruction).IsRequired().HasDefaultValue(string.Empty);
-                entity.Property(e => e.TotalTokens).HasDefaultValue(0);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
-
-                entity.HasIndex(e => new { e.ProjectId, e.UserId });
-                entity.HasIndex(e => e.ChapterId);
-
-                entity.HasOne(r => r.Project)
-                      .WithMany()
-                      .HasForeignKey(r => r.ProjectId)
-                      .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasOne(r => r.Chapter)
-                      .WithMany()
-                      .HasForeignKey(r => r.ChapterId)
-                      .OnDelete(DeleteBehavior.SetNull)
-                      .IsRequired(false);
-
-                entity.HasOne(r => r.User)
-                      .WithMany()
-                      .HasForeignKey(r => r.UserId)
-                      .OnDelete(DeleteBehavior.Cascade);
-            });
 
             // ── AiAnalysisHistory ───────────────────────────────────────────────────
             modelBuilder.Entity<AiAnalysisHistory>(entity =>
