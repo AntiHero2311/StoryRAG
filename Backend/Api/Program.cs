@@ -243,7 +243,6 @@ builder.Services.AddScoped<IUserSettingsService, UserSettingsService>();
 builder.Services.AddScoped<IWorldbuildingService, WorldbuildingService>();
 builder.Services.AddScoped<ICharacterService, CharacterService>();
 builder.Services.AddScoped<ICharacterRelationshipService, CharacterRelationshipService>();
-builder.Services.AddScoped<IAiRewriteService, AiRewriteService>();
 builder.Services.AddScoped<IAiWritingService, AiWritingService>();
 builder.Services.AddScoped<IBugReportService, BugReportService>();
 builder.Services.AddScoped<IStaffService, StaffService>();

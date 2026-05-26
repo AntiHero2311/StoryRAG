@@ -14,8 +14,6 @@
 
 - ✍️ Quản lý project truyện, chương, version (Git-style: pin, diff, restore)
 - 🤖 Chat AI theo ngữ cảnh (RAG) — AI "đọc" nội dung truyện của bạn (chỉ tốn token)
-- 🔁 Rewrite đoạn văn theo instruction
-- ✍️ **Viết mới** từ dàn ý, **Tiếp nối** mạch truyện, **Trau chuốt** bản thảo — có tích hợp các kỹ thuật viết văn (Show don't tell, Pacing)
 - 📊 **Phân tích** chấm điểm chất lượng truyện (**Rubric 5 điểm**, 20 tiêu chí, **Zero Hallucination**, chấm theo Thể loại, phát hiện **6 cảnh báo đặc biệt**: INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY / **SEXUAL_CONTENT** / **ANTI_STATE**). Mỗi lần phân tích chạy trên **snapshot toàn bộ bộ truyện** và tự repair chapter active nào chưa chunk/embed đủ trước khi chấm.
 - 🌍 **Story Bible** chuyên sâu: Quản lý Worldbuilding, Nhân vật, Ghi chú cốt truyện (Plot Notes), Chủ đề (Themes), Cẩm nang phong cách (Style Guides) — Hỗ trợ vector embedding.
 - 📅 Quản lý **Timeline** mốc sự kiện dòng thời gian.
@@ -117,7 +115,7 @@ StoryRAG/
 ├── Frontend/
 │   └── src/
 │       ├── pages/                  # 18 trang React
-│       ├── components/             # Sidebar, Topbar, RewritePanel, Toast...
+│       ├── components/             # Sidebar, Topbar, Toast...
 │       ├── services/               # API clients TypeScript
 │       ├── hooks/                  # Custom React hooks
 │       └── utils/                  # JWT helper, utilities
@@ -142,7 +140,6 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
   │           ├──< ProjectReports
   │           ├──< ProjectAnalysisJobs (có thể trỏ tới ProjectReports khi hoàn tất)
   │           ├──< ChatMessages
-  │           ├──< RewriteHistories (ActionType: WriteNew, ContinueWriting, Polish)
   │           ├──< AiAnalysisHistories
   │           └──< TimelineEvents
   │
@@ -170,7 +167,6 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | `ThemeEntries`         | Chủ đề/tầng nghĩa                       | **`Embedding vector(768)`**                                                                |
 | `PlotNoteEntries`      | Ghi chú cốt truyện                      | **`Embedding vector(768)`**                                                                |
 | `ChatMessages`         | Lịch sử chat AI                         | Question/Answer mã hóa AES-256                                                             |
-| `RewriteHistories`     | Lịch sử viết/trau chuốt AI              | OriginalText/RewrittenText mã hóa, phân loại qua `ActionType`                              |
 | `ProjectReports`       | Báo cáo phân tích truyện                | `CriteriaJson` (JSONB), `ProjectVersion` (snapshot label), `ProjectVersionHash`, `OverallFeedback`, `Warnings` |
 | `ProjectAnalysisJobs`  | Job phân tích bất đồng bộ               | Trạng thái/progress/result cho phân tích dài, `ProjectVersionHash` snapshot                |
 | `AiAnalysisHistories`  | Lịch sử phân tích cảnh/cliffhanger      | JSON kết quả và token đã dùng                                                              |
@@ -260,12 +256,6 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | GET    | `/{projectId}/analyze/jobs/{jobId}` | Trạng thái job phân tích       |
 | GET    | `/{projectId}/analyze/jobs/{jobId}/result` | Kết quả job đã hoàn thành (hoặc 409 khi đang chờ staff review cuối) |
 | POST   | `/{projectId}/analyze/jobs/{jobId}/cancel` | Hủy job `Queued/Processing` sau ~5 phút kể từ lúc enqueue |
-| POST   | `/{projectId}/rewrite`            | Rewrite đoạn văn                |
-| GET    | `/{projectId}/rewrite/history`    | Lịch sử viết AI (mới/tiếp/trau chuốt) |
-| POST   | `/{projectId}/write`              | AI viết mới theo instruction    |
-| POST   | `/{projectId}/continue`           | AI viết tiếp từ ngữ cảnh        |
-| POST   | `/{projectId}/polish`             | AI trau chuốt đoạn văn          |
-| POST   | `/{projectId}/suggest`            | Gợi ý ý tưởng/tình tiết         |
 | POST   | `/{projectId}/scenes`             | Phân rã cảnh và trích quote     |
 | POST   | `/{projectId}/cliffhanger`        | Phân tích cliffhanger/ba hồi    |
 | GET    | `/{projectId}/analysis/history`   | Lịch sử phân tích cảnh/cliffhanger |
@@ -450,7 +440,6 @@ Khi switch version:
   - Project: `Title`, `Summary`
   - Chapter: `DraftContent`, `Content` (versions)
   - ChatMessage: `Question`, `Answer`
-  - RewriteHistory: `OriginalText`, `RewrittenText`, `Instruction`
   - Character: `Name`, `Description`, `Background`
   - Worldbuilding: `Title`, `Content`
 
@@ -686,11 +675,10 @@ builder.Services.AddSingleton<IMyService, MyService>(); // MyService inject IDbC
 | `IGenreService`         | Quản lý thể loại (Admin)                                                                                                                                                                                                                                         |
 | `ISubscriptionService`  | Quản lý gói dịch vụ                                                                                                                                                                                                                                              |
 | `IAiChatService`        | RAG chat, lưu lịch sử, deduct token only                                                                                                                                                                                                                         |
-| `IAiRewriteService`     | Rewrite theo instruction, lưu lịch sử                                                                                                                                                                                                                            |
 | `IAiAnalysisHistoryService` | Lưu và truy xuất lịch sử phân tích cảnh/cliffhanger                                                                                                                                                                                                          |
 | `IEmbeddingService`     | Gọi Gemini lấy embedding vector                                                                                                                                                                                                                                  |
 | `IChunkingService`      | Chia text thành chunks với overlap                                                                                                                                                                                                                               |
-| `IAiWritingService`     | Viết mới từ dàn ý, tiếp nối mạch truyện (RAG), trau chuốt bản thảo — tích hợp kỹ thuật **Show Don't Tell**, **Pacing**, lưu lịch sử bền vững                                                                                                                      |
+| `IAiWritingService`     | Phân tích cảnh quay, cliffhanger và tuyến truyện (RAG)                                                                                                                                                                                                            |
 | `IProjectReportService` | Phân tích & chấm điểm theo **Rubric 5 điểm** (1-Kém → 5-Xuất sắc), **Zero Hallucination**, chấm theo **Thể loại**, phát hiện **6 cảnh báo** (INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY / **SEXUAL_CONTENT** / **ANTI_STATE**), sinh `OverallFeedback` tâm huyết, chốt `ProjectVersionHash` snapshot của toàn bộ truyện. Sau khi AI hoàn tất, report vào `ReviewStatus=PendingStaffReview`; Staff duyệt rồi mới release cho Author. |
 | `IProjectAnalysisJobService` | Quản lý job phân tích bất đồng bộ, progress, cancel, lấy kết quả                                                                                                                                                                                          |
 | `INarrativeAnalyticsService` | Sinh dữ liệu biểu đồ pacing, emotion, tần suất/xuất hiện nhân vật                                                                                                                                                                                        |

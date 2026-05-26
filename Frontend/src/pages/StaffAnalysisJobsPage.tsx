@@ -8,7 +8,6 @@ import {
   Activity,
   XCircle,
   Clock,
-  ExternalLink,
   RotateCcw,
 } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
@@ -16,7 +15,6 @@ import { getUserInfo } from '../utils/jwtHelper';
 import {
   analysisJobService,
   type StaffAnalysisJobItem,
-  type StaffPendingReportItem,
 } from '../services/analysisJobService';
 
 function fmtDate(iso?: string | null) {
@@ -41,7 +39,6 @@ function statusBadge(status: string) {
 export default function StaffAnalysisJobsPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState<StaffAnalysisJobItem[]>([]);
-  const [pendingReports, setPendingReports] = useState<StaffPendingReportItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [rerunLoadingId, setRerunLoadingId] = useState<string | null>(null);
@@ -52,12 +49,8 @@ export default function StaffAnalysisJobsPage() {
     setLoading(true);
     setError('');
     try {
-      const [data, pending] = await Promise.all([
-        analysisJobService.getFailedOrStale(statusFilter),
-        analysisJobService.getPendingReports(1, 30),
-      ]);
+      const data = await analysisJobService.getFailedOrStale(statusFilter);
       setItems(data);
-      setPendingReports(pending.items ?? []);
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string; Message?: string } } })?.response?.data?.message ??
@@ -158,32 +151,7 @@ export default function StaffAnalysisJobsPage() {
             </div>
           )}
 
-          {!loading && pendingReports.length > 0 && (
-            <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4">
-              <p className="text-sm font-semibold text-[var(--text-primary)]">Report chờ staff kiểm tra bước cuối ({pendingReports.length})</p>
-              <div className="mt-3 space-y-2">
-                {pendingReports.slice(0, 8).map((r) => (
-                  <div
-                    key={r.report_id}
-                    className="flex flex-wrap items-center gap-2 justify-between px-3 py-2 rounded-xl border border-[var(--border-color)]/80 bg-[var(--bg-hover)]/30"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-[var(--text-primary)] truncate">{r.project_title}</p>
-                      <p className="text-xs text-[var(--text-secondary)]">Tác giả: {r.author_name} • Điểm AI: {r.total_score.toFixed(1)}</p>
-                    </div>
-                    <a
-                      href={`/staff/analysis-reports/${r.report_id}`}
-                      className="h-8 px-3 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5"
-                      style={{ background: 'rgba(99,102,241,0.10)', border: '1px solid rgba(99,102,241,0.22)', color: 'var(--accent-text)' }}
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      Review report
-                    </a>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+
 
           {loading ? (
             <div className="flex justify-center py-16">

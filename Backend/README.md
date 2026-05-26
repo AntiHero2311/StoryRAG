@@ -127,24 +127,6 @@ Authorization: Bearer <access_token>
 }
 ```
 
-### Rewrite
-
-| Method | Route | Mô tả |
-|--------|-------|-------|
-| `POST` | `/ai/{projectId}/rewrite` | Viết lại đoạn văn được chọn |
-| `POST` | `/ai/{projectId}/polish` | Trau chuốt đoạn văn và lưu vào lịch sử chat |
-| `GET` | `/ai/{projectId}/rewrite/history` | Lịch sử các lần rewrite |
-
-**Body `POST /rewrite`**
-```json
-{
-  "chapterId": "guid",
-  "selectedText": "Đoạn văn gốc...",
-  "instruction": "Viết lại theo phong cách bi kịch hơn"
-}
-```
-
-> `POST /ai/{projectId}/polish` trả kết quả giống `write/continue` (`generatedText`, `totalTokens`) và tự động ghi vào `GET /ai/{projectId}/chat/history`.
 
 ### Phân tích AI
 
@@ -478,9 +460,8 @@ Nếu bạn reset DB bằng `supabase_full_reset.sql`, cần đảm bảo migrat
 | `AppControllerBase` | **Base controller** cho tất cả controller cần xác thực: cung cấp `GetUserId()` (nullable) và `GetRequiredUserId()` (throw nếu chưa đăng nhập) — loại bỏ code trùng lặp ở 21 controller |
 | `EmbeddingService` | `batchEmbedContents` với batch/token throttling (config qua `Gemini:Embedding*`), ưu tiên key chuyên embed `Gemini:EmbeddingApiKey`; nếu không có thì fallback theo use-case giữa `Gemini:AnalyzeApiKey` và `Gemini:ChatApiKey` |
 | `AiChatService` | Gemini-only chat, lưu lịch sử |
-| `AiRewriteService` | Gemini-only rewrite, lưu lịch sử |
 | `ChunkingService` | 1500 ký tự, overlap 150, ưu tiên cắt tại `\n\n` → `.` → space |
-| `AiWritingService` | Viết mới, tiếp nối, rất trau chuốt — tích hợp kỹ thuật **Show Don't Tell** & **Pacing** |
+| `AiWritingService` | Phân tích cảnh quay, cliffhanger và cấu trúc truyện (RAG) |
 | `ProjectReportService` | Rubric **5 điểm** (1-Kém → 5-Xuất sắc), phát hiện **4 loại cảnh báo** (INCOMPLETE/REPETITION/PLAGIARISM\_RISK/INCONSISTENCY), **Zero Hallucination**, chấm theo **Thể loại**; phân tích ưu tiên Analyze key, fallback sang Chat key; model fallback `gemini-3-flash-preview` -> `gemini-2.5-flash` |
 | `ProjectAnalysisJobService` | Điều phối queue async cho phân tích: enqueue/status/result/cancel (rule hủy sau ~5 phút), chốt snapshot bằng `ProjectVersionHash`, tự xử lý job theo snapshot hiện tại |
 | `GeminiRetryHelper` | Backoff [10s, 30s, 65s] cho 429; throw lỗi thân thiện sau 3 lần |
@@ -506,7 +487,6 @@ ThemeEntries            — uuid PK, FK→Projects, Title/Description, Embedding
 PlotNoteEntries         — uuid PK, FK→Projects, Type, Embedding vector(768)
 
 ChatMessages            — uuid PK, FK→Projects, FK→Users
-RewriteHistories        — uuid PK, FK→Projects, FK→Users
 ProjectReports          — uuid PK, FK→Projects, CriteriaJson (jsonb), ProjectVersion (text)
 StaffFeedbacks          — uuid PK, feedback staff cho author/project/chapter/report, kèm user reaction/reply
 faqs                    — uuid PK, FAQ trợ giúp (published)

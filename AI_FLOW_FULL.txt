@@ -7,7 +7,6 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
 - Project resources: /api/projects/{projectId}/...
 - Guardrails backend:
   + AiChat: 20 req/phút/user
-  + AiRewrite: 15 req/phút/user
   + AiAnalyze: 3 req/10 phút/user
   + AiEmbed: 30 req/phút/user
   + LongRunning timeout: 10 phút
@@ -55,29 +54,7 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
 - Lịch sử chat:
   GET /ai/{projectId}/chat/history
 
-4) Luồng Rewrite / Polish / Write / Continue / Suggest
-- RewritePanel:
-  POST /ai/{projectId}/rewrite
-  POST /ai/{projectId}/polish
-- AI Writer tab:
-  POST /ai/{projectId}/write
-  POST /ai/{projectId}/suggest
-- Continue writing (Workspace):
-  POST /ai/{projectId}/continue
-- AiRewriteService + AiWritingService:
-  + check gói + token budget
-  + sanitize prompt input
-  + gọi Gemini
-  + validate output
-  + trừ token
-- Continue có RAG riêng:
-  + embed query từ previousText
-  + lấy chunks liên quan từ các chương <= chương hiện tại
-  + tránh lấy dữ liệu chương tương lai
-- Rewrite history:
-  GET /ai/{projectId}/rewrite/history
-
-5) Luồng Project Analysis (rubric 100 điểm, async jobs)
+4) Luồng Project Analysis (rubric 100 điểm, async jobs)
 - Frontend AnalysisPage enqueue:
   POST /ai/{projectId}/analyze/jobs
 - ProjectAnalysisJobService trước khi tạo job:
@@ -114,7 +91,7 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
   GET /ai/{projectId}/reports/{reportId}/export/pdf
   (ReportExportService + QuestPDF)
 
-6) Luồng Narrative Charts
+5) Luồng Narrative Charts
 - API:
   GET /ai/{projectId}/narrative/charts
 - NarrativeAnalyticsService:
@@ -136,7 +113,7 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
   5. `INCONSISTENCY_DETECTED` — AI cắm INCONSISTENCY
   + Ngoài ra: NO_ANALYSIS / INCOMPLETE_ANALYSIS / LOW_QUALITY_SCORE (score < 60)
 
-7) Luồng Scene / Cliffhanger
+6) Luồng Scene / Cliffhanger
 - API có sẵn:
   POST /ai/{projectId}/scenes
   POST /ai/{projectId}/cliffhanger
@@ -145,7 +122,7 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
 - Frontend đã có aiAnalysisService + SceneCliffhangerPanel.
 - Hiện trạng UI: panel này chưa được mount vào Workspace tabs.
 
-8) Luồng embed Story Bible entries (nguồn RAG phụ)
+7) Luồng embed Story Bible entries (nguồn RAG phụ)
 - Các resource có endpoint embed riêng:
   + worldbuilding: POST /projects/{projectId}/worldbuilding/{id}/embed
   + character:    POST /projects/{projectId}/character/{id}/embed
@@ -154,7 +131,7 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
   + plot-notes:   POST /projects/{projectId}/plot-notes/{id}/embed
 - Nhiều service tự auto regen embedding sau create/update để dữ liệu luôn sẵn cho RAG/analyze.
 
-9) Bảo mật và an toàn prompt
+8) Bảo mật và an toàn prompt
 - PromptSanitizer: lọc mẫu prompt injection trước khi gửi LLM.
 - LlmOutputValidator: chặn response có dấu hiệu rò rỉ prompt/secret.
 - GeminiRetryHelper: retry khi 429, backoff.
@@ -163,12 +140,12 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
   + failover model (Gemini chat models)
   + flatten system prompt cho Gemma nếu cần
 
-10) Subscription và anti-abuse
+9) Subscription và anti-abuse
 - Token usage:
-  + Chat/Rewrite/Writing trừ token
+  + Chat trừ token
   + Analysis trừ cả token + số lần phân tích
 - AbuseDetector:
-  + theo dõi tần suất chat + rewrite trong cửa sổ thời gian
+  + theo dõi tần suất chat trong cửa sổ thời gian
   + warning (>50 calls/10 phút) / suspend (>200 calls/10 phút) user nếu vượt ngưỡng
   + ghi ProjectAbuseFlag với reason AI_RATE_LIMIT_WARNING / AI_RATE_LIMIT_SUSPEND
 - Content flags (GetFlagReason — xuất hiện trong /manuscripts/flagged):

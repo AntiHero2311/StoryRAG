@@ -463,10 +463,9 @@ Mỗi lần gọi Gemini API đều tốn tiền theo số token (input + output
 | Tính năng | Token tracking | Deduct subscription |
 |---|---|---|
 | **Chat** (`/ai/{id}/chat`) | ✅ `inputTokens`, `outputTokens`, `totalTokens` từ `completion.Usage` | ✅ `sub.UsedTokens += totalTokens` |
-| **Rewrite** (`/ai/{id}/rewrite`) | ✅ Lưu vào `RewriteHistory.TotalTokens` | ❌ **Không trừ** subscription |
 | **Analyze** (`/ai/{id}/analyze`) | ❌ **Không theo dõi token** | ✅ Chỉ trừ `UsedAnalysisCount` |
 
-> ⚠️ **Khoảng trống:** Rewrite và Analyze đều gọi LLM nhưng không đầy đủ tracking — chi phí thực tế cao hơn ghi nhận.
+> ⚠️ **Khoảng trống:** Phân tích (Analyze) gọi LLM nhưng không đầy đủ tracking — chi phí thực tế cao hơn ghi nhận.
 
 ### Kiến Trúc Token Budget Đề Xuất
 
@@ -476,7 +475,7 @@ SubscriptionPlans:
   MaxAnalysisCount = 3       (Free) / 20      (Basic) / 100      (Pro)
 
 UserSubscriptions:
-  UsedTokens        ← cộng dồn TOÀN BỘ token (chat + rewrite + analyze)
+  UsedTokens        ← cộng dồn TOÀN BỘ token (chat + analyze)
   UsedAnalysisCount ← chỉ tính analyze
   ResetDate         ← reset mỗi đầu tháng (billing cycle)
 ```
@@ -491,12 +490,12 @@ public static class TokenBudgetHelper
 {
     /// <summary>
     /// Kiểm tra đủ token, trừ usage và lưu DB. Throw nếu vượt hạn mức.
-    /// Dùng chung cho Chat, Rewrite và Analyze.
+    /// Dùng chung cho Chat và Analyze.
     /// </summary>
     public static async Task DeductTokensAsync(
         UserSubscription sub,
         int tokensToDeduct,
-        string featureName,   // "Chat" | "Rewrite" | "Analyze"
+        string featureName,   // "Chat" | "Analyze"
         AppDbContext context)
     {
         if (sub.UsedTokens + tokensToDeduct > sub.Plan.MaxTokenLimit)
@@ -538,7 +537,6 @@ Cần thêm endpoint `/api/admin/stats/token-cost` trả về:
   ],
   "tokensByFeature": {
     "chat": 8_000_000,
-    "rewrite": 3_200_000,
     "analyze": 1_300_000
   }
 }
@@ -639,7 +637,7 @@ var options = new ChatCompletionOptions
     Temperature = 0.1f,   // Gần 0 = ít hallucinate hơn, bám sát input
     MaxOutputTokenCount = 4000,
 };
-// (Áp dụng cho ProjectReportService, không phải chat/rewrite)
+// (Áp dụng cho ProjectReportService, không phải chat)
 ```
 
 ### Tradeoff: Accuracy vs. Creativity
@@ -648,7 +646,6 @@ var options = new ChatCompletionOptions
 |---|---|---|
 | Phân tích & chấm điểm | 0.1 – 0.3 | Cần factual, bám sát text |
 | Chat hỏi đáp về truyện | 0.3 – 0.5 | Cần reasoning, vẫn cần creativity |
-| Rewrite / sáng tác | 0.7 – 0.9 | Cần đa dạng văn phong |
 
 ---
 
@@ -809,7 +806,6 @@ export function useStreamingChat(projectId: string) {
 | Endpoint | Hiện tại | Sau streaming | UX cảm nhận |
 |---|---|---|---|
 | Chat | 3–8s blank → hiện full | Token đầu tiên ~0.5s | Cảm giác "live" như ChatGPT |
-| Rewrite | 5–15s blank | Token đầu tiên ~0.5s | Xem văn được viết "từng chữ" |
 | Analyze | 20–45s blank | Polling 3s có progress | Biết hệ thống đang xử lý |
 
 ---
@@ -884,9 +880,8 @@ Một tài khoản dùng bot gửi hàng nghìn request analyze/chat trong vài 
 ### Cơ Chế Rate Limiting Đã Triển Khai
 
 ```csharp
-// Program.cs — 4 policies Fixed Window
+// Program.cs — 3 policies Fixed Window
 AiChat:    20 req / 1 phút / user
-AiRewrite: 15 req / 1 phút / user
 AiAnalyze:  3 req / 10 phút / user   ← operation nặng nhất
 AiEmbed:   30 req / 1 phút / user
 ```
@@ -942,9 +937,6 @@ public static class AbuseDetector
         // Đếm số lần gọi AI trong 10 phút gần nhất
         var recentCalls = await context.ChatMessages
             .CountAsync(m => m.UserId == userId && m.CreatedAt >= since);
-
-        recentCalls += await context.RewriteHistories
-            .CountAsync(r => r.UserId == userId && r.CreatedAt >= since);
 
         if (recentCalls >= SuspendThreshold)
         {
@@ -1057,7 +1049,7 @@ HAVING COUNT(*) >= 3;
 | 3 | Copyright AI Output | ToS rõ ràng + anti-plagiarism prompt | 🔲 Cần bổ sung ToS |
 | 4 | Prompt Injection | `PromptSanitizer` + XML delimiter + output validation | ✅ Đã triển khai |
 | 5 | Context Window / Cost | Chunking + Semantic Retrieval | ✅ Chunking / 🔲 Cần auto-summary |
-| 6 | Token Cost & Subscription | Unified token deduction + monthly reset | ✅ Chat / 🔲 Rewrite & Analyze còn thiếu |
+| 6 | Token Cost & Subscription | Unified token deduction + monthly reset | ✅ Chat / 🔲 Analyze còn thiếu |
 | 7 | AI Hallucination | Grounding instruction + citation requirement + low temperature | ✅ Rubric enforces citation / 🔲 Cần temperature config |
 | 8 | Latency & Streaming | SSE Streaming cho chat + Job polling cho analyze | 🔲 Cần triển khai streaming |
 | 9 | System Prompt Leakage | PromptSanitizer + guardrail + LlmOutputValidator + Red Team | ✅ Backend done / 🔲 Cần Red Team testing |

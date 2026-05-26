@@ -346,7 +346,7 @@ namespace Service.Implementations
                 ProjectId = projectId,
                 UserId = userId,
                 Status = reportStatus,
-                ReviewStatus = ReviewStatusPendingStaff,
+                ReviewStatus = ReviewStatusReleased,
                 ProjectVersion = projectVersion,
                 TotalScore = total,
                 CriteriaJson = BuildStoredCriteriaJson(criteria, warnings, overallFeedback),

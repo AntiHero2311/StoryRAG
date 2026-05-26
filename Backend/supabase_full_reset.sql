@@ -537,30 +537,6 @@ CREATE TABLE "ChatMessages" (
 CREATE INDEX "IX_ChatMessages_ProjectId_UserId" ON "ChatMessages" ("ProjectId", "UserId");
 CREATE INDEX "IX_ChatMessages_UserId"           ON "ChatMessages" ("UserId");
 
--- ── RewriteHistories ──────────────────────────────────────────
-CREATE TABLE "RewriteHistories" (
-    "Id"            uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
-    "ProjectId"     uuid                     NOT NULL,
-    "ChapterId"     uuid,
-    "UserId"        uuid                     NOT NULL,
-    "OriginalText"  text                     NOT NULL,
-    "RewrittenText" text                     NOT NULL,
-    "Instruction"   text                     NOT NULL DEFAULT '',
-    "ActionType"    text                     NOT NULL DEFAULT '',
-    "TotalTokens"   integer                  NOT NULL DEFAULT 0,
-    "CreatedAt"     timestamp with time zone NOT NULL DEFAULT NOW(),
-    CONSTRAINT "PK_RewriteHistories" PRIMARY KEY ("Id"),
-    CONSTRAINT "FK_RewriteHistories_Projects_ProjectId" FOREIGN KEY ("ProjectId")
-        REFERENCES "Projects" ("Id") ON DELETE CASCADE,
-    CONSTRAINT "FK_RewriteHistories_Chapters_ChapterId" FOREIGN KEY ("ChapterId")
-        REFERENCES "Chapters" ("Id") ON DELETE SET NULL,
-    CONSTRAINT "FK_RewriteHistories_Users_UserId" FOREIGN KEY ("UserId")
-        REFERENCES "Users" ("Id") ON DELETE CASCADE
-);
-
-CREATE INDEX "IX_RewriteHistories_ProjectId_UserId" ON "RewriteHistories" ("ProjectId", "UserId");
-CREATE INDEX "IX_RewriteHistories_UserId"            ON "RewriteHistories" ("UserId");
-CREATE INDEX "IX_RewriteHistories_ChapterId"         ON "RewriteHistories" ("ChapterId");
 
 -- ── AiAnalysisHistories ───────────────────────────────────────
 CREATE TABLE "AiAnalysisHistories" (

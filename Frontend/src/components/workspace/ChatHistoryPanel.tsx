@@ -1,14 +1,9 @@
-import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { Clock, Loader2, Bot, Search, Sparkles, User, Copy, Check, AlertCircle, MessageSquare, RotateCcw, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { Clock, Loader2, Bot, Search, Copy, Check, RotateCcw, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { aiService, type ChatHistoryItem } from '../../services/aiService';
 import { sanitizeAiResponseForDisplay } from '../../utils/aiResponseSanitizer';
 
 const PAGE_SIZE = 15;
-const POLISH_PREFIX = '[Trau chuốt]';
-const CONTINUE_PREFIX = '[Viết tiếp]';
-const WRITE_NEW_PREFIX = '[Viết mới]';
-const REWRITE_PREFIX = '[Viết lại]';
-const REWRITE_PREFIX_LEGACY = '[Rewrite]';
 
 
 // ── Inline markdown renderer ───────────────────────────────────────────────
@@ -112,14 +107,6 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
         const normalizedQuery = query.trim().toLowerCase();
 
         return items.filter(item => {
-            const isContinue = item.question.startsWith(CONTINUE_PREFIX);
-            const isPolish = item.question.startsWith(POLISH_PREFIX);
-            const isWriteNew = item.question.startsWith(WRITE_NEW_PREFIX);
-            const isRewrite = item.question.startsWith(REWRITE_PREFIX) || item.question.startsWith(REWRITE_PREFIX_LEGACY);
-            const isRewriteRelated = isPolish || isRewrite || isWriteNew;
-
-            if (isContinue || isRewriteRelated) return false;
-
             if (!normalizedQuery) return true;
             return item.question.toLowerCase().includes(normalizedQuery) || 
                    item.answer.toLowerCase().includes(normalizedQuery);
@@ -179,6 +166,11 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
 
             {/* List */}
             <div className="flex-1 overflow-y-auto px-3 py-3 space-y-6 scrollbar-thin">
+                {error && (
+                    <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl flex items-center gap-2">
+                        <span>{error}</span>
+                    </div>
+                )}
                 {loading && items.length === 0 ? (
                     <div className="flex flex-col py-4 gap-2.5">
                         {[...Array(3)].map((_, i) => <div key={i} className="h-24 rounded-2xl animate-pulse" style={{ background: 'var(--bg-app)' }} />)}
@@ -225,36 +217,11 @@ export default function ChatHistoryPanel({ projectId }: ChatHistoryPanelProps) {
 
 // ── Sub-component for individual history item ───────────────────────────
 function HistoryItemRow({ item, onDelete }: { item: ChatHistoryItem, onDelete?: () => void }) {
-    const isContinue = item.question.startsWith(CONTINUE_PREFIX);
-    const isPolish = item.question.startsWith(POLISH_PREFIX);
-    const isRewrite = item.question.startsWith(REWRITE_PREFIX) || item.question.startsWith(REWRITE_PREFIX_LEGACY);
-    const isWriteNew = item.question.startsWith(WRITE_NEW_PREFIX);
-
     const [expanded, setExpanded] = useState(false);
     const [copied, setCopied] = useState(false);
 
     const getDisplayQuestion = () => {
-        let text = item.question;
-        if (isContinue) text = text.slice(CONTINUE_PREFIX.length).trim();
-        else if (isPolish) text = text.slice(POLISH_PREFIX.length).trim();
-        else if (isWriteNew) text = text.slice(WRITE_NEW_PREFIX.length).trim();
-        else if (isRewrite) {
-            if (text.startsWith(REWRITE_PREFIX)) text = text.slice(REWRITE_PREFIX.length).trim();
-            else text = text.slice(REWRITE_PREFIX_LEGACY.length).trim();
-        }
-
-        if (isContinue && text.includes('| Tiếp nối từ:')) {
-            const [inst, ctx] = text.split('| Tiếp nối từ:');
-            return (
-                <div className="space-y-1.5">
-                    <p className="font-semibold text-[var(--accent-text)]">{inst.trim()}</p>
-                    <div className="text-[10px] opacity-60 italic border-l-2 border-[var(--accent)]/30 pl-2 line-clamp-2">
-                        Từ: {ctx.trim()}
-                    </div>
-                </div>
-            );
-        }
-        return <p className="leading-relaxed whitespace-pre-wrap break-words line-clamp-3">{text}</p>;
+        return <p className="leading-relaxed whitespace-pre-wrap break-words line-clamp-3">{item.question}</p>;
     };
 
     const handleCopy = () => {
@@ -271,12 +238,6 @@ function HistoryItemRow({ item, onDelete }: { item: ChatHistoryItem, onDelete?: 
                     <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-2xl rounded-tr-sm px-4 py-3 text-[12px] shadow-sm">
                          {getDisplayQuestion()}
                     </div>
-                    {/* Tiny legacy badge if it's not normal chat */}
-                    {(isContinue || isPolish || isRewrite) && (
-                         <span className="text-[9px] text-[var(--text-secondary)] mt-1.5 uppercase font-semibold tracking-wider opacity-60">
-                             {isContinue ? 'Viết tiếp (Legacy)' : 'Chỉnh sửa (Legacy)'}
-                         </span>
-                    )}
                 </div>
             </div>
 
