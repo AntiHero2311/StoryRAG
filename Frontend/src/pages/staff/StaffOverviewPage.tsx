@@ -19,19 +19,11 @@ type HubStats = {
 };
 
 const QUICK_LINKS = [
-<<<<<<< HEAD
     { to: '/staff/flagged', label: 'Dự án bị cờ', icon: AlertTriangle, color: 'text-amber-400', statKey: 'flagged' as const },
     { to: '/staff/analysis-jobs', label: 'Phân tích lỗi / treo', icon: Activity, color: 'text-violet-400', statKey: 'failedJobs' as const },
     { to: '/staff/feedbacks', label: 'Phản hồi tác giả', icon: MessageSquare, color: 'text-indigo-400', statKey: 'openFeedbacks' as const },
     { to: '/staff/content?tab=faq', label: 'Nội dung trợ giúp', icon: CircleHelp, color: 'text-emerald-400' },
     { to: '/staff/bugs', label: 'Báo cáo lỗi app', icon: Bug, color: 'text-orange-400', statKey: 'openBugs' as const },
-=======
-    { to: '/staff/flagged', label: 'Dự án bị cờ', desc: 'Abuse / rate-limit', icon: AlertTriangle, color: 'text-amber-400', statKey: 'flagged' as const },
-    { to: '/staff/analysis-jobs', label: 'Phân tích lỗi / treo', desc: 'Rerun job phân tích lỗi hoặc treo', icon: Activity, color: 'text-violet-400', statKey: 'failedJobs' as const },
-    { to: '/staff/feedbacks', label: 'Phản hồi tác giả', desc: 'Gửi & theo dõi feedback', icon: MessageSquare, color: 'text-indigo-400', statKey: 'openFeedbacks' as const },
-    { to: '/staff/content?tab=faq', label: 'Nội dung trợ giúp', desc: 'FAQ & mẹo viết truyện', icon: CircleHelp, color: 'text-emerald-400' },
-    { to: '/staff/bugs', label: 'Báo cáo lỗi app', desc: 'Bug / UX từ người dùng', icon: Bug, color: 'text-orange-400', statKey: 'openBugs' as const },
->>>>>>> acccaf40c548840ebb67b8824516d8996d3ea562
 ];
 
 export default function StaffOverviewPage() {
