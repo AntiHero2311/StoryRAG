@@ -19,7 +19,7 @@ type HubStats = {
 };
 
 const QUICK_LINKS = [
-    { to: '/staff/flagged', label: 'Dự án bị cờ', icon: AlertTriangle, color: 'text-amber-400', statKey: 'flagged' as const },
+    { to: '/staff/flagged', label: 'Bản thảo bị cờ', icon: AlertTriangle, color: 'text-amber-400', statKey: 'flagged' as const },
     { to: '/staff/analysis-jobs', label: 'Phân tích lỗi / treo', icon: Activity, color: 'text-violet-400', statKey: 'failedJobs' as const },
     { to: '/staff/feedbacks', label: 'Phản hồi tác giả', icon: MessageSquare, color: 'text-indigo-400', statKey: 'openFeedbacks' as const },
     { to: '/staff/content?tab=faq', label: 'Nội dung trợ giúp', icon: CircleHelp, color: 'text-emerald-400' },
@@ -37,12 +37,12 @@ export default function StaffOverviewPage() {
         setError('');
         try {
             const [flaggedRes, perf, jobs, bugs] = await Promise.all([
-                api.get<{ total_count?: number; totalCount?: number }>('/staff/flagged-projects', { params: { page: 1, page_size: 1 } }),
+                api.get<{ totalCount?: number }>('/staff/manuscripts/flagged', { params: { page: 1, pageSize: 1 } }),
                 staffService.getPerformance(),
                 analysisJobService.getFailedOrStale('failed,stale'),
                 bugReportService.getStats(),
             ]);
-            const flaggedTotal = flaggedRes.data.total_count ?? flaggedRes.data.totalCount ?? 0;
+            const flaggedTotal = flaggedRes.data.totalCount ?? (flaggedRes.data as any).TotalCount ?? 0;
             setStats({
                 flagged: flaggedTotal,
                 openFeedbacks: perf.openFeedbacksAssigned,
@@ -76,7 +76,7 @@ export default function StaffOverviewPage() {
 
                     {stats && (
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            <StatCard icon={AlertTriangle} label="Dự án bị cờ" value={stats.flagged} color="border-amber-500/25 text-amber-300" iconColor="bg-amber-500/10" />
+                            <StatCard icon={AlertTriangle} label="Bản thảo bị cờ" value={stats.flagged} color="border-amber-500/25 text-amber-300" iconColor="bg-amber-500/10" />
                             <StatCard icon={Activity} label="Job lỗi/treo" value={stats.failedJobs} color="border-violet-500/25 text-violet-300" iconColor="bg-violet-500/10" />
                             <StatCard icon={MessageSquare} label="Feedback mở" value={stats.openFeedbacks} color="border-sky-500/25 text-sky-300" iconColor="bg-sky-500/10" />
                         </div>

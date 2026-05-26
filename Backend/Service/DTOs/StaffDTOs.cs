@@ -5,27 +5,6 @@ using System.Text.Json.Serialization;
 namespace Service.DTOs
 {
     /// <summary>Abuse / rate-limit flags cho staff (JSON keys theo spec issue).</summary>
-    public class FlaggedProjectItem
-    {
-        [JsonPropertyName("project_id")]
-        public Guid ProjectId { get; set; }
-
-        [JsonPropertyName("author_id")]
-        public Guid AuthorId { get; set; }
-
-        [JsonPropertyName("author_email")]
-        public string AuthorEmail { get; set; } = string.Empty;
-
-        [JsonPropertyName("flag_reason")]
-        public string FlagReason { get; set; } = string.Empty;
-
-        [JsonPropertyName("flagged_at")]
-        public DateTime FlaggedAt { get; set; }
-
-        [JsonPropertyName("severity")]
-        public string Severity { get; set; } = string.Empty;
-    }
-
     public class FlaggedManuscriptItem
     {
         public Guid ProjectId { get; set; }
