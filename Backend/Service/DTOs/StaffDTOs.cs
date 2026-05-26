@@ -126,44 +126,6 @@ namespace Service.DTOs
         }
     }
 
-    public class StaffContentRequest
-    {
-        [Required]
-        [RegularExpression("^(FAQ|WritingTip)$")]
-        public string Type { get; set; } = "FAQ";
-
-        [Required]
-        [MinLength(3)]
-        [MaxLength(200)]
-        public string Title { get; set; } = string.Empty;
-
-        [Required]
-        [MinLength(10)]
-        [MaxLength(5000)]
-        public string Content { get; set; } = string.Empty;
-
-        [MaxLength(300)]
-        public string? Tags { get; set; }
-
-        public bool IsPublished { get; set; } = true;
-        public int SortOrder { get; set; } = 0;
-    }
-
-    public class StaffContentResponse
-    {
-        public Guid Id { get; set; }
-        public string Type { get; set; } = string.Empty;
-        public string Title { get; set; } = string.Empty;
-        public string Content { get; set; } = string.Empty;
-        public string? Tags { get; set; }
-        public bool IsPublished { get; set; }
-        public int SortOrder { get; set; }
-        public Guid CreatedBy { get; set; }
-        public Guid? UpdatedBy { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public DateTime? UpdatedAt { get; set; }
-    }
-
     public class ReviewAnalysisRequest
     {
         [Required]

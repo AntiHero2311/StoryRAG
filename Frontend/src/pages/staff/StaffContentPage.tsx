@@ -16,10 +16,7 @@ export default function StaffContentPage() {
     return (
         <MainLayout pageTitle="Nội dung trợ giúp">
             {() => (
-                <AdminPageShell
-                    title="Nội dung trợ giúp"
-                    subtitle="Câu hỏi thường gặp và mẹo viết — tác giả xem tại trang Trợ giúp"
-                >
+                <AdminPageShell title="Nội dung trợ giúp">
                     <div className="flex flex-wrap gap-2 border-b border-[var(--border-color)] pb-3">
                         <button
                             type="button"

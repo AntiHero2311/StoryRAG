@@ -150,7 +150,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
   ├──< Payments
   ├──< BugReports
   ├──< StaffFeedbacks
-  ├──< StaffKnowledgeBaseItems
+  ├──< faqs / writing_tips (trợ giúp công khai)
   ├──< StaffAnalysisReviews
   └──1 UserSettings
 ```
@@ -177,7 +177,8 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | `Payments`             | Giao dịch thanh toán                    | VNPay, trạng thái, transaction/order reference                                        |
 | `BugReports`           | Báo cáo lỗi từ user                     | Category, Priority, Status, StaffNote                                                      |
 | `StaffFeedbacks`       | Phản hồi chuyên môn từ Staff            | Gắn với project/report/user/staff, có like/dislike + reply từ author                      |
-| `StaffKnowledgeBaseItems` | Bài viết tri thức Staff              | Published/draft, loại nội dung                                                             |
+| `faqs`                 | Câu hỏi thường gặp (Staff quản lý)      | `Published`, `Order`, `Category`                                                           |
+| `writing_tips`         | Mẹo viết truyện                         | `Tags[]`, `Published`                                                                      |
 | `StaffAnalysisReviews` | Review báo cáo phân tích                | Verified/Adjusted/RerunRequested                                                           |
 | `Genres`               | Thể loại truyện                         | 14 thể loại mặc định                                                                       |
 | `ProjectGenres`        | Liên kết Project ↔ Genre                | Many-to-many                                                                               |
@@ -361,8 +362,8 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | GET/POST | `/feedback` | Xem / tạo phản hồi Staff |
 | PUT/DELETE | `/feedback/{feedbackId}` | Cập nhật / xóa phản hồi |
 | POST | `/feedback/{feedbackId}/respond` | Author like/dislike và reply feedback |
-| GET/POST | `/knowledge-base` | Xem / tạo bài tri thức |
-| PUT/DELETE | `/knowledge-base/{id}` | Cập nhật / xóa bài tri thức |
+| GET/POST/PUT/DELETE | `/faqs/admin`, `/writing-tips/admin` | CRUD FAQ & mẹo viết (thay knowledge-base cũ) |
+| GET | `/faqs`, `/writing-tips` | Nội dung đã publish (trang Trợ giúp) |
 | GET    | `/analyses/pending` | Danh sách report đang chờ staff review cuối |
 | GET    | `/analyses/reviews` | Danh sách review phân tích |
 | GET    | `/analyses/{reportId}` | Chi tiết report (CriteriaJson + warnings) để Staff đọc |

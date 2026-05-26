@@ -166,10 +166,7 @@ function AdminSubscriptionContent() {
 
                 {/* Header */}
                 <div className="flex items-center justify-between">
-                    <div>
-                        <h2 className="text-[var(--text-primary)] font-bold text-lg">Quản lý Subscription Plans</h2>
-                        <p className="text-[var(--text-secondary)] text-sm mt-0.5">{plans.length} plan • hiển thị kể cả đã tắt</p>
-                    </div>
+                    <h2 className="text-[var(--text-primary)] font-bold text-lg">Quản lý Subscription Plans</h2>
                     <button
                         onClick={() => setModal('create')}
                         className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 hover:scale-105 active:scale-95"

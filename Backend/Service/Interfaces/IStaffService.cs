@@ -14,11 +14,6 @@ namespace Service.Interfaces
         Task<StaffFeedbackResponse> UpdateFeedbackAsync(Guid feedbackId, Guid staffId, StaffFeedbackRequest request);
         Task DeleteFeedbackAsync(Guid feedbackId);
 
-        Task<StaffPagedResponse<StaffContentResponse>> GetKnowledgeBaseAsync(string? type, bool? isPublished, int page, int pageSize);
-        Task<StaffContentResponse> CreateKnowledgeBaseItemAsync(Guid staffId, StaffContentRequest request);
-        Task<StaffContentResponse> UpdateKnowledgeBaseItemAsync(Guid id, Guid staffId, StaffContentRequest request);
-        Task DeleteKnowledgeBaseItemAsync(Guid id);
-
         Task<StaffPagedResponse<StaffAnalysisReviewResponse>> GetAnalysisReviewsAsync(Guid? projectId, int page, int pageSize);
         /// <summary>Lấy review theo ProjectReportId (khác với GetAnalysisReviewsAsync filter theo ProjectId).</summary>
         Task<StaffAnalysisReviewResponse?> GetAnalysisReviewByReportIdAsync(Guid reportId);

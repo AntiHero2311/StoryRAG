@@ -1,33 +1,62 @@
-import { useEffect, useState } from 'react';
-import { CircleHelp, Sparkles, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { CircleHelp, Sparkles, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { faqService, type Faq } from '../services/faqService';
 import { writingTipService, type WritingTip } from '../services/writingTipService';
+
+function normalizeList<T>(data: unknown): T[] {
+    return Array.isArray(data) ? data : [];
+}
 
 export default function HelpPage() {
     const [tab, setTab] = useState<'faq' | 'tips'>('faq');
     const [faqs, setFaqs] = useState<Faq[]>([]);
     const [tips, setTips] = useState<WritingTip[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [openFaq, setOpenFaq] = useState<string | null>(null);
 
-    useEffect(() => {
+    const load = useCallback(() => {
         setLoading(true);
+        setError('');
         void Promise.all([faqService.getPublic(), writingTipService.getPublic()])
-            .then(([f, t]) => { setFaqs(f); setTips(t); })
+            .then(([f, t]) => {
+                setFaqs(normalizeList<Faq>(f));
+                setTips(normalizeList<WritingTip>(t));
+            })
+            .catch(() => {
+                setError('Không tải được nội dung trợ giúp. Kiểm tra API đang chạy hoặc thử lại sau.');
+                setFaqs([]);
+                setTips([]);
+            })
             .finally(() => setLoading(false));
     }, []);
+
+    useEffect(() => {
+        load();
+    }, [load]);
 
     return (
         <MainLayout pageTitle="Trợ giúp">
             {() => (
                 <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
-                    <div>
-                        <h1 className="text-xl font-bold text-[var(--text-primary)]">Trợ giúp & hướng dẫn</h1>
-                        <p className="text-sm text-[var(--text-secondary)] mt-1">
-                            Câu hỏi thường gặp và mẹo viết do đội ngũ StoryRAG biên soạn.
-                        </p>
-                    </div>
+                    <h1 className="text-xl font-bold text-[var(--text-primary)]">Trợ giúp & hướng dẫn</h1>
+
+                    {error && (
+                        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-start gap-3 text-sm text-amber-200">
+                            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                                <p>{error}</p>
+                                <button
+                                    type="button"
+                                    onClick={load}
+                                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-100 hover:underline"
+                                >
+                                    <RefreshCw className="w-3.5 h-3.5" /> Thử lại
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="flex flex-wrap gap-2">
                         <button

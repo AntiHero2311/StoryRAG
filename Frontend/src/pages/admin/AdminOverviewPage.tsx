@@ -47,7 +47,6 @@ export default function AdminOverviewPage() {
             {() => (
                 <AdminPageShell
                     title="Tổng quan Admin"
-                    subtitle="Quản trị nền tảng — chọn mục bên dưới"
                     action={
                         <button type="button" onClick={() => void load()} className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[var(--border-color)] text-sm">
                             <RefreshCw className="w-4 h-4" /> Làm mới

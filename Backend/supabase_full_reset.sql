@@ -651,33 +651,7 @@ CREATE INDEX "IX_StaffFeedbacks_ProjectId" ON "StaffFeedbacks" ("ProjectId");
 CREATE INDEX "IX_StaffFeedbacks_StaffId" ON "StaffFeedbacks" ("StaffId");
 CREATE INDEX "IX_StaffFeedbacks_UserReaction" ON "StaffFeedbacks" ("UserReaction");
 
--- ────────────────────────────────────────────────────────────
--- StaffKnowledgeBaseItems table
--- ────────────────────────────────────────────────────────────
-CREATE TABLE "StaffKnowledgeBaseItems" (
-    "Id"          uuid                     NOT NULL DEFAULT uuid_generate_v4(),
-    "Type"        character varying(20)    NOT NULL DEFAULT 'FAQ',
-    "Title"       character varying(200)   NOT NULL,
-    "Content"     character varying(5000)  NOT NULL,
-    "Tags"        character varying(300),
-    "IsPublished" boolean                  NOT NULL DEFAULT TRUE,
-    "SortOrder"   integer                  NOT NULL DEFAULT 0,
-    "CreatedBy"   uuid                     NOT NULL,
-    "UpdatedBy"   uuid,
-    "CreatedAt"   timestamp with time zone NOT NULL DEFAULT NOW(),
-    "UpdatedAt"   timestamp with time zone,
-    CONSTRAINT "PK_StaffKnowledgeBaseItems" PRIMARY KEY ("Id"),
-    CONSTRAINT "CK_StaffKnowledgeBaseItems_Type" CHECK ("Type" IN ('FAQ','WritingTip')),
-    CONSTRAINT "FK_StaffKnowledgeBaseItems_Users_CreatedBy" FOREIGN KEY ("CreatedBy")
-        REFERENCES "Users" ("Id") ON DELETE RESTRICT,
-    CONSTRAINT "FK_StaffKnowledgeBaseItems_Users_UpdatedBy" FOREIGN KEY ("UpdatedBy")
-        REFERENCES "Users" ("Id") ON DELETE SET NULL
-);
-
-CREATE INDEX "IX_StaffKnowledgeBaseItems_CreatedBy" ON "StaffKnowledgeBaseItems" ("CreatedBy");
-CREATE INDEX "IX_StaffKnowledgeBaseItems_UpdatedBy" ON "StaffKnowledgeBaseItems" ("UpdatedBy");
-CREATE INDEX "IX_StaffKnowledgeBaseItems_Type_IsPublished_SortOrder"
-    ON "StaffKnowledgeBaseItems" ("Type", "IsPublished", "SortOrder");
+-- StaffKnowledgeBaseItems: đã thay bằng faqs + writing_tips (xem upsert_help_content.sql)
 
 -- ────────────────────────────────────────────────────────────
 -- StaffAnalysisReviews table
@@ -866,6 +840,8 @@ INSERT INTO "Genres" ("Id","Name","Slug","Color","Description") VALUES
 
 SELECT setval(pg_get_serial_sequence('"Genres"', 'Id'), 14);
 
+-- FAQs & Writing Tips (chạy Scripts/upsert_help_content.sql sau reset, hoặc dùng EF migration UpsertHelpContent)
+
 -- system_logs (admin audit)
 CREATE TABLE IF NOT EXISTS system_logs (
     "Id" uuid NOT NULL PRIMARY KEY,
@@ -908,4 +884,7 @@ INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
     ('20260508005500_AddAnalysisJobRerunAudit', '9.0.0'),
     ('20260508134500_AddCharacterRelationships', '9.0.0'),
     ('20260513231800_AddStaffFeedbackResponseFields', '9.0.0'),
-    ('20260514104000_AddNotifications', '9.0.0');
+    ('20260514104000_AddNotifications', '9.0.0'),
+    ('20260519150000_SeedHelpContent', '9.0.0'),
+    ('20260520120000_UpsertHelpContent', '9.0.0'),
+    ('20260520140000_DropStaffKnowledgeBaseItems', '9.0.0');

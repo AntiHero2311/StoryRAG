@@ -65,8 +65,8 @@ export const roleStyle = (role: string) => {
 export const roleLabel = (role: string) =>
     ({ Admin: 'Admin', Author: 'Tác giả', Staff: 'Nhân viên' } as Record<string, string>)[role] ?? role;
 
-export function AdminPageShell({ title, subtitle, children, action }: {
-    title: string; subtitle?: string; children: ReactNode; action?: ReactNode;
+export function AdminPageShell({ title, children, action }: {
+    title: string; children: ReactNode; action?: ReactNode;
 }) {
     return (
         <div className="flex-1 overflow-y-auto">
@@ -75,10 +75,7 @@ export function AdminPageShell({ title, subtitle, children, action }: {
             </div>
             <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <div>
-                        <h1 className="text-xl font-bold text-[var(--text-primary)]">{title}</h1>
-                        {subtitle && <p className="text-sm text-[var(--text-secondary)] mt-0.5">{subtitle}</p>}
-                    </div>
+                    <h1 className="text-xl font-bold text-[var(--text-primary)]">{title}</h1>
                     {action}
                 </div>
                 {children}

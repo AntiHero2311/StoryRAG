@@ -111,7 +111,6 @@ export default function AdminUsersPage() {
             {() => (
                 <AdminPageShell
                     title="Quản lý người dùng"
-                    subtitle={`${stats?.totalUsers ?? 0} tài khoản · ${stats?.activeUsers ?? 0} đang hoạt động`}
                     action={
                         <div className="flex gap-2">
                             <button type="button" onClick={() => void load()} className="p-2 rounded-xl border border-[var(--border-color)]"><RefreshCw className="w-4 h-4" /></button>

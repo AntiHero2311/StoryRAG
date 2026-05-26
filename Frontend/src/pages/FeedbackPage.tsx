@@ -60,12 +60,12 @@ export default function FeedbackPage() {
               <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.12)' }}>
                 <MessageSquare className="w-5 h-5" style={{ color: 'var(--accent-text)' }} />
               </div>
-              <div>
-                <p className="text-sm font-bold" style={{ color: 'var(--text-bright)' }}>Hộp thư phản hồi</p>
-                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                  {unreadCount > 0 ? `Bạn có ${unreadCount} feedback chưa đọc.` : 'Bạn đã đọc hết feedback.'}
-                </p>
-              </div>
+              <p className="text-sm font-bold" style={{ color: 'var(--text-bright)' }}>
+                Hộp thư phản hồi
+                {unreadCount > 0 && (
+                  <span className="ml-2 text-xs font-semibold text-amber-300">({unreadCount} chưa đọc)</span>
+                )}
+              </p>
             </div>
             {unreadCount === 0 && (
               <div className="hidden sm:flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-xl"

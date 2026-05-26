@@ -79,42 +79,6 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        [HttpGet("knowledge-base")]
-        public async Task<IActionResult> GetKnowledgeBase([FromQuery] string? type, [FromQuery] bool? isPublished, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
-        {
-            var result = await _staffService.GetKnowledgeBaseAsync(type, isPublished, page, pageSize);
-            return Ok(result);
-        }
-
-        [HttpPost("knowledge-base")]
-        public async Task<IActionResult> CreateKnowledgeBase([FromBody] StaffContentRequest request)
-        {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-            var staffId = GetUserId();
-            if (staffId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
-
-            var result = await _staffService.CreateKnowledgeBaseItemAsync(staffId.Value, request);
-            return Ok(result);
-        }
-
-        [HttpPut("knowledge-base/{id:guid}")]
-        public async Task<IActionResult> UpdateKnowledgeBase(Guid id, [FromBody] StaffContentRequest request)
-        {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-            var staffId = GetUserId();
-            if (staffId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
-
-            var result = await _staffService.UpdateKnowledgeBaseItemAsync(id, staffId.Value, request);
-            return Ok(result);
-        }
-
-        [HttpDelete("knowledge-base/{id:guid}")]
-        public async Task<IActionResult> DeleteKnowledgeBase(Guid id)
-        {
-            await _staffService.DeleteKnowledgeBaseItemAsync(id);
-            return NoContent();
-        }
-
         [HttpGet("analyses/reviews")]
         public async Task<IActionResult> GetAnalysisReviews([FromQuery] Guid? projectId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {

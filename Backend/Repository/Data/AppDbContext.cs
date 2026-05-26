@@ -56,7 +56,6 @@ namespace Repository.Data
         // Bug Reports
         public DbSet<BugReport> BugReports { get; set; }
         public DbSet<StaffFeedback> StaffFeedbacks { get; set; }
-        public DbSet<StaffKnowledgeBaseItem> StaffKnowledgeBaseItems { get; set; }
         public DbSet<StaffAnalysisReview> StaffAnalysisReviews { get; set; }
         public DbSet<ProjectAbuseFlag> ProjectAbuseFlags { get; set; }
         public DbSet<Faq> Faqs { get; set; }
@@ -819,33 +818,6 @@ namespace Repository.Data
                       .WithMany()
                       .HasForeignKey(e => e.StaffId)
                       .OnDelete(DeleteBehavior.Restrict);
-            });
-
-            // ── StaffKnowledgeBaseItem ────────────────────────────────────────────
-            modelBuilder.Entity<StaffKnowledgeBaseItem>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.Type).IsRequired().HasMaxLength(20).HasDefaultValue("FAQ");
-                entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
-                entity.Property(e => e.Content).IsRequired().HasMaxLength(5000);
-                entity.Property(e => e.Tags).HasMaxLength(300);
-                entity.Property(e => e.IsPublished).HasDefaultValue(true);
-                entity.Property(e => e.SortOrder).HasDefaultValue(0);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
-                entity.HasIndex(e => new { e.Type, e.IsPublished, e.SortOrder });
-                entity.ToTable(t => t.HasCheckConstraint("CK_StaffKnowledgeBaseItems_Type", "\"Type\" IN ('FAQ','WritingTip')"));
-
-                entity.HasOne(e => e.Creator)
-                      .WithMany()
-                      .HasForeignKey(e => e.CreatedBy)
-                      .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasOne(e => e.Updater)
-                      .WithMany()
-                      .HasForeignKey(e => e.UpdatedBy)
-                      .OnDelete(DeleteBehavior.SetNull)
-                      .IsRequired(false);
             });
 
             // ── Faq ──────────────────────────────────────────────────────────────

@@ -294,17 +294,22 @@ Table StaffFeedbacks {
   ReadAt timestamptz
 }
 
-Table StaffKnowledgeBaseItems {
+Table faqs {
   Id uuid [pk]
-  Type varchar(20)
+  Question varchar(300)
+  Answer varchar(5000)
+  Category varchar(50)
+  Order int
+  Published bool
+  UpdatedAt timestamptz
+}
+
+Table writing_tips {
+  Id uuid [pk]
   Title varchar(200)
-  Content varchar(5000)
-  Tags varchar(300)
-  IsPublished bool
-  SortOrder int
-  CreatedBy uuid
-  UpdatedBy uuid
-  CreatedAt timestamptz
+  Content varchar(8000)
+  Tags text[]
+  Published bool
   UpdatedAt timestamptz
 }
 
@@ -376,8 +381,6 @@ Ref: StaffFeedbacks.ProjectReportId > ProjectReports.Id
 Ref: StaffFeedbacks.ChapterId > Chapters.Id
 Ref: StaffFeedbacks.AuthorId > Users.Id
 Ref: StaffFeedbacks.StaffId > Users.Id
-Ref: StaffKnowledgeBaseItems.CreatedBy > Users.Id
-Ref: StaffKnowledgeBaseItems.UpdatedBy > Users.Id
 Ref: StaffAnalysisReviews.ProjectReportId > ProjectReports.Id
 Ref: StaffAnalysisReviews.ProjectId > Projects.Id
 Ref: StaffAnalysisReviews.AuthorId > Users.Id

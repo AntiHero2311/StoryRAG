@@ -130,16 +130,9 @@ function DashboardContent({ fullName, role, onNavigate }: {
                             <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.12)' }}>
                                 <ShieldCheck className="w-4 h-4 text-rose-400" />
                             </div>
-                            <div>
-                                <p className="font-semibold text-sm" style={{ color: 'var(--text-bright)' }}>
-                                    {role === 'Admin' ? 'Admin Panel' : 'Staff Panel'}
-                                </p>
-                                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                                    {role === 'Admin'
-                                        ? 'Quản lý người dùng & thống kê hệ thống'
-                                        : 'Tổng quan kiểm duyệt, phân tích & hỗ trợ tác giả'}
-                                </p>
-                            </div>
+                            <p className="font-semibold text-sm" style={{ color: 'var(--text-bright)' }}>
+                                {role === 'Admin' ? 'Admin Panel' : 'Staff Panel'}
+                            </p>
                         </div>
                         <ArrowRight className="w-4 h-4 text-rose-400 opacity-50 group-hover:opacity-100 transition-opacity" />
                     </div>

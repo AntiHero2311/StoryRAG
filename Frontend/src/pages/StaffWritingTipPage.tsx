@@ -58,7 +58,6 @@ function Modal({
           </div>
           <div className="min-w-0">
             <p className="text-[var(--text-primary)] font-bold text-base truncate">{title}</p>
-            <p className="text-[var(--text-secondary)] text-xs">Quản lý Writing Tips hiển thị công khai</p>
           </div>
           <button onClick={onClose} className="ml-auto w-8 h-8 flex items-center justify-center rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 transition-colors">
             <X className="w-4 h-4" />
@@ -261,9 +260,6 @@ export default function StaffWritingTipPage({ embedded = false }: { embedded?: b
               </div>
               <div>
                 <p className="text-sm font-bold" style={{ color: 'var(--text-bright)' }}>Writing Tips Manager</p>
-                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                  CRUD + publish toggle · Public endpoint filter theo tag
-                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">

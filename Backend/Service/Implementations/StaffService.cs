@@ -289,87 +289,6 @@ namespace Service.Implementations
             await _db.SaveChangesAsync();
         }
 
-        public async Task<StaffPagedResponse<StaffContentResponse>> GetKnowledgeBaseAsync(string? type, bool? isPublished, int page, int pageSize)
-        {
-            page = Math.Max(1, page);
-            pageSize = Math.Clamp(pageSize, 1, 100);
-
-            var query = _db.StaffKnowledgeBaseItems.AsNoTracking().AsQueryable();
-            if (!string.IsNullOrWhiteSpace(type))
-            {
-                query = query.Where(x => x.Type == type);
-            }
-
-            if (isPublished.HasValue)
-            {
-                query = query.Where(x => x.IsPublished == isPublished.Value);
-            }
-
-            var total = await query.CountAsync();
-            var entities = await query
-                .OrderBy(x => x.SortOrder)
-                .ThenByDescending(x => x.CreatedAt)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
-            var items = entities.Select(MapContent).ToList();
-
-            return new StaffPagedResponse<StaffContentResponse>
-            {
-                Items = items,
-                TotalCount = total,
-                Page = page,
-                PageSize = pageSize
-            };
-        }
-
-        public async Task<StaffContentResponse> CreateKnowledgeBaseItemAsync(Guid staffId, StaffContentRequest request)
-        {
-            var entity = new StaffKnowledgeBaseItem
-            {
-                Id = Guid.NewGuid(),
-                Type = request.Type,
-                Title = request.Title.Trim(),
-                Content = request.Content.Trim(),
-                Tags = string.IsNullOrWhiteSpace(request.Tags) ? null : request.Tags.Trim(),
-                IsPublished = request.IsPublished,
-                SortOrder = request.SortOrder,
-                CreatedBy = staffId,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _db.StaffKnowledgeBaseItems.Add(entity);
-            await _db.SaveChangesAsync();
-            return MapContent(entity);
-        }
-
-        public async Task<StaffContentResponse> UpdateKnowledgeBaseItemAsync(Guid id, Guid staffId, StaffContentRequest request)
-        {
-            var entity = await _db.StaffKnowledgeBaseItems.FirstOrDefaultAsync(x => x.Id == id)
-                ?? throw new KeyNotFoundException("Không tìm thấy bài viết.");
-
-            entity.Type = request.Type;
-            entity.Title = request.Title.Trim();
-            entity.Content = request.Content.Trim();
-            entity.Tags = string.IsNullOrWhiteSpace(request.Tags) ? null : request.Tags.Trim();
-            entity.IsPublished = request.IsPublished;
-            entity.SortOrder = request.SortOrder;
-            entity.UpdatedBy = staffId;
-            entity.UpdatedAt = DateTime.UtcNow;
-
-            await _db.SaveChangesAsync();
-            return MapContent(entity);
-        }
-
-        public async Task DeleteKnowledgeBaseItemAsync(Guid id)
-        {
-            var entity = await _db.StaffKnowledgeBaseItems.FirstOrDefaultAsync(x => x.Id == id)
-                ?? throw new KeyNotFoundException("Không tìm thấy bài viết.");
-
-            _db.StaffKnowledgeBaseItems.Remove(entity);
-            await _db.SaveChangesAsync();
-        }
-
         public async Task<StaffPagedResponse<StaffAnalysisReviewResponse>> GetAnalysisReviewsAsync(Guid? projectId, int page, int pageSize)
         {
             page = Math.Max(1, page);
@@ -963,24 +882,6 @@ namespace Service.Implementations
                 CreatedAt = feedback.CreatedAt,
                 UpdatedAt = feedback.UpdatedAt,
                 ReadAt = feedback.ReadAt,
-            };
-        }
-
-        private static StaffContentResponse MapContent(StaffKnowledgeBaseItem item)
-        {
-            return new StaffContentResponse
-            {
-                Id = item.Id,
-                Type = item.Type,
-                Title = item.Title,
-                Content = item.Content,
-                Tags = item.Tags,
-                IsPublished = item.IsPublished,
-                SortOrder = item.SortOrder,
-                CreatedBy = item.CreatedBy,
-                UpdatedBy = item.UpdatedBy,
-                CreatedAt = item.CreatedAt,
-                UpdatedAt = item.UpdatedAt
             };
         }
 

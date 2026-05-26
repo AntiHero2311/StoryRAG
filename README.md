@@ -28,7 +28,7 @@ npm run dev
 2. Dung `Backend/supabase_full_reset.dbml` de visualize schema tren dbdiagram.io.
 
 > `supabase_full_reset.sql` da bao gom day du cac bang phuc vu luong phan tich/staff:
-> `ProjectAnalysisJobs`, `StaffFeedbacks`, `StaffKnowledgeBaseItems`, `StaffAnalysisReviews`.
+> `ProjectAnalysisJobs`, `StaffFeedbacks`, `faqs`, `writing_tips`, `StaffAnalysisReviews`.
 
 ---
 
@@ -80,7 +80,7 @@ Users
   ├─< Payments
   ├─< BugReports
   ├─< StaffFeedbacks
-  ├─< StaffKnowledgeBaseItems
+  ├─< faqs / writing_tips
   └─< StaffAnalysisReviews
 ```
 

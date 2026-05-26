@@ -20,11 +20,11 @@ type HubStats = {
 };
 
 const QUICK_LINKS = [
-    { to: '/staff/flagged', label: 'Dự án bị cờ', desc: 'Abuse / rate-limit', icon: AlertTriangle, color: 'text-amber-400', statKey: 'flagged' as const },
-    { to: '/staff/analysis-jobs', label: 'Phân tích lỗi / treo', desc: 'Rerun job & report chờ duyệt', icon: Activity, color: 'text-violet-400', statKey: 'failedJobs' as const },
-    { to: '/staff/feedbacks', label: 'Phản hồi tác giả', desc: 'Gửi & theo dõi feedback', icon: MessageSquare, color: 'text-indigo-400', statKey: 'openFeedbacks' as const },
-    { to: '/staff/content?tab=faq', label: 'Nội dung trợ giúp', desc: 'FAQ & mẹo viết truyện', icon: CircleHelp, color: 'text-emerald-400' },
-    { to: '/staff/bugs', label: 'Báo cáo lỗi app', desc: 'Bug / UX từ người dùng', icon: Bug, color: 'text-orange-400', statKey: 'openBugs' as const },
+    { to: '/staff/flagged', label: 'Dự án bị cờ', icon: AlertTriangle, color: 'text-amber-400', statKey: 'flagged' as const },
+    { to: '/staff/analysis-jobs', label: 'Phân tích lỗi / treo', icon: Activity, color: 'text-violet-400', statKey: 'failedJobs' as const },
+    { to: '/staff/feedbacks', label: 'Phản hồi tác giả', icon: MessageSquare, color: 'text-indigo-400', statKey: 'openFeedbacks' as const },
+    { to: '/staff/content?tab=faq', label: 'Nội dung trợ giúp', icon: CircleHelp, color: 'text-emerald-400' },
+    { to: '/staff/bugs', label: 'Báo cáo lỗi app', icon: Bug, color: 'text-orange-400', statKey: 'openBugs' as const },
 ];
 
 export default function StaffOverviewPage() {
@@ -69,7 +69,6 @@ export default function StaffOverviewPage() {
             {() => (
                 <AdminPageShell
                     title="Tổng quan Staff"
-                    subtitle="Kiểm duyệt, phân tích, hỗ trợ tác giả và nội dung trợ giúp"
                     action={
                         <button type="button" onClick={() => void load()} className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[var(--border-color)] text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
                             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Làm mới
@@ -104,7 +103,6 @@ export default function StaffOverviewPage() {
                                                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">{badge}</span>
                                             )}
                                         </p>
-                                        <p className="text-xs text-[var(--text-secondary)]">{l.desc}</p>
                                     </div>
                                     <ChevronRight className="w-4 h-4 text-[var(--text-tertiary)] group-hover:text-amber-400" />
                                 </Link>

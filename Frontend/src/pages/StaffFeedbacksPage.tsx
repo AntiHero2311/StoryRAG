@@ -124,12 +124,7 @@ export default function StaffFeedbacksPage() {
                         <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--input-bg)' }}>
                             <MessageSquare className="w-5 h-5 text-indigo-400" />
                         </div>
-                        <div>
-                            <h1 className="text-lg font-bold text-[var(--text-primary)]">Phản hồi tác giả</h1>
-                            <p className="text-sm text-[var(--text-secondary)] mt-0.5">
-                                Gửi nhận xét thủ công hoặc theo dõi phản hồi lại của tác giả.
-                            </p>
-                        </div>
+                        <h1 className="text-lg font-bold text-[var(--text-primary)]">Phản hồi tác giả</h1>
                         </div>
                         <button
                             type="button"

@@ -117,9 +117,11 @@ export default function StaffAnalysisJobsPage() {
                 <Activity className="w-5 h-5 text-amber-400" />
               </div>
               <div>
-                <p className="text-sm font-bold" style={{ color: 'var(--text-bright)' }}>Job phân tích lỗi hoặc treo</p>
-                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                  Tổng: {stats.total} · Failed: {stats.failed} · Processing: {stats.processing}
+                <p className="text-sm font-bold" style={{ color: 'var(--text-bright)' }}>
+                  Job phân tích lỗi hoặc treo
+                  <span className="ml-2 text-xs font-normal" style={{ color: 'var(--text-secondary)' }}>
+                    ({stats.total} · Failed {stats.failed} · Processing {stats.processing})
+                  </span>
                 </p>
               </div>
             </div>

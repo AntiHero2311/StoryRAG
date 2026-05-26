@@ -37,7 +37,6 @@ export default function AdminLogsPage() {
             {() => (
                 <AdminPageShell
                     title="Nhật ký hệ thống"
-                    subtitle={data ? `${data.total} bản ghi` : 'Audit log cơ bản'}
                     action={
                         <button type="button" onClick={() => void load()} className="p-2 rounded-xl border border-[var(--border-color)]">
                             <RefreshCw className="w-4 h-4" />

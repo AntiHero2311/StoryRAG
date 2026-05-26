@@ -39,12 +39,7 @@ export default function StaffPerformancePage() {
                 <div className="p-6 max-w-4xl mx-auto w-full space-y-6">
                     <div className="flex items-center gap-3">
                         <BarChart3 className="w-6 h-6 text-indigo-400" />
-                        <div>
-                            <h1 className="text-lg font-bold text-[var(--text-primary)]">Hiệu suất làm việc</h1>
-                            <p className="text-sm text-[var(--text-secondary)]">
-                                {stats ? `Xin chào ${stats.staffName}` : 'Thống kê nội bộ tháng hiện tại'}
-                            </p>
-                        </div>
+                        <h1 className="text-lg font-bold text-[var(--text-primary)]">Hiệu suất làm việc</h1>
                     </div>
 
                     {error && <p className="text-rose-400 text-sm">{error}</p>}

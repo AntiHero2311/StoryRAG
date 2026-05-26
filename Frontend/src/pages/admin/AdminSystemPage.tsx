@@ -58,7 +58,7 @@ export default function AdminSystemPage() {
     return (
         <MainLayout pageTitle="Hệ thống">
             {() => (
-                <AdminPageShell title="Cấu hình hệ thống" subtitle="RAG, giới hạn lưu trữ và chế độ bảo trì">
+                <AdminPageShell title="Cấu hình hệ thống">
                     {error && <p className="text-rose-400 text-sm">{error}</p>}
 
                     {limits && (

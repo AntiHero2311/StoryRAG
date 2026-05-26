@@ -443,26 +443,18 @@ Khi staff gửi `feedbackMessage` trong `PATCH /staff/analyses/{reportId}/edit`,
 
 ### 4) Quản lý FAQ / Writing Tips
 
+FAQ: `/api/faqs` (public) và `/api/faqs/admin` (Staff/Admin CRUD).  
+Writing tips: `/api/writing-tips` (public) và `/api/writing-tips/admin` (Staff/Admin CRUD).
+
 | Method | Route | Mô tả |
 |--------|-------|-------|
-| `GET` | `/staff/knowledge-base` | Danh sách FAQ/tips (`?type=&isPublished=&page=&pageSize=`) |
-| `POST` | `/staff/knowledge-base` | Tạo item mới |
-| `PUT` | `/staff/knowledge-base/{id}` | Cập nhật item |
-| `DELETE` | `/staff/knowledge-base/{id}` | Xóa item |
-
-**Body `POST/PUT /staff/knowledge-base`**
-```json
-{
-  "type": "FAQ",
-  "title": "Làm sao tăng pacing chương 1?",
-  "content": "Ưu tiên xung đột sớm, giảm đoạn mô tả dài...",
-  "tags": "pacing,chapter-1",
-  "isPublished": true,
-  "sortOrder": 10
-}
-```
-
-`type`: `FAQ` | `WritingTip`
+| `GET` | `/faqs` | FAQ đã publish (tác giả / Trợ giúp) |
+| `GET` | `/faqs/admin` | Danh sách FAQ (staff) |
+| `POST` | `/faqs/admin` | Tạo FAQ |
+| `PUT` | `/faqs/admin/{id}` | Sửa FAQ |
+| `DELETE` | `/faqs/admin/{id}` | Xóa FAQ |
+| `GET` | `/writing-tips` | Mẹo viết đã publish |
+| `GET/POST/PUT/DELETE` | `/writing-tips/admin` | CRUD mẹo viết (staff) |
 
 ---
 
@@ -517,7 +509,8 @@ ChatMessages            — uuid PK, FK→Projects, FK→Users
 RewriteHistories        — uuid PK, FK→Projects, FK→Users
 ProjectReports          — uuid PK, FK→Projects, CriteriaJson (jsonb), ProjectVersion (text)
 StaffFeedbacks          — uuid PK, feedback staff cho author/project/chapter/report, kèm user reaction/reply
-StaffKnowledgeBaseItems — uuid PK, FAQ/WritingTip do staff quản trị
+faqs                    — uuid PK, FAQ trợ giúp (published)
+writing_tips            — uuid PK, mẹo viết (tags text[])
 StaffAnalysisReviews    — uuid PK, thao tác review/rerun report của staff
  
 SubscriptionPlans       — int PK (seed: Free/Basic/Pro/Enterprise)
