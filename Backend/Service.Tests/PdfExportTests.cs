@@ -137,6 +137,9 @@ public class PdfExportTests
 
         public Task<List<EvidenceChunkItemDto>> GetProjectEvidenceChunksAsync(Guid projectId, Guid userId, string? ids, string? ordinals, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
+
+        public Task<List<ProjectReportSnapshotItem>> GetReportSnapshotsAsync(Guid reportId, Guid projectId, Guid userId, CancellationToken cancellationToken = default)
+            => throw new NotImplementedException();
     }
 }
 

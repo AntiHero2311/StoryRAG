@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart2, BrainCircuit, Loader2, AlertCircle, CheckCircle2, Sparkles, Clock, CreditCard, Download, ChevronDown, Check } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
@@ -14,6 +14,8 @@ import GroupCard from '../components/analysis/GroupCard';
 import EvidenceChunksPanel from '../components/analysis/EvidenceChunksPanel';
 import NarrativeChartsPanel from '../components/analysis/NarrativeChartsPanel';
 import CharacterRelationshipsGraphPanel from '../components/analysis/CharacterRelationshipsGraphPanel';
+import SnapshotViewerPanel from '../components/analysis/SnapshotViewerPanel';
+import StoryBiblePanel from '../components/analysis/StoryBiblePanel';
 import { useToast } from '../components/Toast';
 import { browserNotificationService } from '../services/browserNotificationService';
 import { appNotificationService } from '../services/appNotificationService';
@@ -47,7 +49,7 @@ function AnalysisContent() {
     const [loadingHistoryReport, setLoadingHistoryReport] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({});
-    const [activeTab, setActiveTab] = useState<'overall' | 'charts'>('overall');
+    const [activeTab, setActiveTab] = useState<'overall' | 'storyBible' | 'charts' | 'snapshots'>('overall');
     const [elapsed, setElapsed] = useState(0);
     const [subscription, setSubscription] = useState<UserSubscription | null>(null);
     const [analysisJob, setAnalysisJob] = useState<ProjectAnalysisJobResponse | null>(null);
@@ -948,11 +950,29 @@ function AnalysisContent() {
                                         )}
                                     </button>
                                     <button
+                                        onClick={() => setActiveTab('storyBible')}
+                                        className={`pb-3 text-sm font-bold relative transition-colors ${activeTab === 'storyBible' ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                                    >
+                                        Cẩm nang truyện
+                                        {activeTab === 'storyBible' && (
+                                            <div className="absolute bottom-0 left-0 w-full h-0.5 rounded-t-full bg-amber-500" />
+                                        )}
+                                    </button>
+                                    <button
                                         onClick={() => setActiveTab('charts')}
                                         className={`pb-3 text-sm font-bold relative transition-colors ${activeTab === 'charts' ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
                                     >
                                         Biểu đồ chuyên sâu
                                         {activeTab === 'charts' && (
+                                            <div className="absolute bottom-0 left-0 w-full h-0.5 rounded-t-full bg-amber-500" />
+                                        )}
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('snapshots')}
+                                        className={`pb-3 text-sm font-bold relative transition-colors ${activeTab === 'snapshots' ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                                    >
+                                        Đọc bản thảo đã phân tích
+                                        {activeTab === 'snapshots' && (
                                             <div className="absolute bottom-0 left-0 w-full h-0.5 rounded-t-full bg-amber-500" />
                                         )}
                                     </button>
@@ -1055,6 +1075,19 @@ function AnalysisContent() {
                                     </div>
                                 )}
 
+                                {activeTab === 'storyBible' && (
+                                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        {report.contentAnalysis ? (
+                                            <StoryBiblePanel data={report.contentAnalysis} />
+                                        ) : (
+                                            <div className="rounded-2xl p-5 mt-5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                                                <p className="text-[var(--text-primary)] font-semibold text-sm">Cẩm nang truyện</p>
+                                                <p className="text-[var(--text-secondary)] text-xs mt-2">Báo cáo này không có dữ liệu cẩm nang truyện (phiên bản cũ).</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 {activeTab === 'charts' && (
                                     <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                                         <div className="rounded-2xl mb-5 p-4 flex flex-col gap-3"
@@ -1097,6 +1130,12 @@ function AnalysisContent() {
                                         <div className="mt-5">
                                             <CharacterRelationshipsGraphPanel projectId={selectedId} />
                                         </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'snapshots' && (
+                                    <div className="mt-4">
+                                        <SnapshotViewerPanel projectId={selectedId} reportId={report.id} />
                                     </div>
                                 )}
                             </>

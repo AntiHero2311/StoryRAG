@@ -319,6 +319,8 @@ CREATE TABLE "ProjectReports" (
     "Status"         character varying(20)    NOT NULL DEFAULT 'Pending',
     "TotalScore"     numeric(5,2)             NOT NULL DEFAULT 0,
     "CriteriaJson"   jsonb                    NOT NULL DEFAULT '[]',
+    "ContentAnalysisJson" jsonb,
+    "EmotionPacingJson" jsonb,
     "ProjectVersion" character varying(50)    NOT NULL DEFAULT 'v1.0.0',
     "CreatedAt"      timestamp with time zone NOT NULL DEFAULT NOW(),
     "UpdatedAt"      timestamp with time zone,
@@ -336,6 +338,19 @@ CREATE TABLE "ReportItems" (
     "EvidenceChunkIds" jsonb,
     CONSTRAINT "PK_ReportItems" PRIMARY KEY ("Id"),
     CONSTRAINT "FK_ReportItems_ProjectReports_ProjectReportId" FOREIGN KEY ("ProjectReportId")
+        REFERENCES "ProjectReports" ("Id") ON DELETE CASCADE
+);
+
+-- ── ProjectReportSnapshots ───────────────────────────────────
+CREATE TABLE "ProjectReportSnapshots" (
+    "Id"               uuid                     NOT NULL DEFAULT uuid_generate_v4(),
+    "ProjectReportId"  uuid                     NOT NULL,
+    "ChapterNumber"    integer                  NOT NULL,
+    "Title"            character varying(255)   NOT NULL,
+    "Content"          text                     NOT NULL,
+    "WordCount"        integer                  NOT NULL DEFAULT 0,
+    CONSTRAINT "PK_ProjectReportSnapshots" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_ProjectReportSnapshots_ProjectReports" FOREIGN KEY ("ProjectReportId")
         REFERENCES "ProjectReports" ("Id") ON DELETE CASCADE
 );
 

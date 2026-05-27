@@ -29,6 +29,7 @@ namespace Repository.Data
         // AI Reports
         public DbSet<ProjectReport> ProjectReports { get; set; }
         public DbSet<ReportItem> ReportItems { get; set; }
+        public DbSet<ProjectReportSnapshot> ProjectReportSnapshots { get; set; }
         public DbSet<ProjectAnalysisJob> ProjectAnalysisJobs { get; set; }
         public DbSet<ProjectAnalysisFact> ProjectAnalysisFacts { get; set; }
 
@@ -334,6 +335,22 @@ namespace Repository.Data
                 entity.HasOne(r => r.User)
                       .WithMany()
                       .HasForeignKey(r => r.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── ProjectReportSnapshot ─────────────────────────────────────────────
+            modelBuilder.Entity<ProjectReportSnapshot>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.ChapterNumber).IsRequired();
+                entity.Property(e => e.Title).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.Content).IsRequired();
+                entity.Property(e => e.WordCount).HasDefaultValue(0);
+
+                entity.HasOne(s => s.ProjectReport)
+                      .WithMany(r => r.Snapshots)
+                      .HasForeignKey(s => s.ProjectReportId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
 

@@ -29,7 +29,7 @@ services:
       - key: Gemini__EmbeddingModel
         value: gemini-embedding-001
       - key: Gemini__ChatModels
-        value: gemini-2.0-flash,gemini-2.5-flash,gemini-1.5-flash,gemini-3-flash-preview
+        value: gemini-2.0-flash,gemini-2.5-flash,gemini-3-flash-preview
       - key: Gemini__AnalyzeRpmLimit
         value: "8"
       - key: Gemini__GlobalOverloadRetryCycles

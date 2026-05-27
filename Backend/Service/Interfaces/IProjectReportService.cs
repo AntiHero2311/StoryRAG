@@ -33,5 +33,15 @@ namespace Service.Interfaces
             string? ids,
             string? ordinals,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Lấy danh sách snapshot văn bản (Read-only) của một Report, 
+        /// tự động giải mã để trả về nguyên văn bản thảo lúc phân tích.
+        /// </summary>
+        Task<List<ProjectReportSnapshotItem>> GetReportSnapshotsAsync(
+            Guid reportId,
+            Guid projectId,
+            Guid userId,
+            CancellationToken cancellationToken = default);
     }
 }

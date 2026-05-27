@@ -266,6 +266,8 @@ namespace Service.Implementations
             List<ReportItem> reportItemsForSave;
             Guid analysisRunId;
             ProjectAnalysisJob? syntheticRunCarrier = null;
+            string? contentAnalysisData = null;
+            string? emotionPacingData = null;
 
             if (analysisJobId is Guid existingRun &&
                 await _context.ProjectAnalysisJobs.AnyAsync(
@@ -295,22 +297,51 @@ namespace Service.Implementations
 
             if (useRag)
             {
-                (criteria, warnings, overallFeedback, analyzeTokens, factsPayloadJson, reportItemsForSave) =
-                    await EvaluateWithRagPipelineAsync(
-                        projectTitle,
-                        chunks,
-                        decryptedChunks,
-                        storyBibleText,
-                        chapterCount,
-                        totalWords,
-                        aiInstructions,
-                        progressCallback,
-                        analysisRunId,
-                        cancellationToken);
+                var rubricTask = EvaluateWithRagPipelineAsync(
+                    projectTitle,
+                    chunks,
+                    decryptedChunks,
+                    storyBibleText,
+                    chapterCount,
+                    totalWords,
+                    aiInstructions,
+                    progressCallback,
+                    analysisRunId,
+                    cancellationToken);
+
+                var contentTask = ExtractStoryBibleAsync(
+                    projectTitle,
+                    decryptedChunks,
+                    progressCallback,
+                    cancellationToken);
+
+                var emotionTask = AnalyzeEmotionPacingAsync(
+                    projectTitle,
+                    decryptedChunks,
+                    progressCallback,
+                    cancellationToken);
+
+                await Task.WhenAll(rubricTask, contentTask, emotionTask);
+
+                var rubricRes = rubricTask.Result;
+                var contentRes = contentTask.Result;
+                var emotionRes = emotionTask.Result;
+
+                criteria = rubricRes.Criteria;
+                warnings = rubricRes.Warnings;
+                overallFeedback = rubricRes.OverallFeedback;
+                analyzeTokens = rubricRes.TokensUsed + contentRes.TokensUsed + emotionRes.TokensUsed;
+                factsPayloadJson = rubricRes.FactsPayloadJson;
+                reportItemsForSave = rubricRes.ReportItems;
+
+                var rawContentData = JsonSerializer.Serialize(contentRes.Content, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                var rawEmotionData = JsonSerializer.Serialize(emotionRes.Pacing, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                contentAnalysisData = EncryptionHelper.EncryptWithMasterKey(rawContentData, rawDek);
+                emotionPacingData = EncryptionHelper.EncryptWithMasterKey(rawEmotionData, rawDek);
             }
             else
             {
-                (criteria, warnings, overallFeedback, analyzeTokens) = await EvaluateWithAiAsync(
+                var rubricRes = await EvaluateWithAiAsync(
                     projectTitle,
                     decryptedChunks,
                     storyBibleText,
@@ -319,6 +350,11 @@ namespace Service.Implementations
                     aiInstructions,
                     progressCallback,
                     cancellationToken);
+
+                criteria = rubricRes.Criteria;
+                warnings = rubricRes.Warnings;
+                overallFeedback = rubricRes.OverallFeedback;
+                analyzeTokens = rubricRes.TokensUsed;
                 factsPayloadJson = """{"characters":[],"chapter_stats":[],"plot_events":[],"consistency_flags":[]}""";
                 reportItemsForSave = new List<ReportItem>();
             }
@@ -350,9 +386,35 @@ namespace Service.Implementations
                 ProjectVersion = projectVersion,
                 TotalScore = total,
                 CriteriaJson = BuildStoredCriteriaJson(criteria, warnings, overallFeedback),
+                ContentAnalysisJson = contentAnalysisData,
+                EmotionPacingJson = emotionPacingData,
                 CreatedAt = DateTime.UtcNow,
             };
             _context.ProjectReports.Add(report);
+
+            // Save Snapshot Data
+            foreach (var chapter in chapters)
+            {
+                var state = snapshot.Chapters.FirstOrDefault(c => c.ChapterNumber == chapter.ChapterNumber);
+                if (state == null || !state.CurrentVersionId.HasValue) continue;
+                
+                var version = await _context.ChapterVersions
+                    .Where(v => v.Id == state.CurrentVersionId.Value)
+                    .Select(v => new { v.Title, v.Content, v.WordCount })
+                    .FirstOrDefaultAsync(cancellationToken);
+                
+                if (version != null)
+                {
+                    _context.ProjectReportSnapshots.Add(new ProjectReportSnapshot
+                    {
+                        ProjectReportId = report.Id,
+                        ChapterNumber = chapter.ChapterNumber,
+                        Title = version.Title,
+                        Content = version.Content, // Already encrypted in DB
+                        WordCount = version.WordCount
+                    });
+                }
+            }
 
             if (useRag)
             {
@@ -448,8 +510,21 @@ namespace Service.Implementations
                     c.EvidenceChunkOrdinals = row.EvidenceChunkIds.ToList();
             }
 
+            ContentAnalysisResult? contentRes = null;
+            EmotionPacingResult? emotionRes = null;
+            if (!string.IsNullOrWhiteSpace(report.ContentAnalysisJson))
+            {
+                var decData = EncryptionHelper.DecryptWithMasterKey(report.ContentAnalysisJson, rawDek);
+                try { contentRes = JsonSerializer.Deserialize<ContentAnalysisResult>(decData, jsonOpts); } catch { }
+            }
+            if (!string.IsNullOrWhiteSpace(report.EmotionPacingJson))
+            {
+                var decData = EncryptionHelper.DecryptWithMasterKey(report.EmotionPacingJson, rawDek);
+                try { emotionRes = JsonSerializer.Deserialize<EmotionPacingResult>(decData, jsonOpts); } catch { }
+            }
+
             var projectVersionHash = await ResolveProjectVersionHashAsync(report.Id, CancellationToken.None);
-            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, mergedLatest, warnings, overallFeedback, report.ProjectVersion, projectVersionHash, report.CreatedAt);
+            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, mergedLatest, warnings, overallFeedback, report.ProjectVersion, projectVersionHash, report.CreatedAt, contentRes, emotionRes);
         }
 
         public async Task<List<ProjectReportSummary>> GetAllAsync(Guid projectId, Guid userId)
@@ -565,8 +640,55 @@ namespace Service.Implementations
                     c.EvidenceChunkOrdinals = row.EvidenceChunkIds.ToList();
             }
 
+            ContentAnalysisResult? contentRes = null;
+            EmotionPacingResult? emotionRes = null;
+            if (!string.IsNullOrWhiteSpace(report.ContentAnalysisJson))
+            {
+                var decData = EncryptionHelper.DecryptWithMasterKey(report.ContentAnalysisJson, rawDek);
+                try { contentRes = JsonSerializer.Deserialize<ContentAnalysisResult>(decData, jsonOpts); } catch { }
+            }
+            if (!string.IsNullOrWhiteSpace(report.EmotionPacingJson))
+            {
+                var decData = EncryptionHelper.DecryptWithMasterKey(report.EmotionPacingJson, rawDek);
+                try { emotionRes = JsonSerializer.Deserialize<EmotionPacingResult>(decData, jsonOpts); } catch { }
+            }
+
             var projectVersionHash = await ResolveProjectVersionHashAsync(report.Id, CancellationToken.None);
-            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, mergedById, warnings, overallFeedback, report.ProjectVersion, projectVersionHash, report.CreatedAt);
+            return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, mergedById, warnings, overallFeedback, report.ProjectVersion, projectVersionHash, report.CreatedAt, contentRes, emotionRes);
+        }
+
+        public async Task<List<ProjectReportSnapshotItem>> GetReportSnapshotsAsync(
+            Guid reportId,
+            Guid projectId,
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            await VerifyOwnershipAsync(projectId, userId);
+
+            var report = await _context.ProjectReports
+                .Include(r => r.Snapshots)
+                .Include(r => r.Project)
+                .FirstOrDefaultAsync(r => r.Id == reportId && r.ProjectId == projectId, cancellationToken);
+
+            if (report == null)
+                throw new KeyNotFoundException("Không tìm thấy báo cáo.");
+
+            var author = await _context.Users.FindAsync(report.Project.AuthorId);
+            if (author == null) throw new KeyNotFoundException("Không tìm thấy người dùng.");
+            var rawDek = EncryptionHelper.DecryptWithMasterKey(author.DataEncryptionKey!, _config["Security:MasterKey"]!);
+
+            return report.Snapshots
+                .OrderBy(s => s.ChapterNumber)
+                .Select(s => new ProjectReportSnapshotItem
+                {
+                    Id = s.Id,
+                    ProjectReportId = s.ProjectReportId,
+                    ChapterNumber = s.ChapterNumber,
+                    Title = s.Title,
+                    Content = EncryptionHelper.DecryptWithMasterKey(s.Content, rawDek),
+                    WordCount = s.WordCount
+                })
+                .ToList();
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────────
@@ -1274,7 +1396,7 @@ namespace Service.Implementations
         private static ProjectReportResponse BuildResponse(
             Guid reportId, Guid projectId, string projectTitle,
             string status, decimal totalScore, List<CriterionResult> criteria,
-            List<StoryWarning>? warnings = null, string overallFeedback = "", string projectVersion = "v1.0", string projectVersionHash = "", DateTime? createdAt = null)
+            List<StoryWarning>? warnings = null, string overallFeedback = "", string projectVersion = "v1.0", string projectVersionHash = "", DateTime? createdAt = null, ContentAnalysisResult? contentAnalysis = null, EmotionPacingResult? emotionPacing = null)
         {
             var groups = criteria
                 .GroupBy(c => c.GroupName)
@@ -1300,6 +1422,8 @@ namespace Service.Implementations
                 ProjectVersionHash = projectVersionHash,
                 Groups = groups,
                 Warnings = warnings ?? new(),
+                ContentAnalysis = contentAnalysis,
+                EmotionPacing = emotionPacing,
                 CreatedAt = createdAt ?? DateTime.UtcNow,
             };
         }

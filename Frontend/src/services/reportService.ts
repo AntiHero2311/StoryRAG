@@ -41,6 +41,25 @@ export interface StoryWarning {
     detail: string;
 }
 
+export interface ContentAnalysisResult {
+    worldSettings: Array<{ name: string; description: string; rules: string }>;
+    characters: Array<{ name: string; role: string; description: string; motivation: string }>;
+    timelineEvents: Array<{ time: string; title: string; description: string; importance: string; sortOrder: number }>;
+    themes: Array<{ title: string; description: string; evidence: string }>;
+    analysisNote: string;
+}
+
+export interface EmotionPacingResult {
+    pacingPoints: PacingPoint[];
+    emotionPoints: EmotionPoint[];
+    characterFrequencies: CharacterFrequency[];
+    characterPresence: CharacterPresenceSeries[];
+    characterRelationships: CharacterRelationshipEdge[];
+    insights: string[];
+    overallPacingProfile: string;
+    dominantEmotionProfile: string;
+}
+
 export interface ProjectReportResponse {
     id: string;
     projectId: string;
@@ -53,6 +72,8 @@ export interface ProjectReportResponse {
     projectVersionHash: string;
     groups: GroupResult[];
     warnings: StoryWarning[];
+    contentAnalysis?: ContentAnalysisResult;
+    emotionPacing?: EmotionPacingResult;
     createdAt: string;
 }
 
@@ -127,6 +148,15 @@ export interface NarrativeChartsResponse {
     segmentTexts: string[];
 }
 
+export interface ProjectReportSnapshotItem {
+    id: string;
+    projectReportId: string;
+    chapterNumber: number;
+    title: string;
+    content: string;
+    wordCount: number;
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 export const reportService = {
     getActiveAnalyzeJob: (projectId?: string) => {
@@ -176,6 +206,9 @@ export const reportService = {
         api.get<NarrativeChartsResponse>(`/ai/${projectId}/narrative/charts`, {
             params: chapterId ? { chapterId } : {},
         }).then(r => r.data),
+
+    getReportSnapshots: (projectId: string, reportId: string) =>
+        api.get<ProjectReportSnapshotItem[]>(`/ai/${projectId}/reports/${reportId}/snapshots`).then(r => r.data),
 
     exportReportPdf: async (projectId: string, reportId: string): Promise<void> => {
         const res = await api.get(`/ai/${projectId}/reports/${reportId}/export/pdf`, {

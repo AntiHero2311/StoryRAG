@@ -53,18 +53,21 @@ Hệ thống cung cấp hàng loạt công cụ RAG / AI Writing.
 
 ### 4.3. Story Bible (Tài liệu cốt truyện)
 - Phân hệ gồm: Character, Worldbuilding, Plot Notes, Themes, Style Guides và Timeline Events.
-- Tất cả đều được Frontend hiển thị trên Floating Chat (sidebar). Các thẻ này khi được tạo đều được mã hóa bằng thuật toán `EncryptionHelper` qua `DEK` trước khi vào DB, đảm bảo bảo mật ngang hàng với chương chính.
+- **Thay đổi mới nhất:** Thay vì lưu trên dự án (Project), Story Bible hiện tại được tạo và đóng băng cùng mỗi lần Phân tích dự án (Project Report). Dữ liệu này được hiển thị trong tab **Cẩm nang truyện** tại trang Phân tích (`AnalysisPage.tsx`).
+- Tất cả dữ liệu phân tích này đều được mã hóa bằng thuật toán `EncryptionHelper` qua `DEK` trước khi vào DB.
 
 ## 5. Luồng Đánh giá Dự án (Big Report Generation Job)
-**Tên chức năng:** 100-Point Project Rubric Analysis (Phân tích tổng lực 100 điểm)
+**Tên chức năng:** 100-Point Project Rubric Analysis & Parallel Analytics
 - **FE:** ở `AnalysisPage.tsx`, chọn phân tích dự án.
-- **BE (`AnalysisJobQueue` & `ProjectAnalysisJobService`):**
+- **BE (`AnalysisJobQueue` & `ProjectReportService`):**
   - Đây là Job quá lớn để chạy trực tiếp (kéo dài cả tiếng đồng hồ nếu truyện dài).
   - C# đẩy job vào Background Queue ưu tiên (`AnalysisJobQueue.cs`), mỗi user chỉ có tối đa 1 job active.
-  - Worker ưu tiên lấy job theo tier gói subscription trước, sau đó theo thời điểm tạo.
   - Phản hồi `202 Accepted` kèm theo JobId và `ProjectVersionHash` snapshot của toàn bộ bộ truyện.
-  - Trước khi chấm rubric, backend chốt snapshot active của toàn bộ truyện; nếu chapter nào chưa chunk/embed đủ thì worker sẽ báo rõ chapter đó, tự repair rồi mới tiếp tục.
-  - Trình worker ngầm lấy toàn bộ các chương đã embed của snapshot đó → Tiến hành chấm điểm từng tiêu chí (Character, Plot, Pacing, Style) → Kết xuất Report lớn định dạng JSON.
+  - Chạy **3 Task phân tích song song** bằng `Task.WhenAll`:
+    1. **Đánh giá Rubric 100 điểm:** Trình worker ngầm lấy toàn bộ các chương đã embed của snapshot đó → Phân tích cốt truyện, văn phong → Kết xuất Report Rubric.
+    2. **Phân tích Cẩm nang (Story Bible):** Trích xuất Bối cảnh, Nhân vật, Dòng thời gian, Chủ đề.
+    3. **Phân tích Nhịp độ & Cảm xúc (Emotion Pacing):** Vẽ biểu đồ cốt truyện.
+  - **Lưu trữ an toàn:** Tất cả kết quả JSON (`ContentAnalysisJson`, `EmotionPacingJson`) và Text Snapshots (`ProjectReportSnapshots`) đều được **mã hóa qua DEK** trước khi lưu vào DB để đảm bảo tính bất biến (immutable) và bảo mật tuyệt đối cho người dùng.
   - AI phát hiện **6 cảnh báo đặc biệt** (lưu trong mảng `warnings[]` của `CriteriaJson`):
     | Code | Severity | Ý nghĩa |
     |------|----------|----------|
