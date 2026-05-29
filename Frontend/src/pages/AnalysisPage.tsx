@@ -6,16 +6,16 @@ import { UserInfo } from '../utils/jwtHelper';
 import { projectService, ProjectResponse } from '../services/projectService';
 import { reportService, type ProjectAnalysisJobResponse, type ProjectReportResponse, type ProjectReportSummary, type NarrativeChartsResponse } from '../services/reportService';
 import { subscriptionService, UserSubscription } from '../services/subscriptionService';
-import { chapterService, type ChapterResponse } from '../services/chapterService';
 import { classifyColor, groupColor } from '../components/analysis/helpers';
 import DonutChart from '../components/analysis/DonutChart';
 import RadarChart from '../components/analysis/RadarChart';
 import GroupCard from '../components/analysis/GroupCard';
 import EvidenceChunksPanel from '../components/analysis/EvidenceChunksPanel';
 import NarrativeChartsPanel from '../components/analysis/NarrativeChartsPanel';
-import CharacterRelationshipsGraphPanel from '../components/analysis/CharacterRelationshipsGraphPanel';
+
 import SnapshotViewerPanel from '../components/analysis/SnapshotViewerPanel';
 import StoryBiblePanel from '../components/analysis/StoryBiblePanel';
+import ChatPanel from '../components/workspace/ChatPanel';
 import { useToast } from '../components/Toast';
 import { browserNotificationService } from '../services/browserNotificationService';
 import { appNotificationService } from '../services/appNotificationService';
@@ -38,7 +38,6 @@ function AnalysisContent() {
     const [projectQuery, setProjectQuery] = useState('');
     const [report, setReport] = useState<ProjectReportResponse | null>(null);
     const [history, setHistory] = useState<ProjectReportSummary[]>([]);
-    const [projectChapters, setProjectChapters] = useState<ChapterResponse[]>([]);
     const [chartChapterFilter, setChartChapterFilter] = useState<string>('all');
     const [narrativeCharts, setNarrativeCharts] = useState<NarrativeChartsResponse | null>(null);
     const [loadingProjects, setLoadingProjects] = useState(true);
@@ -49,7 +48,7 @@ function AnalysisContent() {
     const [loadingHistoryReport, setLoadingHistoryReport] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({});
-    const [activeTab, setActiveTab] = useState<'overall' | 'storyBible' | 'charts' | 'snapshots'>('overall');
+    const [activeTab, setActiveTab] = useState<'overall' | 'storyBible' | 'charts' | 'snapshots' | 'chat'>('overall');
     const [elapsed, setElapsed] = useState(0);
     const [subscription, setSubscription] = useState<UserSubscription | null>(null);
     const [analysisJob, setAnalysisJob] = useState<ProjectAnalysisJobResponse | null>(null);
@@ -177,7 +176,6 @@ function AnalysisContent() {
 
         setReport(null);
         setHistory([]);
-        setProjectChapters([]);
         setChartChapterFilter('all');
         setNarrativeCharts(null);
         setError(null);
@@ -189,16 +187,6 @@ function AnalysisContent() {
         processingAnnouncedRef.current = null;
 
         const projectId = selectedId;
-
-        void chapterService.getChapters(projectId)
-            .then(chapters => {
-                if (!mountedRef.current || cancelled) return;
-                setProjectChapters(chapters);
-            })
-            .catch(() => {
-                if (!mountedRef.current || cancelled) return;
-                setProjectChapters([]);
-            });
 
         const loadProjectAnalysis = async () => {
             const [latestResult, allResult, activeJobResult, latestJobResult, globalActiveJobResult] = await Promise.allSettled([
@@ -588,12 +576,6 @@ function AnalysisContent() {
         }
     };
 
-    const handleRefreshNarrativeCharts = async () => {
-        if (!selectedId || loadingNarrativeCharts) return;
-        const chapterId = chartChapterFilter === 'all' ? undefined : chartChapterFilter;
-        await loadNarrativeCharts(selectedId, chapterId);
-    };
-
     const toggleGroup = (idx: number) =>
         setExpandedGroups(prev => ({ ...prev, [idx]: !prev[idx] }));
 
@@ -851,10 +833,20 @@ function AnalysisContent() {
                         )}
 
                         {error && (
-                            <div className="flex items-center gap-3 p-4 rounded-2xl text-sm"
+                            <div className="flex items-center justify-between gap-3 p-4 rounded-2xl text-sm w-full"
                                 style={{ background: 'linear-gradient(135deg,rgba(239,68,68,0.12),rgba(239,68,68,0.04))', border: '1px solid rgba(239,68,68,0.28)', color: '#f87171' }}>
-                                <AlertCircle className="w-4 h-4 shrink-0" />
-                                {error}
+                                <div className="flex items-center gap-3">
+                                    <AlertCircle className="w-4 h-4 shrink-0" />
+                                    <span>{error}</span>
+                                </div>
+                                {!analyzing && (
+                                    <button 
+                                        onClick={handleAnalyze}
+                                        className="h-8 px-4 rounded-xl font-semibold text-xs text-white shrink-0 transition-all active:scale-95 flex items-center gap-1 hover:brightness-110"
+                                        style={{ background: 'linear-gradient(135deg,#ef4444,#dc2626)', boxShadow: '0 4px 12px rgba(239,68,68,0.2)' }}>
+                                        <Sparkles className="w-3.5 h-3.5" /> Chạy lại
+                                    </button>
+                                )}
                             </div>
                         )}
 
@@ -976,6 +968,15 @@ function AnalysisContent() {
                                             <div className="absolute bottom-0 left-0 w-full h-0.5 rounded-t-full bg-amber-500" />
                                         )}
                                     </button>
+                                    <button
+                                        onClick={() => setActiveTab('chat')}
+                                        className={`pb-3 text-sm font-bold relative transition-colors ${activeTab === 'chat' ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                                    >
+                                        Hỏi đáp tác phẩm
+                                        {activeTab === 'chat' && (
+                                            <div className="absolute bottom-0 left-0 w-full h-0.5 rounded-t-full bg-amber-500" />
+                                        )}
+                                    </button>
                                 </div>
 
                                 {activeTab === 'overall' && (
@@ -1072,6 +1073,21 @@ function AnalysisContent() {
                                                 />
                                             ))}
                                         </div>
+
+                                        {/* AI Disclaimer */}
+                                        <div className="mt-6 p-5 rounded-2xl flex items-start gap-3 border transition-all"
+                                            style={{
+                                                background: 'linear-gradient(135deg, rgba(245,158,11,0.03), rgba(245,158,11,0.01))',
+                                                borderColor: 'rgba(245,158,11,0.15)',
+                                            }}>
+                                            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                                            <div className="space-y-1.5">
+                                                <p className="text-xs font-bold text-amber-500 uppercase tracking-wider">Khuyến cáo về nội dung do AI tạo</p>
+                                                <p className="text-xs text-[var(--text-secondary)] leading-relaxed select-text">
+                                                    Báo cáo phân tích này được thực hiện hoàn toàn tự động bằng công nghệ AI (RAG). AI có thể mắc sai sót, hiểu chưa đầy đủ ngữ cảnh hoặc đưa ra những nhận định mang tính khách quan tương đối. Nội dung báo cáo và các đề xuất chỉnh sửa chỉ mang tính chất tham khảo, dùng để hỗ trợ và nâng cao chất lượng quá trình sáng tác của bạn.
+                                                </p>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
 
@@ -1090,52 +1106,27 @@ function AnalysisContent() {
 
                                 {activeTab === 'charts' && (
                                     <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                        <div className="rounded-2xl mb-5 p-4 flex flex-col gap-3"
-                                            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-                                            <div className="flex items-center justify-between gap-3">
-                                                <div>
-                                                    <p className="text-[var(--text-primary)] text-sm font-semibold">Bộ lọc chart narrative</p>
-                                                    <p className="text-[var(--text-secondary)] text-xs">Chọn phạm vi phân tích theo toàn bộ project hoặc từng chapter.</p>
-                                                </div>
-                                                <button
-                                                    onClick={handleRefreshNarrativeCharts}
-                                                    disabled={!selectedId || loadingNarrativeCharts}
-                                                    className="h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-opacity disabled:opacity-50"
-                                                    style={{ background: 'rgba(139,92,246,0.15)', color: '#c4b5fd', border: '1px solid rgba(139,92,246,0.35)' }}>
-                                                    {loadingNarrativeCharts ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                                                    Làm mới chart
-                                                </button>
-                                            </div>
-                                            <div className="w-full sm:max-w-sm">
-                                                <label className="block text-[var(--text-secondary)] text-xs font-semibold mb-1.5 uppercase tracking-wider">
-                                                    Phạm vi chart
-                                                </label>
-                                                <select
-                                                    value={chartChapterFilter}
-                                                    onChange={e => setChartChapterFilter(e.target.value)}
-                                                    className="w-full h-10 px-3 rounded-xl text-sm text-[var(--text-primary)] outline-none"
-                                                    style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
-                                                    <option value="all">Toàn bộ project</option>
-                                                    {projectChapters.map(ch => (
-                                                        <option key={ch.id} value={ch.id}>
-                                                            {ch.title ?? `Chương ${ch.chapterNumber}`}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        </div>
-
                                         <NarrativeChartsPanel data={narrativeCharts} loading={loadingNarrativeCharts} />
-
-                                        <div className="mt-5">
-                                            <CharacterRelationshipsGraphPanel projectId={selectedId} />
-                                        </div>
                                     </div>
                                 )}
 
                                 {activeTab === 'snapshots' && (
                                     <div className="mt-4">
                                         <SnapshotViewerPanel projectId={selectedId} reportId={report.id} />
+                                    </div>
+                                )}
+
+                                {activeTab === 'chat' && (
+                                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        <div className="rounded-2xl p-5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', height: '620px', display: 'flex', flexDirection: 'column' }}>
+                                            <div className="mb-4">
+                                                <h3 className="text-[var(--text-primary)] font-bold text-lg">Hỏi đáp về tác phẩm</h3>
+                                                <p className="text-[var(--text-secondary)] text-xs mt-1">Trò chuyện với AI về nhân vật, cốt truyện, bối cảnh và các khía cạnh trong tác phẩm dựa trên báo cáo phân tích và cẩm nang truyện.</p>
+                                            </div>
+                                            <div className="flex-1 flex flex-col min-h-0 bg-[var(--bg-app)] rounded-xl border border-[var(--border-color)] overflow-hidden">
+                                                <ChatPanel projectId={selectedId} isEmbedded={true} />
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </>
@@ -1171,75 +1162,77 @@ function AnalysisContent() {
                         )}
                     </div>
 
-                    {/* ── Right: history sidebar — z thấp hơn khối chọn dự án để không đè menu sổ */}
-                    <div className="relative z-0 w-full xl:w-80 xl:sticky xl:top-8 shrink-0 order-first xl:order-none">
-                        <div
-                            className="rounded-3xl overflow-hidden border"
-                            style={{
-                                borderColor: 'rgba(255,255,255,0.08)',
-                                background: 'linear-gradient(160deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01) 45%, var(--bg-surface) 100%)',
-                            }}>
-                            <div className="px-5 py-4 flex items-center gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                                <Clock className="w-4 h-4 text-[var(--text-secondary)]" />
-                                <span className="text-[var(--text-primary)] font-semibold text-sm">Lịch sử phân tích</span>
-                                <span className="ml-auto px-2 py-0.5 rounded-full text-xs font-bold"
-                                    style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)' }}>
-                                    {history.length}
-                                </span>
-                            </div>
-                            <div className="divide-y max-h-[600px] overflow-y-auto" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                                {history.length === 0 && (
-                                    <div className="px-5 py-6">
-                                        <p className="text-[var(--text-primary)] text-sm font-semibold mb-1">Chưa có report nào</p>
-                                        <p className="text-[var(--text-secondary)] text-xs">
-                                            Sau khi phân tích xong, lịch sử report sẽ xuất hiện tại đây.
-                                        </p>
-                                    </div>
-                                )}
-                                {history.map(h => {
-                                    const c = classifyColor(h.classification);
-                                    const isActive = h.id === activeReportId;
-                                    const isLoading = loadingHistoryReport === h.id;
-                                    return (
-                                        <button key={h.id} onClick={() => handleLoadHistory(h)}
-                                            className="w-full px-5 py-3.5 flex items-center gap-3 text-left transition-colors hover:bg-white/5"
-                                            style={{
-                                                background: isActive ? 'rgba(245,166,35,0.08)' : undefined,
-                                                borderLeft: isActive ? '3px solid #f59e0b' : '3px solid transparent',
-                                                cursor: isActive ? 'default' : 'pointer',
-                                            }}>
-                                            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm"
-                                                style={{ background: c.bg, color: c.text }}>
-                                                {isLoading
-                                                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                                                    : h.totalScore.toFixed(0)}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="text-[var(--text-primary)] font-medium text-sm">
-                                                        {h.totalScore.toFixed(1)} điểm
-                                                    </span>
-                                                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
-                                                        style={{ background: c.bg, color: c.text }}>
-                                                        {h.classification}
-                                                    </span>
-                                                    {isActive && (
-                                                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
-                                                            style={{ background: 'rgba(245,166,35,0.15)', color: '#f5a623' }}>
-                                                            Đang xem
-                                                        </span>
-                                                    )}
+                    {/* ── Right: history sidebar — z thấp hơn khối chọn dự án để không đè menu sổ (Ẩn đi khi đang đọc bản thảo để rộng không gian) */}
+                    {activeTab !== 'snapshots' && (
+                        <div className="relative z-0 w-full xl:w-80 xl:sticky xl:top-8 shrink-0 order-first xl:order-none animate-in fade-in duration-300">
+                            <div
+                                className="rounded-3xl overflow-hidden border"
+                                style={{
+                                    borderColor: 'rgba(255,255,255,0.08)',
+                                    background: 'linear-gradient(160deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01) 45%, var(--bg-surface) 100%)',
+                                }}>
+                                <div className="px-5 py-4 flex items-center gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                                    <Clock className="w-4 h-4 text-[var(--text-secondary)]" />
+                                    <span className="text-[var(--text-primary)] font-semibold text-sm">Lịch sử phân tích</span>
+                                    <span className="ml-auto px-2 py-0.5 rounded-full text-xs font-bold"
+                                        style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)' }}>
+                                        {history.length}
+                                    </span>
+                                </div>
+                                <div className="divide-y max-h-[600px] overflow-y-auto" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                                    {history.length === 0 && (
+                                        <div className="px-5 py-6">
+                                            <p className="text-[var(--text-primary)] text-sm font-semibold mb-1">Chưa có report nào</p>
+                                            <p className="text-[var(--text-secondary)] text-xs">
+                                                Sau khi phân tích xong, lịch sử report sẽ xuất hiện tại đây.
+                                            </p>
+                                        </div>
+                                    )}
+                                    {history.map(h => {
+                                        const c = classifyColor(h.classification);
+                                        const isActive = h.id === activeReportId;
+                                        const isLoading = loadingHistoryReport === h.id;
+                                        return (
+                                            <button key={h.id} onClick={() => handleLoadHistory(h)}
+                                                className="w-full px-5 py-3.5 flex items-center gap-3 text-left transition-colors hover:bg-white/5"
+                                                style={{
+                                                    background: isActive ? 'rgba(245,166,35,0.08)' : undefined,
+                                                    borderLeft: isActive ? '3px solid #f59e0b' : '3px solid transparent',
+                                                    cursor: isActive ? 'default' : 'pointer',
+                                                }}>
+                                                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm"
+                                                    style={{ background: c.bg, color: c.text }}>
+                                                    {isLoading
+                                                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                        : h.totalScore.toFixed(0)}
                                                 </div>
-                                                <p className="text-[var(--text-secondary)] text-xs mt-0.5">
-                                                    {new Date(h.createdAt).toLocaleString('vi-VN')}
-                                                </p>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="text-[var(--text-primary)] font-medium text-sm">
+                                                            {h.totalScore.toFixed(1)} điểm
+                                                        </span>
+                                                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                                                            style={{ background: c.bg, color: c.text }}>
+                                                            {h.classification}
+                                                        </span>
+                                                        {isActive && (
+                                                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                                                                style={{ background: 'rgba(245,166,35,0.15)', color: '#f5a623' }}>
+                                                                Đang xem
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[var(--text-secondary)] text-xs mt-0.5">
+                                                        {new Date(h.createdAt).toLocaleString('vi-VN')}
+                                                    </p>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
                 </div>
             </div>

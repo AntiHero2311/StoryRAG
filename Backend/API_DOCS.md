@@ -540,12 +540,11 @@ Lấy kết quả báo cáo sau khi job hoàn tất.
 
 **Response `409`:**
 - Nếu job chưa hoàn thành.
-- Hoặc AI đã xong nhưng report đang ở bước **staff review cuối** (user sẽ nhận thông báo "đang kiểm tra bước cuối cùng").
 
 ---
 
 ### GET `/api/staff/analyses/pending?page={n}&pageSize={m}`
-Staff/Admin lấy danh sách report đang chờ review cuối (`PendingStaffReview` / `StaffReviewing`).
+Staff/Admin lấy danh sách report đang chờ review (chủ yếu phục vụ xem các báo cáo cũ chưa phát hành hoặc hậu kiểm).
 
 **Auth:** Bắt buộc, role `Staff` hoặc `Admin`.
 

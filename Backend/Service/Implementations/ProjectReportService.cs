@@ -10,6 +10,7 @@ using Service.DTOs;
 using Service.Helpers;
 using Service.Interfaces;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Service.Implementations
 {
@@ -268,6 +269,7 @@ namespace Service.Implementations
             ProjectAnalysisJob? syntheticRunCarrier = null;
             string? contentAnalysisData = null;
             string? emotionPacingData = null;
+            ContentAnalysisResult? contentResObj = null;
 
             if (analysisJobId is Guid existingRun &&
                 await _context.ProjectAnalysisJobs.AnyAsync(
@@ -338,6 +340,7 @@ namespace Service.Implementations
                 var rawEmotionData = JsonSerializer.Serialize(emotionRes.Pacing, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
                 contentAnalysisData = EncryptionHelper.EncryptWithMasterKey(rawContentData, rawDek);
                 emotionPacingData = EncryptionHelper.EncryptWithMasterKey(rawEmotionData, rawDek);
+                contentResObj = contentRes.Content;
             }
             else
             {
@@ -391,6 +394,123 @@ namespace Service.Implementations
                 CreatedAt = DateTime.UtcNow,
             };
             _context.ProjectReports.Add(report);
+
+            // Save Story Bible into report-specific tables
+            if (contentResObj != null)
+            {
+                // 1. Save Characters
+                if (contentResObj.Characters != null)
+                {
+                    foreach (var character in contentResObj.Characters)
+                    {
+                        var encName = EncryptionHelper.EncryptWithMasterKey(character.Name ?? string.Empty, rawDek);
+                        var encDesc = EncryptionHelper.EncryptWithMasterKey(character.Description ?? string.Empty, rawDek);
+                        var encBg = !string.IsNullOrWhiteSpace(character.Background)
+                            ? EncryptionHelper.EncryptWithMasterKey(character.Background, rawDek)
+                            : null;
+
+                        var traitsStr = character.Traits != null ? JsonSerializer.Serialize(character.Traits) : "[]";
+                        var encTraits = EncryptionHelper.EncryptWithMasterKey(traitsStr, rawDek);
+
+                        var relStr = character.Relationships != null ? JsonSerializer.Serialize(character.Relationships) : "[]";
+                        var encRel = EncryptionHelper.EncryptWithMasterKey(relStr, rawDek);
+
+                        _context.ReportCharacterEntries.Add(new ReportCharacterEntry
+                        {
+                            Id = Guid.NewGuid(),
+                            ProjectReportId = report.Id,
+                            Name = encName,
+                            Role = character.Role ?? "Supporting",
+                            Description = encDesc,
+                            Background = encBg,
+                            TraitsJson = encTraits,
+                            RelationshipsJson = encRel,
+                            FirstAppearance = character.FirstAppearance > 0 ? character.FirstAppearance : null,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+
+                // 2. Save World Settings
+                if (contentResObj.WorldSettings != null)
+                {
+                    foreach (var worldSetting in contentResObj.WorldSettings)
+                    {
+                        var encTitle = EncryptionHelper.EncryptWithMasterKey(worldSetting.Title ?? string.Empty, rawDek);
+                        var encContent = EncryptionHelper.EncryptWithMasterKey(worldSetting.Description ?? string.Empty, rawDek);
+                        var encImportance = !string.IsNullOrWhiteSpace(worldSetting.Importance)
+                            ? EncryptionHelper.EncryptWithMasterKey(worldSetting.Importance, rawDek)
+                            : null;
+
+                        var chaptersStr = worldSetting.SourceChapters != null ? JsonSerializer.Serialize(worldSetting.SourceChapters) : "[]";
+                        var encChapters = EncryptionHelper.EncryptWithMasterKey(chaptersStr, rawDek);
+
+                        _context.ReportWorldbuildingEntries.Add(new ReportWorldbuildingEntry
+                        {
+                            Id = Guid.NewGuid(),
+                            ProjectReportId = report.Id,
+                            Title = encTitle,
+                            Content = encContent,
+                            Category = worldSetting.Category ?? "Other",
+                            Importance = encImportance,
+                            SourceChaptersJson = encChapters,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+
+                // 3. Save Themes
+                if (contentResObj.Themes != null)
+                {
+                    foreach (var theme in contentResObj.Themes)
+                    {
+                        var encTitle = EncryptionHelper.EncryptWithMasterKey(theme.Title ?? string.Empty, rawDek);
+                        var encDesc = EncryptionHelper.EncryptWithMasterKey(theme.Description ?? string.Empty, rawDek);
+                        var encEvidence = !string.IsNullOrWhiteSpace(theme.Evidence)
+                            ? EncryptionHelper.EncryptWithMasterKey(theme.Evidence, rawDek)
+                            : null;
+
+                        _context.ReportThemeEntries.Add(new ReportThemeEntry
+                        {
+                            Id = Guid.NewGuid(),
+                            ProjectReportId = report.Id,
+                            Title = encTitle,
+                            Description = encDesc,
+                            Evidence = encEvidence,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+
+                // 4. Save Timeline Events
+                if (contentResObj.TimelineEvents != null)
+                {
+                    foreach (var timelineEvent in contentResObj.TimelineEvents)
+                    {
+                        var encTitle = EncryptionHelper.EncryptWithMasterKey(timelineEvent.Title ?? string.Empty, rawDek);
+                        var encDesc = EncryptionHelper.EncryptWithMasterKey(timelineEvent.Description ?? string.Empty, rawDek);
+                        var encTime = !string.IsNullOrWhiteSpace(timelineEvent.TimeLabel)
+                            ? EncryptionHelper.EncryptWithMasterKey(timelineEvent.TimeLabel, rawDek)
+                            : null;
+                        var encImportance = !string.IsNullOrWhiteSpace(timelineEvent.Importance)
+                            ? EncryptionHelper.EncryptWithMasterKey(timelineEvent.Importance, rawDek)
+                            : null;
+
+                        _context.ReportTimelineEvents.Add(new ReportTimelineEvent
+                        {
+                            Id = Guid.NewGuid(),
+                            ProjectReportId = report.Id,
+                            Category = timelineEvent.Category ?? "Story",
+                            Title = encTitle,
+                            Description = encDesc,
+                            TimeLabel = encTime,
+                            SortOrder = timelineEvent.SortOrder,
+                            Importance = encImportance ?? "Normal",
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+            }
 
             // Save Snapshot Data
             foreach (var chapter in chapters)
@@ -793,13 +913,13 @@ namespace Service.Implementations
                 5. bibleComparison: SO SÁNH trung lập với cẩm nang (nếu có). Nêu rõ điểm nào khớp, điểm nào khác biệt/thay đổi. KHÔNG trừ điểm nếu có sự khác biệt so với kế hoạch ban đầu. Nếu không có cẩm nang: để null.
                 6. errors: BẮT BUỘC liệt kê 3-5 lỗi/vấn đề cụ thể cho mỗi mục — nêu rõ vấn đề + ví dụ câu văn mắc lỗi.
                 7. suggestions: BẮT BUỘC liệt kê 3-5 gợi ý/cách sửa cụ thể cho mỗi mục — nêu hướng xử lý chi tiết cho từng lỗi đã nêu.
-                9. score: Chấm điểm CỰC KỲ NGHIÊM KHẮC theo RUBRIC 5 ĐIỂM sau (Tiêu chuẩn xuất bản):
+                8. score: Chấm điểm CỰC KỲ NGHIÊM KHẮC theo RUBRIC 5 ĐIỂM sau (Tiêu chuẩn xuất bản):
                    - 1 điểm: Kém — Văn phong thô sơ, sai chính tả/ngữ pháp nặng, phá vỡ logic cơ bản.
                    - 2 điểm: Yếu — Có cốt truyện nhưng diễn đạt lúng túng, nhân vật mờ nhạt, nhiều sáo rỗng.
                    - 3 điểm: Đạt yêu cầu — Viết đúng quy tắc nhưng chưa có chất riêng, còn lặp ý, nhịp độ chưa tốt. (Đây là mức điểm cho các tác phẩm 'tạm ổn' nhưng chưa hay).
                    - 4 điểm: Tốt — Chuyên nghiệp, ngôn ngữ sắc sảo, cảm xúc chân thực, có bản sắc riêng.
                    - 5 điểm: Xuất sắc — Tinh tế, độc đáo, lôi cuốn ấn tượng, không có hạt sạn về logic. (Chỉ dành cho tác phẩm thực sự xuất sắc).
-                10. Tất cả 20 mục phải có đủ feedback, evidence, errors (≥3), suggestions (≥3) — KHÔNG được để trống. Nếu tác phẩm quá ngắn hoặc quá tệ, hãy mạnh dạn cho điểm 1-2.
+                9. Tất cả 20 mục phải có đủ feedback, evidence, errors (≥3), suggestions (≥3) — KHÔNG được để trống. Nếu tác phẩm quá ngắn hoặc quá tệ, hãy mạnh dạn cho điểm 1-2.
 
                 NHẬN XÉT TỔNG QUAN (overallFeedback):
                 Viết một đoạn nhận xét chung tâm huyết (khoảng 4-6 câu) dành cho tác giả: đúc kết những điểm mạnh nổi bật nhất, những điểm yếu lớn nhất cần khắc phục, và một lời động viên/nhận định tổng kết về tiềm năng của tác phẩm.
@@ -1194,7 +1314,7 @@ namespace Service.Implementations
 
         private async Task WaitForAnalyzeRateSlotAsync(CancellationToken cancellationToken)
         {
-            var rpmLimit = ReadIntConfig("Gemini:AnalyzeRpmLimit", DefaultAnalyzeRpmLimit, 1, 120);
+            var rpmLimit = Math.Clamp(await _sysConfig.GetAsync("gemini.analyze_rpm_limit", 120), 1, 1200);
             await AnalyzeRpmLock.WaitAsync(cancellationToken);
             try
             {
@@ -1441,8 +1561,11 @@ namespace Service.Implementations
             public string Key { get; set; } = string.Empty;
             public decimal Score { get; set; }
             public decimal MaxScore { get; set; }
+            [JsonConverter(typeof(SafeStringConverter))]
             public string Feedback { get; set; } = string.Empty;
+            [JsonConverter(typeof(SafeStringConverter))]
             public string Evidence { get; set; } = string.Empty;
+            [JsonConverter(typeof(SafeStringConverter))]
             public string? BibleComparison { get; set; }
             public List<string> Errors { get; set; } = new();
             public List<string> Suggestions { get; set; } = new();

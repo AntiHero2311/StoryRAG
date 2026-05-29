@@ -1446,7 +1446,7 @@ export default function WorkspacePage() {
                                 ref={editorScrollRef}
                                 className="flex-1 overflow-y-auto flex justify-center p-6 lg:p-12 scrollbar-thin"
                             >
-                                <div className="w-full max-w-3xl relative">
+                                <div className="w-full max-w-5xl relative">
                                     {activeChapter ? (
                                         <>
                                             {/* Chapter title input */}

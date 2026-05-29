@@ -56,20 +56,31 @@ DELETE /{chapterId}/versions/{num}                 # Xóa version (không áp d�
 POST   /chapters/{chapterId}/embed                 # Embed active version của chương
 POST   /{projectId}/chat                           # Chat RAG (chỉ trừ token, không trừ analysis)
 GET    /{projectId}/chat/history                   # Lịch sử chat (phân trang)
-POST   /{projectId}/analyze                        # Phân tích rubric 100 điểm (trừ analysis count)
-GET    /{projectId}/reports/latest                 # Báo cáo phân tích mới nhất
-GET    /{projectId}/reports                        # Toàn bộ lịch sử báo cáo
-GET    /{projectId}/reports/{reportId}             # Báo cáo cụ thể
+POST   /{projectId}/analyze                        # Phân tích rubric 100 điểm đồng bộ (legacy)
+POST   /{projectId}/analyze/jobs                   # Tạo job phân tích bất đồng bộ (mới)
+GET    /analyze/jobs/active                        # Job phân tích đang chạy của user
+GET    /{projectId}/analyze/jobs/latest            # Job phân tích gần nhất của project
+GET    /{projectId}/analyze/jobs/{jobId}           # Trạng thái job phân tích (progress, stage)
+GET    /{projectId}/analyze/jobs/{jobId}/result    # Lấy kết quả báo cáo phân tích từ job hoàn tất
+POST   /{projectId}/analyze/jobs/{jobId}/cancel    # Hủy job đang queued/processing sau ~5 phút
+POST   /{projectId}/scenes                         # Phân tích phân cảnh và trích dẫn quote
+POST   /{projectId}/cliffhanger                    # Phân tích cliffhanger và cấu trúc 3 hồi
+GET    /{projectId}/analysis/history               # Lịch sử phân tích cảnh/cliffhanger
+GET    /{projectId}/reports/latest                 # Báo cáo phân tích mới nhất của project
+GET    /{projectId}/reports                        # Toàn bộ lịch sử báo cáo của project
+GET    /{projectId}/reports/{reportId}             # Báo cáo cụ thể theo ID
+GET    /{projectId}/reports/{reportId}/export/pdf  # Xuất PDF báo cáo phân tích cho gói trả phí
+GET    /{projectId}/narrative/charts               # Dữ liệu biểu đồ pacing/emotion (đã bỏ character)
 POST   /{projectId}/rewrite                        # AI Rewrite đoạn văn
 GET    /{projectId}/rewrite/history                # Lịch sử rewrite (phân trang)
 
 ### WorldbuildingController  /api/projects/{projectId}/worldbuilding  [Auth]
-GET    /                              # Danh sách entries
-GET    /{id}                          # Chi tiết entry
-POST   /                              # Tạo entry mới (auto embed)
-PUT    /{id}                          # Cập nhật entry (auto embed)
-DELETE /{id}                          # Xóa entry
-POST   /{id}/embed                    # Embed thủ công
+GET    /                              # Danh sách entries bối cảnh thế giới
+GET    /{id}                          # Chi tiết entry bối cảnh
+POST   /                              # Tạo entry bối cảnh (auto embed)
+PUT    /{id}                          # Cập nhật entry bối cảnh (auto embed)
+DELETE /{id}                          # Xóa entry bối cảnh
+POST   /{id}/embed                    # Embed thủ công bối cảnh thế giới
 
 ### CharacterController  /api/projects/{projectId}/character  [Auth]
 GET    /                              # Danh sách nhân vật
@@ -77,7 +88,41 @@ GET    /{id}                          # Chi tiết nhân vật
 POST   /                              # Tạo nhân vật mới (auto embed)
 PUT    /{id}                          # Cập nhật nhân vật (auto embed)
 DELETE /{id}                          # Xóa nhân vật
-POST   /{id}/embed                    # Embed thủ công
+POST   /{id}/embed                    # Embed thủ công nhân vật
+
+### StoryBibleAuxiliaryController (StyleGuides, Themes, PlotNotes)  /api/projects/{projectId}  [Auth]
+GET/POST /style-guides                # Danh sách / Tạo cẩm nang phong cách
+GET/PUT/DELETE /style-guides/{id}     # Chi tiết / Sửa / Xóa cẩm nang phong cách
+POST   /style-guides/{id}/embed       # Embed thủ công cẩm nang phong cách
+GET/POST /themes                      # Danh sách / Tạo chủ đề câu chuyện
+GET/PUT/DELETE /themes/{id}           # Chi tiết / Sửa / Xóa chủ đề
+POST   /themes/{id}/embed             # Embed thủ công chủ đề
+GET/POST /plot-notes                  # Danh sách / Tạo ghi chú cốt truyện
+GET/PUT/DELETE /plot-notes/{id}       # Chi tiết / Sửa / Xóa ghi chú cốt truyện
+POST   /plot-notes/{id}/embed         # Embed thủ công ghi chú cốt truyện
+
+### TimelineController  /api/projects/{projectId}/timeline  [Auth]
+GET    /                              # Danh sách mốc thời gian sự kiện (sorted sortOrder)
+POST   /                              # Tạo mốc thời gian sự kiện (auto-sort)
+PUT    /{id}                          # Sửa mốc thời gian sự kiện
+DELETE /{id}                          # Xóa mốc thời gian sự kiện
+PATCH  /{id}/reorder                  # Cập nhật thứ tự sắp xếp (sortOrder)
+
+### ManuscriptController  /api/manuscript  [Auth]
+POST   /{projectId}/upload            # Upload bản thảo (docx/txt) tự tách chương
+GET    /{projectId}/export            # Export toàn bộ truyện (docx/txt/pdf)
+GET    /{projectId}/chapters/{chapterId}/export # Export chương đơn lẻ
+
+### VNPayPaymentController  /api/payment  [Auth]
+POST   /create                        # Tạo giao dịch thanh toán mới
+PATCH  /{paymentId}/status            # Cập nhật trạng thái thủ công
+PUT    /{paymentId}/mark-completed   # Đánh dấu thanh toán hoàn tất thành công
+POST   /{paymentId}/refund            # Hoàn tiền giao dịch
+POST   /vnpay/create-url              # Sinh URL redirect sang cổng VNPay
+GET    /vnpay/ipn                     # IPN Callback từ VNPay (Public webhook)
+GET    /vnpay/order/{txnRef}          # Kiểm tra trạng thái đơn hàng VNPay
+GET    /history                       # Lịch sử giao dịch thanh toán của user
+GET    /{paymentId}                   # Chi tiết giao dịch thanh toán
 
 ### BugReportController  /api/bug-reports
 POST   /                [Auth]                     # Gửi báo cáo lỗi
@@ -87,8 +132,29 @@ GET    /stats           [Auth(Staff,Admin)]        # Thống kê bug reports
 PUT    /{id}            [Auth(Staff,Admin)]        # Cập nhật status + staff note
 DELETE /{id}            [Auth(Admin)]              # Xóa báo cáo
 
+### StaffController  /api/staff  [Auth(Staff,Admin)]
+GET    /manuscripts/flagged           # Danh sách bản thảo bị cờ cảnh báo (ANTI_STATE, SEXUAL_CONTENT...)
+GET/POST /feedback                    # Danh sách / Tạo phản hồi của Staff cho tác giả
+PUT/DELETE /feedback/{feedbackId}     # Cập nhật / Xóa phản hồi chuyên môn
+POST   /feedback/{feedbackId}/respond # Tác giả tương tác phản hồi (like/dislike/reply)
+GET/POST/PUT/DELETE /faqs/admin       # CRUD FAQs trong trang trợ giúp
+GET/POST/PUT/DELETE /writing-tips/admin # CRUD mẹo viết truyện (Writing Tips)
+GET    /analyses/pending              # Danh sách các report đang chờ Staff review duyệt phát hành
+GET    /analyses/reviews              # Xem toàn bộ danh sách đánh giá từ Staff
+GET    /analyses/{reportId}           # Chi tiết báo cáo phân tích AI để Staff hậu kiểm
+GET    /analyses/{reportId}/review    # Lấy thông tin Staff review cụ thể
+GET    /analyses/{reportId}/story     # Lấy nội dung bản thảo nguyên bản (read-only) để Staff đối chiếu
+POST   /analyses/{reportId}/review    # Phê duyệt, điều chỉnh hoặc yêu cầu AI chạy lại
+PATCH  /analyses/{reportId}/edit      # Staff trực tiếp chỉnh sửa văn bản báo cáo AI trước khi gửi tác giả
+GET    /analyses/jobs                 # Quản lý danh sách jobs đang chạy của hệ thống
+POST   /analyses/jobs/{jobId}/rerun   # Yêu cầu chạy lại một job phân tích
+
+### AdminConfigController  /api/admin/rag-config  [Auth(Admin)]
+GET    /                              # Lấy cấu hình RAG/Gemini hiện hành (cổng kiểm soát)
+PUT    /                              # Cập nhật cấu hình cổng kiểm soát (limits, chunk, batch sizes)
+
 ### AdminController  /api/admin  [Auth(Admin)]
-GET    /stats/overview                # Tổng quan hệ thống (users, projects, reports...)
+GET    /stats/overview                # Tổng quan hệ thống (users, projects, reports, revenue...)
 GET    /users/stats                   # Thống kê chi tiết users theo role
 
 ### SubscriptionController  /api/subscription
@@ -151,30 +217,38 @@ userService.ts          # /api/user — profile
 worldbuildingService.ts # /api/projects/{id}/worldbuilding — CRUD, embed
 
 ## ============================================================
-## KEY BUSINESS RULES
+## KEY BUSINESS RULES & AI PIPELINE
 ## ============================================================
 
 # RAG Vector Search:
-- Chỉ tìm trong chunks của ACTIVE VERSION (Chapter.CurrentVersionId)
-- Worldbuilding + Characters: tìm tất cả (không theo version)
-- TopK: 3 chapters + 2 worldbuilding + 2 characters
+- Chỉ tìm kiếm trong các chunks thuộc ACTIVE VERSION (`Chapter.CurrentVersionId`).
+- Các entries Story Bible (Worldbuilding, Characters, PlotNotes, Themes, StyleGuides): tìm kiếm tất cả (không lưu version).
+- TopK: Tự động điều chỉnh dựa trên cấu hình hệ thống (`rag.top_k_chat` - mặc định 5 chunks; `rag.top_k_report` - mặc định 8 chunks) và tự động ưu tiên tăng TopK cho các tài khoản gói Premium (Basic/Pro) để lấy đầy đủ ngữ cảnh.
 
-# AI Token & Analysis:
-- Chat RAG: chỉ trừ UsedTokens — KHÔNG trừ UsedAnalysisCount
-- Analyze: trừ cả UsedTokens + UsedAnalysisCount
-- Rewrite: chỉ trừ UsedTokens
+# AI Token & Analysis Job:
+- Chat RAG: Chỉ trừ token tích lũy của gói dịch vụ, KHÔNG trừ số lượt phân tích (`UsedAnalysisCount`).
+- Phân Tích Rubric (Analyze): Thực thi qua hàng đợi bất đồng bộ (`AnalysisJobQueue`), mỗi user tối đa 1 job chạy tại một thời điểm. Trừ cả token và số lần phân tích (`UsedAnalysisCount`).
+- Phân tích chạy song song 5 tiêu chí rubric mỗi đợt (`rag.rubric_batch_size = 5`) để tối ưu tốc độ mà không vượt giới hạn RPM của Gemini.
 
-# Chapter Version:
-- Max 20 versions/chapter — auto-prune oldest non-pinned
-- Pinned versions: không bao giờ bị auto-delete
-- Create version: snapshot current content (không tạo rỗng)
-- Chunks xóa cascade khi version bị prune
+# Cảnh báo Đặc biệt (Warnings):
+- AI phát hiện **6 nội dung nhạy cảm và chất lượng**:
+  1. `ANTI_STATE`           - Nội dung vi phạm chính trị pháp lý (Critical)
+  2. `SEXUAL_CONTENT`       - Nội dung người lớn/tình dục thô tục (Warning/Critical)
+  3. `PLAGIARISM_RISK`      - Nguy cơ đạo văn (Critical)
+  4. `INCOMPLETE`           - Bản thảo bị đứt đoạn, chưa hoàn thiện (Warning)
+  5. `INCONSISTENCY`        - Mâu thuẫn logic cốt truyện/nhân vật (Info/Warning)
+  6. `REPETITION`           - Trùng lặp/lặp từ nghiêm trọng (Warning)
+- Các bản thảo bị cắm cảnh báo sẽ tự động bị gắn cờ và gửi tới trang hậu kiểm của Staff (`/api/staff/manuscripts/flagged`).
 
-# Encryption (AES-256):
-- Mỗi user có DEK riêng
-- DEK mã hóa bằng Security:MasterKey
-- Encrypted fields: chapter content, titles, characters, worldbuilding, chat messages
+# Chapter Version & Pruning:
+- Tối đa 20 phiên bản cho mỗi chương. Tự động dọn dẹp (auto-prune) phiên bản cũ nhất.
+- Phiên bản được Ghim (`IsPinned = true`): Không bao giờ bị tự động dọn dẹp.
+- Chunks và vector embeddings liên quan tự động xóa cascade khi phiên bản bị dọn dẹp.
 
-# Auto Embed on Save:
-- Khi lưu chương → backend tự chunk + embed ngầm
-- Worldbuilding/Character: auto embed khi tạo/cập nhật
+# Narrative Charts (Biểu đồ kịch tính):
+- Phân tích và trực quan hóa **Nhịp độ truyện (Pacing)** và **Mạch cảm xúc (Emotion progression)**.
+- **Lưu ý:** Biểu đồ tần suất/xuất hiện nhân vật và Mạng quan hệ nhân vật đã được **lược bỏ** khỏi giao diện phân tích của tác giả để giảm độ nhiễu và làm rõ hơn lý do biến động nhịp độ.
+
+# Bảo mật mã hóa (AES-256 E2E):
+- Mỗi user sở hữu một mã khóa `DataEncryptionKey` (DEK) riêng, mã hóa bởi MasterKey.
+- Toàn bộ nội dung truyện (bản thảo, chương, version), bối cảnh thế giới, hồ sơ nhân vật, lịch sử chat và các snapshot phân tích đều được mã hóa trước khi lưu xuống PostgreSQL.

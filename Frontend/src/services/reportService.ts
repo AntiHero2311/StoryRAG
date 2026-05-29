@@ -41,11 +41,51 @@ export interface StoryWarning {
     detail: string;
 }
 
+export interface CharacterRelationshipItem {
+    targetName: string;
+    type: string;
+    description: string;
+}
+
+export interface WorldSettingItem {
+    title: string;
+    category: string;
+    description: string;
+    importance: string;
+    sourceChapters: number[];
+}
+
+export interface CharacterItem {
+    name: string;
+    role: string;
+    description: string;
+    background: string;
+    motivation?: string;
+    traits: string[];
+    relationships: CharacterRelationshipItem[];
+    firstAppearance: number;
+}
+
+export interface TimelineEventItem {
+    title: string;
+    category: string;
+    timeLabel: string;
+    description: string;
+    importance: string;
+    sortOrder: number;
+}
+
+export interface ThemeItem {
+    title: string;
+    description: string;
+    evidence: string;
+}
+
 export interface ContentAnalysisResult {
-    worldSettings: Array<{ name: string; description: string; rules: string }>;
-    characters: Array<{ name: string; role: string; description: string; motivation: string }>;
-    timelineEvents: Array<{ time: string; title: string; description: string; importance: string; sortOrder: number }>;
-    themes: Array<{ title: string; description: string; evidence: string }>;
+    worldSettings: WorldSettingItem[];
+    characters: CharacterItem[];
+    timelineEvents: TimelineEventItem[];
+    themes: ThemeItem[];
     analysisNote: string;
 }
 

@@ -21,7 +21,7 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
 - Frontend queue embed có cooldown (queueEmbedSync/flushEmbedQueue).
 - Frontend gọi:
   POST /ai/chapters/{chapterId}/embed
-  (backend trả 202 Accepted, xử lý nền)
+  (backend xử lý đồng bộ và trả về 200 OK để cập nhật trạng thái UI ngay lập tức)
 - EmbeddingService:
   + verify ownership + version active đã chunk
   + decrypt chunk content
@@ -97,14 +97,14 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
 - NarrativeAnalyticsService:
   + dùng chapter active versions
   + tách segment từ text
-  + tính pacing/emotion/character presence/relationships
-  + **Staff Review gate:** Sau khi AI hoàn tất, report vào trạng thái `PendingStaffReview`; user nhận thông báo "đang kiểm tra bước cuối cùng".
-- **Staff Review:** Staff/Admin lấy queue review qua `/api/staff/analyses/pending`.
-  + Xem chi tiết report (warnings, criteria) qua `GET /api/staff/analyses/{reportId}`
-  + Đọc bản thảo (read-only) qua `GET /api/staff/analyses/{reportId}/story` (Wide Reader Modal)
-  + Xem review record qua `GET /api/staff/analyses/{reportId}/review`
-  + Hành động: `POST /api/staff/analyses/{reportId}/review` (Action: Verified/Adjusted/RerunRequested)
-  + Chỉnh sửa + release cho user: `PATCH /api/staff/analyses/{reportId}/edit`
+  + tính pacing/emotion (đã lược bỏ biểu đồ xuất hiện nhân vật và mạng quan hệ nhân vật để tối ưu độ nhiễu và làm rõ hơn lý do phân tích nhịp độ/cảm xúc kịch tính)
+  + Báo cáo phân tích được phát hành trực tiếp (`Released`) cho tác giả ngay khi AI hoàn tất.
+- **Hậu kiểm & Moderation của Staff:** Staff/Admin không chặn luồng xem báo cáo của tác giả mà thực hiện hậu kiểm:
+  + Xem chi tiết báo cáo (warnings, criteria) qua `GET /api/staff/analyses/{reportId}`
+  + Đọc bản thảo (read-only) để đối chiếu qua `GET /api/staff/analyses/{reportId}/story` (Wide Reader Modal)
+  + Xem lịch sử review qua `GET /api/staff/analyses/{reportId}/review`
+  + Hành động điều chỉnh hoặc yêu cầu chạy lại AI qua `POST /api/staff/analyses/{reportId}/review`
+  + Chỉnh sửa văn bản báo cáo AI qua `PATCH /api/staff/analyses/{reportId}/edit`
 - **GetFlagReason** — xác định manuscript cần Staff xem (thứ tự ưu tiên):
   1. `ANTI_STATE`           — pháp lý nghiêm trọng nhất
   2. `SEXUAL_CONTENT`       — vi phạm chính sách nội dung
@@ -152,7 +152,19 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
   + ANTI_STATE, SEXUAL_CONTENT, PLAGIARISM_RISK, INCOMPLETE_STORY, INCONSISTENCY_DETECTED
   + NO_ANALYSIS, INCOMPLETE_ANALYSIS, LOW_QUALITY_SCORE
 
+9b) Cấu hình Cổng kiểm soát (RAG/Gemini Configs cho Admin)
+- Admin Portal cung cấp giao diện quản lý cấu hình và giới hạn vận hành của AI:
+  + API: GET/PUT /api/admin/rag-config (Chỉ Admin)
+  + Các tham số điều phối:
+    * rag.chunk_size: Kích thước chunk bản thảo (100–4000)
+    * rag.chunk_overlap: Độ gối chồng giữa các chunk (0–500)
+    * rag.top_k_chat: Số lượng chunk tối đa lấy cho RAG Chat
+    * rag.top_k_report: Số lượng chunk tối đa lấy cho RAG Analysis
+    * rag.stage1_batch_chunks: Số chunk phân tích song song mỗi đợt trong Stage 1 (ví dụ: mỗi lần 5-8 chunks song song)
+    * gemini.analyze_rpm_limit: Giới hạn RPM (Requests Per Minute) của API Gemini nhằm chống lỗi 429
+    * rag.rubric_batch_size: Số lượng tiêu chí rubric chạy song song trong Stage 2 (chạy song song 5 tiêu chí mỗi đợt để tránh vượt quota và tối ưu tốc độ phân tích)
+
 TÓM TẮT:
 Hệ thống AI của StoryRAG vận hành theo mô hình RAG dựa trên active chapter chunks +
 story bible vectors, có đầy đủ lớp bảo vệ (rate limit, sanitize, output validator,
-retry/failover, subscription quota) và có pipeline async jobs cho phân tích nặng.
+retry/failover, subscription quota, admin controls) và có pipeline async jobs cho phân tích nặng.

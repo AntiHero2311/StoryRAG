@@ -53,5 +53,9 @@ namespace Repository.Entities
         public User User { get; set; } = null!;
         public ICollection<ReportItem> ReportItems { get; set; } = new List<ReportItem>();
         public ICollection<ProjectReportSnapshot> Snapshots { get; set; } = new List<ProjectReportSnapshot>();
+        public ICollection<ReportCharacterEntry> CharacterEntries { get; set; } = new List<ReportCharacterEntry>();
+        public ICollection<ReportWorldbuildingEntry> WorldbuildingEntries { get; set; } = new List<ReportWorldbuildingEntry>();
+        public ICollection<ReportThemeEntry> ThemeEntries { get; set; } = new List<ReportThemeEntry>();
+        public ICollection<ReportTimelineEvent> TimelineEvents { get; set; } = new List<ReportTimelineEvent>();
     }
 }

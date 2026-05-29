@@ -257,10 +257,59 @@ namespace Service.Implementations
             }
             _logger.LogInformation("Import {ProjectId}: đã embed {Done}/{Total} chương.", project.Id, embeddedChapters, chaptersToInsert.Count);
 
-            // ── Bước 8: Không chạy AI khi import ────────────────────────────────
-            // Chỉ giữ logic import/chia chương/chunk/embed + heuristic metadata cơ bản.
+            // ── Bước 8: Chạy AI trích xuất thông tin bằng AI (Tóm tắt, nhân vật, bối cảnh, timeline) ──
             int charactersExtracted = 0;
             int settingsExtracted = 0;
+            bool aiExtractionFailed = false;
+            string? aiExtractionError = null;
+
+            var samples = new List<string>();
+            int scanCount = 0;
+            foreach (var part in chapterParts)
+            {
+                if (scanCount >= MaxChaptersForAiScan) break;
+                var chapterTitle = part.Title ?? $"Chương {scanCount + 1}";
+                var sample = part.Content.Length > MaxCharsPerChapterSummary
+                    ? part.Content[..MaxCharsPerChapterSummary]
+                    : part.Content;
+                samples.Add($"--- {chapterTitle} ---\n{sample}");
+                scanCount++;
+            }
+
+            if (samples.Count > 0)
+            {
+                var combinedContent = string.Join("\n\n", samples);
+                _logger.LogInformation("Import {ProjectId}: Bắt đầu chạy AI trích xuất thông tin.", project.Id);
+                try
+                {
+                    var aiExtracted = await ExtractProjectInfoWithAiAsync(combinedContent, projectTitle);
+                    if (aiExtracted != null)
+                    {
+                        var counts = await ApplyAiExtractionAsync(project, aiExtracted, rawDek, isReExtract: false);
+                        if (!string.IsNullOrWhiteSpace(counts.Summary))
+                        {
+                            extractedSummary = counts.Summary;
+                        }
+                        charactersExtracted = counts.Characters;
+                        settingsExtracted = counts.Settings;
+                        timelineEventsExtracted += counts.Timeline;
+                        _logger.LogInformation("Import {ProjectId}: AI trích xuất thành công tóm tắt, {CharCount} nhân vật, {SettingCount} bối cảnh, {TimelineCount} sự kiện.",
+                            project.Id, charactersExtracted, settingsExtracted, counts.Timeline);
+                    }
+                    else
+                    {
+                        aiExtractionFailed = true;
+                        aiExtractionError = "AI không trả về kết quả hợp lệ.";
+                        _logger.LogWarning("Import {ProjectId}: AI trích xuất trả về null hoặc không hợp lệ.", project.Id);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    aiExtractionFailed = true;
+                    aiExtractionError = ex.Message;
+                    _logger.LogError(ex, "Import {ProjectId}: Chạy AI trích xuất thất bại.", project.Id);
+                }
+            }
 
             var result = new ProjectImportResult
             {
@@ -272,8 +321,8 @@ namespace Service.Implementations
                 TimelineEventsExtracted = timelineEventsExtracted,
                 GenresLinked = genresLinked,
                 Summary = extractedSummary,
-                AiExtractionFailed = false,
-                AiExtractionError = null,
+                AiExtractionFailed = aiExtractionFailed,
+                AiExtractionError = aiExtractionError,
             };
 
             // ── Bước 9: Gửi notification ─────────────────────────────────────────
@@ -446,9 +495,10 @@ namespace Service.Implementations
             bool hasExistingTimeline = isReExtract && await _context.TimelineEvents.AnyAsync(t => t.ProjectId == project.Id);
             if (!hasExistingTimeline)
             {
-                int sortOrder = isReExtract
+                int sortOrder = await _context.TimelineEvents.AnyAsync(t => t.ProjectId == project.Id)
                     ? (await _context.TimelineEvents.Where(t => t.ProjectId == project.Id).MaxAsync(t => (int?)t.SortOrder) ?? -1) + 1
                     : 0;
+
 
                 foreach (var evt in aiExtracted.Timeline ?? new())
                 {

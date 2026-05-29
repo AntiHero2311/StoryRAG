@@ -30,6 +30,10 @@ namespace Repository.Data
         public DbSet<ProjectReport> ProjectReports { get; set; }
         public DbSet<ReportItem> ReportItems { get; set; }
         public DbSet<ProjectReportSnapshot> ProjectReportSnapshots { get; set; }
+        public DbSet<ReportCharacterEntry> ReportCharacterEntries { get; set; }
+        public DbSet<ReportWorldbuildingEntry> ReportWorldbuildingEntries { get; set; }
+        public DbSet<ReportThemeEntry> ReportThemeEntries { get; set; }
+        public DbSet<ReportTimelineEvent> ReportTimelineEvents { get; set; }
         public DbSet<ProjectAnalysisJob> ProjectAnalysisJobs { get; set; }
         public DbSet<ProjectAnalysisFact> ProjectAnalysisFacts { get; set; }
 
@@ -351,6 +355,72 @@ namespace Repository.Data
                 entity.HasOne(s => s.ProjectReport)
                       .WithMany(r => r.Snapshots)
                       .HasForeignKey(s => s.ProjectReportId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── ReportCharacterEntry ──────────────────────────────────────────────
+            modelBuilder.Entity<ReportCharacterEntry>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Name).IsRequired();
+                entity.Property(e => e.Role).IsRequired().HasMaxLength(50).HasDefaultValue("Supporting");
+                entity.Property(e => e.Description).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(e => e.ProjectReport)
+                      .WithMany(r => r.CharacterEntries)
+                      .HasForeignKey(e => e.ProjectReportId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── ReportWorldbuildingEntry ──────────────────────────────────────────
+            modelBuilder.Entity<ReportWorldbuildingEntry>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Title).IsRequired();
+                entity.Property(e => e.Content).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.Category).IsRequired().HasMaxLength(50).HasDefaultValue("Other");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(e => e.ProjectReport)
+                      .WithMany(r => r.WorldbuildingEntries)
+                      .HasForeignKey(e => e.ProjectReportId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── ReportThemeEntry ──────────────────────────────────────────────────
+            modelBuilder.Entity<ReportThemeEntry>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Title).IsRequired();
+                entity.Property(e => e.Description).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(e => e.ProjectReport)
+                      .WithMany(r => r.ThemeEntries)
+                      .HasForeignKey(e => e.ProjectReportId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── ReportTimelineEvent ───────────────────────────────────────────────
+            modelBuilder.Entity<ReportTimelineEvent>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Category).IsRequired().HasMaxLength(50).HasDefaultValue("Story");
+                entity.Property(e => e.Title).IsRequired();
+                entity.Property(e => e.Description).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.TimeLabel).HasMaxLength(100);
+                entity.Property(e => e.SortOrder).HasDefaultValue(0);
+                entity.Property(e => e.Importance).IsRequired().HasMaxLength(20).HasDefaultValue("Normal");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(e => e.ProjectReport)
+                      .WithMany(r => r.TimelineEvents)
+                      .HasForeignKey(e => e.ProjectReportId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
 

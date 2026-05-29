@@ -2,6 +2,8 @@
 
 Nền tảng hỗ trợ sáng tác truyện tích hợp AI theo mô hình **RAG (Retrieval-Augmented Generation)**, dùng PostgreSQL + pgvector để truy hồi ngữ cảnh từ chính dữ liệu truyện của tác giả.
 
+> 💡 *Lưu ý về thương hiệu:* **StoryNest** là thương hiệu thương mại hiển thị trực tiếp tới tác giả (ở Client, Landing page và các thông báo), còn **StoryRAG** là tên kỹ thuật/tên repository chính thức nội bộ của dự án.
+
 ---
 
 ## Khoi chay nhanh
@@ -55,7 +57,7 @@ npm run dev
 - **Luong analyze async**:
   - Moi user chi co 1 job active.
   - Worker uu tien job theo goi subscription (plan cao duoc xu ly truoc).
-  - Sau khi AI cham xong, report vao trang thai cho staff review cuoi; user thay thong bao "dang kiem tra buoc cuoi cung" den khi staff release.
+  - Sau khi AI cham xong, report duoc phat hanh truc tiep (`Released`) giup tac gia xem duoc ngay lap tuc.
 - **Thu tu API key embedding**: uu tien `Gemini:EmbeddingApiKey`; neu khong co thi dung `Gemini:ChatApiKey` roi moi fallback `Gemini:AnalyzeApiKey`.
 - **Bao mat route frontend** da duoc ap dung bang `RouteGuard`, `RoleGuard`, va `ErrorBoundary`.
 

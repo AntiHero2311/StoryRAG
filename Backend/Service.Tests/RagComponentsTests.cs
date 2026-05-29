@@ -52,6 +52,33 @@ public class RagComponentsTests
         Assert.Equal(2, top[1].Ordinal);
     }
 
+    [Fact]
+    public void SafeStringConverter_converts_arrays_and_objects_safely()
+    {
+        var jsonText = @"{
+            ""evidence_array"": [""line 1"", ""line 2""],
+            ""evidence_object"": {""key"": ""val""},
+            ""evidence_string"": ""normal string"",
+            ""evidence_num"": 123
+        }";
+
+        var options = new System.Text.Json.JsonSerializerOptions();
+        options.Converters.Add(new SafeStringConverter());
+
+        using var doc = System.Text.Json.JsonDocument.Parse(jsonText);
+        var root = doc.RootElement;
+
+        var arrayStr = System.Text.Json.JsonSerializer.Deserialize<string>(root.GetProperty("evidence_array").GetRawText(), options);
+        var objStr = System.Text.Json.JsonSerializer.Deserialize<string>(root.GetProperty("evidence_object").GetRawText(), options);
+        var strStr = System.Text.Json.JsonSerializer.Deserialize<string>(root.GetProperty("evidence_string").GetRawText(), options);
+        var numStr = System.Text.Json.JsonSerializer.Deserialize<string>(root.GetProperty("evidence_num").GetRawText(), options);
+
+        Assert.Equal("line 1\nline 2", arrayStr);
+        Assert.Equal("{\"key\":\"val\"}", objStr?.Replace(" ", "").Replace("\r", "").Replace("\n", ""));
+        Assert.Equal("normal string", strStr);
+        Assert.Equal("123", numStr);
+    }
+
     private static float[] Pad(float[] shorter, int dim)
     {
         var a = new float[dim];

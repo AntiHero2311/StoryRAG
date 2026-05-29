@@ -144,7 +144,7 @@ Authorization: Bearer <access_token>
 - Mỗi user chỉ có tối đa **1 job active**.
 - Worker ưu tiên xử lý job theo **gói subscription** (plan cao trước).
 - Job phân tích chốt snapshot toàn bộ bộ truyện bằng `ProjectVersionHash`; nếu chapter active nào chưa chunk/embed đủ thì hệ thống sẽ tự repair trước khi chạy rubric.
-- Khi AI hoàn tất, report vào trạng thái **PendingStaffReview**. User sẽ thấy thông báo "đang kiểm tra bước cuối cùng" cho tới khi staff release.
+- Khi AI hoàn tất, báo cáo phân tích được phát hành trực tiếp (`Released`) giúp tác giả xem được kết quả ngay lập tức.
 
 **AI Context được đưa vào khi phân tích:**
 - `WorldbuildingEntries` — Nhóm 8: Xây dựng thế giới
@@ -462,7 +462,7 @@ Nếu bạn reset DB bằng `supabase_full_reset.sql`, cần đảm bảo migrat
 | `AiChatService` | Gemini-only chat, lưu lịch sử |
 | `ChunkingService` | 1500 ký tự, overlap 150, ưu tiên cắt tại `\n\n` → `.` → space |
 | `AiWritingService` | Phân tích cảnh quay, cliffhanger và cấu trúc truyện (RAG) |
-| `ProjectReportService` | Rubric **5 điểm** (1-Kém → 5-Xuất sắc), phát hiện **4 loại cảnh báo** (INCOMPLETE/REPETITION/PLAGIARISM\_RISK/INCONSISTENCY), **Zero Hallucination**, chấm theo **Thể loại**; phân tích ưu tiên Analyze key, fallback sang Chat key; model fallback `gemini-3-flash-preview` -> `gemini-2.5-flash` |
+| `ProjectReportService` | Rubric **5 điểm** (1-Kém → 5-Xuất sắc), phát hiện **6 loại cảnh báo** (INCOMPLETE/REPETITION/PLAGIARISM\_RISK/INCONSISTENCY/SEXUAL\_CONTENT/ANTI\_STATE), **Zero Hallucination**, chấm theo **Thể loại**; phân tích ưu tiên Analyze key, fallback sang Chat key; model fallback `gemini-3-flash-preview` -> `gemini-2.5-flash` |
 | `ProjectAnalysisJobService` | Điều phối queue async cho phân tích: enqueue/status/result/cancel (rule hủy sau ~5 phút), chốt snapshot bằng `ProjectVersionHash`, tự xử lý job theo snapshot hiện tại |
 | `GeminiRetryHelper` | Backoff [10s, 30s, 65s] cho 429; throw lỗi thân thiện sau 3 lần |
 | `EncryptionHelper` | AES-256 với user DEK + Master Key |

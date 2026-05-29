@@ -254,7 +254,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | GET    | `/analyze/jobs/active`            | Job phân tích đang chạy của user |
 | GET    | `/{projectId}/analyze/jobs/latest` | Job phân tích gần nhất của project |
 | GET    | `/{projectId}/analyze/jobs/{jobId}` | Trạng thái job phân tích       |
-| GET    | `/{projectId}/analyze/jobs/{jobId}/result` | Kết quả job đã hoàn thành (hoặc 409 khi đang chờ staff review cuối) |
+| GET    | `/{projectId}/analyze/jobs/{jobId}/result` | Kết quả báo cáo phân tích khi job đã hoàn tất |
 | POST   | `/{projectId}/analyze/jobs/{jobId}/cancel` | Hủy job `Queued/Processing` sau ~5 phút kể từ lúc enqueue |
 | POST   | `/{projectId}/scenes`             | Phân rã cảnh và trích quote     |
 | POST   | `/{projectId}/cliffhanger`        | Phân tích cliffhanger/ba hồi    |
@@ -263,7 +263,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | GET    | `/{projectId}/reports/latest`     | Báo cáo phân tích mới nhất      |
 | GET    | `/{projectId}/reports`            | Toàn bộ lịch sử báo cáo         |
 | GET    | `/{projectId}/reports/{reportId}` | Báo cáo cụ thể                  |
-| GET    | `/{projectId}/narrative/charts`   | Dữ liệu biểu đồ pacing/emotion/character |
+| GET    | `/{projectId}/narrative/charts`   | Dữ liệu biểu đồ nhịp độ (pacing) & cảm xúc (emotion) (đã lược bỏ nhân vật) |
 | GET    | `/{projectId}/reports/{reportId}/export/pdf` | Xuất PDF báo cáo cho gói trả phí |
 
 ### 6.5 Worldbuilding, Characters, Plot Notes, Themes & Style Guides
@@ -297,12 +297,14 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | PUT    | `/{id}`  | Staff/Admin | Cập nhật trạng thái + ghi chú     |
 | DELETE | `/{id}`  | Admin       | Xóa báo cáo                       |
 
-### 6.7 Admin — `/api/admin`
+### 6.7 Admin — `/api/admin` & `/api/admin/rag-config`
 
 | Method | Endpoint          | Mô tả                                                     |
 | ------ | ----------------- | --------------------------------------------------------- |
 | GET    | `/stats/overview` | Tổng quan hệ thống (users, projects, reports, revenue...) |
 | GET    | `/users/stats`    | Thống kê chi tiết users theo role                         |
+| GET    | `/rag-config`     | Lấy cấu hình RAG/Gemini hiện hành (cổng kiểm soát)         |
+| PUT    | `/rag-config`     | Cập nhật cấu hình cổng kiểm soát (limits, chunks...)     |
 
 ### 6.8 Subscription — `/api/subscription`
 
@@ -354,7 +356,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | POST | `/feedback/{feedbackId}/respond` | Author like/dislike và reply feedback |
 | GET/POST/PUT/DELETE | `/faqs/admin`, `/writing-tips/admin` | CRUD FAQ & mẹo viết (thay knowledge-base cũ) |
 | GET | `/faqs`, `/writing-tips` | Nội dung đã publish (trang Trợ giúp) |
-| GET    | `/analyses/pending` | Danh sách report đang chờ staff review cuối |
+| GET    | `/analyses/pending` | Danh sách report đang chờ review (dành cho hậu kiểm hoặc các báo cáo cũ chưa phát hành) |
 | GET    | `/analyses/reviews` | Danh sách review phân tích |
 | GET    | `/analyses/{reportId}` | Chi tiết report (CriteriaJson + warnings) để Staff đọc |
 | GET    | `/analyses/{reportId}/review` | Review record theo reportId |
@@ -679,9 +681,9 @@ builder.Services.AddSingleton<IMyService, MyService>(); // MyService inject IDbC
 | `IEmbeddingService`     | Gọi Gemini lấy embedding vector                                                                                                                                                                                                                                  |
 | `IChunkingService`      | Chia text thành chunks với overlap                                                                                                                                                                                                                               |
 | `IAiWritingService`     | Phân tích cảnh quay, cliffhanger và tuyến truyện (RAG)                                                                                                                                                                                                            |
-| `IProjectReportService` | Phân tích & chấm điểm theo **Rubric 5 điểm** (1-Kém → 5-Xuất sắc), **Zero Hallucination**, chấm theo **Thể loại**, phát hiện **6 cảnh báo** (INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY / **SEXUAL_CONTENT** / **ANTI_STATE**), sinh `OverallFeedback` tâm huyết, chốt `ProjectVersionHash` snapshot của toàn bộ truyện. Sau khi AI hoàn tất, report vào `ReviewStatus=PendingStaffReview`; Staff duyệt rồi mới release cho Author. |
+| `IProjectReportService` | Phân tích & chấm điểm theo **Rubric 5 điểm** (1-Kém → 5-Xuất sắc), **Zero Hallucination**, chấm theo **Thể loại**, phát hiện **6 cảnh báo** (INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY / **SEXUAL_CONTENT** / **ANTI_STATE**), sinh `OverallFeedback` tâm huyết, chốt `ProjectVersionHash` snapshot của toàn bộ truyện. Sau khi AI hoàn tất, report được lưu trực tiếp dưới dạng `ReviewStatus=Released` để tác giả có thể xem ngay lập tức. Staff vẫn có thể hậu kiểm và chỉnh sửa văn bản hoặc xử lý vi phạm nếu cần. |
 | `IProjectAnalysisJobService` | Quản lý job phân tích bất đồng bộ, progress, cancel, lấy kết quả                                                                                                                                                                                          |
-| `INarrativeAnalyticsService` | Sinh dữ liệu biểu đồ pacing, emotion, tần suất/xuất hiện nhân vật                                                                                                                                                                                        |
+| `INarrativeAnalyticsService` | Sinh dữ liệu biểu đồ nhịp độ (pacing) và dòng cảm xúc (emotion) (đã lược bỏ biểu đồ xuất hiện nhân vật và mạng quan hệ nhân vật để tối ưu độ nhiễu) |
 | `IReportExportService` | Xuất báo cáo phân tích sang PDF                                                                                                                                                                                                                                   |
 | `IEmailService`         | Gửi email (welcome, password reset) qua Gmail SMTP                                                                                                                                                                                                               |
 | `IAdminService`         | Dashboard stats cho Admin                                                                                                                                                                                                                                        |

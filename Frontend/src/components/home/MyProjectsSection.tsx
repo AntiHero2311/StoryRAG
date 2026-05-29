@@ -313,8 +313,8 @@ function ProjectInfoModal({ project, onClose }: { project: ProjectResponse; onCl
                 <div className="relative h-28 bg-gradient-to-br from-[var(--accent)]/20 to-[var(--bg-primary)] flex items-end px-6 pb-4">
                     {project.coverImageURL && <img src={project.coverImageURL} alt="cover" className="absolute inset-0 w-full h-full object-cover opacity-30" />}
                     <div className="relative z-10 flex items-end gap-4 w-full">
-                        <div className="w-14 h-20 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] overflow-hidden shadow-lg flex items-center justify-center shrink-0">
-                            {project.coverImageURL ? <img src={project.coverImageURL} alt="cover" className="w-full h-full object-cover" /> : <span className="text-2xl">📖</span>}
+                        <div className="w-14 h-20 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] overflow-hidden shadow-lg flex items-center justify-center shrink-0 bg-indigo-500/10">
+                            {project.coverImageURL ? <img src={project.coverImageURL} alt="cover" className="w-full h-full object-cover" /> : <img src="/logo.png" alt="StoryNest" className="w-10 h-10 object-contain drop-shadow-[0_2px_8px_rgba(99,102,241,0.3)]" />}
                         </div>
                         <div className="flex-1 min-w-0 mb-1">
                             <p className="text-[var(--text-primary)] font-bold text-base truncate">{project.title}</p>
