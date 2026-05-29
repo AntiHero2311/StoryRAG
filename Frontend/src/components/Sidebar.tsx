@@ -22,7 +22,6 @@ const NAV_AUTHOR: NavItem[] = [
 
 const NAV_STAFF: NavItem[] = [
     { key: 'staff-hub', label: 'Tổng quan', icon: LayoutDashboard, path: '/staff' },
-    { key: 'staff-flagged', label: 'Bản thảo bị cờ', icon: AlertTriangle, path: '/staff/flagged' },
     { key: 'staff-analysis', label: 'Phân tích lỗi', icon: Activity, path: '/staff/analysis-jobs' },
     { key: 'staff-feedbacks', label: 'Phản hồi tác giả', icon: MessageSquare, path: '/staff/feedbacks' },
     { key: 'staff-content', label: 'Nội dung trợ giúp', icon: CircleHelp, path: '/staff/content' },

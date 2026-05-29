@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-    LayoutDashboard, AlertTriangle, MessageSquare, Activity,
+    LayoutDashboard, MessageSquare, Activity,
     CircleHelp, Bug, RefreshCw, ChevronRight,
 } from 'lucide-react';
 import MainLayout from '../../layouts/MainLayout';
@@ -9,17 +9,14 @@ import { AdminPageShell, StatCard } from '../../components/admin/AdminShared';
 import { staffService } from '../../services/staffService';
 import { analysisJobService } from '../../services/analysisJobService';
 import { bugReportService } from '../../services/bugReportService';
-import api from '../../services/api';
 
 type HubStats = {
-    flagged: number;
     openFeedbacks: number;
     failedJobs: number;
     openBugs: number;
 };
 
 const QUICK_LINKS = [
-    { to: '/staff/flagged', label: 'Bản thảo bị cờ', icon: AlertTriangle, color: 'text-amber-400', statKey: 'flagged' as const },
     { to: '/staff/analysis-jobs', label: 'Phân tích lỗi / treo', icon: Activity, color: 'text-violet-400', statKey: 'failedJobs' as const },
     { to: '/staff/feedbacks', label: 'Phản hồi tác giả', icon: MessageSquare, color: 'text-indigo-400', statKey: 'openFeedbacks' as const },
     { to: '/staff/content?tab=faq', label: 'Nội dung trợ giúp', icon: CircleHelp, color: 'text-emerald-400' },
@@ -36,15 +33,12 @@ export default function StaffOverviewPage() {
         setLoading(true);
         setError('');
         try {
-            const [flaggedRes, perf, jobs, bugs] = await Promise.all([
-                api.get<{ totalCount?: number }>('/staff/manuscripts/flagged', { params: { page: 1, pageSize: 1 } }),
+            const [perf, jobs, bugs] = await Promise.all([
                 staffService.getPerformance(),
                 analysisJobService.getFailedOrStale('failed,stale'),
                 bugReportService.getStats(),
             ]);
-            const flaggedTotal = flaggedRes.data.totalCount ?? (flaggedRes.data as any).TotalCount ?? 0;
             setStats({
-                flagged: flaggedTotal,
                 openFeedbacks: perf.openFeedbacksAssigned,
                 failedJobs: jobs.length,
                 openBugs: bugs.open + bugs.inProgress,
@@ -76,7 +70,6 @@ export default function StaffOverviewPage() {
 
                     {stats && (
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            <StatCard icon={AlertTriangle} label="Bản thảo bị cờ" value={stats.flagged} color="border-amber-500/25 text-amber-300" iconColor="bg-amber-500/10" />
                             <StatCard icon={Activity} label="Job lỗi/treo" value={stats.failedJobs} color="border-violet-500/25 text-violet-300" iconColor="bg-violet-500/10" />
                             <StatCard icon={MessageSquare} label="Feedback mở" value={stats.openFeedbacks} color="border-sky-500/25 text-sky-300" iconColor="bg-sky-500/10" />
                         </div>

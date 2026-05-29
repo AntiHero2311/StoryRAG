@@ -26,7 +26,6 @@ const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
 const StaffOverviewPage = lazy(() => import('./pages/staff/StaffOverviewPage'));
 const StaffContentPage = lazy(() => import('./pages/staff/StaffContentPage'));
 const StaffDashboardPage = lazy(() => import('./pages/StaffDashboardPage'));
-const StaffFlaggedPage = lazy(() => import('./pages/StaffFlaggedPage'));
 const StaffAnalysisJobsPage = lazy(() => import('./pages/StaffAnalysisJobsPage'));
 const StaffFeedbacksPage = lazy(() => import('./pages/StaffFeedbacksPage'));
 const StaffPerformancePage = lazy(() => import('./pages/StaffPerformancePage'));
@@ -111,16 +110,6 @@ function App() {
             <Route path="/admin/logs" element={<RouteGuard><RoleGuard allowedRoles={['Admin']}><AdminLogsPage /></RoleGuard></RouteGuard>} />
 
             {/* Staff routes — cụ thể trước /staff để khớp đúng */}
-            <Route
-              path="/staff/flagged"
-              element={
-                <RouteGuard>
-                  <RoleGuard allowedRoles={['Staff', 'Admin']}>
-                    <StaffFlaggedPage />
-                  </RoleGuard>
-                </RouteGuard>
-              }
-            />
             <Route path="/staff/faqs" element={<Navigate to="/staff/content?tab=faq" replace />} />
             <Route path="/staff/writing-tips" element={<Navigate to="/staff/content?tab=tips" replace />} />
             <Route
