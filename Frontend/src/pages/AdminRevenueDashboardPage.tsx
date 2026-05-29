@@ -1,7 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { DollarSign, Loader2, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+    ArrowLeft,
+    Calendar,
+    CreditCard,
+    DollarSign,
+    Loader2,
+    Package,
+    Percent,
+    RefreshCw,
+    ShoppingCart,
+    TrendingDown,
+    TrendingUp,
+} from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
+import {
+    AdminPageShell,
+    Section,
+    StatCard,
+    fmtNum,
+} from '../components/admin/AdminShared';
 import {
     adminService,
     type AdminRevenueDashboard,
@@ -9,14 +27,24 @@ import {
     type PlanRevenueItem,
 } from '../services/adminService';
 
-const PLAN_COLORS = ['#3b82f6', '#22c55e', '#eab308', '#f97316', '#ec4899', '#8b5cf6'];
+const PLAN_COLORS = [
+    { bar: 'bg-indigo-500', text: 'text-indigo-400', hex: '#6366f1' },
+    { bar: 'bg-violet-500', text: 'text-violet-400', hex: '#8b5cf6' },
+    { bar: 'bg-emerald-500', text: 'text-emerald-400', hex: '#10b981' },
+    { bar: 'bg-sky-500', text: 'text-sky-400', hex: '#0ea5e9' },
+    { bar: 'bg-rose-500', text: 'text-rose-400', hex: '#f43f5e' },
+    { bar: 'bg-amber-500', text: 'text-amber-400', hex: '#f59e0b' },
+];
 
 function fmtCurrency(n: number) {
     return n.toLocaleString('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
 }
 
-function fmtNum(n: number) {
-    return n.toLocaleString('vi-VN');
+function fmtCurrencyShort(n: number) {
+    if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+    return String(n);
 }
 
 function monthOptions() {
@@ -33,53 +61,101 @@ function monthOptions() {
     return items;
 }
 
+const selectClass =
+    'rounded-xl border border-[var(--border-color)] bg-[var(--bg-elevated)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500/50 transition-shadow';
+
+function ChartCard({ title, subtitle, children, className = '' }: {
+    title: string;
+    subtitle?: string;
+    children: ReactNode;
+    className?: string;
+}) {
+    return (
+        <div className={`glass-card rounded-2xl p-5 flex flex-col ${className}`}>
+            <div className="mb-4">
+                <p className="text-xs font-bold uppercase tracking-widest text-[var(--text-tertiary)]">{title}</p>
+                {subtitle && <p className="text-xs text-[var(--text-secondary)] mt-0.5">{subtitle}</p>}
+            </div>
+            <div className="flex-1 min-h-0">{children}</div>
+        </div>
+    );
+}
+
 function VerticalBarChart({
-    title,
     items,
     formatValue,
 }: {
-    title: string;
-    items: { label: string; value: number; color: string }[];
+    items: { label: string; value: number; colorClass: string }[];
     formatValue: (v: number) => string;
 }) {
     const max = Math.max(...items.map(i => i.value), 1);
+    if (items.length === 0) {
+        return (
+            <p className="text-sm text-[var(--text-secondary)] flex-1 flex items-center justify-center py-12">
+                Chưa có dữ liệu trong tháng này
+            </p>
+        );
+    }
     return (
-        <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-4 h-full flex flex-col">
-            <p className="text-xs font-bold uppercase tracking-widest text-[var(--text-tertiary)] mb-4">{title}</p>
-            {items.length === 0 ? (
-                <p className="text-sm text-[var(--text-secondary)] flex-1 flex items-center justify-center">Chưa có dữ liệu</p>
-            ) : (
-                <div className="flex items-end justify-center gap-3 flex-1 min-h-[140px] px-2">
-                    {items.map(item => (
-                        <div key={item.label} className="flex flex-col items-center gap-2 flex-1 max-w-[72px]">
-                            <span className="text-[10px] text-[var(--text-secondary)] text-center leading-tight">{formatValue(item.value)}</span>
-                            <div
-                                className="w-full rounded-t-lg transition-all"
-                                style={{ height: `${Math.max(8, (item.value / max) * 120)}px`, backgroundColor: item.color }}
-                            />
-                            <span className="text-[10px] font-semibold text-[var(--text-primary)] text-center truncate w-full">{item.label}</span>
-                        </div>
-                    ))}
+        <div className="flex items-end justify-center gap-2 sm:gap-4 flex-1 min-h-[160px] px-1 pb-1">
+            {items.map(item => (
+                <div key={item.label} className="flex flex-col items-center gap-2 flex-1 max-w-[88px] group">
+                    <span className="text-[10px] font-medium text-[var(--text-secondary)] text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        {formatValue(item.value)}
+                    </span>
+                    <div className="w-full flex flex-col justify-end h-[130px]">
+                        <div
+                            className={`w-full rounded-t-lg ${item.colorClass} opacity-90 group-hover:opacity-100 transition-all duration-300 shadow-[0_-4px_20px_rgba(99,102,241,0.15)]`}
+                            style={{ height: `${Math.max(10, (item.value / max) * 120)}px` }}
+                            title={`${item.label}: ${formatValue(item.value)}`}
+                        />
+                    </div>
+                    <span className="text-[10px] font-semibold text-[var(--text-primary)] text-center truncate w-full leading-tight">
+                        {item.label}
+                    </span>
                 </div>
-            )}
+            ))}
         </div>
     );
 }
 
 function MonthlyBarChart({ data }: { data: MonthlyRevenueItem[] }) {
     const max = Math.max(...data.map(d => d.revenue), 1);
+    if (data.length === 0) {
+        return <p className="text-sm text-[var(--text-secondary)] text-center py-16">Chưa có dữ liệu xu hướng</p>;
+    }
     return (
-        <div className="flex items-end gap-1.5 h-[160px] px-1">
-            {data.map(d => (
-                <div key={d.label} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-                    <div
-                        className="w-full rounded-t bg-amber-500/90 min-h-[4px]"
-                        style={{ height: `${Math.max(4, (d.revenue / max) * 130)}px` }}
-                        title={`${d.label}: ${fmtCurrency(d.revenue)}`}
-                    />
-                    <span className="text-[9px] text-[var(--text-tertiary)] rotate-[-45deg] origin-top-left translate-y-2 whitespace-nowrap">{d.label}</span>
-                </div>
-            ))}
+        <div className="space-y-3">
+            <div className="flex items-end gap-1.5 h-[180px] px-0.5">
+                {data.map((d, i) => (
+                    <div key={d.label} className="flex-1 flex flex-col items-center gap-2 min-w-0 group">
+                        <span className="text-[9px] text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 transition-opacity truncate max-w-full">
+                            {fmtCurrencyShort(d.revenue)}
+                        </span>
+                        <div className="w-full flex flex-col justify-end flex-1 min-h-0">
+                            <div
+                                className="w-full rounded-t-md min-h-[6px] transition-all duration-300 group-hover:brightness-110"
+                                style={{
+                                    height: `${Math.max(6, (d.revenue / max) * 150)}px`,
+                                    background: `linear-gradient(180deg, ${PLAN_COLORS[i % PLAN_COLORS.length].hex}99, ${PLAN_COLORS[i % PLAN_COLORS.length].hex})`,
+                                }}
+                                title={`${d.label}: ${fmtCurrency(d.revenue)} · ${d.orderCount} đơn`}
+                            />
+                        </div>
+                    </div>
+                ))}
+            </div>
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {data.map(d => (
+                    <span
+                        key={d.label}
+                        className="flex-1 min-w-0 text-center text-[9px] text-[var(--text-tertiary)] truncate"
+                        title={d.label}
+                    >
+                        {d.label.replace('Tháng ', '').replace('/', '/')}
+                    </span>
+                ))}
+            </div>
         </div>
     );
 }
@@ -87,66 +163,53 @@ function MonthlyBarChart({ data }: { data: MonthlyRevenueItem[] }) {
 function GrowthLineChart({ data }: { data: MonthlyRevenueItem[] }) {
     const points = data.filter(d => d.growthPercent != null);
     if (points.length < 2) {
-        return <p className="text-sm text-[var(--text-secondary)] py-12 text-center">Chưa đủ dữ liệu tăng trưởng</p>;
+        return <p className="text-sm text-[var(--text-secondary)] py-16 text-center">Chưa đủ dữ liệu tăng trưởng</p>;
     }
     const values = points.map(p => p.growthPercent ?? 0);
-    const min = Math.min(...values, -10);
-    const max = Math.max(...values, 10);
+    const min = Math.min(...values, -15);
+    const max = Math.max(...values, 15);
     const range = max - min || 1;
-    const w = 320;
-    const h = 120;
+    const w = 400;
+    const h = 140;
+    const padY = 12;
     const coords = points.map((p, i) => {
-        const x = (i / (points.length - 1)) * w;
-        const y = h - ((p.growthPercent! - min) / range) * h;
-        return `${x},${y}`;
-    }).join(' ');
+        const x = 20 + (i / (points.length - 1)) * (w - 40);
+        const y = padY + (h - padY * 2) - ((p.growthPercent! - min) / range) * (h - padY * 2);
+        return { x, y, p };
+    });
+    const linePoints = coords.map(c => `${c.x},${c.y}`).join(' ');
+    const zeroY = padY + (h - padY * 2) - ((0 - min) / range) * (h - padY * 2);
 
     return (
-        <svg viewBox={`0 0 ${w} ${h + 24}`} className="w-full h-[160px]">
-            <polyline fill="none" stroke="#6366f1" strokeWidth="2.5" points={coords} />
-            {points.map((p, i) => {
-                const x = (i / (points.length - 1)) * w;
-                const y = h - ((p.growthPercent! - min) / range) * h;
-                return <circle key={p.label} cx={x} cy={y} r="3" fill="#818cf8" />;
-            })}
-        </svg>
-    );
-}
-
-function DonutStat({ percent, label, color }: { percent: number; label: string; color: string }) {
-    const r = 42;
-    const c = 2 * Math.PI * r;
-    const offset = c * (1 - Math.min(100, Math.max(0, percent)) / 100);
-    return (
-        <div className="flex flex-col items-center justify-center">
-            <svg width="110" height="110" viewBox="0 0 110 110">
-                <circle cx="55" cy="55" r={r} fill="none" stroke="var(--border-color)" strokeWidth="12" />
-                <circle
-                    cx="55" cy="55" r={r} fill="none"
-                    stroke={color}
-                    strokeWidth="12"
-                    strokeDasharray={c}
-                    strokeDashoffset={offset}
-                    strokeLinecap="round"
-                    transform="rotate(-90 55 55)"
+        <div className="w-full overflow-x-auto">
+            <svg viewBox={`0 0 ${w} ${h + 28}`} className="w-full min-w-[280px] h-[180px]">
+                <line x1="20" y1={zeroY} x2={w - 20} y2={zeroY} stroke="var(--border-color)" strokeWidth="1" strokeDasharray="4 4" />
+                <defs>
+                    <linearGradient id="growth-line-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#6366f1" />
+                        <stop offset="100%" stopColor="#a855f7" />
+                    </linearGradient>
+                    <linearGradient id="growth-area-grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="rgba(99,102,241,0.25)" />
+                        <stop offset="100%" stopColor="rgba(99,102,241,0)" />
+                    </linearGradient>
+                </defs>
+                <polygon
+                    fill="url(#growth-area-grad)"
+                    points={`${coords[0].x},${zeroY} ${linePoints} ${coords[coords.length - 1].x},${zeroY}`}
                 />
-                <text x="55" y="52" textAnchor="middle" className="fill-[var(--text-primary)] text-lg font-bold">
-                    {percent}%
-                </text>
-                <text x="55" y="68" textAnchor="middle" className="fill-[var(--text-secondary)] text-[9px]">
-                    {label}
-                </text>
+                <polyline fill="none" stroke="url(#growth-line-grad)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={linePoints} />
+                {coords.map(({ x, y, p }) => (
+                    <g key={p.label}>
+                        <circle cx={x} cy={y} r="4" fill="#818cf8" stroke="var(--bg-surface)" strokeWidth="2" />
+                        <title>{`${p.label}: ${p.growthPercent! > 0 ? '+' : ''}${p.growthPercent}%`}</title>
+                    </g>
+                ))}
             </svg>
-        </div>
-    );
-}
-
-function KpiBox({ label, value, sub }: { label: string; value: string; sub?: string }) {
-    return (
-        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--input-bg)] px-4 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-tertiary)]">{label}</p>
-            <p className="text-lg font-bold text-[var(--text-primary)] mt-1 leading-tight">{value}</p>
-            {sub && <p className="text-xs text-[var(--text-secondary)] mt-0.5">{sub}</p>}
+            <div className="flex justify-between text-[9px] text-[var(--text-tertiary)] px-5 -mt-1">
+                <span>{points[0]?.label}</span>
+                <span>{points[points.length - 1]?.label}</span>
+            </div>
         </div>
     );
 }
@@ -179,7 +242,10 @@ export default function AdminRevenueDashboardPage() {
 
     useEffect(() => {
         const token = localStorage.getItem('token');
-        if (!token) { navigate('/login'); return; }
+        if (!token) {
+            navigate('/login');
+            return;
+        }
         void load();
     }, [load, navigate]);
 
@@ -188,7 +254,7 @@ export default function AdminRevenueDashboardPage() {
         return data.revenueByPlan.map((p, i) => ({
             label: p.planName,
             value: p.revenue,
-            color: PLAN_COLORS[i % PLAN_COLORS.length],
+            colorClass: PLAN_COLORS[i % PLAN_COLORS.length].bar,
         }));
     }, [data]);
 
@@ -197,144 +263,269 @@ export default function AdminRevenueDashboardPage() {
         return data.revenueByPlan.map((p, i) => ({
             label: p.planName,
             value: p.orderCount,
-            color: PLAN_COLORS[i % PLAN_COLORS.length],
+            colorClass: PLAN_COLORS[i % PLAN_COLORS.length].bar,
         }));
     }, [data]);
 
     const growth = data?.revenueGrowthPercent ?? 0;
     const growthUp = growth >= 0;
+    const totalPlanRevenue = data?.revenueByPlan.reduce((s, p) => s + p.revenue, 0) ?? 0;
 
-    const selectedPlanShare = useMemo(() => {
-        if (!data || planId === 'all') return data?.paymentSuccessRate ?? 0;
-        const total = data.revenueByPlan.reduce((s, p) => s + p.revenue, 0);
+    /** Khi "Tất cả gói": tỷ lệ đơn Completed / tổng lần tạo đơn trong tháng. Khi chọn 1 gói: % doanh thu gói đó trong tháng. */
+    const rateKpi = useMemo(() => {
+        if (!data) return { value: 0, label: 'Tỷ lệ thanh toán', sub: '' };
+        if (planId === 'all') {
+            return {
+                value: data.paymentSuccessRate,
+                label: 'Tỷ lệ thanh toán thành công',
+                sub: 'Đơn hoàn tất ÷ tổng lần tạo đơn (kể cả hủy/thất bại)',
+            };
+        }
         const sel = data.revenueByPlan.find(p => String(p.planId) === planId);
-        if (!total || !sel) return 0;
-        return Math.round((sel.revenue / total) * 1000) / 10;
-    }, [data, planId]);
+        const share = totalPlanRevenue && sel
+            ? Math.round((sel.revenue / totalPlanRevenue) * 1000) / 10
+            : 0;
+        const name = data.plans.find(p => String(p.planId) === planId)?.planName ?? 'Gói đã chọn';
+        return {
+            value: share,
+            label: 'Thị phần doanh thu',
+            sub: `${name} trong tổng doanh thu tháng`,
+        };
+    }, [data, planId, totalPlanRevenue]);
+
+    const selectedMonthLabel = months.find(m => m.year === year && m.month === month)?.label ?? `Tháng ${month}/${year}`;
 
     return (
         <MainLayout pageTitle="Báo cáo doanh thu">
             {() => (
-                <div className="flex-1 overflow-y-auto">
-                    <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            <div className="flex items-center gap-3">
-                                <DollarSign className="w-7 h-7 text-amber-400" />
-                                <div>
-                                    <h1 className="text-xl font-bold text-[var(--text-primary)]">Báo cáo doanh thu</h1>
-                                    <p className="text-sm text-[var(--text-secondary)]">Thống kê thanh toán gói đăng ký theo tháng và theo plan</p>
-                                </div>
-                            </div>
-                            <button type="button" onClick={() => void load()} disabled={loading}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[var(--border-color)] text-sm text-[var(--text-secondary)] hover:bg-[var(--text-primary)]/5">
-                                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Làm mới
+                <AdminPageShell
+                    title="Báo cáo doanh thu"
+                    action={
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <Link
+                                to="/admin"
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[var(--border-color)] text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-indigo-500/30 transition-colors"
+                            >
+                                <ArrowLeft className="w-4 h-4" />
+                                Tổng quan
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={() => void load()}
+                                disabled={loading}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] text-sm text-[var(--text-secondary)] hover:border-indigo-500/40 hover:text-[var(--text-primary)] transition-colors disabled:opacity-50"
+                            >
+                                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                                Làm mới
                             </button>
                         </div>
+                    }
+                >
+                    {/* Filters */}
+                    <div className="glass-card rounded-2xl p-4 flex flex-col sm:flex-row sm:items-end gap-4 flex-wrap">
+                        <div className="flex-1 min-w-[200px]">
+                            <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-[var(--text-tertiary)] mb-2">
+                                <Calendar className="w-3.5 h-3.5" />
+                                Tháng báo cáo
+                            </label>
+                            <select
+                                value={`${year}-${month}`}
+                                onChange={e => {
+                                    const [y, m] = e.target.value.split('-').map(Number);
+                                    setYear(y);
+                                    setMonth(m);
+                                }}
+                                className={`w-full sm:max-w-xs ${selectClass}`}
+                            >
+                                {months.map(m => (
+                                    <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
+                                        {m.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex-1 min-w-[200px]">
+                            <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-[var(--text-tertiary)] mb-2">
+                                <Package className="w-3.5 h-3.5" />
+                                Gói (xu hướng 12 tháng)
+                            </label>
+                            <select
+                                value={planId}
+                                onChange={e => setPlanId(e.target.value)}
+                                className={`w-full sm:max-w-xs ${selectClass}`}
+                                disabled={!data}
+                            >
+                                <option value="all">Tất cả gói</option>
+                                {data?.plans.map((p: PlanRevenueItem) => (
+                                    <option key={p.planId} value={String(p.planId)}>
+                                        {p.planName}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        {data && (
+                            <div className="sm:ml-auto text-right">
+                                <p className="text-xs text-[var(--text-tertiary)]">Đang xem</p>
+                                <p className="text-sm font-semibold text-[var(--text-bright)]">{selectedMonthLabel}</p>
+                            </div>
+                        )}
+                    </div>
 
-                        {error && <p className="text-rose-400 text-sm">{error}</p>}
+                    {error && (
+                        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-400">
+                            {error}
+                        </div>
+                    )}
 
-                        {loading && !data ? (
-                            <div className="flex justify-center py-24"><Loader2 className="w-10 h-10 animate-spin text-indigo-400" /></div>
-                        ) : data && (
-                            <>
-                                {/* ── Top: month filter + KPIs + charts ── */}
-                                <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-                                    <div className="xl:col-span-3 space-y-3">
-                                        <label className="text-xs font-bold uppercase tracking-widest text-[var(--text-tertiary)]">Chọn tháng báo cáo</label>
-                                        <select
-                                            value={`${year}-${month}`}
-                                            onChange={e => {
-                                                const [y, m] = e.target.value.split('-').map(Number);
-                                                setYear(y);
-                                                setMonth(m);
-                                            }}
-                                            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)]"
-                                        >
-                                            {months.map(m => (
-                                                <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>{m.label}</option>
-                                            ))}
-                                        </select>
-                                        <div className="grid grid-cols-1 gap-2">
-                                            <KpiBox label="Tổng doanh thu" value={fmtCurrency(data.totalRevenue)} />
-                                            <KpiBox label="Doanh thu tháng chọn" value={fmtCurrency(data.selectedMonthRevenue)} />
-                                            <KpiBox label="Tổng đơn thành công" value={fmtNum(data.totalCompletedOrders)} />
-                                            <KpiBox label="Đơn tháng chọn" value={fmtNum(data.selectedMonthOrders)} />
-                                        </div>
-                                    </div>
+                    {loading && !data ? (
+                        <div className="flex flex-col items-center justify-center py-24 gap-3">
+                            <Loader2 className="w-10 h-10 animate-spin text-indigo-400" />
+                            <p className="text-sm text-[var(--text-secondary)]">Đang tải báo cáo…</p>
+                        </div>
+                    ) : null}
 
-                                    <div className="xl:col-span-3">
-                                        <VerticalBarChart title="Doanh thu theo gói (tháng)" items={planBars} formatValue={fmtCurrency} />
-                                    </div>
-                                    <div className="xl:col-span-3">
-                                        <VerticalBarChart title="Số đơn theo gói (tháng)" items={orderBars} formatValue={fmtNum} />
-                                    </div>
+                    {data && (
+                        <>
+                            {/* KPI row */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                                <StatCard
+                                    icon={DollarSign}
+                                    label="Tổng doanh thu"
+                                    value={fmtCurrency(data.totalRevenue)}
+                                    sub={`${fmtNum(data.totalCompletedOrders)} đơn thành công`}
+                                    color="border-indigo-500/25 text-indigo-200"
+                                    iconColor="bg-indigo-500/15 text-indigo-400"
+                                />
+                                <StatCard
+                                    icon={CreditCard}
+                                    label="Doanh thu tháng"
+                                    value={fmtCurrency(data.selectedMonthRevenue)}
+                                    sub={`${fmtNum(data.selectedMonthOrders)} đơn · ${selectedMonthLabel}`}
+                                    color="border-violet-500/25 text-violet-200"
+                                    iconColor="bg-violet-500/15 text-violet-400"
+                                />
+                                <StatCard
+                                    icon={growthUp ? TrendingUp : TrendingDown}
+                                    label="Tăng trưởng"
+                                    value={`${growth > 0 ? '+' : ''}${growth}%`}
+                                    sub="So với tháng trước"
+                                    color={growthUp ? 'border-emerald-500/25 text-emerald-300' : 'border-rose-500/25 text-rose-300'}
+                                    iconColor={growthUp ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'}
+                                />
+                                <StatCard
+                                    icon={Percent}
+                                    label={rateKpi.label}
+                                    value={`${rateKpi.value}%`}
+                                    sub={rateKpi.sub}
+                                    color="border-sky-500/25 text-sky-200"
+                                    iconColor="bg-sky-500/15 text-sky-400"
+                                />
+                            </div>
 
-                                    <div className="xl:col-span-3 space-y-3">
-                                        <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4">
-                                            <p className="text-xs font-bold uppercase tracking-widest text-[var(--text-tertiary)] mb-2">Tăng trưởng doanh thu</p>
-                                            <div className="flex items-center gap-2">
-                                                {growthUp ? <TrendingUp className="w-8 h-8 text-emerald-400" /> : <TrendingDown className="w-8 h-8 text-rose-400" />}
-                                                <span className={`text-3xl font-black ${growthUp ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                    {growth > 0 ? '+' : ''}{growth}%
-                                                </span>
-                                            </div>
-                                            <p className="text-xs text-[var(--text-secondary)] mt-2">So với tháng trước</p>
-                                        </div>
-                                        <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 flex flex-col items-center">
-                                            <p className="text-xs font-bold uppercase tracking-widest text-[var(--text-tertiary)] mb-2 self-start">
-                                                {planId === 'all' ? 'Tỷ lệ thanh toán thành công' : 'Thị phần gói (tháng)'}
+                            {/* Trends */}
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                                <ChartCard
+                                    title="Doanh thu 12 tháng"
+                                    subtitle={planId === 'all' ? 'Tất cả gói' : data.plans.find(p => String(p.planId) === planId)?.planName}
+                                    className="lg:col-span-7"
+                                >
+                                    <MonthlyBarChart data={data.monthlyTrend} />
+                                </ChartCard>
+                                <ChartCard
+                                    title="Tăng trưởng %"
+                                    subtitle="So với tháng liền trước"
+                                    className="lg:col-span-5"
+                                >
+                                    <GrowthLineChart data={data.monthlyTrend} />
+                                </ChartCard>
+                            </div>
+
+                            {/* Plan breakdown */}
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                                <ChartCard title="Doanh thu theo gói" subtitle={selectedMonthLabel} className="lg:col-span-4">
+                                    <VerticalBarChart items={planBars} formatValue={fmtCurrency} />
+                                </ChartCard>
+                                <ChartCard title="Số đơn theo gói" subtitle={selectedMonthLabel} className="lg:col-span-4">
+                                    <VerticalBarChart items={orderBars} formatValue={fmtNum} />
+                                </ChartCard>
+
+                                <div className="lg:col-span-4 glass-card rounded-2xl p-5 relative overflow-hidden border border-indigo-500/20 bg-brand-subtle flex flex-col min-h-[280px]">
+                                    <div
+                                        className="absolute inset-0 opacity-40 pointer-events-none"
+                                        style={{ background: 'var(--gradient-brand)', filter: 'blur(60px)' }}
+                                    />
+                                    <div className="relative flex-1">
+                                        <p className="text-xs font-bold uppercase tracking-widest text-[var(--accent-text)] mb-1">
+                                            Tóm tắt tháng
+                                        </p>
+                                        <p className="text-2xl sm:text-3xl font-black text-gradient-bright leading-tight">
+                                            {fmtCurrency(data.selectedMonthRevenue)}
+                                        </p>
+                                        <p className="text-sm text-[var(--text-secondary)] mt-2 flex items-center gap-1.5">
+                                            <ShoppingCart className="w-4 h-4" />
+                                            {fmtNum(data.selectedMonthOrders)} đơn hoàn tất
+                                        </p>
+                                        {planId === 'all' && (
+                                            <p className="text-xs text-[var(--text-tertiary)] mt-3">
+                                                {rateKpi.value}% đơn thanh toán thành công trong tháng
                                             </p>
-                                            <DonutStat
-                                                percent={selectedPlanShare}
-                                                label={planId === 'all' ? 'thành công' : 'doanh thu'}
-                                                color={planId === 'all' ? '#22c55e' : '#3b82f6'}
-                                            />
-                                        </div>
+                                        )}
                                     </div>
-                                </div>
-
-                                {/* ── Bottom: plan filter + trends ── */}
-                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                                    <div className="lg:col-span-12 flex flex-wrap items-center gap-3">
-                                        <label className="text-xs font-bold uppercase tracking-widest text-[var(--text-tertiary)]">Chọn gói (xu hướng 12 tháng)</label>
-                                        <select
-                                            value={planId}
-                                            onChange={e => setPlanId(e.target.value)}
-                                            className="rounded-xl border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text-primary)] min-w-[200px]"
-                                        >
-                                            <option value="all">Tất cả gói</option>
-                                            {data.plans.map((p: PlanRevenueItem) => (
-                                                <option key={p.planId} value={String(p.planId)}>{p.planName}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    <div className="lg:col-span-5 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-4">
-                                        <p className="text-xs font-bold uppercase tracking-widest text-[var(--text-tertiary)] mb-3">Doanh thu 12 tháng</p>
-                                        <MonthlyBarChart data={data.monthlyTrend} />
-                                    </div>
-                                    <div className="lg:col-span-4 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-4">
-                                        <p className="text-xs font-bold uppercase tracking-widest text-[var(--text-tertiary)] mb-3">Tăng trưởng % từng tháng</p>
-                                        <GrowthLineChart data={data.monthlyTrend} />
-                                    </div>
-                                    <div className="lg:col-span-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-4 flex flex-col items-center justify-center">
-                                        <p className="text-xs font-bold uppercase tracking-widest text-[var(--text-tertiary)] mb-2 self-start">Tháng {month}/{year}</p>
-                                        <p className="text-2xl font-bold text-amber-300">{fmtCurrency(data.selectedMonthRevenue)}</p>
-                                        <p className="text-sm text-[var(--text-secondary)] mt-1">{data.selectedMonthOrders} đơn hoàn tất</p>
-                                        <div className="mt-4 w-full pt-4 border-t border-[var(--border-color)] space-y-2">
-                                            {data.revenueByPlan.slice(0, 5).map((p, i) => (
-                                                <div key={p.planId} className="flex justify-between text-xs">
-                                                    <span className="text-[var(--text-secondary)] truncate pr-2">{p.planName}</span>
-                                                    <span className="font-semibold" style={{ color: PLAN_COLORS[i % PLAN_COLORS.length] }}>{fmtCurrency(p.revenue)}</span>
+                                    {data.revenueByPlan.length > 0 && (
+                                        <div className="relative mt-4 pt-4 border-t border-[var(--border-color)] space-y-2">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-tertiary)]">
+                                                Top gói tháng này
+                                            </p>
+                                            {data.revenueByPlan.slice(0, 4).map((p, i) => (
+                                                <div key={p.planId} className="flex justify-between text-xs gap-2">
+                                                    <span className={`truncate ${PLAN_COLORS[i % PLAN_COLORS.length].text}`}>
+                                                        {p.planName}
+                                                    </span>
+                                                    <span className="font-semibold text-[var(--text-primary)] shrink-0">
+                                                        {fmtCurrency(p.revenue)}
+                                                    </span>
                                                 </div>
                                             ))}
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
-                            </>
-                        )}
-                    </main>
-                </div>
+                            </div>
+
+                            {/* Plan table */}
+                            {data.revenueByPlan.length > 0 && (
+                                <Section title="Chi tiết theo gói" icon={Package}>
+                                    <div className="space-y-3">
+                                        {data.revenueByPlan.map((p, i) => {
+                                            const pct = totalPlanRevenue > 0 ? Math.round((p.revenue / totalPlanRevenue) * 100) : 0;
+                                            const colors = PLAN_COLORS[i % PLAN_COLORS.length];
+                                            return (
+                                                <div key={p.planId} className="space-y-1.5">
+                                                    <div className="flex justify-between items-baseline gap-2">
+                                                        <span className={`text-sm font-medium ${colors.text}`}>{p.planName}</span>
+                                                        <div className="text-right shrink-0">
+                                                            <span className="text-sm font-bold text-[var(--text-primary)]">
+                                                                {fmtCurrency(p.revenue)}
+                                                            </span>
+                                                            <span className="text-xs text-[var(--text-tertiary)] ml-2">
+                                                                {fmtNum(p.orderCount)} đơn · {pct}%
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="h-1.5 bg-[var(--text-primary)]/10 rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full rounded-full ${colors.bar} transition-all duration-500`}
+                                                            style={{ width: `${pct}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </Section>
+                            )}
+                        </>
+                    )}
+                </AdminPageShell>
             )}
         </MainLayout>
     );
