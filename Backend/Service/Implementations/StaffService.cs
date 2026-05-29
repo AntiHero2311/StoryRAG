@@ -294,26 +294,38 @@ namespace Service.Implementations
         }
 
 
-        public async Task<StaffPagedResponse<StaffPendingReportItem>> GetPendingReportsAsync(int page, int pageSize)
+        public async Task<StaffPagedResponse<StaffPendingReportItem>> GetPendingReportsAsync(int page, int pageSize, string? status = null)
         {
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 1, 100);
-
-            var pendingStatuses = new[]
-            {
-                ProjectReportService.ReviewStatusPendingStaff,
-                ProjectReportService.ReviewStatusStaffReviewing
-            };
 
             var query = _db.ProjectReports
                 .AsNoTracking()
                 .Include(r => r.Project)
                     .ThenInclude(p => p.Author)
-                // Report cũ có thể chưa có ReviewStatus (null/empty) — xem như pending để staff vẫn review được.
-                .Where(r =>
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(status) && status.Equals("all", StringComparison.OrdinalIgnoreCase))
+            {
+                // No filter, show all reports
+            }
+            else if (!string.IsNullOrWhiteSpace(status) && status.Equals("Released", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(r => r.ReviewStatus == ProjectReportService.ReviewStatusReleased);
+            }
+            else
+            {
+                var pendingStatuses = new[]
+                {
+                    ProjectReportService.ReviewStatusPendingStaff,
+                    ProjectReportService.ReviewStatusStaffReviewing
+                };
+                query = query.Where(r =>
                     string.IsNullOrWhiteSpace(r.ReviewStatus) ||
-                    pendingStatuses.Contains(r.ReviewStatus))
-                .OrderByDescending(r => r.UpdatedAt ?? r.CreatedAt);
+                    pendingStatuses.Contains(r.ReviewStatus));
+            }
+
+            query = query.OrderByDescending(r => r.UpdatedAt ?? r.CreatedAt);
 
             var total = await query.CountAsync();
             var reports = await query

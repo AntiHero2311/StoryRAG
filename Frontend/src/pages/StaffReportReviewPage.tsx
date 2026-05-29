@@ -322,20 +322,20 @@ export default function StaffReportReviewPage() {
   const chapterCount = story?.chapters?.length ?? 0;
 
   return (
-    <MainLayout pageTitle="Staff Review Report">
+    <MainLayout pageTitle="Chi tiết phân tích AI">
       {() => (
         <div className="p-6 max-w-[1600px] mx-auto w-full space-y-6">
           {/* Top Bar with Back Navigation */}
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate('/staff/analysis-jobs')}
+              onClick={() => navigate('/staff/analyses')}
               className="h-10 px-3.5 rounded-xl text-xs font-semibold inline-flex items-center gap-2 hover:opacity-85 transition-opacity"
               style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}
             >
               <ArrowLeft className="w-4 h-4" />
               Quay lại danh sách
             </button>
-            <h1 className="text-xl font-bold text-[var(--text-primary)]">Xem chi tiết report (Staff)</h1>
+            <h1 className="text-xl font-bold text-[var(--text-primary)]">Xem chi tiết phân tích AI</h1>
           </div>
 
           {error && (
@@ -391,10 +391,10 @@ export default function StaffReportReviewPage() {
                           : 'bg-amber-500 shadow-[0_0_8px_#f59e0b] animate-pulse'
                       }`} />
                       <span className="text-xs font-bold text-[var(--text-primary)]">
-                        Trạng thái duyệt: {
+                        Trạng thái: {
                           detail.reviewStatus === 'Released' ? 'Đã phát hành' : 
-                          detail.reviewStatus === 'StaffReviewing' ? 'Staff đang xem' : 
-                          'Chờ duyệt (Pending)'
+                          detail.reviewStatus === 'StaffReviewing' ? 'Đang xem xét' : 
+                          'Chưa phát hành'
                         }
                       </span>
                     </div>

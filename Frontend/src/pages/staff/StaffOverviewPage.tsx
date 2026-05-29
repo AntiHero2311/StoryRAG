@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, MessageSquare, Activity,
-    CircleHelp, Bug, RefreshCw, ChevronRight,
+    CircleHelp, Bug, RefreshCw, ChevronRight, BarChart2,
 } from 'lucide-react';
 import MainLayout from '../../layouts/MainLayout';
 import { AdminPageShell, StatCard } from '../../components/admin/AdminShared';
@@ -11,12 +11,14 @@ import { analysisJobService } from '../../services/analysisJobService';
 import { bugReportService } from '../../services/bugReportService';
 
 type HubStats = {
+    pendingReports: number;
     openFeedbacks: number;
     failedJobs: number;
     openBugs: number;
 };
 
 const QUICK_LINKS = [
+    { to: '/staff/analyses', label: 'Kết quả phân tích', icon: BarChart2, color: 'text-indigo-400', statKey: 'pendingReports' as const },
     { to: '/staff/analysis-jobs', label: 'Phân tích lỗi / treo', icon: Activity, color: 'text-violet-400', statKey: 'failedJobs' as const },
     { to: '/staff/feedbacks', label: 'Phản hồi tác giả', icon: MessageSquare, color: 'text-indigo-400', statKey: 'openFeedbacks' as const },
     { to: '/staff/content?tab=faq', label: 'Nội dung trợ giúp', icon: CircleHelp, color: 'text-emerald-400' },
@@ -33,12 +35,14 @@ export default function StaffOverviewPage() {
         setLoading(true);
         setError('');
         try {
-            const [perf, jobs, bugs] = await Promise.all([
+            const [perf, jobs, bugs, pendingReportsRes] = await Promise.all([
                 staffService.getPerformance(),
                 analysisJobService.getFailedOrStale('failed,stale'),
                 bugReportService.getStats(),
+                analysisJobService.getPendingReports(1, 1, 'Pending'),
             ]);
             setStats({
+                pendingReports: pendingReportsRes.totalCount ?? 0,
                 openFeedbacks: perf.openFeedbacksAssigned,
                 failedJobs: jobs.length,
                 openBugs: bugs.open + bugs.inProgress,
@@ -70,6 +74,7 @@ export default function StaffOverviewPage() {
 
                     {stats && (
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <StatCard icon={BarChart2} label="Chưa phát hành" value={stats.pendingReports} color="border-indigo-500/25 text-indigo-300" iconColor="bg-indigo-500/10" />
                             <StatCard icon={Activity} label="Job lỗi/treo" value={stats.failedJobs} color="border-violet-500/25 text-violet-300" iconColor="bg-violet-500/10" />
                             <StatCard icon={MessageSquare} label="Feedback mở" value={stats.openFeedbacks} color="border-sky-500/25 text-sky-300" iconColor="bg-sky-500/10" />
                         </div>

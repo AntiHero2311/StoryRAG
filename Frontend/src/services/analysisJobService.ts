@@ -83,9 +83,9 @@ export const analysisJobService = {
   rerun: (jobId: string) =>
     api.post<StaffAnalysisJobItem>(`/staff/analysis-jobs/${jobId}/rerun`).then(r => r.data),
 
-  getPendingReports: (page = 1, pageSize = 20) =>
+  getPendingReports: (page = 1, pageSize = 20, status?: string) =>
     api
-      .get<StaffPagedResponse<StaffPendingReportItem>>('/staff/analyses/pending', { params: { page, pageSize } })
+      .get<StaffPagedResponse<StaffPendingReportItem>>('/staff/analyses/pending', { params: { page, pageSize, status } })
       .then(r => r.data),
 
   getReportDetail: (reportId: string) =>

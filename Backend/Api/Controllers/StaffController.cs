@@ -78,9 +78,9 @@ namespace Api.Controllers
         }
 
         [HttpGet("analyses/pending")]
-        public async Task<IActionResult> GetPendingReports([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        public async Task<IActionResult> GetPendingReports([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
-            var result = await _staffService.GetPendingReportsAsync(page, pageSize);
+            var result = await _staffService.GetPendingReportsAsync(page, pageSize, status);
             return Ok(result);
         }
 
