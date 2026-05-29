@@ -1833,6 +1833,15 @@ function wbCategoryIcon(cat: string, size = 'w-3.5 h-3.5') {
 }
 
 const WORLD_FOCUS_CATEGORY_ORDER = ['World', 'Setting', 'Location', 'Rules', 'Timeline', 'Glossary', 'Other'] as const;
+const WORLDBUILDING_CATEGORIES = [
+    { value: 'World', label: 'Thế giới', color: '#818cf8' },
+    { value: 'Setting', label: 'Bối cảnh', color: '#22d3ee' },
+    { value: 'Location', label: 'Địa điểm', color: '#34d399' },
+    { value: 'Rules', label: 'Luật lệ', color: '#f59e0b' },
+    { value: 'Timeline', label: 'Dòng thời gian', color: '#f97316' },
+    { value: 'Glossary', label: 'Thuật ngữ', color: '#a78bfa' },
+    { value: 'Other', label: 'Khác', color: '#94a3b8' },
+] as const;
 const WORLD_FOCUS_CATEGORIES = WORLD_FOCUS_CATEGORY_ORDER
     .map(value => WORLDBUILDING_CATEGORIES.find(c => c.value === value))
     .filter((c): c is NonNullable<typeof c> => !!c);
