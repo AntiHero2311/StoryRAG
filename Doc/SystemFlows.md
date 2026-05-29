@@ -13,8 +13,7 @@ Tài liệu này mô tả chi tiết, chuyên sâu các luồng hoạt động (
 6. [Luồng Cấu hình Cổng kiểm soát cho Admin (Admin RAG Configuration)](#6-luồng-cấu-hình-cổng-kiểm-soát-cho-admin-admin-rag-configuration)
 7. [Luồng Nâng cấp Gói & Thanh toán VNPay (VNPay Integration & Subscription Lifecycle)](#7-luồng-nâng-cấp-gói--thanh-toán-vnpay-vnpay-integration--subscription-lifecycle)
 8. [Luồng Hậu kiểm & Phản hồi chuyên môn của Staff (Staff Post-Audit & Wide Reader Modal)](#8-luồng-hậu-kiểm--phản-hồi-chuyên-môn-của-staff-staff-post-audit--wide-reader-modal)
-9. [Luồng Quản lý Dòng thời gian kịch bản (Timeline Ordering & Reordering)](#9-luồng-quản-lý-dòng-thời-gian-kịch-bản-timeline-ordering--reordering)
-10. [Luồng Dọn dẹp dữ liệu & Xóa mềm (Pruning & Soft/Hard Deletion)](#10-luồng-dọn-dẹp-dữ-liệu--xóa-mềm-pruning--softhard-deletion)
+9. [Luồng Dọn dẹp dữ liệu & Xóa mềm (Pruning & Soft/Hard Deletion)](#9-luồng-dọn-dẹp-dữ-liệu--xóa-mềm-pruning--softhard-deletion)
 
 ---
 
@@ -50,7 +49,7 @@ sequenceDiagram
    - Client đính kèm `Authorization: Bearer <token>` vào mọi yêu cầu.
    - **Xoay vòng Token:** Khi token hết hạn (401), Axios Interceptor tự động tạm dừng hàng đợi, gọi `POST /api/auth/refresh` bằng Refresh Token để lấy cặp token mới rồi tự động thực thi lại các request lỗi mà người dùng không hề nhận biết (Seamless UX).
 3. **Mã hóa E2E tại Service Layer:**
-   - Mọi thực thể chứa bản thảo (`Chapters`, `ChapterVersions`, `WorldbuildingEntries`, `CharacterEntries`, `ChatMessages`) trước khi chèn vào Database đều đi qua lớp lọc `EncryptionHelper.EncryptWithUserKey`.
+   - Mọi thực thể chứa bản thảo (`Chapters`, `ChapterVersions`, `ChatMessages`) trước khi chèn vào Database đều đi qua lớp lọc `EncryptionHelper.EncryptWithUserKey`.
    - Khi đọc lên, service lấy DEK của chính tác giả đó, giải mã (`DecryptWithUserKey`) rồi mới gửi kết quả sạch về cho Frontend render. Nhân viên quản trị hệ thống nếu truy cập DB trực tiếp cũng chỉ thấy các chuỗi ký tự Hex mã hóa vô nghĩa.
 
 ---
@@ -126,8 +125,8 @@ sequenceDiagram
     FE->>BE: POST /api/ai/{projectId}/chat
     BE->>AI: Sinh vector nhúng cho câu hỏi
     AI-->>BE: Trả về vector 768 chiều
-    BE->>DB: Vector Search Cosine (Active Chapter Chunks + Story Bible)
-    DB-->>BE: Trả về Top 5 chunks + Top 2 nhân vật/bối cảnh gần nhất
+    BE->>DB: Vector Search Cosine (Active Chapter Chunks)
+    DB-->>BE: Trả về Top K chunks gần nhất
     BE->>BE: Giải mã các ngữ cảnh bằng DEK tác giả
     BE->>BE: Trộn ngữ cảnh vào XML Prompt Template
     BE->>AI: Gửi Prompt hoàn chỉnh (Gemini Chat Model)
@@ -268,22 +267,9 @@ sequenceDiagram
 
 ---
 
-## 9. Luồng Quản lý Dòng thời gian kịch bản (Timeline Ordering & Reordering)
-
-**Mục tiêu:** Cho phép tác giả sắp xếp, quản lý các mốc thời gian diễn ra cốt truyện một cách logic, tự động đồng bộ hóa vào cẩm nang truyện và biểu đồ phân tích.
-
-```mermaid
-graph TD
-    A[Tác giả kéo thả / Sắp xếp lại sự kiện trên giao diện] -->|Hành động Reorder| B[PATCH /api/projects/{projectId}/timeline/{id}/reorder]
-    B --> C[Backend Service: Đọc danh sách sự kiện hiện tại]
-    C --> D[Cập nhật thuộc tính SortOrder cho các sự kiện liên quan]
-    D --> E[Lưu database PostgreSQL]
-    E --> F[Tự động đồng bộ hóa thứ tự mới vào dữ liệu Cẩm nang truyện của Project Report tiếp theo]
-```
-
 ---
 
-## 10. Luồng Dọn dẹp dữ liệu & Xóa mềm (Pruning & Soft/Hard Deletion)
+## 9. Luồng Dọn dẹp dữ liệu & Xóa mềm (Pruning & Soft/Hard Deletion)
 
 **Mục tiêu:** Quản lý dung lượng lưu trữ cơ sở dữ liệu vector và bảo mật quyền lãng quên của người dùng.
 

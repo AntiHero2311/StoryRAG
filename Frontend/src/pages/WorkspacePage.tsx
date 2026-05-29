@@ -12,7 +12,7 @@ import {
 import { getUserInfo } from '../utils/jwtHelper';
 import ChatPanel from '../components/workspace/ChatPanel';
 import ChatHistoryPanel from '../components/workspace/ChatHistoryPanel';
-import TimelinePanel from '../components/workspace/TimelinePanel';
+
 
 import {
     chapterService,
@@ -21,28 +21,10 @@ import {
 } from '../services/chapterService';
 import { aiService } from '../services/aiService';
 import { useEditorSettings, AVAILABLE_FONTS, AVAILABLE_SIZES } from '../hooks/useEditorSettings';
-import {
-    worldbuildingService,
-    type WorldbuildingEntry,
-    type CreateWorldbuildingRequest,
-    WORLDBUILDING_CATEGORIES,
-    getCategoryLabel,
-    getCategoryColor,
-    getCategoryPlaceholder,
-} from '../services/worldbuildingService';
-import {
-    characterService,
-    type CharacterEntry,
-    type CreateCharacterRequest,
-    CHARACTER_ROLES,
-    getRoleInfo,
-} from '../services/characterService';
 import { projectService } from '../services/projectService';
 import { exportService } from '../services/exportService';
 import { genreService } from '../services/genreService';
 import type { GenreResponse } from '../services/projectService';
-import { styleGuideService, type StyleGuideEntry, type CreateStyleGuideRequest, STYLE_GUIDE_ASPECTS, getStyleGuideAspectLabel, getStyleGuideAspectColor } from '../services/styleGuideService';
-import { themeService, type ThemeEntry, type CreateThemeRequest } from '../services/themeService';
 
 import { useToast } from '../components/Toast';
 import { DeleteConfirmationModal } from '../components/ui';
@@ -51,7 +33,7 @@ import { useDeleteConfirm } from '../hooks';
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type SavedState = 'idle' | 'saving' | 'saved' | 'error';
-type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'worldbuilding' | 'characters' | 'genre' | 'synopsis' | 'aiInstructions' | 'styleGuide' | 'themes' | 'plotTimeline';
+type ActiveTab = 'chat' | 'history' | 'chatHistory' | 'genre' | 'synopsis' | 'aiInstructions';
 const AUTO_EMBED_QUEUE_DELAY_MS = 5_000;
 
 
@@ -1315,11 +1297,7 @@ export default function WorkspacePage() {
 
                 {/* Center - Editor & Boards */}
                 <div className="flex flex-col flex-1 min-h-0 min-w-0 rounded-2xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-                    <div className={activeTab === 'plotTimeline' && projectId ? "flex-1 min-h-0 w-full h-full overflow-hidden flex flex-col bg-[var(--bg-app)]" : "hidden"}>
-                        {projectId && <TimelinePanel projectId={projectId} />}
-                    </div>
-
-                    <div className={activeTab !== 'plotTimeline' ? "flex-1 min-h-0 flex flex-col min-w-0 relative" : "hidden"}>
+                    <div className="flex-1 min-h-0 flex flex-col min-w-0 relative">
                         <>
                             {/* Toolbar */}
                             <div className="h-[48px] shrink-0 flex items-center gap-1 px-4 border-b border-[var(--border-color)]" style={{ background: 'var(--bg-topbar)' }}>
@@ -1555,20 +1533,15 @@ export default function WorkspacePage() {
                         {/* Panel header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] shrink-0 bg-[var(--bg-app)]">
                             <div className="flex items-center gap-2">
-                                {(['worldbuilding', 'characters', 'genre', 'synopsis', 'aiInstructions', 'styleGuide', 'themes', 'plotTimeline'] as ActiveTab[]).includes(activeTab) ? (
+                                {(['genre', 'synopsis', 'aiInstructions'] as ActiveTab[]).includes(activeTab) ? (
                                     <>
                                         <button onClick={() => setActiveTab('history')} className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 transition-colors">
                                             <ArrowLeft className="w-3.5 h-3.5" />
                                         </button>
                                         <BookOpen className="w-4 h-4 text-indigo-400 shrink-0" />
                                         <span className="text-sm font-bold text-[var(--text-primary)]">
-                                            {activeTab === 'worldbuilding' && 'Thế giới'}
-                                            {activeTab === 'characters' && 'Nhân vật'}
                                             {activeTab === 'genre' && 'Thể loại'}
                                             {activeTab === 'synopsis' && 'Tóm tắt'}
-                                            {activeTab === 'styleGuide' && 'Phong cách'}
-                                            {activeTab === 'themes' && 'Chủ đề'}
-                                            {activeTab === 'plotTimeline' && 'Tuyến truyện'}
                                             {activeTab === 'aiInstructions' && 'Ghi chú AI'}
                                         </span>
                                     </>

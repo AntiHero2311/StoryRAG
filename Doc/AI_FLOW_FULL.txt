@@ -37,10 +37,8 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
 - AiChatService:
   + verify ownership + subscription
   + embed câu hỏi (search_query:)
-  + vector search cosine trên 3 nguồn:
-    * ChapterChunks (chỉ active versions)
-    * WorldbuildingEntries
-    * CharacterEntries
+  + vector search cosine trên active chapter chunks:
+    * ChapterChunks (chỉ active versions, top k theo rag.top_k_chat)
   + decrypt context + project summary + ai instructions
   + sanitize input/context (PromptSanitizer)
   + gọi Gemini qua GeminiChatFailoverExecutor
@@ -122,14 +120,12 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
 - Frontend đã có aiAnalysisService + SceneCliffhangerPanel.
 - Hiện trạng UI: panel này chưa được mount vào Workspace tabs.
 
-7) Luồng embed Story Bible entries (nguồn RAG phụ)
-- Các resource có endpoint embed riêng:
-  + worldbuilding: POST /projects/{projectId}/worldbuilding/{id}/embed
-  + character:    POST /projects/{projectId}/character/{id}/embed
-  + style-guides: POST /projects/{projectId}/style-guides/{id}/embed
-  + themes:       POST /projects/{projectId}/themes/{id}/embed
-  + plot-notes:   POST /projects/{projectId}/plot-notes/{id}/embed
-- Nhiều service tự auto regen embedding sau create/update để dữ liệu luôn sẵn cho RAG/analyze.
+7) Story Bible trong Phân tích (AI tự động trích xuất, không nhập thủ công)
+- AI tự trích xuất thông tin Story Bible từ nội dung bản thảo trong quá trình phân tích.
+- Kết quả (nhân vật, thế giới, chủ đề, phong cách...) được lưu vào:
+  + ProjectAnalysisFacts.Payload (JSONB snapshot gắn với RunId)
+  + ProjectReports (ContentAnalysisJson, EmotionPacingJson)
+- Không có bảng nhập thủ công (WorldbuildingEntries, CharacterEntries, v.v. đã bị xóa).
 
 8) Bảo mật và an toàn prompt
 - PromptSanitizer: lọc mẫu prompt injection trước khi gửi LLM.
@@ -165,6 +161,7 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
     * rag.rubric_batch_size: Số lượng tiêu chí rubric chạy song song trong Stage 2 (chạy song song 5 tiêu chí mỗi đợt để tránh vượt quota và tối ưu tốc độ phân tích)
 
 TÓM TẮT:
-Hệ thống AI của StoryRAG vận hành theo mô hình RAG dựa trên active chapter chunks +
-story bible vectors, có đầy đủ lớp bảo vệ (rate limit, sanitize, output validator,
+Hệ thống AI của StoryRAG vận hành theo mô hình RAG dựa trên active chapter chunks,
+với Story Bible được AI tự động trích xuất và lưu snapshot trong ProjectAnalysisFacts.
+Có đầy đủ lớp bảo vệ (rate limit, sanitize, output validator,
 retry/failover, subscription quota, admin controls) và có pipeline async jobs cho phân tích nặng.

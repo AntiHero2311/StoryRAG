@@ -53,7 +53,7 @@ npm run dev
   1. Luu chuong (`PUT /api/projects/{projectId}/chapters/{chapterId}`)
   2. Chunk (`POST .../chunk`)
   3. Embed (`POST /api/ai/chapters/{chapterId}/embed`)
-  4. Chat/Analyze truy hoi context tu active version + Story Bible
+  4. Chat/Analyze truy hoi context tu active chapter chunks (Story Bible tu dong boi AI)
 - **Luong analyze async**:
   - Moi user chi co 1 job active.
   - Worker uu tien job theo goi subscription (plan cao duoc xu ly truoc).
@@ -69,13 +69,10 @@ npm run dev
 Users
   ├─< Projects
   │    ├─< Chapters ─< ChapterVersions ─< ChapterChunks (vector 768)
-  │    ├─< ProjectReports ─< ProjectAnalysisJobs
-  │    ├─< WorldbuildingEntries (vector 768)
-  │    ├─< CharacterEntries (vector 768)
-  │    ├─< StyleGuideEntries (vector 768)
-  │    ├─< ThemeEntries (vector 768)
-  │    ├─< PlotNoteEntries (vector 768)
-  │    ├─< TimelineEvents
+  │    ├─< ProjectReports ─< ReportItems
+  │    │    └─< ProjectReportSnapshots (AI snapshot)
+  │    ├─< ProjectAnalysisJobs ─> ProjectReports
+  │    ├─< ProjectAnalysisFacts  (Story Bible snapshot bởi AI)
   │    ├─< ChatMessages
   │    └─< AiAnalysisHistories
   ├─< UserSubscriptions >─ SubscriptionPlans
@@ -85,6 +82,8 @@ Users
   ├─< faqs / writing_tips
   └─< StaffAnalysisReviews
 ```
+
+> ⚠️ Các bảng `WorldbuildingEntries`, `CharacterEntries`, `StyleGuideEntries`, `ThemeEntries`, `PlotNoteEntries`, `TimelineEvents` đã bị xóa. Dữ liệu Story Bible giờ do AI tự trích xuất và lưu vào `ProjectAnalysisFacts` (snapshot model).
 
 ---
 

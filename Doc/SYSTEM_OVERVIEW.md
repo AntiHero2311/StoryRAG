@@ -1,7 +1,7 @@
 # StoryRAG — Tổng Quan Kiến Trúc Hệ Thống
 
-> **Phiên bản tài liệu:** 1.4  
-> **Cập nhật lần cuối:** Tháng 5/2026 — Thêm cờ nội dung SEXUAL_CONTENT & ANTI_STATE; sửa luồng Staff review; fix 8 bugs audit
+> **Phiên bản tài liệu:** 1.5  
+> **Cập nhật lần cuối:** Tháng 5/2026 — Xóa các bảng Story Bible nhập thủ công; dữ liệu truyện giờ hoàn toàn do AI trích xuất dạng snapshot
 
 
 ---
@@ -15,8 +15,7 @@
 - ✍️ Quản lý project truyện, chương, version (Git-style: pin, diff, restore)
 - 🤖 Chat AI theo ngữ cảnh (RAG) — AI "đọc" nội dung truyện của bạn (chỉ tốn token)
 - 📊 **Phân tích** chấm điểm chất lượng truyện (**Rubric 5 điểm**, 20 tiêu chí, **Zero Hallucination**, chấm theo Thể loại, phát hiện **6 cảnh báo đặc biệt**: INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY / **SEXUAL_CONTENT** / **ANTI_STATE**). Mỗi lần phân tích chạy trên **snapshot toàn bộ bộ truyện** và tự repair chapter active nào chưa chunk/embed đủ trước khi chấm.
-- 🌍 **Story Bible** chuyên sâu: Quản lý Worldbuilding, Nhân vật, Ghi chú cốt truyện (Plot Notes), Chủ đề (Themes), Cẩm nang phong cách (Style Guides) — Hỗ trợ vector embedding.
-- 📅 Quản lý **Timeline** mốc sự kiện dòng thời gian.
+- 🧠 **Story Bible tự động**: AI tự trích xuất nhân vật, thế giới truyện, cốt truyện, chủ đề và phong cách từ nội dung bản thảo trong mỗi lần phân tích — kết quả lưu dạng snapshot trong `ProjectReports` và `ProjectAnalysisFacts`. Không yêu cầu tác giả nhập thủ công.
 - 📥📤 **Import/Export bản thảo chuyên nghiệp** (`.docx`, `.txt`), tự động tách chương theo tiêu đề.
 - 💳 Tích hợp cổng thanh toán **VNPay** hỗ trợ nâng cấp/gia hạn gói dịch vụ.
 - 🐛 Luồng báo cáo lỗi User → Staff/Admin.
@@ -110,7 +109,7 @@ StoryRAG/
 │   │   └── Helpers/                # EncryptionHelper, GeminiRetryHelper
 │   └── Repository/                 # Tầng Data Access
 │       ├── Data/AppDbContext.cs     # EF Core DbContext
-│       ├── Entities/               # 26 Entity models
+│       ├── Entities/               # ~20 Entity models
 │       └── Migrations/             # EF Core migrations
 ├── Frontend/
 │   └── src/
@@ -132,16 +131,12 @@ StoryRAG/
 Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterChunks
   │           │                                              (vector)
   │           ├──< ProjectGenres >── Genres
-  │           ├──< WorldbuildingEntries  (vector)
-  │           ├──< CharacterEntries     (vector)
-  │           ├──< StyleGuideEntries    (vector)
-  │           ├──< ThemeEntries         (vector)
-  │           ├──< PlotNoteEntries      (vector)
-  │           ├──< ProjectReports
-  │           ├──< ProjectAnalysisJobs (có thể trỏ tới ProjectReports khi hoàn tất)
+  │           ├──< ProjectReports ──< ReportItems
+  │           │       └──< ProjectReportSnapshots (AI snapshot)
+  │           ├──< ProjectAnalysisJobs (→ ProjectReports khi hoàn tất)
+  │           ├──< ProjectAnalysisFacts (Story Bible snapshot by AI)
   │           ├──< ChatMessages
-  │           ├──< AiAnalysisHistories
-  │           └──< TimelineEvents
+  │           └──< AiAnalysisHistories
   │
   ├──< UserSubscriptions >── SubscriptionPlans
   ├──< Payments
@@ -161,14 +156,12 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | `Chapters`             | Chương truyện                           | Draft content, version tracking                                                            |
 | `ChapterVersions`      | Lịch sử version chương                  | `IsChunked`, `IsEmbedded`, `IsPinned` — pin bảo vệ khỏi auto-prune                         |
 | `ChapterChunks`        | Đoạn văn nhỏ để RAG                     | **`Embedding vector(768)`** — pgvector                                                     |
-| `WorldbuildingEntries` | Ghi chú thế giới truyện                 | **`Embedding vector(768)`**                                                                |
-| `CharacterEntries`     | Hồ sơ nhân vật                          | **`Embedding vector(768)`**                                                                |
-| `StyleGuideEntries`    | Cẩm nang phong cách                     | **`Embedding vector(768)`**                                                                |
-| `ThemeEntries`         | Chủ đề/tầng nghĩa                       | **`Embedding vector(768)`**                                                                |
-| `PlotNoteEntries`      | Ghi chú cốt truyện                      | **`Embedding vector(768)`**                                                                |
+| `ProjectReports`       | Báo cáo phân tích truyện (snapshot)     | `CriteriaJson` (JSONB), `ContentAnalysisJson`, `EmotionPacingJson`, `ProjectVersionHash`   |
+| `ProjectReportSnapshots` | Snapshot nội dung chương tại thời điểm phân tích | Lưu cùng report để Staff đối chiếu                                              |
+| `ReportItems`          | Bằng chứng rubric từng tiêu chí         | `EvidenceChunkIds` (JSONB)                                                                 |
+| `ProjectAnalysisJobs`  | Job phân tích bất đồng bộ               | Trạng thái/progress/result, `ProjectVersionHash` snapshot                                  |
+| `ProjectAnalysisFacts` | Dữ liệu Story Bible do AI trích xuất    | `Payload` JSONB — nhân vật, thế giới, chủ đề, phong cách tự động từ bản thảo              |
 | `ChatMessages`         | Lịch sử chat AI                         | Question/Answer mã hóa AES-256                                                             |
-| `ProjectReports`       | Báo cáo phân tích truyện                | `CriteriaJson` (JSONB), `ProjectVersion` (snapshot label), `ProjectVersionHash`, `OverallFeedback`, `Warnings` |
-| `ProjectAnalysisJobs`  | Job phân tích bất đồng bộ               | Trạng thái/progress/result cho phân tích dài, `ProjectVersionHash` snapshot                |
 | `AiAnalysisHistories`  | Lịch sử phân tích cảnh/cliffhanger      | JSON kết quả và token đã dùng                                                              |
 | `Payments`             | Giao dịch thanh toán                    | VNPay, trạng thái, transaction/order reference                                        |
 | `BugReports`           | Báo cáo lỗi từ user                     | Category, Priority, Status, StaffNote                                                      |
@@ -181,7 +174,8 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | `SubscriptionPlans`    | Gói dịch vụ (Free/Basic/Pro/Enterprise) | Token & analysis limits                                                                    |
 | `UserSubscriptions`    | Đăng ký gói của user                    | `UsedTokens`, `UsedAnalysisCount`                                                          |
 | `UserSettings`         | Cài đặt editor                          | Font, font size                                                                            |
-| `TimelineEvents`       | Mốc sự kiện dòng thời gian              | Category, TimeLabel, SortOrder, Importance                                                 |
+
+> **Lưu ý:** Các bảng `WorldbuildingEntries`, `CharacterEntries`, `StyleGuideEntries`, `ThemeEntries`, `PlotNoteEntries`, `TimelineEvents` và `character_relationships` đã bị xóa trong migration `RemoveManualStoryBibleTables` (tháng 5/2026). Dữ liệu Story Bible hiện được AI tự động trích xuất và lưu vào `ProjectAnalysisFacts` dưới dạng JSONB payload trong mỗi lần phân tích.
 
 ---
 
@@ -266,25 +260,7 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | GET    | `/{projectId}/narrative/charts`   | Dữ liệu biểu đồ nhịp độ (pacing) & cảm xúc (emotion) (đã lược bỏ nhân vật) |
 | GET    | `/{projectId}/reports/{reportId}/export/pdf` | Xuất PDF báo cáo cho gói trả phí |
 
-### 6.5 Worldbuilding, Characters, Plot Notes, Themes & Style Guides
 
-| Route                                                      | Mô tả                |
-| ---------------------------------------------------------- | -------------------- |
-| `GET/POST /api/projects/{id}/worldbuilding`                 | Danh sách / Tạo mới  |
-| `GET/PUT/DELETE /api/projects/{id}/worldbuilding/{entryId}` | Chi tiết / Sửa / Xóa |
-| `POST /api/projects/{id}/worldbuilding/{entryId}/embed`     | Embed entry          |
-| `GET/POST /api/projects/{id}/character`                     | Danh sách / Tạo mới  |
-| `GET/PUT/DELETE /api/projects/{id}/character/{entryId}`     | Chi tiết / Sửa / Xóa |
-| `POST /api/projects/{id}/character/{entryId}/embed`         | Embed character      |
-| `GET/POST /api/projects/{id}/plot-notes`                    | Danh sách / Tạo mới  |
-| `GET/PUT/DELETE /api/projects/{id}/plot-notes/{id}`         | Chi tiết / Sửa / Xóa |
-| `POST /api/projects/{id}/plot-notes/{id}/embed`             | Embed plot note      |
-| `GET/POST /api/projects/{id}/themes`                        | Danh sách / Tạo mới  |
-| `GET/PUT/DELETE /api/projects/{id}/themes/{id}`             | Chi tiết / Sửa / Xóa |
-| `POST /api/projects/{id}/themes/{id}/embed`                 | Embed theme          |
-| `GET/POST /api/projects/{id}/style-guides`                  | Danh sách / Tạo mới  |
-| `GET/PUT/DELETE /api/projects/{id}/style-guides/{id}`       | Chi tiết / Sửa / Xóa |
-| `POST /api/projects/{id}/style-guides/{id}/embed`           | Embed style guide    |
 
 ### 6.6 Bug Reports — `/api/bug-reports`
 
@@ -335,16 +311,6 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | ------ | -------- | ------------------------ |
 | GET    | `/`      | Cài đặt editor hiện tại  |
 | PUT    | `/`      | Cập nhật font, font size |
-
-### 6.10 Timeline — `/api/projects/{projectId}/timeline`
-
-| Method | Endpoint        | Mô tả                                       |
-| ------ | --------------- | ------------------------------------------- |
-| GET    | `/`             | Danh sách mốc sự kiện (sorted by sortOrder) |
-| POST   | `/`             | Thêm mốc sự kiện mới (auto sort)            |
-| PUT    | `/{id}`         | Cập nhật mốc sự kiện                        |
-| DELETE | `/{id}`         | Xóa mốc sự kiện                             |
-| PATCH  | `/{id}/reorder` | Thay đổi thứ tự (sortOrder)                 |
 
 ### 6.11 Staff — `/api/staff`
 
@@ -442,8 +408,6 @@ Khi switch version:
   - Project: `Title`, `Summary`
   - Chapter: `DraftContent`, `Content` (versions)
   - ChatMessage: `Question`, `Answer`
-  - Character: `Name`, `Description`, `Background`
-  - Worldbuilding: `Title`, `Content`
 
 ### 8.3 CORS
 
@@ -667,11 +631,6 @@ builder.Services.AddSingleton<IMyService, MyService>(); // MyService inject IDbC
 | `IUserSettingsService`  | Cài đặt editor (font, size)                                                                                                                                                                                                                                      |
 | `IProjectService`       | CRUD project, stats tác giả                                                                                                                                                                                                                                       |
 | `IChapterService`       | CRUD chương, quản lý version (create/switch/pin/delete/prune), chunk                                                                                                                                                                                             |
-| `ICharacterService`     | CRUD nhân vật + embed                                                                                                                                                                                                                                            |
-| `IWorldbuildingService` | CRUD worldbuilding/lore + embed                                                                                                                                                                                                                                  |
-| `IPlotNoteService`      | CRUD ghi chú cốt truyện + embed                                                                                                                                                                                                                                  |
-| `IThemeService`         | CRUD chủ đề + embed                                                                                                                                                                                                                                              |
-| `IStyleGuideService`    | CRUD cẩm nang phong cách + embed                                                                                                                                                                                                                                 |
 | `IExportService`        | Export project/chapter ra file `.docx`, `.txt`, `.pdf`                                                                                                                                                                                                           |
 | `IPaymentService`       | Quản lý thanh toán (VNPay), lưu lịch sử giao dịch                                                                                                                                                                                                         |
 | `IGenreService`         | Quản lý thể loại (Admin)                                                                                                                                                                                                                                         |

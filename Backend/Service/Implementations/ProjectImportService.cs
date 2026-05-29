@@ -193,24 +193,7 @@ namespace Service.Implementations
                     await _context.SaveChangesAsync();
             }
 
-            // Timeline heuristic: tên chương làm sự kiện
-            int sortOrder = 0;
-            foreach (var part in chapterParts)
-            {
-                var chapterTitle = part.Title ?? $"Chương {sortOrder + 1}";
-                _context.TimelineEvents.Add(new TimelineEvent
-                {
-                    ProjectId = project.Id,
-                    Title = EncryptionHelper.EncryptWithMasterKey(chapterTitle, rawDek),
-                    Description = EncryptionHelper.EncryptWithMasterKey(string.Empty, rawDek),
-                    SortOrder = sortOrder++,
-                    Category = "Story",
-                    Importance = "Normal",
-                    CreatedAt = DateTime.UtcNow,
-                });
-                timelineEventsExtracted++;
-            }
-            await _context.SaveChangesAsync();
+
 
             // ── Bước 6: Chunk tất cả chương ─────────────────────────────────────
             _logger.LogInformation("Import {ProjectId}: bắt đầu chunk {Count} chương.", project.Id, versionsToInsert.Count);
@@ -448,72 +431,6 @@ namespace Service.Implementations
                 {
                     extractedSummary = aiExtracted.Summary;
                     project.Summary = EncryptionHelper.EncryptWithMasterKey(aiExtracted.Summary, rawDek);
-                }
-            }
-
-            // isReExtract: chỉ thêm nhân vật nếu chưa có nhân vật nào
-            bool hasExistingCharacters = isReExtract && await _context.CharacterEntries.AnyAsync(c => c.ProjectId == project.Id);
-            if (!hasExistingCharacters)
-            {
-                foreach (var character in aiExtracted.Characters ?? new())
-                {
-                    if (string.IsNullOrWhiteSpace(character.Name)) continue;
-                    _context.CharacterEntries.Add(new CharacterEntry
-                    {
-                        Id = Guid.NewGuid(),
-                        ProjectId = project.Id,
-                        Name = EncryptionHelper.EncryptWithMasterKey(character.Name, rawDek),
-                        Role = "Supporting",
-                        Description = EncryptionHelper.EncryptWithMasterKey(character.Description ?? string.Empty, rawDek),
-                        CreatedAt = DateTime.UtcNow,
-                    });
-                    charactersExtracted++;
-                }
-            }
-
-            // isReExtract: chỉ thêm bối cảnh nếu chưa có
-            bool hasExistingSettings = isReExtract && await _context.WorldbuildingEntries.AnyAsync(w => w.ProjectId == project.Id);
-            if (!hasExistingSettings)
-            {
-                foreach (var setting in aiExtracted.Settings ?? new())
-                {
-                    if (string.IsNullOrWhiteSpace(setting.Name)) continue;
-                    _context.WorldbuildingEntries.Add(new WorldbuildingEntry
-                    {
-                        Id = Guid.NewGuid(),
-                        ProjectId = project.Id,
-                        Title = EncryptionHelper.EncryptWithMasterKey(setting.Name, rawDek),
-                        Content = EncryptionHelper.EncryptWithMasterKey(setting.Description ?? string.Empty, rawDek),
-                        Category = "World",
-                        CreatedAt = DateTime.UtcNow,
-                    });
-                    settingsExtracted++;
-                }
-            }
-
-            // isReExtract: chỉ thêm timeline nếu chưa có
-            bool hasExistingTimeline = isReExtract && await _context.TimelineEvents.AnyAsync(t => t.ProjectId == project.Id);
-            if (!hasExistingTimeline)
-            {
-                int sortOrder = await _context.TimelineEvents.AnyAsync(t => t.ProjectId == project.Id)
-                    ? (await _context.TimelineEvents.Where(t => t.ProjectId == project.Id).MaxAsync(t => (int?)t.SortOrder) ?? -1) + 1
-                    : 0;
-
-
-                foreach (var evt in aiExtracted.Timeline ?? new())
-                {
-                    if (string.IsNullOrWhiteSpace(evt.Title)) continue;
-                    _context.TimelineEvents.Add(new TimelineEvent
-                    {
-                        ProjectId = project.Id,
-                        Title = EncryptionHelper.EncryptWithMasterKey(evt.Title, rawDek),
-                        Description = EncryptionHelper.EncryptWithMasterKey(evt.Description ?? string.Empty, rawDek),
-                        SortOrder = sortOrder++,
-                        Category = "Story",
-                        Importance = "Normal",
-                        CreatedAt = DateTime.UtcNow,
-                    });
-                    timelineEventsExtracted++;
                 }
             }
 

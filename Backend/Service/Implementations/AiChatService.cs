@@ -110,17 +110,27 @@ namespace Service.Implementations
                 .Take(contextProfile.ChunkTopK)
                 .ToListAsync();
 
-            var topWorldbuilding = await _context.WorldbuildingEntries
-                .Where(w => w.ProjectId == projectId && w.Embedding != null)
-                .OrderBy(w => w.Embedding!.CosineDistance(queryVector))
-                .Take(contextProfile.WorldbuildingTopK)
-                .ToListAsync();
+            // Find the latest completed report for this project to get the Story Bible snapshot
+            var latestReport = await _context.ProjectReports
+                .Where(r => r.ProjectId == projectId && r.Status == "Completed")
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync();
 
-            var topCharacters = await _context.CharacterEntries
-                .Where(c => c.ProjectId == projectId && c.Embedding != null)
-                .OrderBy(c => c.Embedding!.CosineDistance(queryVector))
-                .Take(contextProfile.CharacterTopK)
-                .ToListAsync();
+            List<ReportWorldbuildingEntry> topWorldbuilding = new();
+            List<ReportCharacterEntry> topCharacters = new();
+
+            if (latestReport != null)
+            {
+                topWorldbuilding = await _context.ReportWorldbuildingEntries
+                    .Where(w => w.ProjectReportId == latestReport.Id)
+                    .Take(contextProfile.WorldbuildingTopK)
+                    .ToListAsync();
+
+                topCharacters = await _context.ReportCharacterEntries
+                    .Where(c => c.ProjectReportId == latestReport.Id)
+                    .Take(contextProfile.CharacterTopK)
+                    .ToListAsync();
+            }
 
             if (topChunks.Count == 0 && topWorldbuilding.Count == 0 && topCharacters.Count == 0)
                 throw new InvalidOperationException("Chưa có nội dung đủ để chat trong dự án này.");

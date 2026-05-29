@@ -224,7 +224,19 @@ namespace Service.Implementations
             var project = await _context.Projects.FindAsync(projectId);
             if (project == null) return "";
 
-            var characters = await _context.CharacterEntries.Where(c => c.ProjectId == projectId).ToListAsync();
+            var latestReport = await _context.ProjectReports
+                .Where(r => r.ProjectId == projectId && r.Status == "Completed")
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            List<ReportCharacterEntry> characters = new();
+            if (latestReport != null)
+            {
+                characters = await _context.ReportCharacterEntries
+                    .Where(c => c.ProjectReportId == latestReport.Id)
+                    .ToListAsync();
+            }
+
             var sb = new StringBuilder();
             sb.AppendLine("CẨM NANG TRUYỆN (STORY BIBLE):");
             foreach (var ch in characters)
@@ -351,9 +363,18 @@ QUY TẮC BẮT BUỘC:
 
         private async Task<List<string>> LoadCharacterNamesAsync(Guid projectId, string rawDek)
         {
-            var characterEntries = await _context.CharacterEntries
-                .Where(c => c.ProjectId == projectId)
-                .ToListAsync();
+            var latestReport = await _context.ProjectReports
+                .Where(r => r.ProjectId == projectId && r.Status == "Completed")
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            List<ReportCharacterEntry> characterEntries = new();
+            if (latestReport != null)
+            {
+                characterEntries = await _context.ReportCharacterEntries
+                    .Where(c => c.ProjectReportId == latestReport.Id)
+                    .ToListAsync();
+            }
 
             return characterEntries
                 .Select(c => EncryptionHelper.DecryptWithMasterKey(c.Name, rawDek).Trim())

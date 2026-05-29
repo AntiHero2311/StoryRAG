@@ -177,21 +177,31 @@ namespace Service.Implementations
                 ? EncryptionHelper.DecryptWithMasterKey(project.Summary, rawDek)
                 : null;
 
-            var characterEntries = await _context.CharacterEntries
-                .Where(c => c.ProjectId == projectId)
-                .ToListAsync(cancellationToken);
-            var worldEntries = await _context.WorldbuildingEntries
-                .Where(w => w.ProjectId == projectId)
-                .ToListAsync(cancellationToken);
-            var styleGuideEntries = await _context.StyleGuideEntries
-                .Where(s => s.ProjectId == projectId)
-                .ToListAsync(cancellationToken);
-            var themeEntries = await _context.ThemeEntries
-                .Where(t => t.ProjectId == projectId)
-                .ToListAsync(cancellationToken);
-            var plotNoteEntries = await _context.PlotNoteEntries
-                .Where(p => p.ProjectId == projectId)
-                .ToListAsync(cancellationToken);
+            var latestReport = await _context.ProjectReports
+                .Where(r => r.ProjectId == projectId && r.Status == "Completed")
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            List<ReportCharacterEntry> characterEntries = new();
+            List<ReportWorldbuildingEntry> worldEntries = new();
+            List<ReportThemeEntry> themeEntries = new();
+            List<ReportTimelineEvent> timelineEvents = new();
+
+            if (latestReport != null)
+            {
+                characterEntries = await _context.ReportCharacterEntries
+                    .Where(c => c.ProjectReportId == latestReport.Id)
+                    .ToListAsync(cancellationToken);
+                worldEntries = await _context.ReportWorldbuildingEntries
+                    .Where(w => w.ProjectReportId == latestReport.Id)
+                    .ToListAsync(cancellationToken);
+                themeEntries = await _context.ReportThemeEntries
+                    .Where(t => t.ProjectReportId == latestReport.Id)
+                    .ToListAsync(cancellationToken);
+                timelineEvents = await _context.ReportTimelineEvents
+                    .Where(t => t.ProjectReportId == latestReport.Id)
+                    .ToListAsync(cancellationToken);
+            }
 
             var bibleBuilder = new System.Text.StringBuilder();
             if (genres.Count > 0)
@@ -220,15 +230,6 @@ namespace Service.Implementations
                     bibleBuilder.AppendLine($"- [{w.Category}] {wTitle}: {wContent[..Math.Min(1500, wContent.Length)]}");
                 }
             }
-            if (styleGuideEntries.Count > 0)
-            {
-                bibleBuilder.AppendLine("Phong cách viết & Ngôn ngữ:");
-                foreach (var s in styleGuideEntries)
-                {
-                    var sContent = EncryptionHelper.DecryptWithMasterKey(s.Content, rawDek);
-                    bibleBuilder.AppendLine($"- [{s.Aspect}]: {sContent[..Math.Min(1500, sContent.Length)]}");
-                }
-            }
             if (themeEntries.Count > 0)
             {
                 bibleBuilder.AppendLine("Chủ đề & Trọng tâm:");
@@ -236,19 +237,19 @@ namespace Service.Implementations
                 {
                     var tTitle = EncryptionHelper.DecryptWithMasterKey(t.Title, rawDek);
                     var tDesc = EncryptionHelper.DecryptWithMasterKey(t.Description, rawDek);
-                    var tNotes = !string.IsNullOrWhiteSpace(t.Notes) ? EncryptionHelper.DecryptWithMasterKey(t.Notes, rawDek) : "";
-                    var fullDesc = tDesc + (string.IsNullOrWhiteSpace(tNotes) ? "" : $"\nGhi chú thêm: {tNotes}");
+                    var tEvidence = !string.IsNullOrWhiteSpace(t.Evidence) ? EncryptionHelper.DecryptWithMasterKey(t.Evidence, rawDek) : "";
+                    var fullDesc = tDesc + (string.IsNullOrWhiteSpace(tEvidence) ? "" : $"\nDẫn chứng: {tEvidence}");
                     bibleBuilder.AppendLine($"- {tTitle}: {fullDesc[..Math.Min(1500, fullDesc.Length)]}");
                 }
             }
-            if (plotNoteEntries.Count > 0)
+            if (timelineEvents.Count > 0)
             {
-                bibleBuilder.AppendLine("Ghi chú cốt truyện & Sự kiện:");
-                foreach (var p in plotNoteEntries)
+                bibleBuilder.AppendLine("Sự kiện dòng thời gian:");
+                foreach (var p in timelineEvents)
                 {
                     var pTitle = EncryptionHelper.DecryptWithMasterKey(p.Title, rawDek);
-                    var pContent = EncryptionHelper.DecryptWithMasterKey(p.Content, rawDek);
-                    bibleBuilder.AppendLine($"- [{p.Type}] {pTitle}: {pContent[..Math.Min(1500, pContent.Length)]}");
+                    var pContent = EncryptionHelper.DecryptWithMasterKey(p.Description, rawDek);
+                    bibleBuilder.AppendLine($"- [{p.Category}] {pTitle}: {pContent[..Math.Min(1500, pContent.Length)]}");
                 }
             }
             var storyBibleText = bibleBuilder.ToString().Trim();

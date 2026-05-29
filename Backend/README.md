@@ -8,11 +8,13 @@
 ## 🔑 Authentication
 
 Các endpoint có 🔒 phải gửi kèm header:
+
 ```
 Authorization: Bearer <access_token>
 ```
 
 **Icon legend:**
+
 - 🔒 Yêu cầu Bearer Token (mọi role)
 - 👑 Chỉ **Admin**
 - ✍️ Chỉ **Author**
@@ -22,33 +24,38 @@ Authorization: Bearer <access_token>
 
 ## Roles
 
-| Role | Mô tả |
-|------|-------|
+| Role     | Mô tả                          |
+| -------- | ------------------------------ |
 | `Author` | Tài khoản mặc định khi đăng ký |
-| `Staff` | Nhân viên, được tạo bởi Admin |
-| `Admin` | Quản trị viên, toàn quyền |
+| `Staff`  | Nhân viên, được tạo bởi Admin  |
+| `Admin`  | Quản trị viên, toàn quyền      |
 
 ---
 
 ## 🔐 Auth — `/api/auth`
 
-| Method | Route | Mô tả |
-|--------|-------|-------|
-| `POST` | `/auth/register` | Đăng ký tài khoản (role mặc định: Author) |
-| `POST` | `/auth/login` | Đăng nhập, trả về JWT + refresh token |
-| `POST` | `/auth/google-login` | Đăng nhập bằng Google (gửi `idToken`) |
-| `POST` | `/auth/refresh` | Làm mới access token |
-| `PUT` | `/auth/change-password` 🔒 | Đổi mật khẩu |
-| `POST` | `/auth/forgot-password` | Gửi email reset password |
-| `POST` | `/auth/reset-password` | Đặt mật khẩu mới (dùng token từ email) |
+| Method | Route                      | Mô tả                                     |
+| ------ | -------------------------- | ----------------------------------------- |
+| `POST` | `/auth/register`           | Đăng ký tài khoản (role mặc định: Author) |
+| `POST` | `/auth/login`              | Đăng nhập, trả về JWT + refresh token     |
+| `POST` | `/auth/google-login`       | Đăng nhập bằng Google (gửi `idToken`)     |
+| `POST` | `/auth/refresh`            | Làm mới access token                      |
+| `PUT`  | `/auth/change-password` 🔒 | Đổi mật khẩu                              |
+| `POST` | `/auth/forgot-password`    | Gửi email reset password                  |
+| `POST` | `/auth/reset-password`     | Đặt mật khẩu mới (dùng token từ email)    |
 
 > `POST /auth/google-login` yêu cầu cấu hình `GoogleAuth:ClientId` (hoặc biến môi trường `GoogleAuth__ClientId`) trên Backend.
 
 **Response `POST /auth/login` (`200`)**
+
 ```json
 {
-  "userId": "guid", "fullName": "Nguyễn Văn A", "email": "user@example.com",
-  "role": "Author", "accessToken": "jwt...", "refreshToken": "..."
+  "userId": "guid",
+  "fullName": "Nguyễn Văn A",
+  "email": "user@example.com",
+  "role": "Author",
+  "accessToken": "jwt...",
+  "refreshToken": "..."
 }
 ```
 
@@ -56,12 +63,12 @@ Authorization: Bearer <access_token>
 
 ## 👤 User — `/api/user`
 
-| Method | Route | Auth | Mô tả |
-|--------|-------|------|-------|
-| `GET` | `/user/profile` | 🔒 | Lấy thông tin profile |
-| `PUT` | `/user/profile` | 🔒 | Cập nhật FullName / AvatarURL |
-| `GET` | `/user/settings` | 🔒 | Lấy cài đặt editor |
-| `PUT` | `/user/settings` | 🔒 | Cập nhật cài đặt editor |
+| Method | Route            | Auth | Mô tả                         |
+| ------ | ---------------- | ---- | ----------------------------- |
+| `GET`  | `/user/profile`  | 🔒   | Lấy thông tin profile         |
+| `PUT`  | `/user/profile`  | 🔒   | Cập nhật FullName / AvatarURL |
+| `GET`  | `/user/settings` | 🔒   | Lấy cài đặt editor            |
+| `PUT`  | `/user/settings` | 🔒   | Cập nhật cài đặt editor       |
 
 ---
 
@@ -69,15 +76,15 @@ Authorization: Bearer <access_token>
 
 > Tất cả endpoint yêu cầu 🔒 ✍️
 
-| Method | Route | Mô tả |
-|--------|-------|-------|
-| `GET` | `/projects` | Danh sách dự án |
-| `GET` | `/projects/{id}` | Chi tiết dự án |
-| `POST` | `/projects` | Tạo dự án mới |
-| `PUT` | `/projects/{id}` | Cập nhật dự án |
-| `DELETE` | `/projects/{id}` | Xóa mềm dự án |
-| `GET` | `/projects/stats` | Thống kê dashboard |
-| `GET` | `/projects/{id}/export` | Export dự án (JSON/TXT) |
+| Method   | Route                   | Mô tả                   |
+| -------- | ----------------------- | ----------------------- |
+| `GET`    | `/projects`             | Danh sách dự án         |
+| `GET`    | `/projects/{id}`        | Chi tiết dự án          |
+| `POST`   | `/projects`             | Tạo dự án mới           |
+| `PUT`    | `/projects/{id}`        | Cập nhật dự án          |
+| `DELETE` | `/projects/{id}`        | Xóa mềm dự án           |
+| `GET`    | `/projects/stats`       | Thống kê dashboard      |
+| `GET`    | `/projects/{id}/export` | Export dự án (JSON/TXT) |
 
 ---
 
@@ -85,19 +92,19 @@ Authorization: Bearer <access_token>
 
 > Tất cả endpoint yêu cầu 🔒 ✍️
 
-| Method | Route | Mô tả |
-|--------|-------|-------|
-| `GET` | `/chapters` | Danh sách chương |
-| `GET` | `/chapters/{chapterId}` | Chi tiết chương + versions |
-| `POST` | `/chapters` | Tạo chương mới |
-| `PUT` | `/chapters/{chapterId}` | Cập nhật nội dung |
-| `DELETE` | `/chapters/{chapterId}` | Xóa chương |
-| `POST` | `/chapters/{chapterId}/chunk` | Chunk nội dung chương |
-| `GET` | `/chapters/{chapterId}/versions` | Danh sách versions |
-| `POST` | `/chapters/{chapterId}/versions` | Tạo version mới |
-| `PUT` | `/chapters/{chapterId}/versions/{num}` | Đổi tên version |
-| `DELETE` | `/chapters/{chapterId}/versions/{num}` | Xóa version |
-| `POST` | `/chapters/{chapterId}/versions/{num}/switch` | Chuyển sang version |
+| Method   | Route                                         | Mô tả                      |
+| -------- | --------------------------------------------- | -------------------------- |
+| `GET`    | `/chapters`                                   | Danh sách chương           |
+| `GET`    | `/chapters/{chapterId}`                       | Chi tiết chương + versions |
+| `POST`   | `/chapters`                                   | Tạo chương mới             |
+| `PUT`    | `/chapters/{chapterId}`                       | Cập nhật nội dung          |
+| `DELETE` | `/chapters/{chapterId}`                       | Xóa chương                 |
+| `POST`   | `/chapters/{chapterId}/chunk`                 | Chunk nội dung chương      |
+| `GET`    | `/chapters/{chapterId}/versions`              | Danh sách versions         |
+| `POST`   | `/chapters/{chapterId}/versions`              | Tạo version mới            |
+| `PUT`    | `/chapters/{chapterId}/versions/{num}`        | Đổi tên version            |
+| `DELETE` | `/chapters/{chapterId}/versions/{num}`        | Xóa version                |
+| `POST`   | `/chapters/{chapterId}/versions/{num}/switch` | Chuyển sang version        |
 
 ---
 
@@ -107,53 +114,59 @@ Authorization: Bearer <access_token>
 
 ### Embedding & Chat
 
-| Method | Route | Mô tả |
-|--------|-------|-------|
+| Method | Route                            | Mô tả                                    |
+| ------ | -------------------------------- | ---------------------------------------- |
 | `POST` | `/ai/chapters/{chapterId}/embed` | Embed tất cả chunks của version hiện tại |
-| `POST` | `/ai/{projectId}/chat` | Hỏi AI (RAG từ chunks + context tables) |
-| `GET` | `/ai/{projectId}/chat/history` | Lịch sử chat (`?page=1&pageSize=20`) |
+| `POST` | `/ai/{projectId}/chat`           | Hỏi AI (RAG từ chunks + context tables)  |
+| `GET`  | `/ai/{projectId}/chat/history`   | Lịch sử chat (`?page=1&pageSize=20`)     |
 
 **Body `POST /chat`**
+
 ```json
 { "question": "Nhân vật chính tên gì?" }
 ```
 
 **Response `200`**
+
 ```json
 {
   "answer": "Nhân vật chính là Phan...",
   "contextChunksUsed": 3,
-  "inputTokens": 850, "outputTokens": 120, "totalTokens": 970
+  "inputTokens": 850,
+  "outputTokens": 120,
+  "totalTokens": 970
 }
 ```
 
-
 ### Phân tích AI
 
-| Method | Route | Mô tả |
-|--------|-------|-------|
-| `POST` | `/ai/{projectId}/analyze/jobs` | Tạo job phân tích async (khuyến nghị) |
-| `GET` | `/ai/{projectId}/analyze/jobs/{jobId}` | Lấy trạng thái tiến độ job |
-| `GET` | `/ai/{projectId}/analyze/jobs/{jobId}/result` | Lấy kết quả report khi job hoàn tất |
+| Method | Route                                         | Mô tả                                                 |
+| ------ | --------------------------------------------- | ----------------------------------------------------- |
+| `POST` | `/ai/{projectId}/analyze/jobs`                | Tạo job phân tích async (khuyến nghị)                 |
+| `GET`  | `/ai/{projectId}/analyze/jobs/{jobId}`        | Lấy trạng thái tiến độ job                            |
+| `GET`  | `/ai/{projectId}/analyze/jobs/{jobId}/result` | Lấy kết quả report khi job hoàn tất                   |
 | `POST` | `/ai/{projectId}/analyze/jobs/{jobId}/cancel` | Hủy job `Queued`/`Processing` sau khi đã chạy ~5 phút |
-| `POST` | `/ai/{projectId}/analyze` | Phân tích đồng bộ (tương thích ngược) |
-| `GET` | `/ai/{projectId}/reports` | Danh sách báo cáo phân tích |
-| `GET` | `/ai/{projectId}/reports/{reportId}` | Chi tiết báo cáo |
+| `POST` | `/ai/{projectId}/analyze`                     | Phân tích đồng bộ (tương thích ngược)                 |
+| `GET`  | `/ai/{projectId}/reports`                     | Danh sách báo cáo phân tích                           |
+| `GET`  | `/ai/{projectId}/reports/{reportId}`          | Chi tiết báo cáo                                      |
 
 **Behavior mới của Analyze async:**
+
 - Mỗi user chỉ có tối đa **1 job active**.
 - Worker ưu tiên xử lý job theo **gói subscription** (plan cao trước).
 - Job phân tích chốt snapshot toàn bộ bộ truyện bằng `ProjectVersionHash`; nếu chapter active nào chưa chunk/embed đủ thì hệ thống sẽ tự repair trước khi chạy rubric.
 - Khi AI hoàn tất, báo cáo phân tích được phát hành trực tiếp (`Released`) giúp tác giả xem được kết quả ngay lập tức.
 
 **AI Context được đưa vào khi phân tích:**
+
 - `WorldbuildingEntries` — Nhóm 8: Xây dựng thế giới
 - `CharacterEntries` — Nhóm 2: Nhân vật
-- `StyleGuideEntries` — Nhóm 4: Ngôn ngữ & phong cách  
+- `StyleGuideEntries` — Nhóm 4: Ngôn ngữ & phong cách
 - `ThemeEntries` — Nhóm 7: Chủ đề tác phẩm
 - `PlotNoteEntries` — Nhóm 3 & 5: Cốt truyện & sự cuốn hút
 
 **Response `GET /analyze/jobs/{jobId}/result` (`200`)**
+
 ```json
 {
   "totalScore": 78,
@@ -171,11 +184,14 @@ Authorization: Bearer <access_token>
   "groups": [
     {
       "name": "Cốt truyện & Mạch lạc",
-      "maxScore": 25, "score": 20,
+      "maxScore": 25,
+      "score": 20,
       "criteria": [
         {
-          "key": "1.1", "name": "Tính nhất quán nội bộ",
-          "maxScore": 5, "score": 4,
+          "key": "1.1",
+          "name": "Tính nhất quán nội bộ",
+          "maxScore": 5,
+          "score": 4,
           "feedback": "Mạch truyện logic nhưng có vài mâu thuẫn nhỏ.",
           "errors": ["..."],
           "suggestions": ["..."]
@@ -187,6 +203,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Response `GET /analyze/jobs/{jobId}/result` (`409`)**
+
 ```json
 {
   "message": "AI đã phân tích xong, đang kiểm tra bước cuối cùng bởi đội ngũ staff."
@@ -194,6 +211,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Response `POST /analyze/jobs` (`202`)**
+
 ```json
 {
   "jobId": "guid",
@@ -216,13 +234,13 @@ Các bảng này cung cấp **context tự động** cho AI khi phân tích — 
 
 ### Worldbuilding — `/worldbuilding`
 
-| Method | Route | Mô tả |
-|--------|-------|-------|
-| `GET` | `/worldbuilding` | Danh sách entries |
-| `POST` | `/worldbuilding` | Tạo mới |
-| `PUT` | `/worldbuilding/{id}` | Cập nhật |
-| `DELETE` | `/worldbuilding/{id}` | Xóa |
-| `POST` | `/worldbuilding/{id}/embed` | Embed cho AI |
+| Method   | Route                       | Mô tả             |
+| -------- | --------------------------- | ----------------- |
+| `GET`    | `/worldbuilding`            | Danh sách entries |
+| `POST`   | `/worldbuilding`            | Tạo mới           |
+| `PUT`    | `/worldbuilding/{id}`       | Cập nhật          |
+| `DELETE` | `/worldbuilding/{id}`       | Xóa               |
+| `POST`   | `/worldbuilding/{id}/embed` | Embed cho AI      |
 
 **Category values:** `Scene` (Cảnh), `Setting`, `Location`, `Rules`, `Glossary`, `Timeline`, `Magic`, `History`, `Religion`, `Geography`, `Technology`, `World`, `Other`
 
@@ -230,31 +248,32 @@ Các bảng này cung cấp **context tự động** cho AI khi phân tích — 
 
 ### Characters — `/characters`
 
-| Method | Route | Mô tả |
-|--------|-------|-------|
-| `GET` | `/characters` | Danh sách nhân vật |
-| `POST` | `/characters` | Tạo nhân vật |
-| `PUT` | `/characters/{id}` | Cập nhật |
-| `DELETE` | `/characters/{id}` | Xóa |
-| `POST` | `/characters/{id}/embed` | Embed cho AI |
+| Method   | Route                    | Mô tả              |
+| -------- | ------------------------ | ------------------ |
+| `GET`    | `/characters`            | Danh sách nhân vật |
+| `POST`   | `/characters`            | Tạo nhân vật       |
+| `PUT`    | `/characters/{id}`       | Cập nhật           |
+| `DELETE` | `/characters/{id}`       | Xóa                |
+| `POST`   | `/characters/{id}/embed` | Embed cho AI       |
 
 **Role values:** `Protagonist`, `Antagonist`, `Supporting`, `Minor`
 
 ### Style Guide — `/style-guides`
 
-| Method | Route | Mô tả |
-|--------|-------|-------|
-| `GET` | `/style-guides` | Danh sách quy tắc phong cách |
-| `POST` | `/style-guides` | Tạo mới |
-| `PUT` | `/style-guides/{id}` | Cập nhật |
-| `DELETE` | `/style-guides/{id}` | Xóa |
-| `POST` | `/style-guides/{id}/embed` | Embed cho AI |
+| Method   | Route                      | Mô tả                        |
+| -------- | -------------------------- | ---------------------------- |
+| `GET`    | `/style-guides`            | Danh sách quy tắc phong cách |
+| `POST`   | `/style-guides`            | Tạo mới                      |
+| `PUT`    | `/style-guides/{id}`       | Cập nhật                     |
+| `DELETE` | `/style-guides/{id}`       | Xóa                          |
+| `POST`   | `/style-guides/{id}/embed` | Embed cho AI                 |
 
 Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 
 **Aspect values:** `POV`, `Tone`, `Vocabulary`, `Dialogue`, `Pacing`, `Other`
 
 **Body `POST /style-guides`**
+
 ```json
 {
   "aspect": "Tone",
@@ -264,17 +283,18 @@ Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 
 ### Themes — `/themes`
 
-| Method | Route | Mô tả |
-|--------|-------|-------|
-| `GET` | `/themes` | Danh sách chủ đề |
-| `POST` | `/themes` | Tạo chủ đề |
-| `PUT` | `/themes/{id}` | Cập nhật |
-| `DELETE` | `/themes/{id}` | Xóa |
-| `POST` | `/themes/{id}/embed` | Embed cho AI |
+| Method   | Route                | Mô tả            |
+| -------- | -------------------- | ---------------- |
+| `GET`    | `/themes`            | Danh sách chủ đề |
+| `POST`   | `/themes`            | Tạo chủ đề       |
+| `PUT`    | `/themes/{id}`       | Cập nhật         |
+| `DELETE` | `/themes/{id}`       | Xóa              |
+| `POST`   | `/themes/{id}/embed` | Embed cho AI     |
 
 Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 
 **Body `POST /themes`**
+
 ```json
 {
   "title": "Sự cô đơn của quyền lực",
@@ -285,19 +305,20 @@ Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 
 ### Plot Notes — `/plot-notes`
 
-| Method | Route | Mô tả |
-|--------|-------|-------|
-| `GET` | `/plot-notes` | Danh sách ghi chú cốt truyện |
-| `POST` | `/plot-notes` | Tạo mới |
-| `PUT` | `/plot-notes/{id}` | Cập nhật |
-| `DELETE` | `/plot-notes/{id}` | Xóa |
-| `POST` | `/plot-notes/{id}/embed` | Embed cho AI |
+| Method   | Route                    | Mô tả                        |
+| -------- | ------------------------ | ---------------------------- |
+| `GET`    | `/plot-notes`            | Danh sách ghi chú cốt truyện |
+| `POST`   | `/plot-notes`            | Tạo mới                      |
+| `PUT`    | `/plot-notes/{id}`       | Cập nhật                     |
+| `DELETE` | `/plot-notes/{id}`       | Xóa                          |
+| `POST`   | `/plot-notes/{id}/embed` | Embed cho AI                 |
 
 Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 
 **Type values:** `Arc`, `Conflict`, `Foreshadowing`, `Twist`, `Climax`, `Resolution`, `Other`
 
 **Body `POST /plot-notes`**
+
 ```json
 {
   "type": "Foreshadowing",
@@ -310,23 +331,23 @@ Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 
 ## 💳 Subscription — `/api/subscription`
 
-| Method | Route | Auth | Mô tả |
-|--------|-------|------|-------|
-| `GET` | `/subscription/plans` | 🔒 | Danh sách plan đang active |
-| `GET` | `/subscription/plans/{id}` | 🔒 | Chi tiết plan |
-| `POST` | `/subscription/plans` | 🔒 👑 | Tạo plan mới |
-| `PUT` | `/subscription/plans/{id}` | 🔒 👑 | Cập nhật plan |
-| `DELETE` | `/subscription/plans/{id}` | 🔒 👑 | Deactivate plan |
-| `GET` | `/subscription/my` | 🔒 | Subscription hiện tại của user |
+| Method   | Route                      | Auth  | Mô tả                          |
+| -------- | -------------------------- | ----- | ------------------------------ |
+| `GET`    | `/subscription/plans`      | 🔒    | Danh sách plan đang active     |
+| `GET`    | `/subscription/plans/{id}` | 🔒    | Chi tiết plan                  |
+| `POST`   | `/subscription/plans`      | 🔒 👑 | Tạo plan mới                   |
+| `PUT`    | `/subscription/plans/{id}` | 🔒 👑 | Cập nhật plan                  |
+| `DELETE` | `/subscription/plans/{id}` | 🔒 👑 | Deactivate plan                |
+| `GET`    | `/subscription/my`         | 🔒    | Subscription hiện tại của user |
 
 **Gói mặc định:**
 
-| ID | Tên | Giá/tháng | Phân tích | Token AI |
-|----|-----|-----------|-----------|----------|
-| 1 | Free | 0đ | 3 lần | 20,000 |
-| 2 | Basic | 99,000đ | 20 lần | 150,000 |
-| 3 | Pro | 249,000đ | 100 lần | 500,000 |
-| 4 | Enterprise | 699,000đ | 9,999 lần | 2,000,000 |
+| ID  | Tên        | Giá/tháng | Phân tích | Token AI  |
+| --- | ---------- | --------- | --------- | --------- |
+| 1   | Free       | 0đ        | 3 lần     | 20,000    |
+| 2   | Basic      | 99,000đ   | 20 lần    | 150,000   |
+| 3   | Pro        | 249,000đ  | 100 lần   | 500,000   |
+| 4   | Enterprise | 699,000đ  | 9,999 lần | 2,000,000 |
 
 ---
 
@@ -334,12 +355,12 @@ Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 
 > Chỉ role **Admin**. Role khác nhận `403 Forbidden`.
 
-| Method | Route | Mô tả |
-|--------|-------|-------|
-| `GET` | `/admin/users/stats` | Thống kê + danh sách toàn bộ user |
-| `POST` | `/admin/users/{id}/toggle-active` | Bật/tắt tài khoản |
-| `POST` | `/admin/users/{id}/change-role` | Đổi role user |
-| `POST` | `/admin/subscriptions` | Cấp subscription thủ công |
+| Method | Route                             | Mô tả                             |
+| ------ | --------------------------------- | --------------------------------- |
+| `GET`  | `/admin/users/stats`              | Thống kê + danh sách toàn bộ user |
+| `POST` | `/admin/users/{id}/toggle-active` | Bật/tắt tài khoản                 |
+| `POST` | `/admin/users/{id}/change-role`   | Đổi role user                     |
+| `POST` | `/admin/subscriptions`            | Cấp subscription thủ công         |
 
 ---
 
@@ -349,9 +370,9 @@ Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 
 ### 1) Xem manuscript bị gắn cờ
 
-| Method | Route | Mô tả |
-|--------|-------|-------|
-| `GET` | `/staff/manuscripts/flagged` | Danh sách bản thảo cần staff xử lý |
+| Method | Route                        | Mô tả                              |
+| ------ | ---------------------------- | ---------------------------------- |
+| `GET`  | `/staff/manuscripts/flagged` | Danh sách bản thảo cần staff xử lý |
 
 **Query params:** `page=1&pageSize=20`
 
@@ -359,14 +380,15 @@ Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
 
 ### 2) Feedback thủ công cho Author
 
-| Method | Route | Mô tả |
-|--------|-------|-------|
-| `GET` | `/staff/feedback` | Danh sách feedback (`?projectId=&page=&pageSize=`) |
-| `POST` | `/staff/feedback` | Tạo feedback mới cho project/chapter/report |
-| `PUT` | `/staff/feedback/{feedbackId}` | Cập nhật feedback |
-| `DELETE` | `/staff/feedback/{feedbackId}` | Xóa feedback |
+| Method   | Route                          | Mô tả                                              |
+| -------- | ------------------------------ | -------------------------------------------------- |
+| `GET`    | `/staff/feedback`              | Danh sách feedback (`?projectId=&page=&pageSize=`) |
+| `POST`   | `/staff/feedback`              | Tạo feedback mới cho project/chapter/report        |
+| `PUT`    | `/staff/feedback/{feedbackId}` | Cập nhật feedback                                  |
+| `DELETE` | `/staff/feedback/{feedbackId}` | Xóa feedback                                       |
 
 **Body `POST/PUT /staff/feedback`**
+
 ```json
 {
   "projectId": "guid",
@@ -386,14 +408,15 @@ Khi staff gửi `feedbackMessage` trong `PATCH /staff/analyses/{reportId}/edit`,
 
 ### 3) Verify / Adjust / Re-run phân tích
 
-| Method | Route | Mô tả |
-|--------|-------|-------|
-| `GET` | `/staff/analyses/pending` | Danh sách report chờ review cuối (`?page=&pageSize=`) |
-| `GET` | `/staff/analyses/reviews` | Danh sách lịch sử review (`?projectId=&page=&pageSize=`) |
-| `POST` | `/staff/analyses/{reportId}/review` | Review một report |
-| `PATCH` | `/staff/analyses/{reportId}/edit` | Staff chỉnh sửa nội dung report + release cho user |
+| Method  | Route                               | Mô tả                                                    |
+| ------- | ----------------------------------- | -------------------------------------------------------- |
+| `GET`   | `/staff/analyses/pending`           | Danh sách report chờ review cuối (`?page=&pageSize=`)    |
+| `GET`   | `/staff/analyses/reviews`           | Danh sách lịch sử review (`?projectId=&page=&pageSize=`) |
+| `POST`  | `/staff/analyses/{reportId}/review` | Review một report                                        |
+| `PATCH` | `/staff/analyses/{reportId}/edit`   | Staff chỉnh sửa nội dung report + release cho user       |
 
 **Body `POST /staff/analyses/{reportId}/review`**
+
 ```json
 {
   "action": "Verified",
@@ -401,10 +424,12 @@ Khi staff gửi `feedbackMessage` trong `PATCH /staff/analyses/{reportId}/edit`,
 }
 ```
 
-`action`: `Verified` | `Adjusted` | `RerunRequested`  
+`action`: `Verified` | `Adjusted` | `RerunRequested`
+
 > `RerunRequested` chỉ áp dụng cho report chưa hoàn tất hoặc bị flag `INCOMPLETE`.
 
 **Body `PATCH /staff/analyses/{reportId}/edit` (mới)**
+
 ```json
 {
   "editedCriteria": [
@@ -428,15 +453,15 @@ Khi staff gửi `feedbackMessage` trong `PATCH /staff/analyses/{reportId}/edit`,
 FAQ: `/api/faqs` (public) và `/api/faqs/admin` (Staff/Admin CRUD).  
 Writing tips: `/api/writing-tips` (public) và `/api/writing-tips/admin` (Staff/Admin CRUD).
 
-| Method | Route | Mô tả |
-|--------|-------|-------|
-| `GET` | `/faqs` | FAQ đã publish (tác giả / Trợ giúp) |
-| `GET` | `/faqs/admin` | Danh sách FAQ (staff) |
-| `POST` | `/faqs/admin` | Tạo FAQ |
-| `PUT` | `/faqs/admin/{id}` | Sửa FAQ |
-| `DELETE` | `/faqs/admin/{id}` | Xóa FAQ |
-| `GET` | `/writing-tips` | Mẹo viết đã publish |
-| `GET/POST/PUT/DELETE` | `/writing-tips/admin` | CRUD mẹo viết (staff) |
+| Method                | Route                 | Mô tả                               |
+| --------------------- | --------------------- | ----------------------------------- |
+| `GET`                 | `/faqs`               | FAQ đã publish (tác giả / Trợ giúp) |
+| `GET`                 | `/faqs/admin`         | Danh sách FAQ (staff)               |
+| `POST`                | `/faqs/admin`         | Tạo FAQ                             |
+| `PUT`                 | `/faqs/admin/{id}`    | Sửa FAQ                             |
+| `DELETE`              | `/faqs/admin/{id}`    | Xóa FAQ                             |
+| `GET`                 | `/writing-tips`       | Mẹo viết đã publish                 |
+| `GET/POST/PUT/DELETE` | `/writing-tips/admin` | CRUD mẹo viết (staff)               |
 
 ---
 
@@ -454,18 +479,18 @@ Nếu bạn reset DB bằng `supabase_full_reset.sql`, cần đảm bảo migrat
 
 ## ⚙️ Services quan trọng
 
-| Service | Vai trò |
-|---------|---------|
-| `ServiceBase` | **Base class** cho tất cả service cần DB + mã hoá: cung cấp `VerifyOwnershipAsync`, `GetUserAsync`, `GetRawDek`, `GetRawDekAsync` — loại bỏ code trùng lặp ở 13 service |
-| `AppControllerBase` | **Base controller** cho tất cả controller cần xác thực: cung cấp `GetUserId()` (nullable) và `GetRequiredUserId()` (throw nếu chưa đăng nhập) — loại bỏ code trùng lặp ở 21 controller |
-| `EmbeddingService` | `batchEmbedContents` với batch/token throttling (config qua `Gemini:Embedding*`), ưu tiên key chuyên embed `Gemini:EmbeddingApiKey`; nếu không có thì fallback theo use-case giữa `Gemini:AnalyzeApiKey` và `Gemini:ChatApiKey` |
-| `AiChatService` | Gemini-only chat, lưu lịch sử |
-| `ChunkingService` | 1500 ký tự, overlap 150, ưu tiên cắt tại `\n\n` → `.` → space |
-| `AiWritingService` | Phân tích cảnh quay, cliffhanger và cấu trúc truyện (RAG) |
-| `ProjectReportService` | Rubric **5 điểm** (1-Kém → 5-Xuất sắc), phát hiện **6 loại cảnh báo** (INCOMPLETE/REPETITION/PLAGIARISM\_RISK/INCONSISTENCY/SEXUAL\_CONTENT/ANTI\_STATE), **Zero Hallucination**, chấm theo **Thể loại**; phân tích ưu tiên Analyze key, fallback sang Chat key; model fallback `gemini-3-flash-preview` -> `gemini-2.5-flash` |
-| `ProjectAnalysisJobService` | Điều phối queue async cho phân tích: enqueue/status/result/cancel (rule hủy sau ~5 phút), chốt snapshot bằng `ProjectVersionHash`, tự xử lý job theo snapshot hiện tại |
-| `GeminiRetryHelper` | Backoff [10s, 30s, 65s] cho 429; throw lỗi thân thiện sau 3 lần |
-| `EncryptionHelper` | AES-256 với user DEK + Master Key |
+| Service                 | Vai trò                                                                                                                                                                                                                                                                                                  |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ServiceBase`               | **Base class** cho tất cả service cần DB + mã hoá: cung cấp `VerifyOwnershipAsync`, `GetUserAsync`, `GetRawDek`, `GetRawDekAsync` — loại bỏ code trùng lặp ở 13 service                                                                                                                                                     |
+| `AppControllerBase`         | **Base controller** cho tất cả controller cần xác thực: cung cấp `GetUserId()` (nullable) và `GetRequiredUserId()` (throw nếu chưa đăng nhập) — loại bỏ code trùng lặp ở 21 controller                                                                                                                                      |
+| `EmbeddingService`          | `batchEmbedContents` với batch/token throttling (config qua `Gemini:Embedding*`), ưu tiên key chuyên embed `Gemini:EmbeddingApiKey`; nếu không có thì fallback theo use-case giữa `Gemini:AnalyzeApiKey` và `Gemini:ChatApiKey`                                                                                             |
+| `AiChatService`             | Gemini-only chat, lưu lịch sử                                                                                                                                                                                                                                                                                               |
+| `ChunkingService`           | 1500 ký tự, overlap 150, ưu tiên cắt tại `\n\n` → `.` → space                                                                                                                                                                                                                                                               |
+| `AiWritingService`          | Phân tích cảnh quay, cliffhanger và cấu trúc truyện (RAG)                                                                                                                                                                                                                                                                   |
+| `ProjectReportService`      | Rubric **5 điểm** (1-Kém → 5-Xuất sắc), phát hiện **6 loại cảnh báo** (INCOMPLETE/REPETITION/PLAGIARISM_RISK/INCONSISTENCY/SEXUAL_CONTENT/ANTI_STATE), **Zero Hallucination**, chấm theo **Thể loại**; phân tích ưu tiên Analyze key, fallback sang Chat key; model fallback `gemini-3-flash-preview` -> `gemini-2.5-flash` |
+| `ProjectAnalysisJobService` | Điều phối queue async cho phân tích: enqueue/status/result/cancel (rule hủy sau ~5 phút), chốt snapshot bằng `ProjectVersionHash`, tự xử lý job theo snapshot hiện tại                                                                                                                                                      |
+| `GeminiRetryHelper`         | Backoff [10s, 30s, 65s] cho 429; throw lỗi thân thiện sau 3 lần                                                                                                                                                                                                                                                             |
+| `EncryptionHelper`          | AES-256 với user DEK + Master Key                                                                                                                                                                                                                                                                                           |
 
 > Khuyến nghị cấu hình key chuyên embed `Gemini__EmbeddingApiKey`. Nếu chưa tách key, cấu hình tối thiểu `Gemini__AnalyzeApiKey` + `Gemini__ChatApiKey`.
 
@@ -492,7 +517,7 @@ StaffFeedbacks          — uuid PK, feedback staff cho author/project/chapter/r
 faqs                    — uuid PK, FAQ trợ giúp (published)
 writing_tips            — uuid PK, mẹo viết (tags text[])
 StaffAnalysisReviews    — uuid PK, thao tác review/rerun report của staff
- 
+
 SubscriptionPlans       — int PK (seed: Free/Basic/Pro/Enterprise)
 UserSubscriptions       — int PK, FK→Users, FK→SubscriptionPlans
 Payments                — uuid PK, FK→Users, FK→SubscriptionPlans
@@ -507,6 +532,7 @@ ProjectGenres           — composite PK (ProjectId, GenreId)
 ## 🗄️ Database Reset
 
 Chạy `supabase_full_reset.sql` trên **Supabase SQL Editor** để:
+
 1. Xóa toàn bộ tables (CASCADE)
 2. Tạo lại schema mới nhất (bao gồm 3 bảng context mới)
 3. Seed data (14 genres, 4 subscription plans)
