@@ -20,16 +20,10 @@ DROP TABLE IF EXISTS "BugReports"            CASCADE;
 DROP TABLE IF EXISTS "StaffAnalysisReviews"  CASCADE;
 DROP TABLE IF EXISTS "StaffKnowledgeBaseItems" CASCADE;
 DROP TABLE IF EXISTS "StaffFeedbacks"        CASCADE;
-DROP TABLE IF EXISTS "TimelineEvents"       CASCADE;
 DROP TABLE IF EXISTS "RewriteHistories"      CASCADE;
 DROP TABLE IF EXISTS "AiAnalysisHistories"   CASCADE;
 DROP TABLE IF EXISTS "ChatMessages"          CASCADE;
 DROP TABLE IF EXISTS "ProjectAbuseFlags"     CASCADE;
-DROP TABLE IF EXISTS "WorldbuildingEntries"  CASCADE;
-DROP TABLE IF EXISTS "PlotNoteEntries"       CASCADE;
-DROP TABLE IF EXISTS "ThemeEntries"          CASCADE;
-DROP TABLE IF EXISTS "StyleGuideEntries"     CASCADE;
-DROP TABLE IF EXISTS "CharacterEntries"      CASCADE;
 DROP TABLE IF EXISTS "UserSettings"          CASCADE;
 DROP TABLE IF EXISTS "ProjectAnalysisFacts"  CASCADE;
 DROP TABLE IF EXISTS "ProjectAnalysisJobs"   CASCADE;
@@ -319,6 +313,8 @@ CREATE TABLE "ProjectReports" (
     "Status"         character varying(20)    NOT NULL DEFAULT 'Pending',
     "TotalScore"     numeric(5,2)             NOT NULL DEFAULT 0,
     "CriteriaJson"   jsonb                    NOT NULL DEFAULT '[]',
+    "ContentAnalysisJson" jsonb,
+    "EmotionPacingJson" jsonb,
     "ProjectVersion" character varying(50)    NOT NULL DEFAULT 'v1.0.0',
     "CreatedAt"      timestamp with time zone NOT NULL DEFAULT NOW(),
     "UpdatedAt"      timestamp with time zone,
@@ -336,6 +332,19 @@ CREATE TABLE "ReportItems" (
     "EvidenceChunkIds" jsonb,
     CONSTRAINT "PK_ReportItems" PRIMARY KEY ("Id"),
     CONSTRAINT "FK_ReportItems_ProjectReports_ProjectReportId" FOREIGN KEY ("ProjectReportId")
+        REFERENCES "ProjectReports" ("Id") ON DELETE CASCADE
+);
+
+-- ── ProjectReportSnapshots ───────────────────────────────────
+CREATE TABLE "ProjectReportSnapshots" (
+    "Id"               uuid                     NOT NULL DEFAULT uuid_generate_v4(),
+    "ProjectReportId"  uuid                     NOT NULL,
+    "ChapterNumber"    integer                  NOT NULL,
+    "Title"            character varying(255)   NOT NULL,
+    "Content"          text                     NOT NULL,
+    "WordCount"        integer                  NOT NULL DEFAULT 0,
+    CONSTRAINT "PK_ProjectReportSnapshots" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_ProjectReportSnapshots_ProjectReports" FOREIGN KEY ("ProjectReportId")
         REFERENCES "ProjectReports" ("Id") ON DELETE CASCADE
 );
 
@@ -397,124 +406,12 @@ CREATE TABLE "ProjectAnalysisFacts" (
 CREATE INDEX "IX_ProjectAnalysisFacts_ProjectId_RunId" ON "ProjectAnalysisFacts" ("ProjectId", "RunId");
 CREATE INDEX "IX_ProjectAnalysisFacts_RunId" ON "ProjectAnalysisFacts" ("RunId");
 
--- ── WorldbuildingEntries ──────────────────────────────────────
--- Valid Category values:
---   Primary: Setting (Bối cảnh), Location (Địa điểm), Rules (Quy tắc thế giới),
---            Glossary (Thuật ngữ), Timeline (Dòng thời gian)
---   Extended: Magic, History, Religion, Geography, Technology, World, Other
-CREATE TABLE "WorldbuildingEntries" (
-    "Id"        uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
-    "ProjectId" uuid                     NOT NULL,
-    "Title"     text                     NOT NULL,
-    "Content"   text                     NOT NULL DEFAULT '',
-    "Category"  character varying(50)    NOT NULL DEFAULT 'Other',
-    "Embedding" vector(768),
-    "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
-    "UpdatedAt" timestamp with time zone,
-    CONSTRAINT "PK_WorldbuildingEntries" PRIMARY KEY ("Id"),
-    CONSTRAINT "FK_WorldbuildingEntries_Projects_ProjectId" FOREIGN KEY ("ProjectId")
-        REFERENCES "Projects" ("Id") ON DELETE CASCADE
-);
-
-CREATE INDEX "IX_WorldbuildingEntries_ProjectId" ON "WorldbuildingEntries" ("ProjectId");
-
--- IVFFlat index cho vector search (uncomment sau khi có >= 100 rows embedding)
--- CREATE INDEX "IX_WorldbuildingEntries_Embedding" ON "WorldbuildingEntries"
---     USING ivfflat ("Embedding" vector_cosine_ops) WITH (lists = 100);
-
--- ── CharacterEntries ──────────────────────────────────────────
-CREATE TABLE "CharacterEntries" (
-    "Id"          uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
-    "ProjectId"   uuid                     NOT NULL,
-    "Name"        text                     NOT NULL,
-    "Role"        character varying(50)    NOT NULL DEFAULT 'Supporting',
-    "Description" text                     NOT NULL DEFAULT '',
-    "Background"  text,
-    "Notes"       text,
-    "Embedding"   vector(768),
-    "CreatedAt"   timestamp with time zone NOT NULL DEFAULT NOW(),
-    "UpdatedAt"   timestamp with time zone,
-    CONSTRAINT "PK_CharacterEntries" PRIMARY KEY ("Id"),
-    CONSTRAINT "FK_CharacterEntries_Projects_ProjectId" FOREIGN KEY ("ProjectId")
-        REFERENCES "Projects" ("Id") ON DELETE CASCADE
-);
-
-CREATE INDEX "IX_CharacterEntries_ProjectId" ON "CharacterEntries" ("ProjectId");
-
--- IVFFlat index cho vector search (uncomment sau khi có >= 100 rows embedding)
--- CREATE INDEX "IX_CharacterEntries_Embedding" ON "CharacterEntries"
---     USING ivfflat ("Embedding" vector_cosine_ops) WITH (lists = 100);
-
--- ── StyleGuideEntries ─────────────────────────────────────────
-CREATE TABLE "StyleGuideEntries" (
-    "Id"        uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
-    "ProjectId" uuid                     NOT NULL,
-    "Aspect"    character varying(50)    NOT NULL DEFAULT 'Other',
-    "Content"   text                     NOT NULL DEFAULT '',
-    "Embedding" vector(768),
-    "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
-    "UpdatedAt" timestamp with time zone,
-    CONSTRAINT "PK_StyleGuideEntries" PRIMARY KEY ("Id"),
-    CONSTRAINT "FK_StyleGuideEntries_Projects_ProjectId" FOREIGN KEY ("ProjectId")
-        REFERENCES "Projects" ("Id") ON DELETE CASCADE
-);
-
-CREATE INDEX "IX_StyleGuideEntries_ProjectId" ON "StyleGuideEntries" ("ProjectId");
-
--- ── ThemeEntries ──────────────────────────────────────────────
-CREATE TABLE "ThemeEntries" (
-    "Id"          uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
-    "ProjectId"   uuid                     NOT NULL,
-    "Title"       text                     NOT NULL,
-    "Description" text                     NOT NULL DEFAULT '',
-    "Notes"       text,
-    "Embedding"   vector(768),
-    "CreatedAt"   timestamp with time zone NOT NULL DEFAULT NOW(),
-    "UpdatedAt"   timestamp with time zone,
-    CONSTRAINT "PK_ThemeEntries" PRIMARY KEY ("Id"),
-    CONSTRAINT "FK_ThemeEntries_Projects_ProjectId" FOREIGN KEY ("ProjectId")
-        REFERENCES "Projects" ("Id") ON DELETE CASCADE
-);
-
-CREATE INDEX "IX_ThemeEntries_ProjectId" ON "ThemeEntries" ("ProjectId");
-
--- ── PlotNoteEntries ───────────────────────────────────────────
-CREATE TABLE "PlotNoteEntries" (
-    "Id"        uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
-    "ProjectId" uuid                     NOT NULL,
-    "Type"      character varying(50)    NOT NULL DEFAULT 'Other',
-    "Title"     text                     NOT NULL,
-    "Content"   text                     NOT NULL DEFAULT '',
-    "Embedding" vector(768),
-    "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
-    "UpdatedAt" timestamp with time zone,
-    CONSTRAINT "PK_PlotNoteEntries" PRIMARY KEY ("Id"),
-    CONSTRAINT "FK_PlotNoteEntries_Projects_ProjectId" FOREIGN KEY ("ProjectId")
-        REFERENCES "Projects" ("Id") ON DELETE CASCADE
-);
-
-CREATE INDEX "IX_PlotNoteEntries_ProjectId" ON "PlotNoteEntries" ("ProjectId");
-
--- ── TimelineEvents ─────────────────────────────────────────────────
--- Category: Story | Historical | Character | World | Political | Other
--- Importance: Critical | Major | Normal | Minor
-CREATE TABLE "TimelineEvents" (
-    "Id"          uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
-    "ProjectId"   uuid                     NOT NULL,
-    "Category"    character varying(50)    NOT NULL DEFAULT 'Story',
-    "Title"       text                     NOT NULL,
-    "Description" text                     NOT NULL DEFAULT '',
-    "TimeLabel"   character varying(100),
-    "SortOrder"   integer                  NOT NULL DEFAULT 0,
-    "Importance"  character varying(20)    NOT NULL DEFAULT 'Normal',
-    "CreatedAt"   timestamp with time zone NOT NULL DEFAULT NOW(),
-    "UpdatedAt"   timestamp with time zone,
-    CONSTRAINT "PK_TimelineEvents" PRIMARY KEY ("Id"),
-    CONSTRAINT "FK_TimelineEvents_Projects_ProjectId" FOREIGN KEY ("ProjectId")
-        REFERENCES "Projects" ("Id") ON DELETE CASCADE
-);
-
-CREATE INDEX "IX_TimelineEvents_ProjectId_SortOrder" ON "TimelineEvents" ("ProjectId", "SortOrder");
+-- ── [REMOVED] Story Bible manual tables ─────────────────────────
+-- WorldbuildingEntries, CharacterEntries, StyleGuideEntries,
+-- ThemeEntries, PlotNoteEntries, TimelineEvents đã bị xóa.
+-- Dữ liệu Story Bible hiện được trích xuất tự động bởi AI trong quá
+-- trình phân tích và lưu vào ProjectReports / ProjectAnalysisFacts
+-- (snapshot model — không có bảng nhập thủ công).
 
 -- ── ChatMessages ──────────────────────────────────────────────
 CREATE TABLE "ChatMessages" (
@@ -699,31 +596,7 @@ CREATE UNIQUE INDEX "IX_Payments_TransactionId"  ON "Payments" ("TransactionId")
 CREATE INDEX        "IX_Payments_Status"         ON "Payments" ("Status");
 CREATE INDEX        "IX_Payments_CreatedAt"      ON "Payments" ("CreatedAt" DESC);
 
--- ── character_relationships ───────────────────────────────────
-CREATE TABLE "character_relationships" (
-    "Id"               uuid                     NOT NULL DEFAULT uuid_generate_v4(),
-    "ProjectId"        uuid                     NOT NULL,
-    "CharAId"          uuid                     NOT NULL,
-    "CharBId"          uuid                     NOT NULL,
-    "RelationType"     character varying(50)    NOT NULL DEFAULT 'Other',
-    "StrengthScore"    real                     NOT NULL DEFAULT 0,
-    "EvidenceChunkIds" jsonb,
-    "CreatedAt"        timestamp with time zone NOT NULL DEFAULT NOW(),
-    CONSTRAINT "PK_character_relationships" PRIMARY KEY ("Id"),
-    CONSTRAINT "CK_CharacterRelationships_CharOrder" CHECK ("CharAId" < "CharBId"),
-    CONSTRAINT "FK_character_relationships_Projects_ProjectId" FOREIGN KEY ("ProjectId")
-        REFERENCES "Projects" ("Id") ON DELETE CASCADE,
-    CONSTRAINT "FK_character_relationships_CharacterEntries_CharAId" FOREIGN KEY ("CharAId")
-        REFERENCES "CharacterEntries" ("Id") ON DELETE CASCADE,
-    CONSTRAINT "FK_character_relationships_CharacterEntries_CharBId" FOREIGN KEY ("CharBId")
-        REFERENCES "CharacterEntries" ("Id") ON DELETE CASCADE
-);
-
-CREATE INDEX "IX_character_relationships_ProjectId" ON "character_relationships" ("ProjectId");
-CREATE INDEX "IX_character_relationships_CharAId"   ON "character_relationships" ("CharAId");
-CREATE INDEX "IX_character_relationships_CharBId"   ON "character_relationships" ("CharBId");
-CREATE UNIQUE INDEX "IX_character_relationships_ProjectId_CharAId_CharBId"
-    ON "character_relationships" ("ProjectId", "CharAId", "CharBId");
+-- character_relationships đã bị xóa cùng CharacterEntries.
 
 -- ── analysis_job_rerun_audits ─────────────────────────────────
 CREATE TABLE "analysis_job_rerun_audits" (
@@ -863,4 +736,5 @@ INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
     ('20260514104000_AddNotifications', '9.0.0'),
     ('20260519150000_SeedHelpContent', '9.0.0'),
     ('20260520120000_UpsertHelpContent', '9.0.0'),
-    ('20260520140000_DropStaffKnowledgeBaseItems', '9.0.0');
+    ('20260520140000_DropStaffKnowledgeBaseItems', '9.0.0'),
+    ('20260529000000_RemoveManualStoryBibleTables', '9.0.5');

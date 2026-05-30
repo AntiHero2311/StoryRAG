@@ -3,22 +3,15 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
-  CheckCircle2,
   Loader2,
-  Save,
-  Send,
   BookOpen,
   Search,
   ChevronDown,
   AlertCircle,
   Sparkles,
-  Eye,
-  EyeOff,
-  Lock,
-  ShieldAlert,
   Sliders,
   BarChart2,
-  Clock,
+  ShieldAlert,
 } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { getUserInfo } from '../utils/jwtHelper';
@@ -33,7 +26,6 @@ import RadarChart from '../components/analysis/RadarChart';
 import GroupCard from '../components/analysis/GroupCard';
 import NarrativeChartsPanel from '../components/analysis/NarrativeChartsPanel';
 import EvidenceChunksPanel from '../components/analysis/EvidenceChunksPanel';
-import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 type EditableCriterion = {
   key: string;
@@ -89,12 +81,7 @@ const RUBRIC_METADATA: Record<string, { groupName: string; criterionName: string
   "8.2": { groupName: "Xây dựng thế giới", criterionName: "Bối cảnh" },
 };
 
-function splitLines(value: string): string[] {
-  return value
-    .split('\n')
-    .map(s => s.trim())
-    .filter(Boolean);
-}
+
 
 function parseCriteria(detail: StaffReportDetail): EditableCriterion[] {
   const source = detail.staffEditedCriteriaJson ?? detail.criteriaJson;
@@ -162,51 +149,16 @@ function parseWarnings(detail: StaffReportDetail): EditableWarning[] {
   }
 }
 
-function parseOriginalCriteria(detail: StaffReportDetail): Record<string, { feedback: string; evidence: string; errors: string[]; suggestions: string[] }> {
-  if (!detail.criteriaJson) return {};
-  try {
-    const raw = JSON.parse(detail.criteriaJson);
-    const arr = Array.isArray(raw)
-      ? raw
-      : (Array.isArray(raw?.criteria)
-        ? raw.criteria
-        : (Array.isArray(raw?.Criteria) ? raw.Criteria : []));
-    
-    const record: Record<string, { feedback: string; evidence: string; errors: string[]; suggestions: string[] }> = {};
-    arr.forEach((item: any) => {
-      const key = String(item?.key ?? item?.Key ?? '');
-      if (key) {
-        record[key] = {
-          feedback: String(item?.feedback ?? item?.Feedback ?? ''),
-          evidence: String(item?.evidence ?? item?.Evidence ?? ''),
-          errors: Array.isArray(item?.errors)
-            ? item.errors.map((x: any) => String(x))
-            : (Array.isArray(item?.Errors) ? item.Errors.map((x: any) => String(x)) : []),
-          suggestions: Array.isArray(item?.suggestions)
-            ? item.suggestions.map((x: any) => String(x))
-            : (Array.isArray(item?.Suggestions) ? item.Suggestions.map((x: any) => String(x)) : []),
-        };
-      }
-    });
-    return record;
-  } catch {
-    return {};
-  }
-}
 
 export default function StaffReportReviewPage() {
   const navigate = useNavigate();
   const { reportId } = useParams<{ reportId: string }>();
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [detail, setDetail] = useState<StaffReportDetail | null>(null);
   const [story, setStory] = useState<StaffReportStoryResponse | null>(null);
   const [criteria, setCriteria] = useState<EditableCriterion[]>([]);
-  const [originalCriteria, setOriginalCriteria] = useState<Record<string, { feedback: string; evidence: string; errors: string[]; suggestions: string[] }>>({});
-  const [feedbackMessage, setFeedbackMessage] = useState('');
 
   // Narrative charts state
   const [narrativeCharts, setNarrativeCharts] = useState<NarrativeChartsResponse | null>(null);
@@ -218,10 +170,6 @@ export default function StaffReportReviewPage() {
     highlight: string;
     label: string;
   } | null>(null);
-
-  // Inline Rubric Editor Modal state
-  const [editingCriterionKey, setEditingCriterionKey] = useState<string | null>(null);
-  const [editingCriterionValue, setEditingCriterionValue] = useState<EditableCriterion | null>(null);
 
   // Reader states
   const [searchTerm, setSearchTerm] = useState('');
@@ -237,11 +185,6 @@ export default function StaffReportReviewPage() {
   // Tab & Collapsibles States
   const [activeTab, setActiveTab] = useState<'rubric' | 'narrative'>('rubric');
   const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({ 0: true });
-  const [showReleaseConfirm, setShowReleaseConfirm] = useState(false);
-
-  const isReadOnly = useMemo(() => {
-    return detail?.reviewStatus === 'Released';
-  }, [detail]);
 
   const warnings = useMemo(() => {
     if (!detail) return [];
@@ -261,7 +204,7 @@ export default function StaffReportReviewPage() {
       groupsMap.get(g)!.push(c);
     });
 
-    return RUBRIC_GROUPS.map((g, idx) => {
+    return RUBRIC_GROUPS.map((g) => {
       const groupCriteria = groupsMap.get(g) || [];
       const score = groupCriteria.reduce((sum, c) => sum + c.score, 0);
       const maxScore = groupCriteria.reduce((sum, c) => sum + c.maxScore, 0);
@@ -280,6 +223,8 @@ export default function StaffReportReviewPage() {
           errors: c.errors,
           suggestions: c.suggestions,
           evidenceChunkOrdinals: c.evidenceChunkOrdinals,
+          groupName: c.groupName,
+          bibleComparison: '',
         })),
       };
     }).filter(g => g.criteria.length > 0);
@@ -329,7 +274,6 @@ export default function StaffReportReviewPage() {
   const load = async (targetReportId: string) => {
     setLoading(true);
     setError('');
-    setSuccess('');
     try {
       const [reportDetail, storyData] = await Promise.all([
         analysisJobService.getReportDetail(targetReportId),
@@ -338,7 +282,6 @@ export default function StaffReportReviewPage() {
       setDetail(reportDetail);
       setStory(storyData);
       setCriteria(parseCriteria(reportDetail));
-      setOriginalCriteria(parseOriginalCriteria(reportDetail));
 
       if (reportDetail.projectId) {
         void loadNarrativeCharts(reportDetail.projectId);
@@ -372,53 +315,8 @@ export default function StaffReportReviewPage() {
     void load(reportId);
   }, [navigate, reportId]);
 
-  const handleSaveCriterionOverride = () => {
-    if (!editingCriterionKey || !editingCriterionValue || isReadOnly) return;
-    setCriteria(prev =>
-      prev.map(c => (c.key === editingCriterionKey ? editingCriterionValue : c))
-    );
-    setEditingCriterionKey(null);
-    setEditingCriterionValue(null);
-  };
-
   const toggleGroup = (idx: number) => {
     setExpandedGroups(prev => ({ ...prev, [idx]: !prev[idx] }));
-  };
-
-  const submitEdit = async (releaseToUser: boolean) => {
-    if (!reportId || !detail || saving || isReadOnly) return;
-    setSaving(true);
-    setError('');
-    setSuccess('');
-    try {
-      const updated = await analysisJobService.editReport(reportId, {
-        editedCriteria: criteria.map(c => ({
-          key: c.key,
-          feedback: c.feedback,
-          evidence: c.evidence,
-          errors: c.errors,
-          suggestions: c.suggestions,
-        })),
-        releaseToUser,
-        expectedUpdatedAt: detail.updatedAt ?? detail.createdAt,
-        feedbackMessage: feedbackMessage.trim() || undefined,
-      });
-
-      setDetail(updated);
-      setCriteria(parseCriteria(updated));
-      setFeedbackMessage(''); // Reset sau khi submit thành công
-      setSuccess(releaseToUser
-        ? 'Đã phát hành report cho tác giả.'
-        : 'Đã lưu bản chỉnh sửa cho staff. Report chưa phát hành.');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err: any) {
-      const message = err?.response?.data?.message
-        ?? err?.response?.data?.Message
-        ?? 'Lưu chỉnh sửa thất bại.';
-      setError(message);
-    } finally {
-      setSaving(false);
-    }
   };
 
   const chapterCount = story?.chapters?.length ?? 0;
@@ -437,19 +335,13 @@ export default function StaffReportReviewPage() {
               <ArrowLeft className="w-4 h-4" />
               Quay lại danh sách
             </button>
-            <h1 className="text-xl font-bold text-[var(--text-primary)]">Review & Phê duyệt report</h1>
+            <h1 className="text-xl font-bold text-[var(--text-primary)]">Xem chi tiết report (Staff)</h1>
           </div>
 
           {error && (
             <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-sm">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               {error}
-            </div>
-          )}
-          {success && (
-            <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-sm">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              {success}
             </div>
           )}
 
@@ -468,14 +360,6 @@ export default function StaffReportReviewPage() {
                 }}
               >
                 <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full blur-3xl opacity-10 pointer-events-none" style={{ background: '#f59e0b' }} />
-                
-                {/* Read Only Indicator Banner */}
-                {isReadOnly && (
-                  <div className="mb-6 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-rose-500/15 border border-rose-500/20 text-rose-300 text-xs font-semibold">
-                    <Lock className="w-4 h-4 shrink-0 text-rose-400" />
-                    Báo cáo này đã được phát hành cho tác giả. Dữ liệu hiện ở chế độ ĐỌC (Read-Only) để bảo vệ lịch sử.
-                  </div>
-                )}
 
                 <div className="flex flex-col lg:flex-row items-center gap-8 justify-around">
                   {/* Left: Score Donut & Radar Chart */}
@@ -631,14 +515,7 @@ export default function StaffReportReviewPage() {
                           expanded={!!expandedGroups[i]}
                           onToggle={() => toggleGroup(i)}
                           projectId={detail.projectId}
-                          isStaff={true}
-                          onEditCriterion={(key) => {
-                            const crit = criteria.find(c => c.key === key);
-                            if (crit) {
-                              setEditingCriterionKey(key);
-                              setEditingCriterionValue({ ...crit });
-                            }
-                          }}
+                          isStaff={false}
                           onViewEvidence={(ordinals, highlight, label) => {
                             setEvidencePanel({ ordinals, highlight, label });
                           }}
@@ -660,48 +537,6 @@ export default function StaffReportReviewPage() {
 
                 {/* Right Column (Col 3): Actions and Manuscript widget */}
                 <div className="space-y-4">
-                  {/* Actions & Feedback Card */}
-                  <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 space-y-3 shadow-sm">
-                    <p className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-                      <Send className="w-4 h-4 text-amber-500" />
-                      Feedback gửi tác giả (tuỳ chọn)
-                    </p>
-                    <textarea
-                      readOnly={isReadOnly}
-                      value={feedbackMessage}
-                      onChange={e => setFeedbackMessage(e.target.value)}
-                      rows={5}
-                      placeholder="Lời nhắn chân thành hoặc hướng dẫn định hướng phát triển thêm cho tác giả..."
-                      className="w-full px-3 py-2.5 rounded-xl text-xs bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/40 transition-colors resize-none leading-relaxed disabled:opacity-60"
-                    />
-                    
-                    <div className="flex flex-col gap-2 pt-1">
-                      <button
-                        onClick={() => void submitEdit(false)}
-                        disabled={saving || isReadOnly}
-                        className="h-10 px-3 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-60 transition-all active:scale-98"
-                        style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-                      >
-                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 text-zinc-400" />}
-                        Lưu nháp Staff
-                      </button>
-                      <button
-                        onClick={() => setShowReleaseConfirm(true)}
-                        disabled={saving || isReadOnly}
-                        className="h-10 px-3 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-2 text-white disabled:opacity-60 transition-all hover:brightness-105 active:scale-98 shadow-md"
-                        style={{ background: 'linear-gradient(135deg,#f59e0b,#f97316)' }}
-                      >
-                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                        Phát hành cho Tác giả
-                      </button>
-                      {isReadOnly && (
-                        <p className="text-[10px] text-center text-rose-400 font-semibold mt-1">
-                          Không thể thay đổi vì report đã gửi đi.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
                   {/* Manuscript widget panel */}
                   <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 space-y-4 shadow-sm">
                     <div className="flex items-center justify-between gap-3 border-b border-[var(--border-color)] pb-3">
@@ -1041,102 +876,6 @@ export default function StaffReportReviewPage() {
             </div>
           )}
 
-          {/* Inline Rubric Editor Modal */}
-          {editingCriterionKey && editingCriterionValue && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 select-none animate-fade-in">
-              <div className="w-full max-w-[640px] rounded-2xl border border-amber-500/25 bg-[var(--bg-surface)] p-6 shadow-2xl space-y-4 text-left">
-                <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                      Tiêu chí {editingCriterionKey}
-                    </span>
-                    <h3 className="text-sm font-black text-[var(--text-bright)]">Điều chỉnh Đánh giá Rubric Chuyên sâu</h3>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setEditingCriterionKey(null);
-                      setEditingCriterionValue(null);
-                    }}
-                    className="text-zinc-500 hover:text-zinc-300 text-xs font-semibold"
-                  >
-                    Đóng
-                  </button>
-                </div>
-
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-                  <label className="block">
-                    <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Nhận xét (Feedback)</span>
-                    <textarea
-                      value={editingCriterionValue.feedback}
-                      onChange={e => setEditingCriterionValue({ ...editingCriterionValue, feedback: e.target.value })}
-                      rows={4}
-                      className="mt-1.5 w-full px-3 py-2 rounded-xl text-xs bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/40 transition-colors leading-relaxed"
-                      placeholder="Nhập nhận xét của bạn về tiêu chí này..."
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Dẫn chứng (Evidence)</span>
-                    <textarea
-                      value={editingCriterionValue.evidence}
-                      onChange={e => setEditingCriterionValue({ ...editingCriterionValue, evidence: e.target.value })}
-                      rows={3}
-                      className="mt-1.5 w-full px-3 py-2 rounded-xl text-xs bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/40 transition-colors leading-relaxed"
-                      placeholder="Các số chương, câu trích dẫn từ truyện..."
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Các lỗi cần sửa (Errors - Mỗi dòng 1 ý)</span>
-                    <textarea
-                      value={editingCriterionValue.errors.join('\n')}
-                      onChange={e => setEditingCriterionValue({
-                        ...editingCriterionValue,
-                        errors: e.target.value.split('\n').map(s => s.trim()).filter(Boolean)
-                      })}
-                      rows={3}
-                      className="mt-1.5 w-full px-3 py-2 rounded-xl text-xs bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/40 transition-colors leading-relaxed"
-                      placeholder="Các lỗi logic, ngữ pháp..."
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Gợi ý chỉnh sửa (Suggestions - Mỗi dòng 1 ý)</span>
-                    <textarea
-                      value={editingCriterionValue.suggestions.join('\n')}
-                      onChange={e => setEditingCriterionValue({
-                        ...editingCriterionValue,
-                        suggestions: e.target.value.split('\n').map(s => s.trim()).filter(Boolean)
-                      })}
-                      rows={3}
-                      className="mt-1.5 w-full px-3 py-2 rounded-xl text-xs bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/40 transition-colors leading-relaxed"
-                      placeholder="Hướng dẫn tác giả cách viết lại hay hơn..."
-                    />
-                  </label>
-                </div>
-
-                <div className="flex justify-end gap-2 border-t border-[var(--border-color)] pt-3.5 text-right">
-                  <button
-                    onClick={() => {
-                      setEditingCriterionKey(null);
-                      setEditingCriterionValue(null);
-                    }}
-                    className="h-9 px-4 rounded-xl text-xs font-semibold bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border-color)]"
-                  >
-                    Hủy bỏ
-                  </button>
-                  <button
-                    onClick={handleSaveCriterionOverride}
-                    className="h-9 px-4 rounded-xl text-xs font-bold text-white transition-all bg-amber-500 hover:brightness-105 active:scale-95 shadow-md"
-                    style={{ background: 'linear-gradient(135deg,#f59e0b,#f97316)' }}
-                  >
-                    Lưu Thay Đổi
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Evidence chunks panel */}
           {detail && (
             <EvidenceChunksPanel
@@ -1148,26 +887,6 @@ export default function StaffReportReviewPage() {
               criterionLabel={evidencePanel?.label ?? ''}
             />
           )}
-
-          <ConfirmDialog
-            isOpen={showReleaseConfirm}
-            onClose={() => setShowReleaseConfirm(false)}
-            onConfirm={async () => {
-              setShowReleaseConfirm(false);
-              await submitEdit(true);
-            }}
-            title="Xác nhận phát hành báo cáo"
-            message={(
-              <div className="space-y-2 text-left">
-                <p>Bạn có chắc chắn muốn <span className="text-amber-400 font-bold">phát hành báo cáo này</span> cho tác giả không?</p>
-                <p className="text-[11px] opacity-75">Sau khi phát hành, tác giả sẽ thấy được đầy đủ nội dung báo cáo và nhiệm vụ của bạn sẽ hoàn thành. Staff sẽ <strong>không có quyền chỉnh sửa tiếp</strong>.</p>
-              </div>
-            )}
-            confirmText="Xác nhận phát hành"
-            cancelText="Hủy"
-            variant="warning"
-            loading={saving}
-          />
         </div>
       )}
     </MainLayout>

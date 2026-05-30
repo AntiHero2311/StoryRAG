@@ -1,0 +1,167 @@
+TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
+
+1) Hạ tầng chung
+- Frontend gọi API qua src/services/api.ts, tự động đính Bearer token.
+- Backend bảo vệ bằng JWT [Authorize].
+- AI endpoint chính: /api/ai
+- Project resources: /api/projects/{projectId}/...
+- Guardrails backend:
+  + AiChat: 20 req/phút/user
+  + AiAnalyze: 3 req/10 phút/user
+  + AiEmbed: 30 req/phút/user
+  + LongRunning timeout: 10 phút
+
+2) Luồng chuẩn bị dữ liệu cho AI (Save -> Chunk -> Embed)
+- Workspace save chương:
+  PUT /projects/{projectId}/chapters/{chapterId}
+- ChapterService.UpdateChapterAsync:
+  + cập nhật active version in-place
+  + reset IsChunked/IsEmbedded
+  + auto chunk ngay (PerformChunkingInternalAsync)
+- Frontend queue embed có cooldown (queueEmbedSync/flushEmbedQueue).
+- Frontend gọi:
+  POST /ai/chapters/{chapterId}/embed
+  (backend xử lý đồng bộ và trả về 200 OK để cập nhật trạng thái UI ngay lập tức)
+- EmbeddingService:
+  + verify ownership + version active đã chunk
+  + decrypt chunk content
+  + chuẩn hoá input với prefix search_document:
+  + batch embedding + quota control + key failover
+  + lưu vector vào ChapterChunks.Embedding
+  + set ChapterVersion.IsEmbedded = true
+
+3) Luồng AI Chat (RAG)
+- UI: ChatPanel (Workspace tab chat), chỉ dùng khi chapter active đã embedded.
+- API:
+  POST /ai/{projectId}/chat
+- AiChatService:
+  + verify ownership + subscription
+  + embed câu hỏi (search_query:)
+  + vector search cosine trên active chapter chunks:
+    * ChapterChunks (chỉ active versions, top k theo rag.top_k_chat)
+  + decrypt context + project summary + ai instructions
+  + sanitize input/context (PromptSanitizer)
+  + gọi Gemini qua GeminiChatFailoverExecutor
+    * fallback key/model
+    * retry 429 qua GeminiRetryHelper
+  + validate output (LlmOutputValidator)
+  + lưu lịch sử chat đã mã hoá (AiChatMessage)
+  + trừ token vào subscription
+- Frontend sanitize lại trước render:
+  src/utils/aiResponseSanitizer.ts
+- Lịch sử chat:
+  GET /ai/{projectId}/chat/history
+
+4) Luồng Project Analysis (rubric 100 điểm, async jobs)
+- Frontend AnalysisPage enqueue:
+  POST /ai/{projectId}/analyze/jobs
+- ProjectAnalysisJobService trước khi tạo job:
+  + verify ownership
+  + verify quota phân tích
+  + bắt buộc dự án đã có nội dung embedded
+- Job vào AnalysisJobQueue (Channel), worker:
+  ProjectAnalysisJobWorker
+- Stage tiến trình:
+  Queued -> Preparing -> Analyzing -> Saving -> Completed
+- ProjectReportService.AnalyzeAsync:
+  + lấy active embedded chapter chunks
+  + lấy story bible:
+    genres, summary, characters, worldbuilding,
+    style guide, themes, plot notes, ai instructions
+  + batch summarize context
+  + gọi Gemini để chấm 20 tiêu chí + 6 warnings + overallFeedback
+  + warnings: INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY / SEXUAL_CONTENT / ANTI_STATE
+  + parse/repair JSON nếu cần
+  + validate quality output (đủ key rubric, đủ errors/suggestions...)
+  + retry nếu output không đạt
+  + lưu ProjectReport
+  + trừ UsedAnalysisCount + UsedTokens
+- Frontend poll:
+  GET /ai/{projectId}/analyze/jobs/{jobId}
+  GET /ai/{projectId}/analyze/jobs/{jobId}/result
+- Lấy report:
+  GET /ai/{projectId}/reports/latest
+  GET /ai/{projectId}/reports
+  GET /ai/{projectId}/reports/{reportId}
+- Huỷ job queued/processing sau ~5 phút:
+  POST /ai/{projectId}/analyze/jobs/{jobId}/cancel
+- Export PDF:
+  GET /ai/{projectId}/reports/{reportId}/export/pdf
+  (ReportExportService + QuestPDF)
+
+5) Luồng Narrative Charts
+- API:
+  GET /ai/{projectId}/narrative/charts
+- NarrativeAnalyticsService:
+  + dùng chapter active versions
+  + tách segment từ text
+  + tính pacing/emotion (đã lược bỏ biểu đồ xuất hiện nhân vật và mạng quan hệ nhân vật để tối ưu độ nhiễu và làm rõ hơn lý do phân tích nhịp độ/cảm xúc kịch tính)
+  + Báo cáo phân tích được phát hành trực tiếp (`Released`) cho tác giả ngay khi AI hoàn tất.
+- **Hậu kiểm & Moderation của Staff:** Staff/Admin không chặn luồng xem báo cáo của tác giả mà thực hiện hậu kiểm:
+  + Xem chi tiết báo cáo (warnings, criteria) qua `GET /api/staff/analyses/{reportId}`
+  + Đọc bản thảo (read-only) để đối chiếu qua `GET /api/staff/analyses/{reportId}/story` (Wide Reader Modal)
+  + Xem lịch sử review qua `GET /api/staff/analyses/{reportId}/review`
+  + Hành động điều chỉnh hoặc yêu cầu chạy lại AI qua `POST /api/staff/analyses/{reportId}/review`
+  + Chỉnh sửa văn bản báo cáo AI qua `PATCH /api/staff/analyses/{reportId}/edit`
+- **GetFlagReason** — xác định manuscript cần Staff xem (thứ tự ưu tiên):
+  1. `ANTI_STATE`           — pháp lý nghiêm trọng nhất
+  2. `SEXUAL_CONTENT`       — vi phạm chính sách nội dung
+  3. `PLAGIARISM_RISK`      — vi phạm bản quyền
+  4. `INCOMPLETE_STORY`     — AI cắm INCOMPLETE
+  5. `INCONSISTENCY_DETECTED` — AI cắm INCONSISTENCY
+  + Ngoài ra: NO_ANALYSIS / INCOMPLETE_ANALYSIS / LOW_QUALITY_SCORE (score < 60)
+
+6) Luồng Scene / Cliffhanger
+- API có sẵn:
+  POST /ai/{projectId}/scenes
+  POST /ai/{projectId}/cliffhanger
+  GET /ai/{projectId}/analysis/history
+- Kết quả được lưu lịch sử qua AiAnalysisHistoryService (mã hoá).
+- Frontend đã có aiAnalysisService + SceneCliffhangerPanel.
+- Hiện trạng UI: panel này chưa được mount vào Workspace tabs.
+
+7) Story Bible trong Phân tích (AI tự động trích xuất, không nhập thủ công)
+- AI tự trích xuất thông tin Story Bible từ nội dung bản thảo trong quá trình phân tích.
+- Kết quả (nhân vật, thế giới, chủ đề, phong cách...) được lưu vào:
+  + ProjectAnalysisFacts.Payload (JSONB snapshot gắn với RunId)
+  + ProjectReports (ContentAnalysisJson, EmotionPacingJson)
+- Không có bảng nhập thủ công (WorldbuildingEntries, CharacterEntries, v.v. đã bị xóa).
+
+8) Bảo mật và an toàn prompt
+- PromptSanitizer: lọc mẫu prompt injection trước khi gửi LLM.
+- LlmOutputValidator: chặn response có dấu hiệu rò rỉ prompt/secret.
+- GeminiRetryHelper: retry khi 429, backoff.
+- GeminiChatFailoverExecutor:
+  + failover key (Analyze/Chat)
+  + failover model (Gemini chat models)
+  + flatten system prompt cho Gemma nếu cần
+
+9) Subscription và anti-abuse
+- Token usage:
+  + Chat trừ token
+  + Analysis trừ cả token + số lần phân tích
+- AbuseDetector:
+  + theo dõi tần suất chat trong cửa sổ thời gian
+  + warning (>50 calls/10 phút) / suspend (>200 calls/10 phút) user nếu vượt ngưỡng
+  + ghi ProjectAbuseFlag với reason AI_RATE_LIMIT_WARNING / AI_RATE_LIMIT_SUSPEND
+- Content flags (GetFlagReason — xuất hiện trong /manuscripts/flagged):
+  + ANTI_STATE, SEXUAL_CONTENT, PLAGIARISM_RISK, INCOMPLETE_STORY, INCONSISTENCY_DETECTED
+  + NO_ANALYSIS, INCOMPLETE_ANALYSIS, LOW_QUALITY_SCORE
+
+9b) Cấu hình Cổng kiểm soát (RAG/Gemini Configs cho Admin)
+- Admin Portal cung cấp giao diện quản lý cấu hình và giới hạn vận hành của AI:
+  + API: GET/PUT /api/admin/rag-config (Chỉ Admin)
+  + Các tham số điều phối:
+    * rag.chunk_size: Kích thước chunk bản thảo (100–4000)
+    * rag.chunk_overlap: Độ gối chồng giữa các chunk (0–500)
+    * rag.top_k_chat: Số lượng chunk tối đa lấy cho RAG Chat
+    * rag.top_k_report: Số lượng chunk tối đa lấy cho RAG Analysis
+    * rag.stage1_batch_chunks: Số chunk phân tích song song mỗi đợt trong Stage 1 (ví dụ: mỗi lần 5-8 chunks song song)
+    * gemini.analyze_rpm_limit: Giới hạn RPM (Requests Per Minute) của API Gemini nhằm chống lỗi 429
+    * rag.rubric_batch_size: Số lượng tiêu chí rubric chạy song song trong Stage 2 (chạy song song 5 tiêu chí mỗi đợt để tránh vượt quota và tối ưu tốc độ phân tích)
+
+TÓM TẮT:
+Hệ thống AI của StoryRAG vận hành theo mô hình RAG dựa trên active chapter chunks,
+với Story Bible được AI tự động trích xuất và lưu snapshot trong ProjectAnalysisFacts.
+Có đầy đủ lớp bảo vệ (rate limit, sanitize, output validator,
+retry/failover, subscription quota, admin controls) và có pipeline async jobs cho phân tích nặng.

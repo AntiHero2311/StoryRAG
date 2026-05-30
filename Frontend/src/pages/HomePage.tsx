@@ -96,11 +96,10 @@ function DashboardContent({ fullName, role, onNavigate }: {
 
             {/* ── Stats Grid ── */}
             {showAuthorProjectDashboard && (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <StatCard label="Tổng Dự án"  value={projectCount.toString()}              icon={FolderOpen}    color="#6366f1" delay={0}   />
                     <StatCard label="Tổng Chương" value={stats.totalChapters.toString()}       icon={BookOpen}      color="#8b5cf6" delay={50}  />
                     <StatCard label="Phân tích"   value={stats.totalAnalysesUsed.toString()}   icon={TrendingUp}    color="#06b6d4" delay={100} />
-                    <StatCard label="AI Queries"  value={stats.totalChatMessages.toString()}   icon={MessageSquare} color="#a855f7" delay={150} />
                 </div>
             )}
 

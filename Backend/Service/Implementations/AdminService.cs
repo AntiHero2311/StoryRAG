@@ -81,8 +81,8 @@ namespace Service.Implementations
             var totalProjects = await _context.Projects.CountAsync(p => !p.IsDeleted);
             var totalChapters = await _context.Chapters.CountAsync(c => !c.IsDeleted);
             var totalWordCount = await _context.Chapters.Where(c => !c.IsDeleted).SumAsync(c => (long)c.WordCount);
-            var totalCharacters = await _context.CharacterEntries.CountAsync();
-            var totalWorldbuildingEntries = await _context.WorldbuildingEntries.CountAsync();
+            var totalCharacters = await _context.ReportCharacterEntries.CountAsync();
+            var totalWorldbuildingEntries = await _context.ReportWorldbuildingEntries.CountAsync();
 
             var totalAiTokens = await _context.ChatMessages.SumAsync(m => (long)m.TotalTokens);
             var totalAiChatMessages = await _context.ChatMessages.CountAsync();

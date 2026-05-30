@@ -105,22 +105,34 @@ namespace Service.Implementations
                 .ToListAsync();
 
             var topChunks = await _context.ChapterChunks
+                .Include(c => c.Version)
+                .ThenInclude(v => v.Chapter)
                 .Where(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId))
                 .OrderBy(c => c.Embedding!.CosineDistance(queryVector))
                 .Take(contextProfile.ChunkTopK)
                 .ToListAsync();
 
-            var topWorldbuilding = await _context.WorldbuildingEntries
-                .Where(w => w.ProjectId == projectId && w.Embedding != null)
-                .OrderBy(w => w.Embedding!.CosineDistance(queryVector))
-                .Take(contextProfile.WorldbuildingTopK)
-                .ToListAsync();
+            // Find the latest completed report for this project to get the Story Bible snapshot
+            var latestReport = await _context.ProjectReports
+                .Where(r => r.ProjectId == projectId && r.Status == "Completed")
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync();
 
-            var topCharacters = await _context.CharacterEntries
-                .Where(c => c.ProjectId == projectId && c.Embedding != null)
-                .OrderBy(c => c.Embedding!.CosineDistance(queryVector))
-                .Take(contextProfile.CharacterTopK)
-                .ToListAsync();
+            List<ReportWorldbuildingEntry> topWorldbuilding = new();
+            List<ReportCharacterEntry> topCharacters = new();
+
+            if (latestReport != null)
+            {
+                topWorldbuilding = await _context.ReportWorldbuildingEntries
+                    .Where(w => w.ProjectReportId == latestReport.Id)
+                    .Take(contextProfile.WorldbuildingTopK)
+                    .ToListAsync();
+
+                topCharacters = await _context.ReportCharacterEntries
+                    .Where(c => c.ProjectReportId == latestReport.Id)
+                    .Take(contextProfile.CharacterTopK)
+                    .ToListAsync();
+            }
 
             if (topChunks.Count == 0 && topWorldbuilding.Count == 0 && topCharacters.Count == 0)
                 throw new InvalidOperationException("Chưa có nội dung đủ để chat trong dự án này.");
@@ -137,9 +149,19 @@ namespace Service.Implementations
                 : null;
 
             var contextTexts = topChunks
-                .Select(c => TruncateForContext(
-                    EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek),
-                    contextProfile.MaxChunkChars))
+                .Select(c => {
+                    var plain = TruncateForContext(
+                        EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek),
+                        contextProfile.MaxChunkChars);
+                    
+                    var chNum = c.Version?.Chapter?.ChapterNumber;
+                    var chTitle = c.Version?.Chapter?.Title;
+                    var locationStr = chNum.HasValue
+                        ? (string.IsNullOrWhiteSpace(chTitle) ? $"Chương {chNum.Value}" : $"Chương {chNum.Value}: {chTitle}")
+                        : "Không rõ chương";
+
+                    return $"[Vị trí: {locationStr}]\n{plain}";
+                })
                 .ToList();
 
             var worldbuildingTexts = topWorldbuilding
@@ -377,6 +399,7 @@ namespace Service.Implementations
 
                 Hướng dẫn:
                 - Trả lời dựa trên nội dung được cung cấp trong <story_context>.
+                - Khi trích dẫn hoặc nhắc đến các tình tiết, nhân vật hay sự kiện, hãy chỉ rõ chương nào (dựa trên nhãn '[Vị trí: Chương X]' được cung cấp ở đầu mỗi đoạn truyện tương ứng) để tác giả dễ dàng tra cứu. Tuyệt đối KHÔNG sử dụng các thuật ngữ kỹ thuật hệ thống như 'chunk', 'chunk_ord' hay 'đoạn trích X' trong phản hồi dành cho tác giả.
                 - Được phép suy luận và tổng hợp thông tin từ các đoạn để đưa ra câu trả lời hợp lý.
                 - Nếu thực sự không có thông tin liên quan trong context, hãy nói rõ "Nội dung được cung cấp chưa đề cập đến thông tin này."
                 - Trả lời bằng tiếng Việt, súc tích và chính xác.

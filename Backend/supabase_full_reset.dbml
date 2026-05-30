@@ -1,6 +1,6 @@
 Project StoryRAG {
   database_type: "PostgreSQL"
-  Note: "Generated from Backend/supabase_full_reset.sql"
+  Note: "Generated from Backend/supabase_full_reset.sql — Story Bible manual tables removed (v1.5)"
 }
 
 Table __EFMigrationsHistory {
@@ -157,74 +157,13 @@ Table ProjectAnalysisJobs {
   UpdatedAt timestamptz
 }
 
-Table WorldbuildingEntries {
-  Id uuid [pk]
-  ProjectId uuid
-  Title text
-  Content text
-  Category varchar(50)
-  Embedding vector(768)
-  CreatedAt timestamptz
-  UpdatedAt timestamptz
-}
-
-Table CharacterEntries {
-  Id uuid [pk]
-  ProjectId uuid
-  Name text
-  Role varchar(50)
-  Description text
-  Background text
-  Notes text
-  Embedding vector(768)
-  CreatedAt timestamptz
-  UpdatedAt timestamptz
-}
-
-Table StyleGuideEntries {
-  Id uuid [pk]
-  ProjectId uuid
-  Aspect varchar(50)
-  Content text
-  Embedding vector(768)
-  CreatedAt timestamptz
-  UpdatedAt timestamptz
-}
-
-Table ThemeEntries {
-  Id uuid [pk]
-  ProjectId uuid
-  Title text
-  Description text
-  Notes text
-  Embedding vector(768)
-  CreatedAt timestamptz
-  UpdatedAt timestamptz
-}
-
-Table PlotNoteEntries {
-  Id uuid [pk]
-  ProjectId uuid
-  Type varchar(50)
-  Title text
-  Content text
-  Embedding vector(768)
-  CreatedAt timestamptz
-  UpdatedAt timestamptz
-}
-
-Table TimelineEvents {
-  Id uuid [pk]
-  ProjectId uuid
-  Category varchar(50)
-  Title text
-  Description text
-  TimeLabel varchar(100)
-  SortOrder int
-  Importance varchar(20)
-  CreatedAt timestamptz
-  UpdatedAt timestamptz
-}
+// [REMOVED] Story Bible manual-entry tables have been deleted:
+// WorldbuildingEntries, CharacterEntries, StyleGuideEntries,
+// ThemeEntries, PlotNoteEntries, TimelineEvents
+//
+// Story Bible data is now auto-extracted by AI during analysis
+// and stored as snapshots in ProjectReports / ProjectAnalysisFacts.
+// Migration: 20260529000000_RemoveManualStoryBibleTables
 
 Table ChatMessages {
   Id uuid [pk]
@@ -360,12 +299,7 @@ Ref: ProjectReports.UserId > Users.Id
 Ref: ProjectAnalysisJobs.ProjectId > Projects.Id
 Ref: ProjectAnalysisJobs.UserId > Users.Id
 Ref: ProjectAnalysisJobs.ReportId > ProjectReports.Id
-Ref: WorldbuildingEntries.ProjectId > Projects.Id
-Ref: CharacterEntries.ProjectId > Projects.Id
-Ref: StyleGuideEntries.ProjectId > Projects.Id
-Ref: ThemeEntries.ProjectId > Projects.Id
-Ref: PlotNoteEntries.ProjectId > Projects.Id
-Ref: TimelineEvents.ProjectId > Projects.Id
+// Refs for removed Story Bible tables have been deleted.
 Ref: ChatMessages.ProjectId > Projects.Id
 Ref: ChatMessages.UserId > Users.Id
 Ref: RewriteHistories.ProjectId > Projects.Id

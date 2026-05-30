@@ -18,6 +18,7 @@ import BugReportModal from './BugReportModal';
 interface TopbarProps {
     fullName: string;
     role: string;
+    userId: string;
     pageTitle?: string;
     onLogout: () => void;
     onSettings?: () => void;
@@ -58,11 +59,10 @@ function getNotificationDot(type: AppNotificationItem['type']) {
     return '#60a5fa';
 }
 
-const BUG_FEEDBACK_SEEN_KEY = 'storyrag:bug-feedback-seen-v1';
-
-function getSeenBugFeedbackMap(): Record<string, string> {
+function getSeenBugFeedbackMap(userId: string): Record<string, string> {
     try {
-        const raw = localStorage.getItem(BUG_FEEDBACK_SEEN_KEY);
+        const key = `storyrag:bug-feedback-seen-v1:${userId}`;
+        const raw = localStorage.getItem(key);
         if (!raw) return {};
         const parsed = JSON.parse(raw) as Record<string, string>;
         if (!parsed || typeof parsed !== 'object') return {};
@@ -72,8 +72,9 @@ function getSeenBugFeedbackMap(): Record<string, string> {
     }
 }
 
-function saveSeenBugFeedbackMap(data: Record<string, string>) {
-    localStorage.setItem(BUG_FEEDBACK_SEEN_KEY, JSON.stringify(data));
+function saveSeenBugFeedbackMap(userId: string, data: Record<string, string>) {
+    const key = `storyrag:bug-feedback-seen-v1:${userId}`;
+    localStorage.setItem(key, JSON.stringify(data));
 }
 
 function getBugStatusLabel(status: BugReportResponse['status']) {
@@ -89,7 +90,7 @@ function getBugStatusLabel(status: BugReportResponse['status']) {
 
 
 // ── Component ──────────────────────────────────────────────────────────────────
-export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings }: TopbarProps) {
+export default function Topbar({ fullName, role, userId, pageTitle, onLogout, onSettings }: TopbarProps) {
     const navigate = useNavigate();
     const [userOpen, setUserOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
@@ -155,7 +156,7 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
     }, []);
 
     useEffect(() => {
-        if (role !== 'Author') return;
+        if (role !== 'Author' || !userId) return;
 
         let disposed = false;
 
@@ -164,7 +165,7 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                 const reports = await bugReportService.getMy();
                 if (disposed) return;
 
-                const seenMap = getSeenBugFeedbackMap();
+                const seenMap = getSeenBugFeedbackMap(userId);
                 let hasSeenUpdates = false;
                 const existingTags = new Set(appNotificationService.getAll().map(n => n.tag).filter(Boolean));
 
@@ -196,7 +197,7 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                 }
 
                 if (hasSeenUpdates) {
-                    saveSeenBugFeedbackMap(seenMap);
+                    saveSeenBugFeedbackMap(userId, seenMap);
                 }
             } catch {
                 // Không làm gián đoạn Topbar khi không tải được phản hồi.
@@ -210,7 +211,7 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
             disposed = true;
             window.clearInterval(intervalId);
         };
-    }, [role]);
+    }, [role, userId]);
 
     const handleNotificationClick = async (item: AppNotificationItem) => {
         if (item.isRead || !item.id.startsWith('server:')) return;

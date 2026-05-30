@@ -27,6 +27,7 @@ export default function MainLayout({ children, pageTitle, onSettings }: MainLayo
 
     const handleLogout = () => {
         localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
         navigate('/login');
     };
 
@@ -53,6 +54,7 @@ export default function MainLayout({ children, pageTitle, onSettings }: MainLayo
                 <Topbar
                     fullName={userInfo.fullName}
                     role={userInfo.role}
+                    userId={userInfo.userId}
                     pageTitle={pageTitle}
                     onLogout={handleLogout}
                     onSettings={onSettings}

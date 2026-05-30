@@ -41,6 +41,65 @@ export interface StoryWarning {
     detail: string;
 }
 
+export interface CharacterRelationshipItem {
+    targetName: string;
+    type: string;
+    description: string;
+}
+
+export interface WorldSettingItem {
+    title: string;
+    category: string;
+    description: string;
+    importance: string;
+    sourceChapters: number[];
+}
+
+export interface CharacterItem {
+    name: string;
+    role: string;
+    description: string;
+    background: string;
+    motivation?: string;
+    traits: string[];
+    relationships: CharacterRelationshipItem[];
+    firstAppearance: number;
+}
+
+export interface TimelineEventItem {
+    title: string;
+    category: string;
+    timeLabel: string;
+    description: string;
+    importance: string;
+    sortOrder: number;
+}
+
+export interface ThemeItem {
+    title: string;
+    description: string;
+    evidence: string;
+}
+
+export interface ContentAnalysisResult {
+    worldSettings: WorldSettingItem[];
+    characters: CharacterItem[];
+    timelineEvents: TimelineEventItem[];
+    themes: ThemeItem[];
+    analysisNote: string;
+}
+
+export interface EmotionPacingResult {
+    pacingPoints: PacingPoint[];
+    emotionPoints: EmotionPoint[];
+    characterFrequencies: CharacterFrequency[];
+    characterPresence: CharacterPresenceSeries[];
+    characterRelationships: CharacterRelationshipEdge[];
+    insights: string[];
+    overallPacingProfile: string;
+    dominantEmotionProfile: string;
+}
+
 export interface ProjectReportResponse {
     id: string;
     projectId: string;
@@ -53,6 +112,8 @@ export interface ProjectReportResponse {
     projectVersionHash: string;
     groups: GroupResult[];
     warnings: StoryWarning[];
+    contentAnalysis?: ContentAnalysisResult;
+    emotionPacing?: EmotionPacingResult;
     createdAt: string;
 }
 
@@ -127,6 +188,15 @@ export interface NarrativeChartsResponse {
     segmentTexts: string[];
 }
 
+export interface ProjectReportSnapshotItem {
+    id: string;
+    projectReportId: string;
+    chapterNumber: number;
+    title: string;
+    content: string;
+    wordCount: number;
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 export const reportService = {
     getActiveAnalyzeJob: (projectId?: string) => {
@@ -176,6 +246,9 @@ export const reportService = {
         api.get<NarrativeChartsResponse>(`/ai/${projectId}/narrative/charts`, {
             params: chapterId ? { chapterId } : {},
         }).then(r => r.data),
+
+    getReportSnapshots: (projectId: string, reportId: string) =>
+        api.get<ProjectReportSnapshotItem[]>(`/ai/${projectId}/reports/${reportId}/snapshots`).then(r => r.data),
 
     exportReportPdf: async (projectId: string, reportId: string): Promise<void> => {
         const res = await api.get(`/ai/${projectId}/reports/${reportId}/export/pdf`, {

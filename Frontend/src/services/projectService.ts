@@ -64,11 +64,26 @@ export const projectService = {
         api.delete(`/projects/${id}`).then(r => r.data),
 
     exportProject: async (id: string, title: string) => {
-        const response = await api.get(`/projects/${id}/export`, { responseType: 'blob' });
-        const url = URL.createObjectURL(new Blob([response.data], { type: 'text/plain;charset=utf-8' }));
+        const response = await api.get(`/manuscript/${id}/export`, {
+            params: { format: 'docx' },
+            responseType: 'blob',
+        });
+        const url = URL.createObjectURL(new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${title}.txt`;
+
+        // Trích xuất tên file từ Content-Disposition header nếu có
+        const disposition = response.headers['content-disposition'];
+        let downloadName = `${title}.docx`;
+        if (disposition && disposition.indexOf('attachment') !== -1) {
+            const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+            const matches = filenameRegex.exec(disposition);
+            if (matches != null && matches[1]) { 
+                downloadName = matches[1].replace(/['"]/g, '');
+            }
+        }
+
+        a.download = downloadName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

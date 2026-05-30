@@ -39,6 +39,7 @@ namespace Service.Implementations
         private readonly INotificationService _notificationService;
         private readonly IEmbeddingService _embeddingService;
         private readonly ILogger<ProjectAnalysisJobService> _logger;
+        private readonly SemaphoreSlim _progressLock = new(1, 1);
 
         public ProjectAnalysisJobService(
             AppDbContext context,
@@ -71,20 +72,19 @@ namespace Service.Implementations
             var currentSnapshot = await BuildProjectSnapshotAsync(projectId, cancellationToken);
             var currentProjectVersionHash = currentSnapshot.ProjectVersionHash;
 
-            // Chặn enqueue mới nếu đang có report chờ Staff duyệt cho cùng project
-            var pendingStaffReport = await _context.ProjectReports
+            // Chặn enqueue mới nếu báo cáo mới nhất đang được staff biên tập nháp
+            var latestReportForBlock = await _context.ProjectReports
                 .AsNoTracking()
-                .AnyAsync(r =>
-                    r.ProjectId == projectId &&
-                    r.UserId == userId &&
-                    (r.ReviewStatus == "PendingStaffReview" || r.ReviewStatus == "StaffReviewing"),
-                    cancellationToken);
+                .Where(r => r.ProjectId == projectId && r.UserId == userId)
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
 
-            if (pendingStaffReport)
+            if (latestReportForBlock != null && 
+                (latestReportForBlock.ReviewStatus == "PendingStaffReview" || latestReportForBlock.ReviewStatus == "StaffReviewing"))
             {
                 throw new InvalidOperationException(
-                    "Báo cáo phân tích đang được đội ngũ Staff kiểm duyệt. " +
-                    "Vui lòng chờ Staff hoàn tất duyệt trước khi yêu cầu phân tích mới.");
+                    "Báo cáo phân tích mới nhất đang được đội ngũ Staff xử lý. " +
+                    "Vui lòng chờ Staff hoàn tất trước khi yêu cầu phân tích mới.");
             }
 
             var activeJob = await _context.ProjectAnalysisJobs
@@ -377,33 +377,42 @@ namespace Service.Implementations
                     job.UserId,
                     async (progress, message, token) =>
                     {
-                        await ThrowIfJobCancelledAsync(jobId, token);
-
-                        var safeProgress = Math.Clamp(progress, 20, 85);
-                        if (job.Progress == safeProgress)
-                            return;
-
-                        job.Stage = NormalizeStage(message);
-                        job.Progress = safeProgress;
-                        job.UpdatedAt = DateTime.UtcNow;
-                        
+                        await _progressLock.WaitAsync(token);
                         try
                         {
-                            await _context.SaveChangesAsync(token);
-                        }
-                        catch (DbUpdateConcurrencyException)
-                        {
-                            // Reload job and retry if concurrency issue
-                            await _context.Entry(job).ReloadAsync(token);
-                            job.Stage = NormalizeStage(message);
+                            await ThrowIfJobCancelledAsync(jobId, token);
+
+                            var safeProgress = Math.Clamp(progress, 20, 85);
+                            var normalizedStage = NormalizeStage(message);
+                            if (job.Progress == safeProgress && job.Stage == normalizedStage)
+                                return;
+
+                            job.Stage = normalizedStage;
                             job.Progress = safeProgress;
                             job.UpdatedAt = DateTime.UtcNow;
-                            await _context.SaveChangesAsync(token);
+                            
+                            try
+                            {
+                                await _context.SaveChangesAsync(token);
+                            }
+                            catch (DbUpdateConcurrencyException)
+                            {
+                                // Reload job and retry if concurrency issue
+                                await _context.Entry(job).ReloadAsync(token);
+                                job.Stage = normalizedStage;
+                                job.Progress = safeProgress;
+                                job.UpdatedAt = DateTime.UtcNow;
+                                await _context.SaveChangesAsync(token);
+                            }
+                            catch (DbUpdateException ex)
+                            {
+                                // Log but don't throw - progress updates are not critical
+                                _logger.LogWarning(ex, "Failed to update progress for job {JobId}. Continuing anyway.", jobId);
+                            }
                         }
-                        catch (DbUpdateException ex)
+                        finally
                         {
-                            // Log but don't throw - progress updates are not critical
-                            _logger.LogWarning(ex, "Failed to update progress for job {JobId}. Continuing anyway.", jobId);
+                            _progressLock.Release();
                         }
                     },
                     processingToken,
@@ -492,13 +501,25 @@ namespace Service.Implementations
                 await _context.SaveChangesAsync(CancellationToken.None);
 
                 var projectTitle = await GetProjectTitleAsync(job.ProjectId, CancellationToken.None);
-                var failureMessage = $"Job phân tích cho dự án \"{projectTitle}\" thất bại. Mã job: {job.Id}. Lý do: {Truncate(ex.Message, 300)}";
+                
+                // Gửi thông báo chung chung, không chứa mã lỗi hoặc chi tiết exception cho Tác giả (Author)
+                var failureMessageAuthor = $"Job phân tích cho dự án \"{projectTitle}\" thất bại. Vui lòng thử lại.";
                 await _notificationService.CreateForRolesAsync(
-                    ["Author", "Staff", "Admin"],
+                    ["Author"],
                     "error",
                     "Phân tích AI gặp lỗi",
-                    failureMessage,
+                    failureMessageAuthor,
                     tag: $"analysis-failed:{job.Id}",
+                    cancellationToken: CancellationToken.None);
+
+                // Gửi thông báo chi tiết đầy đủ exception cho Ban kiểm duyệt (Staff, Admin) để phục vụ debug và kiểm duyệt
+                var failureMessageStaff = $"Job phân tích cho dự án \"{projectTitle}\" thất bại. Mã job: {job.Id}. Lý do: {Truncate(ex.Message, 300)}";
+                await _notificationService.CreateForRolesAsync(
+                    ["Staff", "Admin"],
+                    "error",
+                    "Phân tích AI gặp lỗi (Kỹ thuật)",
+                    failureMessageStaff,
+                    tag: $"analysis-failed-tech:{job.Id}",
                     cancellationToken: CancellationToken.None);
             }
             finally
@@ -715,6 +736,13 @@ namespace Service.Implementations
 
         private static ProjectAnalysisJobResponse ToResponse(ProjectAnalysisJob job, bool isExistingJob = false)
         {
+            // Bảo vệ an toàn thông tin: Chỉ trả về thông báo thất bại chung cho người dùng, ẩn các chi tiết kỹ thuật/exception.
+            var displayErrorMessage = job.ErrorMessage;
+            if (job.Status == StatusFailed && !string.IsNullOrWhiteSpace(displayErrorMessage))
+            {
+                displayErrorMessage = "Phân tích thất bại. Vui lòng thử lại.";
+            }
+
             return new ProjectAnalysisJobResponse
             {
                 JobId = job.Id,
@@ -723,7 +751,7 @@ namespace Service.Implementations
                 Stage = job.Stage,
                 Progress = job.Progress,
                 ReportId = job.ReportId,
-                ErrorMessage = job.ErrorMessage,
+                ErrorMessage = displayErrorMessage,
                 IsExistingJob = isExistingJob,
                 ProjectVersionHash = job.ProjectVersionHash,
                 CreatedAt = job.CreatedAt,

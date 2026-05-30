@@ -29,6 +29,11 @@ namespace Repository.Data
         // AI Reports
         public DbSet<ProjectReport> ProjectReports { get; set; }
         public DbSet<ReportItem> ReportItems { get; set; }
+        public DbSet<ProjectReportSnapshot> ProjectReportSnapshots { get; set; }
+        public DbSet<ReportCharacterEntry> ReportCharacterEntries { get; set; }
+        public DbSet<ReportWorldbuildingEntry> ReportWorldbuildingEntries { get; set; }
+        public DbSet<ReportThemeEntry> ReportThemeEntries { get; set; }
+        public DbSet<ReportTimelineEvent> ReportTimelineEvents { get; set; }
         public DbSet<ProjectAnalysisJob> ProjectAnalysisJobs { get; set; }
         public DbSet<ProjectAnalysisFact> ProjectAnalysisFacts { get; set; }
 
@@ -42,14 +47,7 @@ namespace Repository.Data
         // User Settings
         public DbSet<UserSettings> UserSettings { get; set; }
 
-        // Worldbuilding & Characters & Other Notes
-        public DbSet<WorldbuildingEntry> WorldbuildingEntries { get; set; }
-        public DbSet<CharacterEntry> CharacterEntries { get; set; }
-        public DbSet<CharacterRelationship> CharacterRelationships { get; set; }
-        public DbSet<StyleGuideEntry> StyleGuideEntries { get; set; }
-        public DbSet<ThemeEntry> ThemeEntries { get; set; }
-        public DbSet<PlotNoteEntry> PlotNoteEntries { get; set; }
-        public DbSet<TimelineEvent> TimelineEvents { get; set; }
+
 
         // Bug Reports
         public DbSet<BugReport> BugReports { get; set; }
@@ -337,6 +335,88 @@ namespace Repository.Data
                       .OnDelete(DeleteBehavior.Cascade);
             });
 
+            // ── ProjectReportSnapshot ─────────────────────────────────────────────
+            modelBuilder.Entity<ProjectReportSnapshot>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.ChapterNumber).IsRequired();
+                entity.Property(e => e.Title).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.Content).IsRequired();
+                entity.Property(e => e.WordCount).HasDefaultValue(0);
+
+                entity.HasOne(s => s.ProjectReport)
+                      .WithMany(r => r.Snapshots)
+                      .HasForeignKey(s => s.ProjectReportId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── ReportCharacterEntry ──────────────────────────────────────────────
+            modelBuilder.Entity<ReportCharacterEntry>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Name).IsRequired();
+                entity.Property(e => e.Role).IsRequired().HasMaxLength(50).HasDefaultValue("Supporting");
+                entity.Property(e => e.Description).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(e => e.ProjectReport)
+                      .WithMany(r => r.CharacterEntries)
+                      .HasForeignKey(e => e.ProjectReportId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── ReportWorldbuildingEntry ──────────────────────────────────────────
+            modelBuilder.Entity<ReportWorldbuildingEntry>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Title).IsRequired();
+                entity.Property(e => e.Content).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.Category).IsRequired().HasMaxLength(50).HasDefaultValue("Other");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(e => e.ProjectReport)
+                      .WithMany(r => r.WorldbuildingEntries)
+                      .HasForeignKey(e => e.ProjectReportId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── ReportThemeEntry ──────────────────────────────────────────────────
+            modelBuilder.Entity<ReportThemeEntry>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Title).IsRequired();
+                entity.Property(e => e.Description).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(e => e.ProjectReport)
+                      .WithMany(r => r.ThemeEntries)
+                      .HasForeignKey(e => e.ProjectReportId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── ReportTimelineEvent ───────────────────────────────────────────────
+            modelBuilder.Entity<ReportTimelineEvent>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Category).IsRequired().HasMaxLength(50).HasDefaultValue("Story");
+                entity.Property(e => e.Title).IsRequired();
+                entity.Property(e => e.Description).IsRequired().HasDefaultValue(string.Empty);
+                entity.Property(e => e.TimeLabel);
+                entity.Property(e => e.SortOrder).HasDefaultValue(0);
+                entity.Property(e => e.Importance).IsRequired().HasMaxLength(20).HasDefaultValue("Normal");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(e => e.ProjectReport)
+                      .WithMany(r => r.TimelineEvents)
+                      .HasForeignKey(e => e.ProjectReportId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
             // ── ReportItem (rubric row ↔ chunk evidence, JSONB list of ints) ──────
             modelBuilder.Entity<ReportItem>(entity =>
             {
@@ -495,22 +575,7 @@ namespace Repository.Data
                       .OnDelete(DeleteBehavior.Cascade);
             });
 
-            // ── WorldbuildingEntry ────────────────────────────────────────────────
-            modelBuilder.Entity<WorldbuildingEntry>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.Title).IsRequired();
-                entity.Property(e => e.Content).IsRequired().HasDefaultValue(string.Empty);
-                entity.Property(e => e.Category).IsRequired().HasMaxLength(50).HasDefaultValue("Other");
-                entity.Property(e => e.Embedding).HasColumnType("vector(768)");
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
 
-                entity.HasOne(w => w.Project)
-                      .WithMany()
-                      .HasForeignKey(w => w.ProjectId)
-                      .OnDelete(DeleteBehavior.Cascade);
-            });
 
             // ── ChatMessage ───────────────────────────────────────────────────────
             modelBuilder.Entity<AiChatMessage>(entity =>
@@ -537,141 +602,7 @@ namespace Repository.Data
                       .OnDelete(DeleteBehavior.Cascade);
             });
 
-            // ── CharacterEntry ────────────────────────────────────────────────────
-            modelBuilder.Entity<CharacterEntry>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.Name).IsRequired();
-                entity.Property(e => e.Role).IsRequired().HasMaxLength(50).HasDefaultValue("Supporting");
-                entity.Property(e => e.Description).IsRequired().HasDefaultValue(string.Empty);
-                entity.Property(e => e.Embedding).HasColumnType("vector(768)");
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
 
-                entity.HasOne(c => c.Project)
-                      .WithMany()
-                      .HasForeignKey(c => c.ProjectId)
-                      .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            // ── CharacterRelationship ────────────────────────────────────────────
-            modelBuilder.Entity<CharacterRelationship>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.RelationType).IsRequired().HasMaxLength(50).HasDefaultValue("Other");
-                entity.Property(e => e.StrengthScore).HasDefaultValue(0f);
-                // JSONB list-of-ints (same approach as ReportItem.EvidenceChunkIds)
-                var jsonOpts = (JsonSerializerOptions?)null;
-                var relChunkIdsConverter = new ValueConverter<List<int>?, string?>(
-                    v => v == null ? null : JsonSerializer.Serialize(v, jsonOpts),
-                    v => string.IsNullOrWhiteSpace(v) ? null : JsonSerializer.Deserialize<List<int>>(v, jsonOpts));
-
-                var relChunkIdsComparer = new ValueComparer<List<int>?>(
-                    (a, b) => (a == null && b == null) || (a != null && b != null && a.SequenceEqual(b)),
-                    v => v == null ? 0 : v.Aggregate(0, (h, x) => HashCode.Combine(h, x)),
-                    v => v == null ? null : v.ToList());
-
-                entity.Property(e => e.EvidenceChunkIds)
-                      .HasColumnType("jsonb")
-                      .HasConversion(relChunkIdsConverter)
-                      .Metadata.SetValueComparer(relChunkIdsComparer);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
-
-                entity.HasIndex(e => new { e.ProjectId, e.CharAId, e.CharBId }).IsUnique();
-                entity.HasIndex(e => e.ProjectId);
-
-                entity.ToTable(t =>
-                {
-                    t.HasCheckConstraint("CK_CharacterRelationships_CharOrder", "\"CharAId\" < \"CharBId\"");
-                });
-                entity.ToTable("character_relationships");
-
-                entity.HasOne(e => e.Project)
-                      .WithMany()
-                      .HasForeignKey(e => e.ProjectId)
-                      .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasOne(e => e.CharA)
-                      .WithMany()
-                      .HasForeignKey(e => e.CharAId)
-                      .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasOne(e => e.CharB)
-                      .WithMany()
-                      .HasForeignKey(e => e.CharBId)
-                      .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            // ── StyleGuideEntry ───────────────────────────────────────────────────
-            modelBuilder.Entity<StyleGuideEntry>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.Aspect).IsRequired().HasMaxLength(50).HasDefaultValue("Other");
-                entity.Property(e => e.Content).IsRequired().HasDefaultValue(string.Empty);
-                entity.Property(e => e.Embedding).HasColumnType("vector(768)");
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
-
-                entity.HasOne(s => s.Project)
-                      .WithMany()
-                      .HasForeignKey(s => s.ProjectId)
-                      .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            // ── ThemeEntry ────────────────────────────────────────────────────────
-            modelBuilder.Entity<ThemeEntry>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.Title).IsRequired();
-                entity.Property(e => e.Description).IsRequired().HasDefaultValue(string.Empty);
-                entity.Property(e => e.Embedding).HasColumnType("vector(768)");
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
-
-                entity.HasOne(t => t.Project)
-                      .WithMany()
-                      .HasForeignKey(t => t.ProjectId)
-                      .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            // ── PlotNoteEntry ─────────────────────────────────────────────────────
-            modelBuilder.Entity<PlotNoteEntry>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.Type).IsRequired().HasMaxLength(50).HasDefaultValue("Other");
-                entity.Property(e => e.Title).IsRequired();
-                entity.Property(e => e.Content).IsRequired().HasDefaultValue(string.Empty);
-                entity.Property(e => e.Embedding).HasColumnType("vector(768)");
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
-
-                entity.HasOne(p => p.Project)
-                      .WithMany()
-                      .HasForeignKey(p => p.ProjectId)
-                      .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            // ── TimelineEvent ─────────────────────────────────────────────────────
-            modelBuilder.Entity<TimelineEvent>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.Category).IsRequired().HasMaxLength(50).HasDefaultValue("Story");
-                entity.Property(e => e.Title).IsRequired();
-                entity.Property(e => e.Description).IsRequired().HasDefaultValue(string.Empty);
-                entity.Property(e => e.TimeLabel).HasMaxLength(100);
-                entity.Property(e => e.SortOrder).HasDefaultValue(0);
-                entity.Property(e => e.Importance).IsRequired().HasMaxLength(20).HasDefaultValue("Normal");
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
-
-                entity.HasIndex(e => new { e.ProjectId, e.SortOrder });
-
-                entity.HasOne(t => t.Project)
-                      .WithMany()
-                      .HasForeignKey(t => t.ProjectId)
-                      .OnDelete(DeleteBehavior.Cascade);
-            });
 
 
             // ── AiAnalysisHistory ───────────────────────────────────────────────────

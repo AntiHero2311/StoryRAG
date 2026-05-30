@@ -1,0 +1,222 @@
+# COMPLETE API SURFACE MAP - StoryRAG Project
+# Generated: 2026-03-12
+# Backend: ASP.NET Core .NET 8 | Frontend: React 19 + TypeScript
+
+## ============================================================
+## BACKEND — 8 CONTROLLERS / 55+ ENDPOINTS
+## Base URL (dev): http://localhost:5105/api
+## Base URL (prod): https://storyrag-backend.onrender.com/api
+## ============================================================
+
+### AuthController  /api/auth  [Public unless noted]
+POST   /register                      # Đăng ký tài khoản
+POST   /login                         # Đăng nhập → JWT + RefreshToken
+POST   /refresh                       # Làm mới AccessToken
+PUT    /change-password     [Auth]    # Đổi mật khẩu
+POST   /forgot-password               # Gửi email reset password
+POST   /reset-password                # Đặt mật khẩu mới (dùng token từ email)
+
+### UserController  /api/user  [Auth]
+GET    /profile                       # Xem profile
+PUT    /profile                       # Cập nhật profile
+
+### UserSettingsController  /api/settings  [Auth]
+GET    /                              # Cài đặt editor hiện tại
+PUT    /                              # Cập nhật font, font size
+
+### ProjectController  /api/projects  [Auth(Author)]
+GET    /                              # Danh sách projects của user
+GET    /stats                         # Thống kê cá nhân (projects, chapters, analysis, chat)
+GET    /{id}                          # Chi tiết project
+POST   /                              # Tạo project mới
+PUT    /{id}                          # Cập nhật project
+DELETE /{id}                          # Xóa mềm project
+GET    /{id}/export                   # Export tất cả chương ra .txt
+
+### ChapterController  /api/projects/{projectId}/chapters  [Auth]
+GET    /                              # Danh sách chương
+GET    /{chapterId}                   # Chi tiết chương + versions
+POST   /                              # Tạo chương mới
+PUT    /{chapterId}                   # Lưu nội dung chương
+PATCH  /{chapterId}/title             # Đổi tên chương
+DELETE /{chapterId}                   # Xóa chương
+POST   /{chapterId}/chunk             # Tạo chunks cho active version
+
+# Version management
+GET    /{chapterId}/versions                       # Danh sách versions
+GET    /{chapterId}/versions/{num}                 # Chi tiết version
+POST   /{chapterId}/versions                       # Tạo version mới (snapshot từ active)
+PATCH  /{chapterId}/versions/{num}/activate        # Switch sang version này
+PATCH  /{chapterId}/versions/{num}/title           # Đổi tên version
+PUT    /{chapterId}/versions/{num}/pin             # Toggle pin/unpin (ghim tránh auto-prune)
+GET    /{chapterId}/versions/{num}/content         # Lấy nội dung để diff
+DELETE /{chapterId}/versions/{num}                 # Xóa version (không áp dụng cho pinned)
+
+### AiController  /api/ai  [Auth]
+POST   /chapters/{chapterId}/embed                 # Embed active version của chương
+POST   /{projectId}/chat                           # Chat RAG (chỉ trừ token, không trừ analysis)
+GET    /{projectId}/chat/history                   # Lịch sử chat (phân trang)
+POST   /{projectId}/analyze                        # Phân tích rubric 100 điểm đồng bộ (legacy)
+POST   /{projectId}/analyze/jobs                   # Tạo job phân tích bất đồng bộ (mới)
+GET    /analyze/jobs/active                        # Job phân tích đang chạy của user
+GET    /{projectId}/analyze/jobs/latest            # Job phân tích gần nhất của project
+GET    /{projectId}/analyze/jobs/{jobId}           # Trạng thái job phân tích (progress, stage)
+GET    /{projectId}/analyze/jobs/{jobId}/result    # Lấy kết quả báo cáo phân tích từ job hoàn tất
+POST   /{projectId}/analyze/jobs/{jobId}/cancel    # Hủy job đang queued/processing sau ~5 phút
+POST   /{projectId}/scenes                         # Phân tích phân cảnh và trích dẫn quote
+POST   /{projectId}/cliffhanger                    # Phân tích cliffhanger và cấu trúc 3 hồi
+GET    /{projectId}/analysis/history               # Lịch sử phân tích cảnh/cliffhanger
+GET    /{projectId}/reports/latest                 # Báo cáo phân tích mới nhất của project
+GET    /{projectId}/reports                        # Toàn bộ lịch sử báo cáo của project
+GET    /{projectId}/reports/{reportId}             # Báo cáo cụ thể theo ID
+GET    /{projectId}/reports/{reportId}/export/pdf  # Xuất PDF báo cáo phân tích cho gói trả phí
+GET    /{projectId}/narrative/charts               # Dữ liệu biểu đồ pacing/emotion (đã bỏ character)
+POST   /{projectId}/rewrite                        # AI Rewrite đoạn văn
+GET    /{projectId}/rewrite/history                # Lịch sử rewrite (phân trang)
+
+// [REMOVED] WorldbuildingController, CharacterController, StoryBibleAuxiliaryController, TimelineController
+// (đã xóa trong migration RemoveManualStoryBibleTables - tháng 5/2026)
+// Story Bible hiện được AI tự động trích xuất vào ProjectAnalysisFacts.
+
+### ManuscriptController  /api/manuscript  [Auth]
+POST   /{projectId}/upload            # Upload bản thảo (docx/txt) tự tách chương
+GET    /{projectId}/export            # Export toàn bộ truyện (docx/txt/pdf)
+GET    /{projectId}/chapters/{chapterId}/export # Export chương đơn lẻ
+
+### VNPayPaymentController  /api/payment  [Auth]
+POST   /create                        # Tạo giao dịch thanh toán mới
+PATCH  /{paymentId}/status            # Cập nhật trạng thái thủ công
+PUT    /{paymentId}/mark-completed   # Đánh dấu thanh toán hoàn tất thành công
+POST   /{paymentId}/refund            # Hoàn tiền giao dịch
+POST   /vnpay/create-url              # Sinh URL redirect sang cổng VNPay
+GET    /vnpay/ipn                     # IPN Callback từ VNPay (Public webhook)
+GET    /vnpay/order/{txnRef}          # Kiểm tra trạng thái đơn hàng VNPay
+GET    /history                       # Lịch sử giao dịch thanh toán của user
+GET    /{paymentId}                   # Chi tiết giao dịch thanh toán
+
+### BugReportController  /api/bug-reports
+POST   /                [Auth]                     # Gửi báo cáo lỗi
+GET    /my              [Auth]                     # Báo cáo của chính mình
+GET    /                [Auth(Staff,Admin)]        # Tất cả báo cáo (filter by status)
+GET    /stats           [Auth(Staff,Admin)]        # Thống kê bug reports
+PUT    /{id}            [Auth(Staff,Admin)]        # Cập nhật status + staff note
+DELETE /{id}            [Auth(Admin)]              # Xóa báo cáo
+
+### StaffController  /api/staff  [Auth(Staff,Admin)]
+GET    /manuscripts/flagged           # Danh sách bản thảo bị cờ cảnh báo (ANTI_STATE, SEXUAL_CONTENT...)
+GET/POST /feedback                    # Danh sách / Tạo phản hồi của Staff cho tác giả
+PUT/DELETE /feedback/{feedbackId}     # Cập nhật / Xóa phản hồi chuyên môn
+POST   /feedback/{feedbackId}/respond # Tác giả tương tác phản hồi (like/dislike/reply)
+GET/POST/PUT/DELETE /faqs/admin       # CRUD FAQs trong trang trợ giúp
+GET/POST/PUT/DELETE /writing-tips/admin # CRUD mẹo viết truyện (Writing Tips)
+GET    /analyses/pending              # Danh sách các report đang chờ Staff review duyệt phát hành
+GET    /analyses/reviews              # Xem toàn bộ danh sách đánh giá từ Staff
+GET    /analyses/{reportId}           # Chi tiết báo cáo phân tích AI để Staff hậu kiểm
+GET    /analyses/{reportId}/review    # Lấy thông tin Staff review cụ thể
+GET    /analyses/{reportId}/story     # Lấy nội dung bản thảo nguyên bản (read-only) để Staff đối chiếu
+POST   /analyses/{reportId}/review    # Phê duyệt, điều chỉnh hoặc yêu cầu AI chạy lại
+PATCH  /analyses/{reportId}/edit      # Staff trực tiếp chỉnh sửa văn bản báo cáo AI trước khi gửi tác giả
+GET    /analyses/jobs                 # Quản lý danh sách jobs đang chạy của hệ thống
+POST   /analyses/jobs/{jobId}/rerun   # Yêu cầu chạy lại một job phân tích
+
+### AdminConfigController  /api/admin/rag-config  [Auth(Admin)]
+GET    /                              # Lấy cấu hình RAG/Gemini hiện hành (cổng kiểm soát)
+PUT    /                              # Cập nhật cấu hình cổng kiểm soát (limits, chunk, batch sizes)
+
+### AdminController  /api/admin  [Auth(Admin)]
+GET    /stats/overview                # Tổng quan hệ thống (users, projects, reports, revenue...)
+GET    /users/stats                   # Thống kê chi tiết users theo role
+
+### SubscriptionController  /api/subscription
+GET    /plans           [Auth]        # Danh sách gói đăng ký
+GET    /plans/{id}      [Auth]        # Chi tiết gói
+POST   /plans           [Auth(Admin)] # Tạo gói mới
+PUT    /plans/{id}      [Auth(Admin)] # Cập nhật gói
+DELETE /plans/{id}      [Auth(Admin)] # Xóa gói
+POST   /subscribe       [Auth]        # Đăng ký gói
+GET    /my              [Auth]        # Subscription hiện tại
+
+### GenreController  /api/genre
+GET    /                [Auth]        # Danh sách thể loại
+POST   /                [Auth(Admin)] # Tạo thể loại
+PUT    /{id}            [Auth(Admin)] # Cập nhật thể loại
+DELETE /{id}            [Auth(Admin)] # Xóa thể loại
+
+## ============================================================
+## FRONTEND — 16 PAGES (React 19 + TypeScript)
+## Dev: http://localhost:5173
+## ============================================================
+
+Route         Page                   Mô tả
+/             LandingPage            Trang giới thiệu
+/login        AuthPage (Login)       Đăng nhập
+/register     AuthPage (Register)    Đăng ký
+/forgot-password  ForgotPasswordPage  Yêu cầu reset qua email
+/reset-password   ResetPasswordPage   Đặt mật khẩu mới
+/home         HomePage               Dashboard cá nhân
+/projects     ProjectsPage           Danh sách dự án (export project)
+/workspace/:id WorkspacePage         Editor + AI + Version History + Import/Export
+/analysis     AnalysisPage           Phân tích AI rubric 100 điểm
+/subscription SubscriptionPage       Gói đang dùng
+/plans        PlansPage              Xem và chọn gói
+/profile      ProfilePage            Thông tin cá nhân
+/settings     SettingsPage           Cài đặt editor
+/admin        AdminDashboardPage     Quản trị user + thống kê
+/admin/subscription AdminSubscriptionPage  Quản trị gói đăng ký
+/staff        StaffDashboardPage     Xử lý bug reports
+/privacy      PrivacyPolicyPage      Chính sách bảo mật
+*             NotFoundPage           404
+
+## ============================================================
+## FRONTEND SERVICES (src/services/)
+## ============================================================
+
+adminService.ts         # /api/admin — overview stats, user stats
+aiService.ts            # /api/ai — chat, analyze, rewrite, embed, history
+api.ts                  # Axios base instance + interceptors
+authService.ts          # /api/auth — login, register, forgot/reset password
+bugReportService.ts     # /api/bug-reports — CRUD, status update
+chapterService.ts       # /api/projects/{id}/chapters — CRUD, versions, chunk, pin, diff
+editorSettingsService.ts # /api/settings — font, font size
+genreService.ts         # /api/genre — list genres
+projectService.ts       # /api/projects — CRUD, stats, export
+reportService.ts        # /api/ai/{id}/reports — fetch analysis reports
+subscriptionService.ts  # /api/subscription — plans, subscribe, my plan
+userService.ts          # /api/user — profile
+
+## ============================================================
+## KEY BUSINESS RULES & AI PIPELINE
+## ============================================================
+
+# RAG Vector Search:
+- Chỉ tìm kiếm trong các chunks thuộc ACTIVE VERSION (`Chapter.CurrentVersionId`).
+- **Story Bible:** Không còn bảng nhập thủ công. Dữ liệu Story Bible do AI tự trích xuất và lưu vào `ProjectAnalysisFacts` (snapshot model) mỗi lần phân tích.
+- TopK: Tự động điều chỉnh dựa trên cấu hình hệ thống (`rag.top_k_chat` - mặc định 5 chunks; `rag.top_k_report` - mặc định 8 chunks) và tự động ưu tiên tăng TopK cho các tài khoản gói Premium (Basic/Pro) để lấy đầy đủ ngữ cảnh.
+
+# AI Token & Analysis Job:
+- Chat RAG: Chỉ trừ token tích lũy của gói dịch vụ, KHÔNG trừ số lượt phân tích (`UsedAnalysisCount`).
+- Phân Tích Rubric (Analyze): Thực thi qua hàng đợi bất đồng bộ (`AnalysisJobQueue`), mỗi user tối đa 1 job chạy tại một thời điểm. Trừ cả token và số lần phân tích (`UsedAnalysisCount`).
+- Phân tích chạy song song 5 tiêu chí rubric mỗi đợt (`rag.rubric_batch_size = 5`) để tối ưu tốc độ mà không vượt giới hạn RPM của Gemini.
+
+# Cảnh báo Đặc biệt (Warnings):
+- AI phát hiện **6 nội dung nhạy cảm và chất lượng**:
+  1. `ANTI_STATE`           - Nội dung vi phạm chính trị pháp lý (Critical)
+  2. `SEXUAL_CONTENT`       - Nội dung người lớn/tình dục thô tục (Warning/Critical)
+  3. `PLAGIARISM_RISK`      - Nguy cơ đạo văn (Critical)
+  4. `INCOMPLETE`           - Bản thảo bị đứt đoạn, chưa hoàn thiện (Warning)
+  5. `INCONSISTENCY`        - Mâu thuẫn logic cốt truyện/nhân vật (Info/Warning)
+  6. `REPETITION`           - Trùng lặp/lặp từ nghiêm trọng (Warning)
+- Các bản thảo bị cắm cảnh báo sẽ tự động bị gắn cờ và gửi tới trang hậu kiểm của Staff (`/api/staff/manuscripts/flagged`).
+
+# Chapter Version & Pruning:
+- Tối đa 20 phiên bản cho mỗi chương. Tự động dọn dẹp (auto-prune) phiên bản cũ nhất.
+- Phiên bản được Ghim (`IsPinned = true`): Không bao giờ bị tự động dọn dẹp.
+- Chunks và vector embeddings liên quan tự động xóa cascade khi phiên bản bị dọn dẹp.
+
+# Narrative Charts (Biểu đồ kịch tính):
+- Phân tích và trực quan hóa **Nhịp độ truyện (Pacing)** và **Mạch cảm xúc (Emotion progression)**.
+- **Lưu ý:** Biểu đồ tần suất/xuất hiện nhân vật và Mạng quan hệ nhân vật đã được **lược bỏ** khỏi giao diện phân tích của tác giả để giảm độ nhiễu và làm rõ hơn lý do biến động nhịp độ.
+
+# Bảo mật mã hóa (AES-256 E2E):
+- Mỗi user sở hữu một mã khóa `DataEncryptionKey` (DEK) riêng, mã hóa bởi MasterKey.
+- Toàn bộ nội dung truyện (bản thảo, chương, version), bối cảnh thế giới, hồ sơ nhân vật, lịch sử chat và các snapshot phân tích đều được mã hóa trước khi lưu xuống PostgreSQL.
