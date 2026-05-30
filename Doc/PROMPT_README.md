@@ -1,6 +1,6 @@
 # 📋 StoryRAG — Tổng hợp Prompt AI toàn hệ thống
 
-Tài liệu này tổng hợp đầy đủ **10 prompt AI** đang vận hành trong hệ thống StoryRAG (bao gồm RAG Pipeline mới, Fallback Evaluation, AI Chat, và các tính năng AI bổ trợ).
+Tài liệu này tổng hợp đầy đủ **11 prompt AI/Flows** đang vận hành trong hệ thống StoryRAG (bao gồm RAG Pipeline mới, Fallback Evaluation, AI Chat, và các tính năng AI bổ trợ).
 
 ---
 
@@ -18,6 +18,7 @@ Tài liệu này tổng hợp đầy đủ **10 prompt AI** đang vận hành tr
 | 8 | **Relationship Extraction** | `CharacterRelationshipService` | Gemini Analyze | Phân loại mối quan hệ cụ thể giữa 2 nhân vật |
 | 9 | **Scene Breakdown** | `AiWritingService` | Gemini Chat | Phân rã văn bản chương thành các phân cảnh kịch bản |
 | 10| **Three-Act & Cliffhanger** | `AiWritingService` | Gemini Chat | Phân tích cấu trúc ba hồi và điểm nhấn cliffhanger |
+| 11| **Rich PDF Export (QuestPDF)** | `ReportExportService` | QuestPDF Flow | Xuất báo cáo PDF đầy đủ đa tab (Rubric, Story Bible, Pacing & Emotion) |
 
 ---
 
@@ -65,6 +66,12 @@ Hướng dẫn:
 - `{storyBibleContext}`: Top 2 character entries + Top 2 worldbuilding entries gần nhất từ Vector Search.
 - `{chunksContext}`: Top 3 đến 5 chapter chunks (phiên bản active).
 - **Quota**: Chỉ trừ token, không trừ lượt phân tích (`UsedAnalysisCount`).
+
+> [!NOTE]
+> **Nâng cấp Phân tích & Lưu trữ Lịch sử Chatbot (Mới nhất):**
+> Giao diện Chatbot đã được nâng cấp thành thiết kế kính mờ (glassmorphic) 2 cột cao cấp:
+> 1. **Lịch sử hội thoại động**: Các cuộc trò chuyện được lưu trữ và liên kết chặt chẽ với từng mã báo cáo (`report.id`) thông qua `sessionStorage` và `localStorage`. Khi chuyển đổi qua lại giữa các báo cáo lịch sử, Chatbot sẽ khôi phục chính xác ngữ cảnh hội thoại của báo cáo đó.
+> 2. **AI nhận diện toàn bộ báo cáo**: Thay vì chỉ nhận diện một vài phân đoạn thô, prompt đã được nâng cấp để nạp **toàn bộ nội dung báo cáo phân tích** (bao gồm điểm số chi tiết từng tiêu chí, nhận xét tổng quan, các cảnh báo đặc biệt, và toàn bộ Cẩm nang truyện/Story Bible đã trích xuất) giúp AI trả lời câu hỏi có tính bao quát, chuẩn xác cao nhất đối với tác phẩm.
 
 ---
 
@@ -243,6 +250,13 @@ Trả về JSON thuần túy một object với các field:
 
 Quy tắc: evidence_chunk_ids phải là tập con các chunk_ord đã liệt kê; không bịa trích dẫn ngoài đoạn trích.
 ```
+
+> [!TIP]
+> **Tối ưu hóa Trực quan Dẫn chứng (Smart Paragraph Trimming):**
+> Nhằm nâng cao trải nghiệm đối chứng của tác giả, hệ thống không chỉ bôi vàng từ khóa mà còn áp dụng bộ lọc cắt tỉa thông minh tại Frontend (`EvidenceChunksPanel.tsx`):
+> * AI trích xuất trích dẫn thô trong `evidence`. Giao diện Frontend sẽ dựa vào trích dẫn này để định vị vị trí trùng khớp trong chunk bản thảo gốc.
+> * Hệ thống sẽ tự động quét ngược và quét xuôi để tìm các ranh giới đoạn văn (phân tách bởi `<p>`, `</p>` hoặc `\n\n`) ôm sát câu dẫn chứng.
+> * Toàn bộ các đoạn văn dư thừa xung quanh sẽ được ẩn đi, chỉ chừa lại đúng đoạn văn chứa dẫn chứng được đánh dấu nhằm giữ sự tập trung tối đa cho người đọc.
 
 ---
 
@@ -431,3 +445,26 @@ Trả về JSON thuần túy theo cấu trúc:
        ▼ LlmOutputValidator (Quét chống rò rỉ prompt & Validate JSON)
   [JSON Result] ───► Trả về giao diện & Lưu trữ mã hóa E2E
 ```
+
+---
+
+## 11. Rich PDF Report Export (QuestPDF Engine)
+
+**File:** `Backend/Service/Implementations/ReportExportService.cs`  
+**Method:** `ExportReportPdfAsync()`  
+**Kích hoạt khi:** Tác giả nhấn nút **Xuất PDF** trong trang Báo cáo phân tích (`AnalysisPage`) → `GET /api/ai/{projectId}/reports/{reportId}/export/pdf`.
+
+### Quy Trình & Cấu Trúc Xuất Bản Ấn Phẩm PDF Cao Cấp
+Không chỉ xuất bảng điểm tổng quan, động cơ của `ReportExportService` đã được mở rộng bằng thư viện **QuestPDF** theo tiêu chuẩn xuất bản chuyên nghiệp để gom toàn bộ dữ liệu phân tích đa tab thành một tệp PDF hoàn chỉnh:
+
+1. **Rubric Breakdown & Score Card (Mặc định)**:
+   * Tổng điểm, xếp hạng phân loại kịch bản (Classification) và các cảnh báo chất lượng đặc biệt (`warnings`).
+   * Bảng phân tích chi tiết toàn bộ 20 tiêu chí phân bổ trong 8 nhóm rubric (Key, Criterion Name, Score, Feedback).
+2. **Story Bible — Cẩm nang truyện (Mới nâng cấp)**:
+   * Kích hoạt ngắt trang (`PageBreak`) để tạo sự tách biệt và định dạng thẩm mỹ cao với tông màu chủ đạo **Purple** (`Colors.Purple.Darken2`).
+   * Liệt kê chi tiết **Bối cảnh thế giới** (World Settings), **Danh sách nhân vật, tiểu sử & mối quan hệ** (Characters & Relationships), **Dòng thời gian sự kiện** (Timeline) và **Chủ đề** (Themes) cùng **Ghi chú phân tích**.
+3. **Narrative Pacing & Emotion — Nhịp độ & Cảm xúc (Mới nâng cấp)**:
+   * Kích hoạt ngắt trang và hiển thị trang trí tông màu xanh ngọc **Teal** (`Colors.Teal.Darken2`).
+   * Kết xuất văn bản tóm tắt **Hồ sơ nhịp độ truyện** (Pacing Profile) và **Hồ sơ cảm xúc chủ đạo** (Emotion Profile).
+   * Trích xuất toàn bộ danh sách **Nhận xét chuyên sâu từ AI** (AI Literary & Narrative Insights).
+

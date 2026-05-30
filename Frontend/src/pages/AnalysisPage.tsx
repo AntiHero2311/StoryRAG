@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart2, BrainCircuit, Loader2, AlertCircle, CheckCircle2, Sparkles, Clock, CreditCard, Download, ChevronDown, Check } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
@@ -69,6 +69,23 @@ function AnalysisContent() {
     const processingAnnouncedRef = useRef<string | null>(null);
     const projectPickerRef = useRef<HTMLDivElement | null>(null);
     const reportCacheRef = useRef<Record<string, ProjectReportResponse>>({});
+
+    const effectiveNarrativeCharts = useMemo<NarrativeChartsResponse | null>(() => {
+        if (report?.emotionPacing) {
+            return {
+                pacing: report.emotionPacing.pacingPoints || [],
+                emotions: report.emotionPacing.emotionPoints || [],
+                characterFrequencies: report.emotionPacing.characterFrequencies || [],
+                characterPresence: report.emotionPacing.characterPresence || [],
+                characterRelationships: report.emotionPacing.characterRelationships || [],
+                insights: report.emotionPacing.insights || [],
+                segmentTexts: [],
+            };
+        }
+        return narrativeCharts;
+    }, [report, narrativeCharts]);
+
+    const loadingCharts = loadingNarrativeCharts || !!loadingHistoryReport || loadingReport;
 
     const getCachedReport = (reportId: string): ProjectReportResponse | null => {
         if (reportCacheRef.current[reportId]) {
@@ -1165,7 +1182,7 @@ function AnalysisContent() {
 
                                 {activeTab === 'charts' && (
                                     <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                        <NarrativeChartsPanel data={narrativeCharts} loading={loadingNarrativeCharts} />
+                                        <NarrativeChartsPanel data={effectiveNarrativeCharts} loading={loadingCharts} />
                                     </div>
                                 )}
 

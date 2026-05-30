@@ -151,6 +151,164 @@ namespace Service.Implementations
                                 });
                             });
                         }
+
+                        if (report.ContentAnalysis != null)
+                        {
+                            column.Item().PageBreak();
+                            column.Item().Text("STORY BIBLE (CẨM NANG TRUYỆN)")
+                                .FontSize(16)
+                                .Bold()
+                                .FontColor(Colors.Purple.Darken2);
+
+                            // 1. World settings
+                            if (report.ContentAnalysis.WorldSettings != null && report.ContentAnalysis.WorldSettings.Count > 0)
+                            {
+                                column.Item().PaddingTop(8).Text("World Settings (Bối cảnh thế giới)")
+                                    .FontSize(12)
+                                    .SemiBold()
+                                    .FontColor(Colors.Purple.Medium);
+
+                                foreach (var ws in report.ContentAnalysis.WorldSettings)
+                                {
+                                    column.Item().Background(Colors.Grey.Lighten5).Padding(8).Column(wsCol =>
+                                    {
+                                        wsCol.Spacing(2);
+                                        wsCol.Item().Text($"{ws.Title} [{ws.Category}]").Bold();
+                                        wsCol.Item().Text($"Importance: {ws.Importance} | Chapters: {string.Join(", ", ws.SourceChapters)}").Italic().FontSize(9).FontColor(Colors.Grey.Darken1);
+                                        wsCol.Item().Text(ws.Description);
+                                    });
+                                }
+                            }
+
+                            // 2. Characters
+                            if (report.ContentAnalysis.Characters != null && report.ContentAnalysis.Characters.Count > 0)
+                            {
+                                column.Item().PaddingTop(8).Text("Characters (Nhân vật)")
+                                    .FontSize(12)
+                                    .SemiBold()
+                                    .FontColor(Colors.Purple.Medium);
+
+                                foreach (var c in report.ContentAnalysis.Characters)
+                                {
+                                    column.Item().Background(Colors.Grey.Lighten5).Padding(8).Column(cCol =>
+                                    {
+                                        cCol.Spacing(2);
+                                        cCol.Item().Text($"{c.Name} [{c.Role}]").Bold();
+                                        cCol.Item().Text($"First Appearance: Chapter {c.FirstAppearance} | Traits: {string.Join(", ", c.Traits ?? new List<string>())}").Italic().FontSize(9).FontColor(Colors.Grey.Darken1);
+                                        if (!string.IsNullOrWhiteSpace(c.Background))
+                                        {
+                                            cCol.Item().Text($"Background: {c.Background}");
+                                        }
+                                        if (c.Relationships != null && c.Relationships.Count > 0)
+                                        {
+                                            cCol.Item().Text("Relationships:").SemiBold().FontSize(9);
+                                            foreach (var r in c.Relationships)
+                                            {
+                                                cCol.Item().PaddingLeft(8).Text($"• {r.TargetName} ({r.Type}): {r.Description}").FontSize(9);
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+
+                            // 3. Timeline Events
+                            if (report.ContentAnalysis.TimelineEvents != null && report.ContentAnalysis.TimelineEvents.Count > 0)
+                            {
+                                column.Item().PaddingTop(8).Text("Timeline Events (Dòng thời gian & Sự kiện)")
+                                    .FontSize(12)
+                                    .SemiBold()
+                                    .FontColor(Colors.Purple.Medium);
+
+                                foreach (var te in report.ContentAnalysis.TimelineEvents.OrderBy(e => e.SortOrder))
+                                {
+                                    column.Item().Background(Colors.Grey.Lighten5).Padding(8).Column(teCol =>
+                                    {
+                                        teCol.Spacing(2);
+                                        teCol.Item().Text($"{te.TimeLabel}: {te.Title}").Bold();
+                                        teCol.Item().Text($"Importance: {te.Importance} | Category: {te.Category}").Italic().FontSize(9).FontColor(Colors.Grey.Darken1);
+                                        teCol.Item().Text(te.Description);
+                                    });
+                                }
+                            }
+
+                            // 4. Themes
+                            if (report.ContentAnalysis.Themes != null && report.ContentAnalysis.Themes.Count > 0)
+                            {
+                                column.Item().PaddingTop(8).Text("Themes (Chủ đề & Thông điệp)")
+                                    .FontSize(12)
+                                    .SemiBold()
+                                    .FontColor(Colors.Purple.Medium);
+
+                                foreach (var t in report.ContentAnalysis.Themes)
+                                {
+                                    column.Item().Background(Colors.Grey.Lighten5).Padding(8).Column(tCol =>
+                                    {
+                                        tCol.Spacing(2);
+                                        tCol.Item().Text(t.Title).Bold();
+                                        tCol.Item().Text(t.Description);
+                                        if (!string.IsNullOrWhiteSpace(t.Evidence))
+                                        {
+                                            tCol.Item().Text($"Evidence: \"{t.Evidence}\"").Italic().FontSize(9).FontColor(Colors.Grey.Darken2);
+                                        }
+                                    });
+                                }
+                            }
+
+                            // 5. Analysis Note
+                            if (!string.IsNullOrWhiteSpace(report.ContentAnalysis.AnalysisNote))
+                            {
+                                column.Item().PaddingTop(8).Text("Story Bible Analysis Notes (Ghi chú phân tích)")
+                                    .FontSize(12)
+                                    .SemiBold()
+                                    .FontColor(Colors.Purple.Medium);
+
+                                column.Item().Text(report.ContentAnalysis.AnalysisNote).Italic();
+                            }
+                        }
+
+                        if (report.EmotionPacing != null)
+                        {
+                            column.Item().PageBreak();
+                            column.Item().Text("NARRATIVE PACING & EMOTION (NHỊP ĐỘ & CẢM XÚC)")
+                                .FontSize(16)
+                                .Bold()
+                                .FontColor(Colors.Teal.Darken2);
+
+                            // 1. Overall Profiles
+                            column.Item().PaddingTop(8).Background(Colors.Grey.Lighten5).Padding(10).Row(row =>
+                            {
+                                row.RelativeItem().Column(c =>
+                                {
+                                    c.Item().Text("Pacing Profile").Bold().FontColor(Colors.Teal.Darken1);
+                                    c.Item().Text(string.IsNullOrWhiteSpace(report.EmotionPacing.OverallPacingProfile) ? "N/A" : report.EmotionPacing.OverallPacingProfile);
+                                });
+                                row.RelativeItem().Column(c =>
+                                {
+                                    c.Item().Text("Emotion Profile").Bold().FontColor(Colors.Teal.Darken1);
+                                    c.Item().Text(string.IsNullOrWhiteSpace(report.EmotionPacing.DominantEmotionProfile) ? "N/A" : report.EmotionPacing.DominantEmotionProfile);
+                                });
+                            });
+
+                            // 2. Insights
+                            if (report.EmotionPacing.Insights != null && report.EmotionPacing.Insights.Count > 0)
+                            {
+                                column.Item().PaddingTop(12).Text("Literary & Narrative Insights (Nhận xét chuyên sâu từ AI)")
+                                    .FontSize(12)
+                                    .SemiBold()
+                                    .FontColor(Colors.Teal.Darken2);
+
+                                foreach (var insight in report.EmotionPacing.Insights)
+                                {
+                                    if (insight.Contains("PHÂN TÍCH CHUYÊN SÂU")) continue;
+
+                                    column.Item().PaddingLeft(8).Row(r =>
+                                    {
+                                        r.ConstantItem(12).Text("•");
+                                        r.RelativeItem().Text(insight);
+                                    });
+                                }
+                            }
+                        }
                     });
 
                     page.Footer()

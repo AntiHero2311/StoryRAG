@@ -29,16 +29,52 @@ function renderHighlightedContent(text: string, highlight: string): ReactNode {
     }
     if (idx < 0) return text;
 
-    const before = text.slice(0, idx);
-    const mid = text.slice(idx, idx + matchLen);
-    const after = text.slice(idx + matchLen);
+    // Find smart paragraph boundaries around the match to eliminate redundant text
+    const lastEndP = text.lastIndexOf('</p>', idx);
+    const lastStartP = text.lastIndexOf('<p>', idx);
+    const lastDoubleN = text.lastIndexOf('\n\n', idx);
+    
+    // Nearest backward boundary
+    const cropStart = Math.max(
+        0, 
+        lastEndP >= 0 ? lastEndP + 4 : 0, 
+        lastStartP >= 0 ? lastStartP : 0, 
+        lastDoubleN >= 0 ? lastDoubleN + 2 : 0
+    );
+
+    const nextStartP = text.indexOf('<p>', idx + matchLen);
+    const nextEndP = text.indexOf('</p>', idx + matchLen);
+    const nextDoubleN = text.indexOf('\n\n', idx + matchLen);
+
+    // Collect forward boundaries
+    const forwardIndices: number[] = [];
+    if (nextStartP >= 0) forwardIndices.push(nextStartP);
+    if (nextEndP >= 0) forwardIndices.push(nextEndP + 4);
+    if (nextDoubleN >= 0) forwardIndices.push(nextDoubleN);
+
+    // Nearest forward boundary
+    const cropEnd = forwardIndices.length > 0 ? Math.min(...forwardIndices) : text.length;
+
+    // Slice content to isolate the relevant paragraph
+    const slicedText = text.slice(cropStart, cropEnd);
+    const newIdx = idx - cropStart;
+
+    const before = slicedText.slice(0, newIdx);
+    const mid = slicedText.slice(newIdx, newIdx + matchLen);
+    const after = slicedText.slice(newIdx + matchLen);
+
+    const prefix = cropStart > 0 ? '... ' : '';
+    const suffix = cropEnd < text.length ? ' ...' : '';
+
     return (
         <>
+            {prefix}
             {before}
             <mark className="rounded px-0.5" style={{ background: 'rgba(245,166,35,0.35)', color: 'inherit' }}>
                 {mid}
             </mark>
             {after}
+            {suffix}
         </>
     );
 }
