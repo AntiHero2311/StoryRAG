@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart2, BrainCircuit, Loader2, AlertCircle, CheckCircle2, Sparkles, Clock, CreditCard, Download, ChevronDown, Check } from 'lucide-react';
+import { BarChart2, BrainCircuit, Loader2, AlertCircle, CheckCircle2, Sparkles, Clock, CreditCard, Download, ChevronDown, Check, MessageSquare, Send } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { UserInfo } from '../utils/jwtHelper';
 import { projectService, ProjectResponse } from '../services/projectService';
@@ -20,6 +20,7 @@ import { useToast } from '../components/Toast';
 import { browserNotificationService } from '../services/browserNotificationService';
 import { appNotificationService } from '../services/appNotificationService';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import { feedbackService, type StaffFeedbackResponse } from '../services/feedbackService';
 
 const ANALYSIS_SELECTED_PROJECT_KEY = 'analysis:selectedProjectId';
 const ANALYZE_CANCEL_AFTER_SECONDS = 5 * 60;
@@ -61,6 +62,9 @@ function AnalysisContent() {
         highlight: string;
         label: string;
     } | null>(null);
+    const [reportFeedbacks, setReportFeedbacks] = useState<StaffFeedbackResponse[]>([]);
+    const [feedbackContent, setFeedbackContent] = useState('');
+    const [submittingFeedback, setSubmittingFeedback] = useState(false);
     const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const mountedRef = useRef(true);
     const pollingJobRef = useRef<string | null>(null);
@@ -299,6 +303,53 @@ function AnalysisContent() {
         const chapterId = chartChapterFilter === 'all' ? undefined : chartChapterFilter;
         void loadNarrativeCharts(selectedId, chapterId);
     }, [selectedId, chartChapterFilter]);
+
+    useEffect(() => {
+        if (!report) {
+            setReportFeedbacks([]);
+            return;
+        }
+        let disposed = false;
+        const fetchFeedbacks = async () => {
+            try {
+                const list = await feedbackService.getMy();
+                if (disposed) return;
+                const filtered = list.filter(fb => fb.projectReportId === report.id);
+                setReportFeedbacks(filtered);
+            } catch {
+                // ignore
+            }
+        };
+        void fetchFeedbacks();
+        return () => {
+            disposed = true;
+        };
+    }, [report]);
+
+    const handleSubmitFeedback = async () => {
+        if (!selectedId || !report) return;
+        const trimmed = feedbackContent.trim();
+        if (trimmed.length < 5) {
+            toast.show('Phản hồi phải có ít nhất 5 ký tự.', 'error');
+            return;
+        }
+        setSubmittingFeedback(true);
+        try {
+            const newItem = await feedbackService.create({
+                projectId: selectedId,
+                projectReportId: report.id,
+                content: trimmed,
+            });
+            setReportFeedbacks(prev => [newItem, ...prev]);
+            setFeedbackContent('');
+            toast.show('Gửi phản hồi cho staff thành công!', 'success');
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err?.response?.data?.Message || 'Không thể gửi phản hồi. Vui lòng thử lại.';
+            toast.show(msg, 'error');
+        } finally {
+            setSubmittingFeedback(false);
+        }
+    };
 
     const pollAnalyzeJob = async (projectId: string, jobId: string) => {
         while (true) {
@@ -1086,6 +1137,110 @@ function AnalysisContent() {
                                                 <p className="text-xs text-[var(--text-secondary)] leading-relaxed select-text">
                                                     Báo cáo phân tích này được thực hiện hoàn toàn tự động bằng công nghệ AI (RAG). AI có thể mắc sai sót, hiểu chưa đầy đủ ngữ cảnh hoặc đưa ra những nhận định mang tính khách quan tương đối. Nội dung báo cáo và các đề xuất chỉnh sửa chỉ mang tính chất tham khảo, dùng để hỗ trợ và nâng cao chất lượng quá trình sáng tác của bạn.
                                                 </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Author Feedback to Staff */}
+                                        <div className="mt-6 rounded-2xl overflow-hidden border"
+                                            style={{
+                                                background: 'var(--bg-surface)',
+                                                borderColor: 'var(--border-color)',
+                                            }}>
+                                            <div className="p-6 space-y-6">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(245,166,35,0.12)' }}>
+                                                        <MessageSquare className="w-5 h-5 text-amber-500" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-[var(--text-primary)] font-bold text-lg">Phản hồi gửi Staff</h3>
+                                                        <p className="text-[var(--text-secondary)] text-xs">Gửi câu hỏi hoặc góp ý về kết quả đánh giá phân tích này cho đội ngũ Staff.</p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Textarea for new feedback */}
+                                                <div className="space-y-3">
+                                                    <textarea
+                                                        value={feedbackContent}
+                                                        onChange={e => setFeedbackContent(e.target.value)}
+                                                        rows={4}
+                                                        placeholder="Nhập nội dung thắc mắc hoặc phản hồi của bạn về bài đánh giá này (tối thiểu 5 ký tự)..."
+                                                        className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none transition-all duration-250 border focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20"
+                                                        style={{
+                                                            background: 'var(--input-bg, var(--bg-hover))',
+                                                            borderColor: 'var(--border-color)',
+                                                            color: 'var(--text-primary)',
+                                                        }}
+                                                    />
+                                                    <div className="flex justify-end">
+                                                        <button
+                                                            onClick={handleSubmitFeedback}
+                                                            disabled={submittingFeedback || feedbackContent.trim().length < 5}
+                                                            className="h-10 px-5 rounded-xl text-sm font-semibold text-white flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 hover:brightness-110"
+                                                            style={{
+                                                                background: 'linear-gradient(135deg,#f5a623,#f97316)',
+                                                                boxShadow: '0 4px 12px rgba(245,166,35,0.2)',
+                                                            }}>
+                                                            {submittingFeedback ? (
+                                                                <><Loader2 className="w-4 h-4 animate-spin" /> Đang gửi...</>
+                                                            ) : (
+                                                                <><Send className="w-4 h-4" /> Gửi phản hồi</>
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Previous Feedbacks list */}
+                                                {reportFeedbacks.length > 0 && (
+                                                    <div className="pt-6 border-t" style={{ borderColor: 'var(--border-color)' }}>
+                                                        <h4 className="text-sm font-bold text-[var(--text-primary)] mb-4">Lịch sử phản hồi cho báo cáo này ({reportFeedbacks.length})</h4>
+                                                        <div className="space-y-5 max-h-[420px] overflow-y-auto pr-2">
+                                                            {reportFeedbacks.map(fb => (
+                                                                <div key={fb.id} className="p-5 rounded-2xl space-y-4 border transition-all duration-200 hover:border-white/10" style={{ background: 'rgba(255, 255, 255, 0.015)', borderColor: 'rgba(255, 255, 255, 0.05)' }}>
+                                                                    <div className="flex items-center justify-between gap-3 text-xs">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="font-bold text-[var(--text-bright)]">Tác giả</span>
+                                                                            <span className="text-[var(--text-tertiary)] text-[10px]">•</span>
+                                                                            <span className="text-[var(--text-secondary)]">{new Date(fb.createdAt).toLocaleString('vi-VN')}</span>
+                                                                        </div>
+                                                                        <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
+                                                                            fb.status === 'Open' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                                                        }`}>{fb.status === 'Open' ? 'Đang chờ xử lý' : 'Đã phản hồi'}</span>
+                                                                    </div>
+                                                                    <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed select-text">{fb.content}</p>
+                                                                    {fb.status === 'Resolved' && fb.staffNote && (
+                                                                        <div className="pl-4 border-l-2 border-amber-500/30 space-y-2 mt-4">
+                                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                                <span className="text-xs font-bold text-amber-400">
+                                                                                    {fb.staffName && fb.staffName.toLowerCase() !== 'staff' ? `Staff ${fb.staffName} phản hồi` : 'Phản hồi từ Staff'}
+                                                                                </span>
+                                                                                {fb.staffGenres && fb.staffGenres.length > 0 && (
+                                                                                    <div className="flex flex-wrap gap-1">
+                                                                                        {fb.staffGenres.map(g => (
+                                                                                            <span
+                                                                                                key={g.id}
+                                                                                                className="px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wide uppercase"
+                                                                                                style={{
+                                                                                                    backgroundColor: `${g.color}12`,
+                                                                                                    color: g.color,
+                                                                                                    border: `1px solid ${g.color}25`
+                                                                                                }}
+                                                                                            >
+                                                                                                {g.name}
+                                                                                            </span>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="p-3.5 rounded-xl text-xs leading-relaxed whitespace-pre-wrap select-text border" style={{ background: 'rgba(245,166,35,0.03)', borderColor: 'rgba(245,166,35,0.1)', color: 'var(--text-primary)' }}>
+                                                                                {fb.staffNote}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

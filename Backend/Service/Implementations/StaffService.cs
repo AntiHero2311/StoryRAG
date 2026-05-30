@@ -108,6 +108,7 @@ namespace Service.Implementations
                 .AsNoTracking()
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
+                .Include(x => x.Project)
                 .AsQueryable();
 
             if (projectId.HasValue)
@@ -188,6 +189,7 @@ namespace Service.Implementations
             feedback = await _db.StaffFeedbacks
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
+                .Include(x => x.Project)
                 .FirstAsync(x => x.Id == feedback.Id);
 
             return MapFeedback(feedback);
@@ -241,6 +243,7 @@ namespace Service.Implementations
             feedback = await _db.StaffFeedbacks
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
+                .Include(x => x.Project)
                 .FirstAsync(x => x.Id == feedback.Id);
 
             return MapFeedback(feedback);
@@ -251,6 +254,7 @@ namespace Service.Implementations
             var feedback = await _db.StaffFeedbacks
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
+                .Include(x => x.Project)
                 .FirstOrDefaultAsync(x => x.Id == feedbackId)
                 ?? throw new KeyNotFoundException("Không tìm thấy feedback.");
 
@@ -464,7 +468,9 @@ namespace Service.Implementations
                 {
                     j.Id,
                     j.ProjectId,
+                    ProjectTitle = j.Project.Title,
                     RequestedBy = j.UserId,
+                    RequestedByName = !string.IsNullOrEmpty(j.User.FullName) ? j.User.FullName : j.User.Email,
                     j.Status,
                     j.ErrorMessage,
                     j.StartedAt,
@@ -473,28 +479,27 @@ namespace Service.Implementations
                 })
                 .AsQueryable();
 
-            if (statuses.Contains("failed"))
+            if (statuses.Contains("all"))
             {
-                // keep in query; additional filters below
-            }
-
-            var wantFailed = statuses.Contains("failed");
-            var wantStale = statuses.Contains("stale");
-
-            if (wantFailed && !wantStale)
-            {
-                query = query.Where(x => x.Status == "Failed");
-            }
-            else if (!wantFailed && wantStale)
-            {
-                query = query.Where(x => x.Status == "Processing" && (x.UpdatedAt ?? x.StartedAt ?? x.CreatedAt) < staleBefore);
+                // no filter
             }
             else
             {
-                // default or both
+                var wantFailed = statuses.Contains("failed");
+                var wantStale = statuses.Contains("stale");
+                var wantQueued = statuses.Contains("queued");
+                var wantProcessing = statuses.Contains("processing");
+                var wantCompleted = statuses.Contains("completed");
+                var wantCancelled = statuses.Contains("cancelled");
+
                 query = query.Where(x =>
-                    x.Status == "Failed" ||
-                    (x.Status == "Processing" && (x.UpdatedAt ?? x.StartedAt ?? x.CreatedAt) < staleBefore));
+                    (wantFailed && x.Status == "Failed") ||
+                    (wantQueued && x.Status == "Queued") ||
+                    (wantProcessing && x.Status == "Processing" && (x.UpdatedAt ?? x.StartedAt ?? x.CreatedAt) >= staleBefore) ||
+                    (wantStale && x.Status == "Processing" && (x.UpdatedAt ?? x.StartedAt ?? x.CreatedAt) < staleBefore) ||
+                    (wantCompleted && x.Status == "Completed") ||
+                    (wantCancelled && x.Status == "Cancelled")
+                );
             }
 
             var items = await query
@@ -506,7 +511,9 @@ namespace Service.Implementations
             {
                 Id = x.Id,
                 ProjectId = x.ProjectId,
+                ProjectTitle = x.ProjectTitle,
                 RequestedBy = x.RequestedBy,
+                RequestedByName = x.RequestedByName,
                 Status = x.Status,
                 ErrorMessage = x.ErrorMessage,
                 StartedAt = x.StartedAt,
@@ -518,6 +525,8 @@ namespace Service.Implementations
         {
             var oldJob = await _db.ProjectAnalysisJobs
                 .AsNoTracking()
+                .Include(j => j.Project)
+                .Include(j => j.User)
                 .FirstOrDefaultAsync(j => j.Id == jobId)
                 ?? throw new KeyNotFoundException("Không tìm thấy job phân tích.");
 
@@ -568,7 +577,9 @@ namespace Service.Implementations
             {
                 Id = newJob.Id,
                 ProjectId = newJob.ProjectId,
+                ProjectTitle = oldJob.Project?.Title ?? string.Empty,
                 RequestedBy = newJob.UserId,
+                RequestedByName = oldJob.User != null ? (!string.IsNullOrEmpty(oldJob.User.FullName) ? oldJob.User.FullName : oldJob.User.Email) : string.Empty,
                 Status = newJob.Status,
                 ErrorMessage = newJob.ErrorMessage,
                 StartedAt = newJob.StartedAt,
@@ -839,7 +850,7 @@ namespace Service.Implementations
             return status
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Select(s => s.Trim().ToLowerInvariant())
-                .Where(s => s is "failed" or "stale")
+                .Where(s => s is "failed" or "stale" or "queued" or "processing" or "completed" or "cancelled" or "all")
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
 
@@ -868,6 +879,7 @@ namespace Service.Implementations
             {
                 Id = feedback.Id,
                 ProjectId = feedback.ProjectId,
+                ProjectTitle = feedback.Project?.Title ?? string.Empty,
                 ProjectReportId = feedback.ProjectReportId,
                 ChapterId = feedback.ChapterId,
                 AuthorId = feedback.AuthorId,

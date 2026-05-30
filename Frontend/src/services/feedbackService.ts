@@ -3,6 +3,7 @@ import api from './api';
 export type StaffFeedbackResponse = {
   id: string;
   projectId: string;
+  projectTitle?: string;
   projectReportId?: string | null;
   chapterId?: string | null;
   authorId: string;
@@ -39,6 +40,11 @@ export const feedbackService = {
 
   async respond(id: string, payload: FeedbackResponseRequest): Promise<StaffFeedbackResponse> {
     const res = await api.post<StaffFeedbackResponse>(`/me/feedback/${id}/respond`, payload);
+    return res.data;
+  },
+
+  async create(payload: { projectId: string; projectReportId?: string; content: string }): Promise<StaffFeedbackResponse> {
+    const res = await api.post<StaffFeedbackResponse>('/me/feedback', payload);
     return res.data;
   },
 };

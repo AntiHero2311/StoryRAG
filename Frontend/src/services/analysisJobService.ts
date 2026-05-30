@@ -3,7 +3,9 @@ import { api } from './api';
 export type StaffAnalysisJobItem = {
   id: string;
   project_id: string;
+  project_title: string;
   requested_by: string;
+  requested_by_name: string;
   status: string;
   error_message?: string | null;
   started_at?: string | null;
@@ -77,7 +79,7 @@ export type StaffEditReportRequest = {
 };
 
 export const analysisJobService = {
-  getFailedOrStale: (status?: string) =>
+  getAnalysisJobs: (status?: string) =>
     api.get<StaffAnalysisJobItem[]>('/staff/analysis-jobs', { params: status ? { status } : {} }).then(r => r.data),
 
   rerun: (jobId: string) =>

@@ -19,7 +19,7 @@ type HubStats = {
 
 const QUICK_LINKS = [
     { to: '/staff/analyses', label: 'Kết quả phân tích', icon: BarChart2, color: 'text-indigo-400', statKey: 'pendingReports' as const },
-    { to: '/staff/analysis-jobs', label: 'Phân tích lỗi / treo', icon: Activity, color: 'text-violet-400', statKey: 'failedJobs' as const },
+    { to: '/staff/analysis-jobs', label: 'Phân tích AI', icon: Activity, color: 'text-violet-400', statKey: 'failedJobs' as const },
     { to: '/staff/feedbacks', label: 'Phản hồi tác giả', icon: MessageSquare, color: 'text-indigo-400', statKey: 'openFeedbacks' as const },
     { to: '/staff/content?tab=faq', label: 'Nội dung trợ giúp', icon: CircleHelp, color: 'text-emerald-400' },
     { to: '/staff/bugs', label: 'Báo cáo lỗi app', icon: Bug, color: 'text-orange-400', statKey: 'openBugs' as const },
@@ -37,7 +37,7 @@ export default function StaffOverviewPage() {
         try {
             const [perf, jobs, bugs, pendingReportsRes] = await Promise.all([
                 staffService.getPerformance(),
-                analysisJobService.getFailedOrStale('failed,stale'),
+                analysisJobService.getAnalysisJobs('failed,stale'),
                 bugReportService.getStats(),
                 analysisJobService.getPendingReports(1, 1, 'Pending'),
             ]);
