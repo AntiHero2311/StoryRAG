@@ -65,13 +65,14 @@ Hướng dẫn:
 - `{projectSummary}`: Tóm tắt truyện hiện tại.
 - `{storyBibleContext}`: Top 2 character entries + Top 2 worldbuilding entries gần nhất từ Vector Search.
 - `{chunksContext}`: Top 3 đến 5 chapter chunks (phiên bản active).
-- **Quota**: Chỉ trừ token, không trừ lượt phân tích (`UsedAnalysisCount`).
+- **Lịch sử hội thoại (Conversational Memory)**: Tự động truy vấn và giải mã tối đa **5 cặp đối thoại gần nhất (10 tin nhắn)** từ DB (`ChatMessages`), làm sạch qua `PromptSanitizer` và nạp xen kẽ vào chuỗi tin nhắn gửi tới Gemini API để kế thừa ngữ cảnh hội thoại.
+- **Quota**: Chỉ trừ token (tổng số token bao gồm cả lịch sử chat và context), không trừ lượt phân tích (`UsedAnalysisCount`).
 
 > [!NOTE]
-> **Nâng cấp Phân tích & Lưu trữ Lịch sử Chatbot (Mới nhất):**
-> Giao diện Chatbot đã được nâng cấp thành thiết kế kính mờ (glassmorphic) 2 cột cao cấp:
-> 1. **Lịch sử hội thoại động**: Các cuộc trò chuyện được lưu trữ và liên kết chặt chẽ với từng mã báo cáo (`report.id`) thông qua `sessionStorage` và `localStorage`. Khi chuyển đổi qua lại giữa các báo cáo lịch sử, Chatbot sẽ khôi phục chính xác ngữ cảnh hội thoại của báo cáo đó.
-> 2. **AI nhận diện toàn bộ báo cáo**: Thay vì chỉ nhận diện một vài phân đoạn thô, prompt đã được nâng cấp để nạp **toàn bộ nội dung báo cáo phân tích** (bao gồm điểm số chi tiết từng tiêu chí, nhận xét tổng quan, các cảnh báo đặc biệt, và toàn bộ Cẩm nang truyện/Story Bible đã trích xuất) giúp AI trả lời câu hỏi có tính bao quát, chuẩn xác cao nhất đối với tác phẩm.
+> **Bộ nhớ Hội thoại Đa lượt & Giao diện Kính Mờ (Mới nhất):**
+> 1. **Trí nhớ hội thoại đa lượt**: AI tự động nhận diện và xâu chuỗi thông tin từ các câu hỏi trước đó trong cùng phiên chat, giúp tác giả dễ dàng hỏi tiếp nối bằng các đại từ thay thế (như *"Anh ta"*, *"Cô ấy"*, *"Tình tiết đó"*).
+> 2. **Lịch sử hội thoại động**: Các cuộc trò chuyện được lưu trữ và liên kết chặt chẽ với từng mã báo cáo (`report.id`) thông qua `sessionStorage` và `localStorage`. Khi chuyển đổi qua lại giữa các báo cáo lịch sử, Chatbot sẽ khôi phục chính xác ngữ cảnh hội thoại của báo cáo đó.
+> 3. **AI nhận diện toàn bộ báo cáo**: Giao diện Chatbot đã được nâng cấp thành thiết kế kính mờ (glassmorphic) 2 cột cao cấp. Thay vì chỉ nhận diện một vài phân đoạn thô, prompt đã được nâng cấp để nạp **toàn bộ nội dung báo cáo phân tích** (bao gồm điểm số chi tiết từng tiêu chí, nhận xét tổng quan, các cảnh báo đặc biệt, và toàn bộ Cẩm nang truyện/Story Bible đã trích xuất) giúp AI trả lời câu hỏi có tính bao quát, chuẩn xác cao nhất đối với tác phẩm.
 
 ---
 
@@ -225,6 +226,8 @@ THÔNG TIN HOÀN THIỆN:
 
 TIÊU CHÍ (key={key}, nhóm={group}, tên={name}, điểm tối đa={max}).
 
+{auditGuide}
+
 FACTS JSON (Stage 1, có thể rút gọn):
 {factsForPrompt}
 
@@ -243,8 +246,8 @@ Trả về JSON thuần túy một object với các field:
 - score (0 đến {max})
 - feedback (3-5 câu tiếng Việt đánh giá tích cực/tiêu cực khách quan, tuyệt đối không dùng từ 'chunk' hay 'chunk_ord')
 - evidence (trích dẫn ngắn từ đoạn trên)
-- errors (mảng ≥3 chuỗi): Mỗi chuỗi phải chỉ rõ một vấn đề/sạn cốt truyện cụ thể phát hiện được trong phần trích. Yêu cầu chỉ rõ chương nào (dựa trên thông tin 'Vị trí: Chương X' của đoạn trích), tình tiết nào hoặc nhân vật nào gặp vấn đề, và đưa ra ví dụ cụ thể. Tuyệt đối KHÔNG viết chung chung lý thuyết, và TUYỆT ĐỐI KHÔNG đề cập đến các từ ngữ kỹ thuật hệ thống như 'chunk', 'chunk_ord' hay 'đoạn trích' trong nội dung phản hồi cho tác giả.
-- suggestions (mảng ≥3 chuỗi): Mỗi chuỗi là giải pháp/khuyến nghị tương ứng cho vấn đề ở trên. Yêu cầu đưa ra ví dụ cụ thể (như gợi ý cách viết lại, lời thoại mẫu hoặc hướng điều chỉnh tình tiết rõ ràng), tuyệt đối KHÔNG khuyên bảo chung chung mơ hồ, và TUYỆT ĐỐI KHÔNG sử dụng các từ kỹ thuật như 'chunk' hay 'chunk_ord' trong nội dung đề xuất.
+- errors (mảng ≥3 chuỗi - Đóng vai trò NHÀ PHÊ BÌNH - The Critic): Vạch trần khắt khe lỗi văn học, hạt sạn cốt truyện dựa trên {auditGuide}. Yêu cầu chỉ rõ chương nào (ví dụ 'Chương X'), tình tiết nào hoặc nhân vật nào gặp vấn đề, và bắt buộc trích xuất câu văn gốc bị lỗi làm minh chứng thực tế. Tuyệt đối KHÔNG nhận xét lý thuyết chung chung, không đề cập từ kỹ thuật 'chunk'.
+- suggestions (mảng ≥3 chuỗi - Đóng vai trò HUẤN LUYỆN VIÊN VIẾT VĂN - The Coach): Đưa ra đề xuất cải tiến tương ứng cho từng lỗi ở trên. BẮT BUỘC cung cấp ít nhất một **Phương án viết lại mẫu (Example Rewrite)** chi tiết (câu văn mẫu, lời thoại mẫu hoặc hướng chỉnh sửa cụ thể) để tác giả trực quan áp dụng ngay tại chỗ. Tuyệt đối KHÔNG khuyên bảo lý thuyết mơ hồ, chung chung.
 - bibleComparison (chuỗi hoặc null)
 - evidence_chunk_ids (mảng số nguyên — các chunk_ord đã dùng).
 
@@ -328,7 +331,11 @@ RUBRIC ĐÁNH GIÁ (5 ĐIỂM - CHẤM ĐIỂM CỰC KỲ KHẮT KHE):
 - Tiêu chí 1.1 đến 8.2 (Toàn bộ 20 tiêu chí phân bổ trong 8 nhóm).
 - Chấm điểm nghiêm túc: Gói Free/Mới bắt đầu tối đa 2.5/5.0.
 
-CÁC QUY TẮC PHẢT HIỆN CẢNH BÁO (WARNINGS):
+MÔ HÌNH ĐÁNH GIÁ KÉP (CRITIC-COACH PROMPTING):
+- **Critic (Nhà phê bình)**: Các lỗi/sạn (`errors`) phải chỉ rõ vị trí chương mắc lỗi, phân tích chi tiết lỗ hổng văn học và bắt buộc trích dẫn câu văn gốc làm bằng chứng.
+- **Coach (Huấn luyện viên)**: Các đề xuất (`suggestions`) phải tránh lý thuyết suông, bắt buộc cung cấp ít nhất một **Phương án viết lại mẫu (Example Rewrite)** chi tiết trực quan để tác giả chỉnh sửa ngay tại chỗ.
+
+CÁC QUY TẮC PHÁT HIỆN CẢNH BÁO (WARNINGS):
 - ANTI_STATE: Cảnh giác cao độ với xuyên tạc chính trị.
 - SEXUAL_CONTENT: Quét phân biệt rõ nghệ thuật lãng mạn nhẹ và khiêu dâm explicit thô tục.
 - PLAGIARISM_RISK, INCONSISTENCY, REPETITION, INCOMPLETE.

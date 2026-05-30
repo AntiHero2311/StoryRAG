@@ -204,11 +204,37 @@ namespace Service.Implementations
 
             var systemPrompt = BuildSystemPrompt(projectTitle, sanitizedSummary, sanitizedInstructions, sanitizedContextTexts, sanitizedWorldTexts, sanitizedCharTexts);
 
+            // Tải 5 lượt đối thoại gần nhất (tối đa 10 tin nhắn) để làm bộ nhớ ngữ cảnh hội thoại đa lượt
+            var recentMessages = await _context.ChatMessages
+                .Where(m => m.ProjectId == projectId && m.UserId == userId)
+                .OrderByDescending(m => m.CreatedAt)
+                .Take(5)
+                .ToListAsync();
+
+            // Đảo ngược để xếp theo trình tự thời gian tăng dần (từ cũ đến mới)
+            recentMessages.Reverse();
+
             var messages = new List<ChatMessage>
             {
-                ChatMessage.CreateSystemMessage(systemPrompt),
-                ChatMessage.CreateUserMessage(sanitizedQuestion),
+                ChatMessage.CreateSystemMessage(systemPrompt)
             };
+
+            foreach (var msg in recentMessages)
+            {
+                var pastQuestion = EncryptionHelper.DecryptWithMasterKey(msg.Question, rawDek);
+                var pastAnswer = EncryptionHelper.DecryptWithMasterKey(msg.Answer, rawDek);
+
+                if (!string.IsNullOrWhiteSpace(pastQuestion))
+                {
+                    messages.Add(ChatMessage.CreateUserMessage(PromptSanitizer.SanitizeUserContent(pastQuestion)));
+                }
+                if (!string.IsNullOrWhiteSpace(pastAnswer))
+                {
+                    messages.Add(ChatMessage.CreateAssistantMessage(pastAnswer));
+                }
+            }
+
+            messages.Add(ChatMessage.CreateUserMessage(sanitizedQuestion));
 
             var response = await CompleteChatWithGeminiAsync(messages);
             var completion = response;

@@ -109,9 +109,9 @@ flowchart LR
 
 ## 4. Luồng RAG Chatbot & Hỗ trợ Viết (RAG Chat & AI Writing Assistants)
 
-**Mục tiêu:** Tác giả có thể hỏi đáp với AI về mọi tình tiết trong tác phẩm và sử dụng AI để mở rộng mạch văn mà không bị ảo tưởng (Hallucination).
+**Mục tiêu:** Tác giả có thể hỏi đáp với AI về mọi tình tiết trong tác phẩm và sử dụng AI để mở rộng mạch văn mà không bị ảo tưởng (Hallucination) với trí nhớ ngắn hạn thông minh.
 
-### Sơ đồ luồng RAG Chat
+### Sơ đồ luồng RAG Chat Đa lượt
 ```mermaid
 sequenceDiagram
     autonumber
@@ -121,20 +121,28 @@ sequenceDiagram
     participant DB as PostgreSQL (pgvector)
     participant AI as Gemini API
 
-    User->>FE: Nhập câu hỏi: "Ai đã đầu độc Vương phi?"
+    User->>FE: Nhập câu hỏi tiếp nối: "Anh ta bao nhiêu tuổi?"
     FE->>BE: POST /api/ai/{projectId}/chat
     BE->>AI: Sinh vector nhúng cho câu hỏi
     AI-->>BE: Trả về vector 768 chiều
     BE->>DB: Vector Search Cosine (Active Chapter Chunks)
     DB-->>BE: Trả về Top K chunks gần nhất
-    BE->>BE: Giải mã các ngữ cảnh bằng DEK tác giả
-    BE->>BE: Trộn ngữ cảnh vào XML Prompt Template
-    BE->>AI: Gửi Prompt hoàn chỉnh (Gemini Chat Model)
-    AI-->>BE: Trả về câu trả lời văn học
-    BE->>BE: Lưu lịch sử chat mã hóa vào DB
+    BE->>DB: Truy vấn 5 cặp đối thoại gần nhất (ChatMessages)
+    DB-->>BE: Trả về lịch sử chat (encrypted)
+    BE->>BE: Giải mã các ngữ cảnh & lịch sử chat bằng DEK tác giả
+    BE->>BE: Sắp xếp lịch sử cũ theo thứ tự thời gian tăng dần
+    BE->>BE: Đóng gói lịch sử + ngữ cảnh RAG vào XML Prompt & Messages List
+    BE->>AI: Gửi Messages List (System RAG + Lịch sử đối thoại + Câu hỏi mới)
+    AI-->>BE: Trả về câu trả lời có nhận diện ngữ cảnh cũ
+    BE->>BE: Lưu câu trả lời mã hóa vào DB
     BE-->>FE: Trả về câu trả lời
-    FE->>User: Hiển thị câu trả lời
+    FE->>User: Hiển thị câu trả lời kế thừa ngữ cảnh cũ
 ```
+
+### Bộ nhớ Hội thoại Đa lượt (Multi-turn Conversational Memory):
+* **Cơ chế hoạt động**: Khi nhận yêu cầu chat mới, hệ thống tự động truy tìm 5 cặp câu hỏi/trả lời gần nhất (tối đa 10 tin nhắn) của chính tác giả và dự án đó từ bảng `ChatMessages`.
+* **Mã hóa và Bảo mật**: Lịch sử chat được giải mã an toàn trên RAM của backend bằng DEK độc bản của tác giả, chạy qua bộ lọc `PromptSanitizer.SanitizeUserContent` để loại bỏ nguy cơ Prompt Injection từ tin nhắn cũ trước khi nạp vào chuỗi `messages` gửi tới Gemini API.
+* **Đảm bảo tính liên kết**: Giúp AI hiểu được các câu hỏi tiếp nối có đại từ thay thế (như *"Anh ta"*, *"Cô ấy"*, *"Đoạn văn đó"*), nâng tầm trải nghiệm chatbot từ hỏi đáp đơn lẻ thành một người bạn đồng hành viết lách thực sự hiểu ngữ cảnh.
 
 ### Nhóm chức năng AI Writing hỗ trợ trực tiếp trong Editor:
 *   **AI Rewrite (Viết lại):** Bôi đen đoạn văn -> Chọn tông giọng (Lãng mạn, U tối, Dồn dập...) -> AI chỉnh sửa câu chữ phù hợp.
