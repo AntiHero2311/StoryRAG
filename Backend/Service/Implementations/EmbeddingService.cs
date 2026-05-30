@@ -72,10 +72,18 @@ namespace Service.Implementations
 
         public async Task EmbedChapterAsync(Guid chapterId, Guid userId)
         {
-            if (!ProcessingChapters.TryAdd(chapterId, 0))
+            const int maxWaitMs = 45000; // Đợi tối đa 45 giây cho tiến trình nền hoàn thành
+            var waitedMs = 0;
+            while (!ProcessingChapters.TryAdd(chapterId, 0))
             {
-                _logger.LogWarning("Chương {ChapterId} đang được nhúng dữ liệu bởi một tiến trình khác. Bỏ qua yêu cầu này.", chapterId);
-                return;
+                _logger.LogInformation("Chương {ChapterId} đang được nhúng bởi tiến trình khác. Đang đợi...", chapterId);
+                await Task.Delay(500);
+                waitedMs += 500;
+                if (waitedMs >= maxWaitMs)
+                {
+                    _logger.LogWarning("Đã quá thời gian chờ chương {ChapterId} được nhúng bởi tiến trình khác. Bỏ qua yêu cầu này.", chapterId);
+                    return;
+                }
             }
 
             try

@@ -102,7 +102,7 @@ flowchart LR
    - Tách văn bản dựa theo dấu xuống dòng hoặc dấu chấm câu gần nhất để tránh cắt đôi câu văn.
 3. **Gọi AI sinh nhúng (Embedding Generation):**
    - Backend sử dụng `IEmbeddingService` gọi API Gemini để tính toán vector đại diện.
-   - Vector 768 chiều được lưu trực tiếp vào bảng `ChapterChunks` với trường kiểu dữ liệu đặc biệt `vector(768)` trong PostgreSQL.
+   - Vector 768 chiều được lưu trực tiếp vào bảng `ChapterChunks` trong PostgreSQL.
    - Đánh dấu phiên bản chương `IsEmbedded = true`.
 
 ---
@@ -175,8 +175,13 @@ stateDiagram-v2
 3. **Phân tích Đa luồng song song (Task Parallelism):**
    - **RAG Stage 1:** Đọc từng lô chunks bản thảo (`rag.stage1_batch_chunks`), gọi AI trích xuất các facts thô về nhân vật, cốt truyện và lỗi logic kịch bản.
    - **Trích xuất Cẩm nang truyện (Story Bible Extraction - Task 2):** Đọc **toàn bộ 100% nội dung bản thảo đã giải mã** (`decryptedChunks`) và truyền trực tiếp sang Gemini API trong `{textContext}`. Cơ chế này loại bỏ hoàn toàn việc lấy mẫu (sampling) các phần đầu/giữa/cuối, đảm bảo AI tiếp cận toàn diện toàn bộ tác phẩm để lập hồ sơ nhân vật, bối cảnh thế giới, dòng thời gian và chủ đề một cách chi tiết và chính xác nhất.
-   - **RAG Stage 2 (Rubric Judgment):** Hệ thống đọc cấu hình `rag.rubric_batch_size` (mặc định chạy song song **5 tiêu chí Rubric mỗi đợt**) để gửi request tới Gemini. Giúp tốc độ phân tích tăng gấp 4 lần mà không vi phạm rate-limit RPM của nhà cung cấp.
-4. **Phát hiện 6 Cảnh báo Đặc biệt (Warnings Framework):**
+   - **RAG Stage 2 (Rubric Judgment - Mô hình Critic-Coach & Cẩm nang lỗi đặc thù):**
+     * Hệ thống đọc cấu hình `rag.rubric_batch_size` (mặc định song song **5 tiêu chí Rubric mỗi đợt**) để chấm điểm.
+     * **Cẩm nang lỗi đặc thù (Rubric Flaw Hunt List)**: Mỗi tiêu chí được tiêm động một bộ hướng dẫn phát hiện lỗi văn học chuyên sâu (ví dụ: Mary Sue ở mục nhân vật, Deus Ex Machina ở mục cốt truyện, Tell-don't-show và Cliches ở mục văn phong).
+     * **Mô hình Đánh giá Kép (Critic-Coach Prompting)**: 
+       - *errors (Critic)*: Vạch trần chính xác lỗi kèm trích dẫn thực tế và chương cụ thể.
+       - *suggestions (Coach)*: Bắt buộc cung cấp **phương án viết lại mẫu (Example Rewrite)** trực quan sinh động thay vì lời khuyên chung chung.
+4. **Phát hiện 7 Cảnh báo Đặc biệt (Warnings Framework):**
    - AI quét sâu dòng sự kiện để cắm cờ các lỗi hoặc nội dung nhạy cảm:
      *   `ANTI_STATE` (Critical) - Các chi tiết xuyên tạc lịch sử, phản động.
      *   `SEXUAL_CONTENT` (Warning/Critical) - Cảnh tả quan hệ tình dục trần trụi, thô tục.
@@ -184,7 +189,16 @@ stateDiagram-v2
      *   `INCOMPLETE` (Warning) - Truyện bị dừng đột ngột, thiếu chương kết thúc.
      *   `INCONSISTENCY` (Info/Warning) - Mâu thuẫn thiết lập logic (ví dụ nhân vật đã chết bỗng nhiên sống lại).
      *   `REPETITION` (Warning) - Copy paste, lặp đoạn văn văn học.
-5. **Auto-Release:** Sau khi lưu thành công kết quả mã hóa DEK vào bảng `ProjectReports`, trạng thái được đặt thẳng thành `Released` để tác giả có thể xem ngay trên UI mà không cần chờ Staff duyệt.
+     *   `SPELLING_FORMATTING` (Warning) - Quét tỉ mỉ lỗi chính tả, gõ phím tiếng Việt, khoảng trắng kép và chỉ rõ vị trí chương mắc lỗi.
+5. **Auto-Repair RAG trích dẫn & Mở rộng bối cảnh (RAG Quote Matching & Context Expansion):**
+   - **Sửa lỗi lệch chương**: Thực hiện quét so khớp trực tiếp chuỗi ký tự (literal match) của trích dẫn `evidence` mà AI trả về trên toàn bộ các chunk đã giải mã trên RAM ở Backend. Nếu phát hiện phân đoạn thực sự chứa trích dẫn đó, hệ thống ưu tiên gán đúng id chunk của chương chứa trích dẫn, triệt tiêu lỗi lệch chương.
+   - **Mở rộng ngữ cảnh (Context Expansion)**: Khi trả về minh chứng của một chunk `i`, hệ thống tự động ghép thêm nội dung của chunk liền trước (`i - 1`) và liền sau (`i + 1`) của cùng chương và phiên bản, bảo vệ trích dẫn không bao giờ bị cắt cụt câu văn ở biên phân đoạn.
+6. **Vẽ biểu đồ Nhịp độ & Cảm xúc (Narrative Analytics - Task 3):**
+   - **Chế độ Toàn Cảnh (Overview - Theo Chương)**: Tự động tính điểm trung bình của từng chương, giúp vẽ biểu đồ phẳng đẹp, dễ theo dõi kịch tính vĩ mô không bị quá tải khi truyện có quy mô lớn (20+ chương).
+   - **Chế độ Chi Tiết Chương (Detail - Theo Phân đoạn)**: Chọn xem cụ thể một chương và chỉ vẽ biểu đồ các đoạn văn của riêng chương đó kết hợp với hộp đối chứng nội dung truyện khi nhấp điểm.
+   - **Thẩm mỹ Đồ họa**: Vẽ bằng đường cong mềm mại (cubic bezier curve), tích hợp SVG Dynamic Tooltips bám theo con trỏ chuột và vertical crosshairs khi hover.
+   - **Phân tích AI đa chiều**: Tự động bóc tách các nhận định AI và hiển thị dạng 4 thẻ Glassmorphic kính mờ sang trọng đại diện cho: ⚡ Nhịp độ, 🎭 Cảm xúc, 👥 Nhân vật, 💡 Đề xuất chỉnh sửa kịch bản.
+7. **Auto-Release:** Sau khi lưu thành công kết quả mã hóa DEK vào bảng `ProjectReports`, trạng thái được đặt thẳng thành `Released` để tác giả có thể xem ngay trên UI mà không cần chờ Staff duyệt.
 6. **Xử lý lỗi và Cơ chế Chạy lại (Error Isolation & Rerun):**
    - **Bảo vệ Trải nghiệm Tác giả (Error Masking):** Nếu quá trình phân tích ngầm gặp lỗi (lỗi API Gemini, tràn quota, hoặc lỗi logic), hệ thống tự động bắt exception. Để đảm bảo trải nghiệm chuyên nghiệp và bảo mật thông tin kỹ thuật, hệ thống **chỉ hiển thị thông báo chung** `"Phân tích thất bại. Vui lòng thử lại."` trên giao diện tác giả và hộp thư thông báo của họ, hoàn toàn che giấu (mask) các chi tiết exception trace phức tạp.
    - **Quyền Chạy lại của Tác giả (User Rerun Right):** Khi phân tích thất bại, giao diện tác giả không bị khóa. Hệ thống hiển thị trực quan nút **"Chạy lại"** ngay bên trong Alert báo lỗi để tác giả lập tức kích hoạt phân tích mới.

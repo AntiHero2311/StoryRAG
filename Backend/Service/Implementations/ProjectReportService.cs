@@ -888,7 +888,8 @@ namespace Service.Implementations
     {""code"":""PLAGIARISM_RISK"",""severity"":""CRITICAL"",""title"":"""",""detail"":""""},
     {""code"":""INCONSISTENCY"",""severity"":""WARNING"",""title"":"""",""detail"":""""},
     {""code"":""SEXUAL_CONTENT"",""severity"":""WARNING"",""title"":"""",""detail"":""""},
-    {""code"":""ANTI_STATE"",""severity"":""CRITICAL"",""title"":"""",""detail"":""""}
+    {""code"":""ANTI_STATE"",""severity"":""CRITICAL"",""title"":"""",""detail"":""""},
+    {""code"":""SPELLING_FORMATTING"",""severity"":""WARNING"",""title"":"""",""detail"":""""}
   ],
   ""overallFeedback"": """"
 }";
@@ -915,6 +916,10 @@ namespace Service.Implementations
                 : $"\n\nGHI CHÚ CỦA TÁC GIẢ (lưu ý khi đọc, không ảnh hưởng điểm):\n{aiInstructions}";
 
             var prompt = $$"""
+                 LƯU Ý QUAN TRỌNG VỀ LỖI CHÍNH TẢ & KỸ THUẬT VĂN BẢN (code="SPELLING_FORMATTING"):
+                 - Bạn PHẢI quét kỹ toàn bộ tác phẩm để phát hiện các lỗi chính tả, lỗi gõ phím tiếng Việt (vd: 'loi' thay vì 'lỗi', 'đưọc' thay vì 'được'), viết hoa tùy tiện, khoảng trắng kép, dấu câu đặt sai vị trí hoặc định dạng văn bản bị lỗi.
+                 - BẮT BUỘC phải chỉ ra các ví dụ cụ thể của từ bị viết sai và định vị rõ chương nào, đoạn nào. Tuyệt đối KHÔNG nhận xét chung chung như "có một số lỗi chính tả". Nếu phát hiện lỗi chính tả, bắt buộc phải trả về warning này với severity="WARNING", title="Lỗi kỹ thuật văn bản & chính tả" và detail liệt kê cụ thể các lỗi kèm vị trí chương để tác giả sửa đổi.
+
                 Bạn là giám khảo văn học chuyên nghiệp. Nhiệm vụ: đọc kỹ toàn bộ văn bản, đánh giá 20 tiêu chí và phát hiện các vấn đề đặc biệt (CHƯA KẾT THÚC, LẶP LẠI, ĐẠO NHÁI...).
 
                 THÔNG TIN HOÀN THIỆN TÁC PHẨM:

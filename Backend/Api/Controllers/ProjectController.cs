@@ -179,17 +179,22 @@ namespace Api.Controllers
         /// Lấy nội dung chunk đã giải mã (theo Guid hoặc ordinal phẳng) để hiển thị bằng chứng RAG.
         /// </summary>
         [HttpGet("{id:guid}/chunks")]
-        public async Task<IActionResult> GetEvidenceChunks(Guid id, [FromQuery] string? ids, [FromQuery] string? ordinals, CancellationToken cancellationToken)
+        public async Task<IActionResult> GetEvidenceChunks(
+            Guid id, 
+            [FromQuery] string? ids, 
+            [FromQuery] string? ordinals, 
+            [FromQuery] string? highlight,
+            CancellationToken cancellationToken)
         {
             try
             {
                 var userId = GetUserId();
                 if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
 
-                if (string.IsNullOrWhiteSpace(ids) && string.IsNullOrWhiteSpace(ordinals))
-                    return BadRequest(new { Message = "Cần tham số ids hoặc ordinals (danh sách phân tách bằng dấu phẩy)." });
+                if (string.IsNullOrWhiteSpace(ids) && string.IsNullOrWhiteSpace(ordinals) && string.IsNullOrWhiteSpace(highlight))
+                    return BadRequest(new { Message = "Cần tham số ids, ordinals hoặc highlight (danh sách phân tách bằng dấu phẩy)." });
 
-                var list = await _reportService.GetProjectEvidenceChunksAsync(id, userId.Value, ids, ordinals, cancellationToken);
+                var list = await _reportService.GetProjectEvidenceChunksAsync(id, userId.Value, ids, ordinals, highlight, cancellationToken);
                 return Ok(list);
             }
             catch (ArgumentException ex)

@@ -202,7 +202,7 @@ public class PdfExportTests
             return Task.FromResult<ProjectReportResponse?>(_report);
         }
 
-        public Task<List<EvidenceChunkItemDto>> GetProjectEvidenceChunksAsync(Guid projectId, Guid userId, string? ids, string? ordinals, CancellationToken cancellationToken = default)
+        public Task<List<EvidenceChunkItemDto>> GetProjectEvidenceChunksAsync(Guid projectId, Guid userId, string? ids, string? ordinals, string? highlight = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
         public Task<List<ProjectReportSnapshotItem>> GetReportSnapshotsAsync(Guid reportId, Guid projectId, Guid userId, CancellationToken cancellationToken = default)

@@ -32,6 +32,7 @@ namespace Service.Interfaces
             Guid userId,
             string? ids,
             string? ordinals,
+            string? highlight = null,
             CancellationToken cancellationToken = default);
 
         /// <summary>
