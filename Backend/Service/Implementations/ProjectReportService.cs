@@ -155,6 +155,8 @@ namespace Service.Implementations
                 cancellationToken);
 
             var chunksRaw = await _context.ChapterChunks
+                .Include(c => c.Version)
+                .ThenInclude(v => v.Chapter)
                 .Where(c => c.ProjectId == projectId && c.Embedding != null && snapshot.ActiveVersionIds.Contains(c.VersionId))
                 .ToListAsync(cancellationToken);
 
@@ -416,12 +418,15 @@ namespace Service.Implementations
                         var relStr = character.Relationships != null ? JsonSerializer.Serialize(character.Relationships) : "[]";
                         var encRel = EncryptionHelper.EncryptWithMasterKey(relStr, rawDek);
 
+                        var rawRole = character.Role ?? "Supporting";
+                        if (rawRole.Length > 50) rawRole = rawRole[..50];
+
                         _context.ReportCharacterEntries.Add(new ReportCharacterEntry
                         {
                             Id = Guid.NewGuid(),
                             ProjectReportId = report.Id,
                             Name = encName,
-                            Role = character.Role ?? "Supporting",
+                            Role = rawRole,
                             Description = encDesc,
                             Background = encBg,
                             TraitsJson = encTraits,
@@ -446,13 +451,16 @@ namespace Service.Implementations
                         var chaptersStr = worldSetting.SourceChapters != null ? JsonSerializer.Serialize(worldSetting.SourceChapters) : "[]";
                         var encChapters = EncryptionHelper.EncryptWithMasterKey(chaptersStr, rawDek);
 
+                        var rawCategory = worldSetting.Category ?? "Other";
+                        if (rawCategory.Length > 50) rawCategory = rawCategory[..50];
+
                         _context.ReportWorldbuildingEntries.Add(new ReportWorldbuildingEntry
                         {
                             Id = Guid.NewGuid(),
                             ProjectReportId = report.Id,
                             Title = encTitle,
                             Content = encContent,
-                            Category = worldSetting.Category ?? "Other",
+                            Category = rawCategory,
                             Importance = encImportance,
                             SourceChaptersJson = encChapters,
                             CreatedAt = DateTime.UtcNow
@@ -493,20 +501,27 @@ namespace Service.Implementations
                         var encTime = !string.IsNullOrWhiteSpace(timelineEvent.TimeLabel)
                             ? EncryptionHelper.EncryptWithMasterKey(timelineEvent.TimeLabel, rawDek)
                             : null;
-                        var encImportance = !string.IsNullOrWhiteSpace(timelineEvent.Importance)
-                            ? EncryptionHelper.EncryptWithMasterKey(timelineEvent.Importance, rawDek)
-                            : null;
+
+                        // Importance là metadata enum (Normal/High/Critical) — KHÔNG mã hóa, varchar(20)
+                        var rawImportance = !string.IsNullOrWhiteSpace(timelineEvent.Importance)
+                            ? timelineEvent.Importance.Length <= 20
+                                ? timelineEvent.Importance
+                                : timelineEvent.Importance[..20]
+                            : "Normal";
+
+                        var rawCategory = timelineEvent.Category ?? "Story";
+                        if (rawCategory.Length > 50) rawCategory = rawCategory[..50];
 
                         _context.ReportTimelineEvents.Add(new ReportTimelineEvent
                         {
                             Id = Guid.NewGuid(),
                             ProjectReportId = report.Id,
-                            Category = timelineEvent.Category ?? "Story",
+                            Category = rawCategory,
                             Title = encTitle,
                             Description = encDesc,
                             TimeLabel = encTime,
                             SortOrder = timelineEvent.SortOrder,
-                            Importance = encImportance ?? "Normal",
+                            Importance = rawImportance,
                             CreatedAt = DateTime.UtcNow
                         });
                     }

@@ -20,13 +20,12 @@ function AreaChart({ values, color, labels, onPointSelect, selectedIndex }: {
 
     const width = 420;
     const height = 96;
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const range = max - min || 1;
 
+    // Phân tích tuyệt đối trên thang đo [0, 100] thay vì tỉ lệ co dãn tương đối của dữ liệu cục bộ
+    // giúp người dùng dễ dàng đối sánh nhịp độ và cảm xúc cùng một hệ quy chiếu.
     const pointCoords = values.map((value, index) => ({
         x: values.length === 1 ? width / 2 : (index / (values.length - 1)) * width,
-        y: height - ((value - min) / range) * height,
+        y: height - (Math.min(Math.max(value, 0), 100) / 100) * height,
     }));
 
     const pathData = pointCoords.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
@@ -42,7 +41,7 @@ function AreaChart({ values, color, labels, onPointSelect, selectedIndex }: {
 
     return (
         <div className="w-full overflow-hidden rounded-xl p-2" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
-            <svg viewBox={`-10 -30 ${width + 20} ${height + 40}`} className="w-full h-40">
+            <svg viewBox={`-35 -30 ${width + 45} ${height + 55}`} className="w-full h-44">
                 <defs>
                     <linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
                         <stop offset="0%" style={{ stopColor: color, stopOpacity: 0.4 }} />
@@ -53,6 +52,36 @@ function AreaChart({ values, color, labels, onPointSelect, selectedIndex }: {
                         <feComposite in="SourceGraphic" in2="blur" operator="over" />
                     </filter>
                 </defs>
+
+                {/* Đường lưới kẻ ngang (Gridlines) & Nhãn trục Y từ 0 đến 100 */}
+                {[0, 25, 50, 75, 100].map((tick) => {
+                    const yVal = height - (tick / 100) * height;
+                    return (
+                        <g key={tick}>
+                            <line 
+                                x1="0" 
+                                y1={yVal} 
+                                x2={width} 
+                                y2={yVal} 
+                                stroke="rgba(255, 255, 255, 0.08)" 
+                                strokeWidth="1" 
+                                strokeDasharray={tick === 0 || tick === 100 ? "0" : "4 4"}
+                            />
+                            <text
+                                x="-10"
+                                y={yVal + 3.5}
+                                textAnchor="end"
+                                fill="rgba(255, 255, 255, 0.5)"
+                                fontSize="9"
+                                fontWeight="500"
+                                style={{ fontFamily: 'monospace' }}
+                            >
+                                {tick}
+                            </text>
+                        </g>
+                    );
+                })}
+
                 <path
                     d={areaPathData}
                     fill={`url(#${gradientId})`}
@@ -83,6 +112,34 @@ function AreaChart({ values, color, labels, onPointSelect, selectedIndex }: {
                         <title>Đoạn {i + 1}: {values[i].toFixed(1)}</title>
                     </circle>
                 ))}
+
+                {/* Nhãn mốc phân đoạn trên trục X ở dưới đáy biểu đồ */}
+                {values.map((_, index) => {
+                    const shouldRenderLabel = 
+                        values.length <= 8 || 
+                        index === 0 || 
+                        index === values.length - 1 || 
+                        (values.length <= 16 && index % 2 === 0) || 
+                        (values.length <= 30 && index % 5 === 0) || 
+                        (index % 10 === 0);
+
+                    if (!shouldRenderLabel) return null;
+
+                    const xVal = values.length === 1 ? width / 2 : (index / (values.length - 1)) * width;
+                    return (
+                        <text
+                            key={index}
+                            x={xVal}
+                            y={height + 16}
+                            textAnchor="middle"
+                            fill="rgba(255, 255, 255, 0.38)"
+                            fontSize="8"
+                            fontWeight="500"
+                        >
+                            Đoạn {index + 1}
+                        </text>
+                    );
+                })}
 
                 {annotatedPoints.map((p, i) => (
                     <g key={i}>

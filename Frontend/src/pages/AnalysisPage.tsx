@@ -15,7 +15,7 @@ import NarrativeChartsPanel from '../components/analysis/NarrativeChartsPanel';
 
 import SnapshotViewerPanel from '../components/analysis/SnapshotViewerPanel';
 import StoryBiblePanel from '../components/analysis/StoryBiblePanel';
-import ChatPanel from '../components/workspace/ChatPanel';
+import AnalysisChatPanel from '../components/analysis/AnalysisChatPanel';
 import { useToast } from '../components/Toast';
 import { browserNotificationService } from '../services/browserNotificationService';
 import { appNotificationService } from '../services/appNotificationService';
@@ -68,6 +68,34 @@ function AnalysisContent() {
     const interactiveJobRef = useRef<string | null>(null);
     const processingAnnouncedRef = useRef<string | null>(null);
     const projectPickerRef = useRef<HTMLDivElement | null>(null);
+    const reportCacheRef = useRef<Record<string, ProjectReportResponse>>({});
+
+    const getCachedReport = (reportId: string): ProjectReportResponse | null => {
+        if (reportCacheRef.current[reportId]) {
+            return reportCacheRef.current[reportId];
+        }
+        try {
+            const val = sessionStorage.getItem(`report_cache:${reportId}`);
+            if (val) {
+                const parsed = JSON.parse(val) as ProjectReportResponse;
+                reportCacheRef.current[reportId] = parsed;
+                return parsed;
+            }
+        } catch (e) {
+            console.error('Failed to read from sessionStorage:', e);
+        }
+        return null;
+    };
+
+    const setCachedReport = (reportId: string, data: ProjectReportResponse) => {
+        reportCacheRef.current[reportId] = data;
+        try {
+            sessionStorage.setItem(`report_cache:${reportId}`, JSON.stringify(data));
+        } catch (e) {
+            console.error('Failed to write to sessionStorage:', e);
+        }
+    };
+
     const toast = useToast();
     const normalizeAnalysisErrorMessage = (message?: string | null) => {
         if (!message) return null;
@@ -228,6 +256,9 @@ function AnalysisContent() {
             }
 
             let effectiveLatest = latest;
+            if (latest) {
+                setCachedReport(latest.id, latest);
+            }
             let effectiveHistory = mergeHistory(all, latest);
 
             if (!effectiveLatest && effectiveHistory.length === 0 && latestJob?.reportId) {
@@ -236,6 +267,7 @@ function AnalysisContent() {
                     .catch(() => null);
                 if (recoveredByReportId && mountedRef.current && !cancelled) {
                     effectiveLatest = recoveredByReportId;
+                    setCachedReport(recoveredByReportId.id, recoveredByReportId);
                     effectiveHistory = mergeHistory(all, recoveredByReportId);
                 }
             }
@@ -253,6 +285,7 @@ function AnalysisContent() {
                     });
                 if (recovered && mountedRef.current && !cancelled) {
                     effectiveLatest = recovered;
+                    setCachedReport(recovered.id, recovered);
                     effectiveHistory = mergeHistory(all, recovered);
                 }
             }
@@ -264,6 +297,7 @@ function AnalysisContent() {
                     .catch(() => null);
                 if (newestFromHistory && mountedRef.current && !cancelled) {
                     effectiveLatest = newestFromHistory;
+                    setCachedReport(newestFromHistory.id, newestFromHistory);
                     effectiveHistory = mergeHistory(all, newestFromHistory);
                 }
             }
@@ -369,6 +403,12 @@ function AnalysisContent() {
         setAnalyzing(true);
         setAnalysisJob(job);
         setError(null);
+
+        // Clear any stale report to prevent UI errors/crashes during analysis
+        setReport(null);
+        setActiveReportId(null);
+        setActiveTab('overall');
+
         setAnalysisStatus({
             type: 'info',
             message: job.isExistingJob
@@ -381,6 +421,7 @@ function AnalysisContent() {
             const result = await pollAnalyzeJob(projectId, job.jobId);
             if (!result || !mountedRef.current) return;
 
+            setCachedReport(result.id, result);
             setReport(result);
             setActiveReportId(result.id);
             const all = await reportService.getAll(projectId).catch(() => []);
@@ -466,6 +507,12 @@ function AnalysisContent() {
         setError(null);
         setAnalysisJob(null);
         setAnalyzing(true);
+
+        // Clear any stale report immediately to prevent UI errors/crashes during new analysis
+        setReport(null);
+        setActiveReportId(null);
+        setActiveTab('overall');
+
         setAnalysisStatus({ type: 'info', message: 'AI đã nhận được request. Đang gửi yêu cầu phân tích. Vui lòng chờ trong ít phút...' });
         startElapsedTimer();
         try {
@@ -538,11 +585,23 @@ function AnalysisContent() {
 
     const handleLoadHistory = async (h: ProjectReportSummary) => {
         if (h.id === activeReportId || loadingHistoryReport) return;
+
+        // Check client-side cache first for instant loading
+        const cached = getCachedReport(h.id);
+        if (cached) {
+            setReport(cached);
+            setActiveReportId(cached.id);
+            setExpandedGroups({});
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+        }
+
         setLoadingHistoryReport(h.id);
         setError(null);
         try {
             const full = await reportService.getById(selectedId, h.id);
             if (full) {
+                setCachedReport(full.id, full);
                 setReport(full);
                 setActiveReportId(full.id);
                 setExpandedGroups({});
@@ -1124,7 +1183,7 @@ function AnalysisContent() {
                                                 <p className="text-[var(--text-secondary)] text-xs mt-1">Trò chuyện với AI về nhân vật, cốt truyện, bối cảnh và các khía cạnh trong tác phẩm dựa trên báo cáo phân tích và cẩm nang truyện.</p>
                                             </div>
                                             <div className="flex-1 flex flex-col min-h-0 bg-[var(--bg-app)] rounded-xl border border-[var(--border-color)] overflow-hidden">
-                                                <ChatPanel projectId={selectedId} isEmbedded={true} />
+                                                <AnalysisChatPanel projectId={selectedId} report={report} />
                                             </div>
                                         </div>
                                     </div>

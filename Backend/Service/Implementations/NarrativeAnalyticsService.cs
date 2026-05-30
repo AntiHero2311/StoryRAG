@@ -660,14 +660,14 @@ QUY TẮC BẮT BUỘC:
             minPoint.Label = $"Thấp nhất: {minPoint.Score:F0}";
 
             var avgScore = points.Average(p => p.Score);
-            insights.Add($"📊 Pacing: Nhịp độ trung bình {avgScore:F1}/100. Đỉnh cao nhất tại chương {maxPoint.ChapterNumber} (segment {maxPoint.SegmentIndex}, score {maxPoint.Score:F0}), thấp nhất tại chương {minPoint.ChapterNumber} (segment {minPoint.SegmentIndex}, score {minPoint.Score:F0}).");
+            insights.Add($"Nhịp độ: Nhịp độ trung bình {avgScore:F1}/100. Đỉnh cao nhất tại chương {maxPoint.ChapterNumber} (segment {maxPoint.SegmentIndex}, score {maxPoint.Score:F0}), thấp nhất tại chương {minPoint.ChapterNumber} (segment {minPoint.SegmentIndex}, score {minPoint.Score:F0}).");
 
             var highCount = points.Count(p => p.Score > 65);
             var lowCount = points.Count(p => p.Score < 35);
             if (highCount > lowCount * 2)
-                insights.Add("⚡ Nhịp độ nghiêng về nhanh/action liên tục — có thể cần thêm đoạn nghỉ để người đọc 'thở'.");
+                insights.Add("Nhịp độ nghiêng về nhanh/action liên tục — có thể cần thêm đoạn nghỉ để người đọc 'thở'.");
             else if (lowCount > highCount * 2)
-                insights.Add("🐌 Nhịp độ nghiêng về chậm/nội tâm — có thể cần thêm cảnh hành động để tăng kịch tính.");
+                insights.Add("Nhịp độ nghiêng về chậm/nội tâm — có thể cần thêm cảnh hành động để tăng kịch tính.");
         }
 
         private static void AnnotateEmotionPoints(List<EmotionPoint> points, List<string> insights)
@@ -694,11 +694,11 @@ QUY TẮC BẮT BUỘC:
                 .ToList();
 
             if (emotionCounts.Count > 0)
-                insights.Add($"🎭 Cảm xúc chủ đạo: {string.Join(", ", emotionCounts)}.");
+                insights.Add($"Cảm xúc chủ đạo: {string.Join(", ", emotionCounts)}.");
 
             var avgValence = points.Average(p => p.Valence);
             var tone = avgValence > 0.2 ? "tích cực" : avgValence < -0.2 ? "tiêu cực" : "trung tính";
-            insights.Add($"💫 Tone cảm xúc tổng thể: {tone} (valence trung bình: {avgValence:F2}).");
+            insights.Add($"Tone cảm xúc tổng thể: {tone} (valence trung bình: {avgValence:F2}).");
         }
 
         private static void GenerateCharacterInsights(
@@ -710,19 +710,19 @@ QUY TẮC BẮT BUỘC:
 
             var topN = Math.Min(frequencies.Count, 5);
             var topList = frequencies.Take(topN).Select(f => $"{f.CharacterName} ({f.TotalMentions} lần)").ToList();
-            insights.Add($"👥 Nhân vật xuất hiện nhiều nhất: {string.Join(", ", topList)}.");
+            insights.Add($"Nhân vật xuất hiện nhiều nhất: {string.Join(", ", topList)}.");
 
             if (frequencies.Count >= 2)
             {
                 var ratio = (double)frequencies[0].TotalMentions / Math.Max(1, frequencies[1].TotalMentions);
                 if (ratio > 3)
-                    insights.Add($"⚠️ Nhân vật {frequencies[0].CharacterName} áp đảo về lượng xuất hiện (gấp {ratio:F1}x nhân vật thứ 2). Các nhân vật phụ có thể cần phát triển thêm.");
+                    insights.Add($"Nhân vật {frequencies[0].CharacterName} áp đảo về lượng xuất hiện (gấp {ratio:F1}x nhân vật thứ 2). Các nhân vật phụ có thể cần phát triển thêm.");
             }
 
             if (relationships.Count > 0)
             {
                 var topRel = relationships[0];
-                insights.Add($"🔗 Mối quan hệ mạnh nhất: {topRel.SourceCharacter} ↔ {topRel.TargetCharacter} (đồng xuất hiện {topRel.Weight} lần).");
+                insights.Add($"Mối quan hệ mạnh nhất: {topRel.SourceCharacter} ↔ {topRel.TargetCharacter} (đồng xuất hiện {topRel.Weight} lần).");
             }
         }
 

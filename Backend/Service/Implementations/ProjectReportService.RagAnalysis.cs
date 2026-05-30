@@ -110,12 +110,23 @@ namespace Service.Implementations
                         return;
                     }
 
-                    var contextParts = new List<string>(ranked.Count);
-                    foreach (var (ch, ord) in ranked)
+                    // Sắp xếp các đoạn trích (chunks) theo đúng thứ tự dòng thời gian của câu chuyện (chronological order)
+                    // để tránh AI bị hiểu sai hoặc đánh giá rời rạc các tình tiết nằm ngoài thứ tự.
+                    var chronRanked = ranked.OrderBy(r => r.Ordinal).ToList();
+
+                    var contextParts = new List<string>(chronRanked.Count);
+                    foreach (var (ch, ord) in chronRanked)
                     {
                         var plain = decryptedChunks[ordinalByChunkId[ch.Id]];
                         var snippet = TruncateForPrompt(PromptSanitizer.SanitizeUserContent(plain), 1600);
-                        contextParts.Add($"[chunk_ord={ord}]\n{snippet}");
+
+                        var chNum = ch.Version?.Chapter?.ChapterNumber;
+                        var chTitle = ch.Version?.Chapter?.Title;
+                        var locationStr = chNum.HasValue
+                            ? (string.IsNullOrWhiteSpace(chTitle) ? $"Chương {chNum.Value}" : $"Chương {chNum.Value}: {chTitle}")
+                            : "Không rõ chương";
+
+                        contextParts.Add($"[Đoạn trích (chunk_ord={ord}) - Vị trí: {locationStr}]\n{snippet}");
                     }
 
                     var judgeUserPrompt = $$"""
@@ -133,15 +144,19 @@ namespace Service.Implementations
                         {{(string.IsNullOrEmpty(bibleForPrompt) ? "(Không có)" : bibleForPrompt)}}
                         {{instructionsPart}}
 
-                        ĐOẠN TRUYỆN TRÍCH (chỉ dùng làm bằng chứng; chunk_ord là id nguyên số để trả về evidence_chunk_ids):
+                        ĐOẠN TRUYỆN TRÍCH (Đã được sắp xếp theo đúng thứ tự thời gian của truyện để đảm bảo tính liên kết cốt truyện; chunk_ord là id nguyên số dùng để điền evidence_chunk_ids):
                         {{string.Join("\n\n---\n\n", contextParts)}}
+
+                        QUY TẮC PHÂN BIỆT TRÙNG LẶP KỸ THUẬT VS LẶP CỐT TRUYỆN THỰC TẾ:
+                        1. LẶP KỸ THUẬT (OVERLAP): Giữa các đoạn trích kề nhau của cùng một chương (ví dụ cùng thuộc 'Chương 2') có thể có sự trùng lặp nhẹ về câu chữ ở ranh giới biên (đây là kỹ thuật overlap để không mất context khi cắt nhỏ văn bản). Bạn PHẢI bỏ qua sự lặp lại kỹ thuật này, tuyệt đối không được đánh giá là tác giả viết lặp ý hay lỗi văn phong.
+                        2. LẶP CHƯƠNG THỰC TẾ (DUPLICATE): Nếu bạn phát hiện hai hoặc nhiều đoạn trích thuộc các chương KHÁC NHAU (ví dụ một đoạn thuộc 'Chương 2' và một đoạn thuộc 'Chương 3') có nội dung giống hệt nhau hoặc gần như giống hệt nhau, đây là lỗi trùng lặp nội dung thực tế do tác giả (ví dụ tác giả copy nhầm chương hoặc viết lặp chương). Bạn PHẢI chỉ ra lỗi nghiêm trọng này trong phần 'errors' để tác giả biết và xử lý.
 
                         Trả về JSON thuần túy một object với các field:
                         - score (0 đến {{max}})
-                        - feedback (3-5 câu tiếng Việt)
+                        - feedback (3-5 câu tiếng Việt đánh giá tích cực/tiêu cực khách quan, tuyệt đối không dùng từ 'chunk' hay 'chunk_ord')
                         - evidence (trích dẫn ngắn từ đoạn trên)
-                        - errors (mảng ≥3 chuỗi): Mỗi chuỗi phải chỉ rõ một vấn đề/sạn cốt truyện cụ thể phát hiện được trong phần trích. Yêu cầu chỉ rõ chương nào, tình tiết nào hoặc nhân vật nào gặp vấn đề, và đưa ra ví dụ cụ thể, tuyệt đối KHÔNG viết chung chung lý thuyết.
-                        - suggestions (mảng ≥3 chuỗi): Mỗi chuỗi là giải pháp/khuyến nghị tương ứng cho vấn đề ở trên. Yêu cầu đưa ra ví dụ cụ thể (như gợi ý cách viết lại, lời thoại mẫu hoặc hướng điều chỉnh tình tiết rõ ràng), tuyệt đối KHÔNG khuyên bảo chung chung mơ hồ.
+                        - errors (mảng ≥3 chuỗi): Mỗi chuỗi phải chỉ rõ một vấn đề/sạn cốt truyện cụ thể phát hiện được trong phần trích. Yêu cầu chỉ rõ chương nào (dựa trên thông tin 'Vị trí: Chương X' của đoạn trích), tình tiết nào hoặc nhân vật nào gặp vấn đề, và đưa ra ví dụ cụ thể. Tuyệt đối KHÔNG viết chung chung lý thuyết, và TUYỆT ĐỐI KHÔNG đề cập đến các từ ngữ kỹ thuật hệ thống như 'chunk', 'chunk_ord' hay 'đoạn trích' trong nội dung phản hồi cho tác giả.
+                        - suggestions (mảng ≥3 chuỗi): Mỗi chuỗi là giải pháp/khuyến nghị tương ứng cho vấn đề ở trên. Yêu cầu đưa ra ví dụ cụ thể (như gợi ý cách viết lại, lời thoại mẫu hoặc hướng điều chỉnh tình tiết rõ ràng), tuyệt đối KHÔNG khuyên bảo chung chung mơ hồ, và TUYỆT ĐỐI KHÔNG sử dụng các từ kỹ thuật như 'chunk' hay 'chunk_ord' trong nội dung đề xuất.
                         - bibleComparison (chuỗi hoặc null)
                         - evidence_chunk_ids (mảng số nguyên — các chunk_ord đã dùng).
 

@@ -406,7 +406,7 @@ namespace Repository.Data
                 entity.Property(e => e.Category).IsRequired().HasMaxLength(50).HasDefaultValue("Story");
                 entity.Property(e => e.Title).IsRequired();
                 entity.Property(e => e.Description).IsRequired().HasDefaultValue(string.Empty);
-                entity.Property(e => e.TimeLabel).HasMaxLength(100);
+                entity.Property(e => e.TimeLabel);
                 entity.Property(e => e.SortOrder).HasDefaultValue(0);
                 entity.Property(e => e.Importance).IsRequired().HasMaxLength(20).HasDefaultValue("Normal");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
