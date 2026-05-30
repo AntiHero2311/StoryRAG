@@ -1,5 +1,13 @@
 import api from './api';
 
+export interface GenreInfo {
+    id: number;
+    name: string;
+    slug: string;
+    color: string;
+    description?: string;
+}
+
 export interface UserSummary {
     id: string;
     fullName: string;
@@ -7,6 +15,7 @@ export interface UserSummary {
     role: string;
     isActive: boolean;
     createdAt: string;
+    genres: GenreInfo[];
 }
 
 export interface UserStatsResponse {
@@ -112,6 +121,20 @@ export const adminService = {
     },
     setUserActive: async (id: string, isActive: boolean): Promise<UserSummary> => {
         const response = await api.patch<UserSummary>(`/admin/users/${id}/active`, { isActive });
+        return response.data;
+    },
+
+    // ── Staff Genre Specialization ────────────────────────────────────────────
+    getAllStaffWithGenres: async (): Promise<UserSummary[]> => {
+        const response = await api.get<UserSummary[]>('/admin/staff/genres');
+        return response.data;
+    },
+    getStaffGenres: async (staffId: string): Promise<UserSummary> => {
+        const response = await api.get<UserSummary>(`/admin/staff/${staffId}/genres`);
+        return response.data;
+    },
+    assignStaffGenres: async (staffId: string, genreIds: number[]): Promise<UserSummary> => {
+        const response = await api.put<UserSummary>(`/admin/staff/${staffId}/genres`, { genreIds });
         return response.data;
     },
 };

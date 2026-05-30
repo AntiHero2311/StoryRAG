@@ -115,9 +115,28 @@ export default function FeedbackPage() {
                       <div className="mt-0.5 w-2.5 h-2.5 rounded-full shrink-0" style={{ background: unread ? '#ef4444' : 'rgba(148,163,184,0.35)' }} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-4">
-                          <p className="font-semibold text-sm truncate" style={{ color: 'var(--text-bright)' }}>
-                            {fb.staffName || 'Staff'} · {fb.status}
-                          </p>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm truncate" style={{ color: 'var(--text-bright)' }}>
+                              {fb.staffName || 'Staff'} · {fb.status}
+                            </p>
+                            {fb.staffGenres && fb.staffGenres.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {fb.staffGenres.map(g => (
+                                  <span
+                                    key={g.id}
+                                    className="px-2 py-0.5 rounded text-[10px] font-bold"
+                                    style={{
+                                      backgroundColor: `${g.color}15`,
+                                      color: g.color,
+                                      border: `1px solid ${g.color}30`
+                                    }}
+                                  >
+                                    {g.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                           <p className="text-xs shrink-0" style={{ color: 'var(--text-secondary)' }}>{fmtDate(fb.createdAt)}</p>
                         </div>
                         {fb.projectReportId && (

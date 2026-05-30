@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, ChevronUp, ChevronDown, RefreshCw, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, ChevronUp, ChevronDown, RefreshCw, Loader2, BookOpen } from 'lucide-react';
 import MainLayout from '../../layouts/MainLayout';
-import { adminService, type UserSummary, type UserStatsResponse } from '../../services/adminService';
+import { adminService, type UserSummary, type UserStatsResponse, type GenreInfo } from '../../services/adminService';
+import { genreService } from '../../services/genreService';
+import type { GenreResponse } from '../../services/projectService';
 import { AdminPageShell, roleStyle, roleLabel } from '../../components/admin/AdminShared';
 import UserFormModal, { type UserFormState } from '../../components/admin/UserFormModal';
+import StaffGenreModal from '../../components/admin/StaffGenreModal';
 
 type SortKey = 'fullName' | 'email' | 'role' | 'createdAt';
 type SortDir = 'asc' | 'desc';
@@ -23,10 +26,19 @@ export default function AdminUsersPage() {
     const [userFormError, setUserFormError] = useState('');
     const [togglingId, setTogglingId] = useState<string | null>(null);
 
+    // Genre specialization
+    const [genreModalStaff, setGenreModalStaff] = useState<UserSummary | null>(null);
+    const [allGenres, setAllGenres] = useState<GenreResponse[]>([]);
+
     const load = async () => {
         setLoading(true);
         try {
-            setStats(await adminService.getUserStats());
+            const [statsData, genreData] = await Promise.all([
+                adminService.getUserStats(),
+                genreService.getGenres(),
+            ]);
+            setStats(statsData);
+            setAllGenres(genreData);
         } finally {
             setLoading(false);
         }
@@ -101,6 +113,18 @@ export default function AdminUsersPage() {
         }
     };
 
+    // Update local state when genre saved (avoid full reload)
+    const handleGenreSaved = (updated: UserSummary) => {
+        setStats(prev => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                users: prev.users.map(u => u.id === updated.id ? { ...u, genres: updated.genres } : u),
+            };
+        });
+        setGenreModalStaff(null);
+    };
+
     const SortIcon = ({ col }: { col: SortKey }) =>
         sortKey === col
             ? (sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 inline ml-1" /> : <ChevronDown className="w-3.5 h-3.5 inline ml-1" />)
@@ -129,6 +153,16 @@ export default function AdminUsersPage() {
                             error={userFormError}
                             onClose={() => { setUserModal(null); setEditingUser(null); }}
                             onSave={form => void handleSaveUser(form)}
+                        />
+                    )}
+
+                    {/* Genre Modal */}
+                    {genreModalStaff && (
+                        <StaffGenreModal
+                            staff={genreModalStaff}
+                            allGenres={allGenres}
+                            onClose={() => setGenreModalStaff(null)}
+                            onSaved={handleGenreSaved}
                         />
                     )}
 
@@ -167,7 +201,23 @@ export default function AdminUsersPage() {
                                 <tbody className="divide-y divide-[var(--border-color)]">
                                     {filtered.map(user => (
                                         <tr key={user.id} className="hover:bg-[var(--text-primary)]/5">
-                                            <td className="px-4 py-3 font-medium">{user.fullName}</td>
+                                            <td className="px-4 py-3">
+                                                <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{user.fullName}</div>
+                                                {/* Genre tags for Staff */}
+                                                {user.role === 'Staff' && (user.genres ?? []).length > 0 && (
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {(user.genres as GenreInfo[]).map(g => (
+                                                            <span
+                                                                key={g.id}
+                                                                className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold"
+                                                                style={{ background: `${g.color}22`, color: g.color }}
+                                                            >
+                                                                {g.name}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-3 text-[var(--text-secondary)]">{user.email}</td>
                                             <td className="px-4 py-3">
                                                 <span className={`px-2 py-0.5 rounded-full text-xs border ${roleStyle(user.role)}`}>{roleLabel(user.role)}</span>
@@ -184,6 +234,17 @@ export default function AdminUsersPage() {
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex justify-end gap-1">
+                                                    {/* Genre assignment button — only for Staff */}
+                                                    {user.role === 'Staff' && (
+                                                        <button
+                                                            type="button"
+                                                            title="Quản lý thể loại chuyên môn"
+                                                            onClick={() => setGenreModalStaff(user)}
+                                                            className="p-2 rounded-lg hover:bg-amber-500/20 text-amber-400 transition-colors"
+                                                        >
+                                                            <BookOpen className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                     <button type="button" onClick={() => { setEditingUser(user); setUserModal('edit'); }} className="p-2 rounded-lg hover:bg-indigo-500/20 text-indigo-400"><Pencil className="w-4 h-4" /></button>
                                                     <button type="button" onClick={async () => {
                                                         if (!window.confirm(`Xoá/khoá ${user.fullName}?`)) return;

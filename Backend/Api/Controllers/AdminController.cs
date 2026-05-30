@@ -243,5 +243,73 @@ namespace Api.Controllers
                 return BadRequest(new { Message = ex.Message });
             }
         }
+
+        // ── Staff Genre Specialization ─────────────────────────────────────────────
+
+        /// <summary>Lấy danh sách tất cả Staff kèm thể loại chuyên môn.</summary>
+        [HttpGet("staff/genres")]
+        public async Task<IActionResult> GetAllStaffWithGenres()
+        {
+            try
+            {
+                return Ok(await _adminService.GetAllStaffWithGenresAsync());
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
+        /// <summary>Lấy thể loại chuyên môn của một Staff.</summary>
+        [HttpGet("staff/{id:guid}/genres")]
+        public async Task<IActionResult> GetStaffGenres(Guid id)
+        {
+            try
+            {
+                return Ok(await _adminService.GetStaffGenresAsync(id));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
+        /// <summary>Gán (thay thế toàn bộ) thể loại chuyên môn cho một Staff.</summary>
+        [HttpPut("staff/{id:guid}/genres")]
+        public async Task<IActionResult> AssignStaffGenres(Guid id, [FromBody] StaffGenreAssignRequest request)
+        {
+            var adminId = GetUserId();
+            if (adminId == null) return Unauthorized();
+
+            try
+            {
+                var result = await _adminService.AssignStaffGenresAsync(id, request, adminId.Value);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
     }
 }

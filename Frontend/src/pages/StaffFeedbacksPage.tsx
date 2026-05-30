@@ -144,7 +144,26 @@ export default function StaffFeedbacksPage() {
                                         <div className="flex flex-wrap items-start justify-between gap-2">
                                             <div>
                                                 <p className="font-semibold text-[var(--text-primary)] text-sm">{item.authorName}</p>
-                                                <p className="text-xs text-[var(--text-tertiary)]">Staff: {item.staffName} · {fmtDate(item.createdAt)}</p>
+                                                <div className="flex flex-wrap items-center gap-2 mt-1">
+                                                    <p className="text-xs text-[var(--text-tertiary)]">Staff: {item.staffName} · {fmtDate(item.createdAt)}</p>
+                                                    {item.staffGenres && item.staffGenres.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {item.staffGenres.map(g => (
+                                                                <span
+                                                                    key={g.id}
+                                                                    className="px-1.5 py-0.5 rounded text-[9px] font-bold animate-fade-in"
+                                                                    style={{
+                                                                        backgroundColor: `${g.color}15`,
+                                                                        color: g.color,
+                                                                        border: `1px solid ${g.color}25`
+                                                                    }}
+                                                                >
+                                                                    {g.name}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                                                 item.status === 'Open' ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400'

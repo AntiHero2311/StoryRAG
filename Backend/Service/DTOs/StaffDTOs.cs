@@ -87,6 +87,9 @@ namespace Service.DTOs
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public DateTime? ReadAt { get; set; }
+
+        /// <summary>Thể loại chuyên môn của staff gửi feedback này.</summary>
+        public List<GenreResponse> StaffGenres { get; set; } = new();
     }
 
     public class FeedbackResponseRequest : IValidatableObject

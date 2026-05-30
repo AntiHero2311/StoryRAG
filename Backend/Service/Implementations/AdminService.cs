@@ -42,14 +42,31 @@ namespace Service.Implementations
                 .OrderByDescending(u => u.CreatedAt)
                 .ToListAsync();
 
-            var summaries = users.Select(u => new UserSummaryDto
+            // Load genres for all Staff users in one query
+            var staffIds = users.Where(u => u.Role == "Staff").Select(u => u.Id).ToList();
+            var staffGenreMap = staffIds.Count > 0
+                ? await _context.StaffGenres
+                    .Where(sg => staffIds.Contains(sg.StaffId))
+                    .Include(sg => sg.Genre)
+                    .GroupBy(sg => sg.StaffId)
+                    .ToDictionaryAsync(
+                        g => g.Key,
+                        g => g.Select(sg => new GenreResponse
+                        {
+                            Id = sg.Genre.Id,
+                            Name = sg.Genre.Name,
+                            Slug = sg.Genre.Slug,
+                            Color = sg.Genre.Color,
+                            Description = sg.Genre.Description
+                        }).ToList())
+                : new Dictionary<Guid, List<GenreResponse>>();
+
+            var summaries = users.Select(u =>
             {
-                Id = u.Id,
-                FullName = u.FullName,
-                Email = u.Email,
-                Role = u.Role,
-                IsActive = u.IsActive,
-                CreatedAt = u.CreatedAt
+                var dto = MapSummary(u);
+                if (u.Role == "Staff" && staffGenreMap.TryGetValue(u.Id, out var genres))
+                    dto.Genres = genres;
+                return dto;
             }).ToList();
 
             return new UserStatsResponse
@@ -324,6 +341,107 @@ namespace Service.Implementations
         {
             if (!AllowedRoles.Contains(role))
                 throw new ArgumentException("Role không hợp lệ. Chọn Author, Staff hoặc Admin.");
+        }
+
+        // ── Staff Genre Specialization ────────────────────────────────────────────
+
+        public async Task<List<UserSummaryDto>> GetAllStaffWithGenresAsync()
+        {
+            var staffUsers = await _context.Users
+                .AsNoTracking()
+                .Where(u => u.Role == "Staff")
+                .OrderBy(u => u.FullName)
+                .ToListAsync();
+
+            var staffIds = staffUsers.Select(u => u.Id).ToList();
+            var genreMap = await BuildGenreMapAsync(staffIds);
+
+            return staffUsers.Select(u =>
+            {
+                var dto = MapSummary(u);
+                if (genreMap.TryGetValue(u.Id, out var genres))
+                    dto.Genres = genres;
+                return dto;
+            }).ToList();
+        }
+
+        public async Task<UserSummaryDto> GetStaffGenresAsync(Guid staffId)
+        {
+            var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == staffId)
+                ?? throw new KeyNotFoundException("Không tìm thấy người dùng.");
+            if (user.Role != "Staff")
+                throw new InvalidOperationException("Chỉ Staff mới có thể loại chuyên môn.");
+
+            var dto = MapSummary(user);
+            var genreMap = await BuildGenreMapAsync(new List<Guid> { staffId });
+            if (genreMap.TryGetValue(staffId, out var genres))
+                dto.Genres = genres;
+            return dto;
+        }
+
+        public async Task<UserSummaryDto> AssignStaffGenresAsync(Guid staffId, StaffGenreAssignRequest request, Guid adminId)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == staffId)
+                ?? throw new KeyNotFoundException("Không tìm thấy người dùng.");
+            if (user.Role != "Staff")
+                throw new InvalidOperationException("Chỉ có thể gán thể loại cho Staff.");
+
+            // Validate genres exist
+            if (request.GenreIds.Count > 0)
+            {
+                var validIds = await _context.Genres
+                    .Where(g => request.GenreIds.Contains(g.Id))
+                    .Select(g => g.Id)
+                    .ToListAsync();
+                var invalid = request.GenreIds.Except(validIds).ToList();
+                if (invalid.Count > 0)
+                    throw new ArgumentException($"Genre không hợp lệ: {string.Join(", ", invalid)}");
+            }
+
+            // Replace all — remove old, add new
+            var existing = await _context.StaffGenres.Where(sg => sg.StaffId == staffId).ToListAsync();
+            _context.StaffGenres.RemoveRange(existing);
+
+            var now = DateTime.UtcNow;
+            foreach (var genreId in request.GenreIds.Distinct())
+            {
+                _context.StaffGenres.Add(new Repository.Entities.StaffGenre
+                {
+                    StaffId = staffId,
+                    GenreId = genreId,
+                    AssignedAt = now,
+                    AssignedBy = adminId
+                });
+            }
+
+            await _context.SaveChangesAsync();
+            await _auditLog.LogAsync("Staff", "AssignGenres",
+                $"Gán {request.GenreIds.Count} thể loại cho staff {user.Email}", adminId);
+
+            return await GetStaffGenresAsync(staffId);
+        }
+
+        private async Task<Dictionary<Guid, List<GenreResponse>>> BuildGenreMapAsync(List<Guid> staffIds)
+        {
+            if (staffIds.Count == 0)
+                return new Dictionary<Guid, List<GenreResponse>>();
+
+            return await _context.StaffGenres
+                .AsNoTracking()
+                .Where(sg => staffIds.Contains(sg.StaffId))
+                .Include(sg => sg.Genre)
+                .GroupBy(sg => sg.StaffId)
+                .ToDictionaryAsync(
+                    g => g.Key,
+                    g => g.OrderBy(sg => sg.Genre.Name)
+                          .Select(sg => new GenreResponse
+                          {
+                              Id = sg.Genre.Id,
+                              Name = sg.Genre.Name,
+                              Slug = sg.Genre.Slug,
+                              Color = sg.Genre.Color,
+                              Description = sg.Genre.Description
+                          }).ToList());
         }
 
         public async Task<AdminRevenueDashboardResponse> GetRevenueDashboardAsync(int year, int month, int? planId)

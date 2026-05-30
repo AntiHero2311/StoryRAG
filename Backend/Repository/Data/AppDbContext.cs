@@ -17,6 +17,7 @@ namespace Repository.Data
         public DbSet<Project> Projects { get; set; }
         public DbSet<Genre> Genres { get; set; }
         public DbSet<ProjectGenre> ProjectGenres { get; set; }
+        public DbSet<StaffGenre> StaffGenres { get; set; }
         public DbSet<SubscriptionPlan> SubscriptionPlans { get; set; }
         public DbSet<UserSubscription> UserSubscriptions { get; set; }
         public DbSet<Payment> Payments { get; set; }
@@ -312,6 +313,32 @@ namespace Repository.Data
                       .WithMany(g => g.ProjectGenres)
                       .HasForeignKey(pg => pg.GenreId)
                       .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ── StaffGenre (Staff ↔ Genre specialization) ─────────────────────────
+            modelBuilder.Entity<StaffGenre>(entity =>
+            {
+                entity.HasKey(sg => new { sg.StaffId, sg.GenreId });
+                entity.Property(sg => sg.AssignedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(sg => sg.Staff)
+                      .WithMany()
+                      .HasForeignKey(sg => sg.StaffId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(sg => sg.Genre)
+                      .WithMany()
+                      .HasForeignKey(sg => sg.GenreId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(sg => sg.AssignedByAdmin)
+                      .WithMany()
+                      .HasForeignKey(sg => sg.AssignedBy)
+                      .OnDelete(DeleteBehavior.SetNull)
+                      .IsRequired(false);
+
+                entity.HasIndex(sg => sg.StaffId);
+                entity.HasIndex(sg => sg.GenreId);
             });
             // ── ProjectReport ─────────────────────────────────────────────────────
             modelBuilder.Entity<ProjectReport>(entity =>

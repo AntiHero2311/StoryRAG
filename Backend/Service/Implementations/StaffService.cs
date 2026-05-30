@@ -121,7 +121,29 @@ namespace Service.Implementations
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
-            var items = entities.Select(MapFeedback).ToList();
+
+            // Load genres for all unique staff in this batch
+            var staffIds = entities.Select(e => e.StaffId).Distinct().ToList();
+            var genreMap = staffIds.Count > 0
+                ? await _db.StaffGenres
+                    .AsNoTracking()
+                    .Where(sg => staffIds.Contains(sg.StaffId))
+                    .Include(sg => sg.Genre)
+                    .GroupBy(sg => sg.StaffId)
+                    .ToDictionaryAsync(
+                        g => g.Key,
+                        g => g.OrderBy(sg => sg.Genre.Name)
+                              .Select(sg => new GenreResponse
+                              {
+                                  Id = sg.Genre.Id,
+                                  Name = sg.Genre.Name,
+                                  Slug = sg.Genre.Slug,
+                                  Color = sg.Genre.Color,
+                                  Description = sg.Genre.Description
+                              }).ToList())
+                : new Dictionary<Guid, List<GenreResponse>>();
+
+            var items = entities.Select(e => MapFeedback(e, genreMap)).ToList();
 
             return new StaffPagedResponse<StaffFeedbackResponse>
             {
@@ -837,8 +859,11 @@ namespace Service.Implementations
             return text.Trim();
         }
 
-        private static StaffFeedbackResponse MapFeedback(StaffFeedback feedback)
+        private static StaffFeedbackResponse MapFeedback(
+            StaffFeedback feedback,
+            Dictionary<Guid, List<GenreResponse>>? genreMap = null)
         {
+            var genres = genreMap != null && genreMap.TryGetValue(feedback.StaffId, out var g) ? g : new List<GenreResponse>();
             return new StaffFeedbackResponse
             {
                 Id = feedback.Id,
@@ -858,6 +883,7 @@ namespace Service.Implementations
                 CreatedAt = feedback.CreatedAt,
                 UpdatedAt = feedback.UpdatedAt,
                 ReadAt = feedback.ReadAt,
+                StaffGenres = genres,
             };
         }
 
