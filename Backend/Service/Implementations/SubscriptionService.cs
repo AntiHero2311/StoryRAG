@@ -267,7 +267,7 @@ namespace Service.Implementations
                             userId,
                             "warning",
                             "Hạ cấp gói đã được lên lịch",
-                            $"Yêu cầu hạ cấp xuống gói \"{plan.PlanName}\" đã được ghi nhận. Gói mới sẽ có hiệu lực sau khi gói \"{current.Plan.PlanName}\" hiện tại hết hạn vào {current.EndDate:dd/MM/yyyy}.",
+                            $"Yêu cầu hạ cấp xuống gói \"{plan.PlanName}\" đã được ghi nhận. Gói mới sẽ có hiệu lực sau khi gói \"{current.Plan.PlanName}\" hiện tại hết hạn vào {current.EndDate:dd/MM/yyyy}. Hệ thống không hoàn lại tiền chênh lệch cho chu kỳ hiện tại.",
                             tag: $"subscription-downgrade-scheduled-{current.Id}");
                     }
                     catch { /* Không để lỗi notification chặn luồng chính */ }

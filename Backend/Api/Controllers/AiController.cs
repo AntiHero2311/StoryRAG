@@ -397,7 +397,7 @@ namespace Api.Controllers
     {
         [Required]
         [MinLength(1)]
-        [MaxLength(2000)]
+        [MaxLength(50000)]
         public string Question { get; set; } = string.Empty;
     }
 

@@ -59,11 +59,11 @@ namespace Service.Implementations
             var sysPrompt = @"Bạn là trợ lý AI chuyên nghiệp phân tích cốt truyện, nhân vật và bối cảnh tác phẩm văn học.
 Nhiệm vụ của bạn là trích xuất Cẩm nang truyện (Story Bible) cực kỳ chi tiết, phong phú và chuyên sâu từ nội dung bản thảo được cung cấp.
 
-MỖI THÀNH PHẦN TRÍCH XUẤT CẦN CÓ MỘT NỘI DUNG RẤT CHI TIẾT VÀ ĐẦY ĐỦ. Hãy tuân thủ nghiêm ngặt các yêu cầu sau:
-- Đối với bối cảnh thế giới (worldSettings): Phần mô tả (description) và tầm quan trọng (importance) PHẢI là những đoạn văn phân tích chi tiết, sâu sắc (tối thiểu từ 3 đến 5 câu dài trở lên), mô tả rõ ràng địa lý, cơ chế hoạt động, luật lệ xã hội hoặc quy tắc phép thuật, chứ không viết tóm tắt ngắn gọn.
-- Đối với nhân vật (characters): Phần mô tả (description), tiểu sử (background) và chi tiết mối quan hệ (relationships.description) PHẢI là những đoạn văn dài, đầy đủ (tối thiểu từ 3 đến 5 câu dài trở lên), phân tích sâu sắc ngoại hình, tính cách, động cơ sâu xa, các biến cố cuộc đời và tương tác tâm lý tinh tế với các nhân vật khác.
-- Đối với sự kiện dòng thời gian (timelineEvents): Diễn biến sự kiện (description) và ý nghĩa (importance) PHẢI là những đoạn văn chi tiết (tối thiểu từ 3 đến 5 câu dài trở lên), kể lại trọn vẹn diễn biến sự việc, nguyên nhân kết quả và tác động của nó tới mạch truyện.
-- Đối với chủ đề (themes): Phần phân tích chủ đề (description) và dẫn chứng (evidence) PHẢI đạt độ dài tối thiểu từ 3 đến 5 câu dài trở lên, đi sâu mổ xẻ thông điệp triết học, tư tưởng cốt lõi của tác phẩm, và cách tác giả lồng ghép nó qua các chi tiết nghệ thuật cụ thể.
+MỖI THÀNH PHẦN TRÍCH XUẤT CẦN CÓ MỘT NỘI DUNG RẤT CHI TIẾT VÀ ĐẦY ĐỦ. Hãy tuân thủ nghiêm ngặt các yêu cầu về số lượng và chất lượng sau:
+- Đối với bối cảnh thế giới (worldSettings): Trích xuất TỐI THIỂU từ 5 đến 8 bối cảnh/luật lệ/địa danh nổi bật nhất. Phần mô tả (description) và tầm quan trọng (importance) PHẢI là những đoạn văn phân tích chi tiết, sâu sắc (tối thiểu từ 3 đến 5 câu dài trở lên), mô tả rõ ràng địa lý, cơ chế hoạt động, luật lệ xã hội hoặc quy tắc phép thuật, chứ không viết tóm tắt ngắn gọn.
+- Đối với nhân vật (characters): Trích xuất TOÀN BỘ các nhân vật có tên (TỐI THIỂU từ 5 đến 10 nhân vật quan trọng nhất nếu có). Phần mô tả (description), tiểu sử (background) và chi tiết mối quan hệ (relationships.description) PHẢI là những đoạn văn dài, đầy đủ (tối thiểu từ 3 đến 5 câu dài trở lên), phân tích sâu sắc ngoại hình, tính cách, động cơ sâu xa, các biến cố cuộc đời và tương tác tâm lý tinh tế với các nhân vật khác.
+- Đối với sự kiện dòng thời gian (timelineEvents): Trích xuất TỐI THIỂU từ 8 đến 15 sự kiện dòng thời gian cốt lõi theo đúng trình tự thời gian xảy ra. Diễn biến sự kiện (description) và ý nghĩa (importance) PHẢI là những đoạn văn chi tiết (tối thiểu từ 3 đến 5 câu dài trở lên), kể lại trọn vẹn diễn biến sự việc, nguyên nhân kết quả và tác động của nó tới mạch truyện.
+- Đối với chủ đề (themes): Trích xuất TỐI THIỂU từ 3 đến 5 chủ đề cốt lõi. Phần phân tích chủ đề (description) và dẫn chứng (evidence) PHẢI đạt độ dài tối thiểu từ 3 đến 5 câu dài trở lên, đi sâu mổ xẻ thông điệp triết học, tư tưởng cốt lõi của tác phẩm, và cách tác giả lồng ghép nó qua các chi tiết nghệ thuật cụ thể.
 
 Hãy trả về kết quả dưới dạng JSON duy nhất khớp HOÀN TOÀN với cấu trúc C# sau (không bọc trong thẻ markdown ```json):
 {

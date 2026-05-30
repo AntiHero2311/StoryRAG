@@ -307,26 +307,33 @@ VĂN BẢN MẪU:
             var emotionStats = $"Cảm xúc chủ đạo: {string.Join(", ", emotions.GroupBy(e => e.DominantEmotion).OrderByDescending(g => g.Count()).Take(2).Select(g => g.Key))}";
 
             var prompt = $@"
-Bạn là một Nhà phê bình văn học sắc sảo. Hãy phân tích các biểu đồ của tác phẩm dựa trên dữ liệu thực tế và Cẩm nang truyện.
+Bạn là một chuyên gia phê bình văn học lỗi lạc với ngòi bút sắc sảo. Dựa trên dữ liệu thống kê biểu đồ của câu chuyện, Cẩm nang truyện (Story Bible) và các đoạn trích mẫu, hãy thực hiện một bài phân tích sâu sắc, toàn diện và có cấu trúc rõ ràng về tác phẩm này.
 
-DỮ LIỆU BIỂU ĐỒ:
+DỮ LIỆU THỐNG KÊ BIỂU ĐỒ:
 - {pacingStats}
 - {emotionStats}
-- Nhân vật tracked: {string.Join(", ", characters)}
+- Danh sách nhân vật chính được theo dõi: {string.Join(", ", characters)}
 
-DỮ LIỆU CẨM NANG TRUYỆN:
+DỮ LIỆU CẨM NANG TRUYỆN (STORY BIBLE):
 {bibleContext}
 
-NỘI DUNG TÁC PHẨM (MẪU):
+CÁC ĐOẠN TRÍCH MẪU TỪ TÁC PHẨM:
 {string.Join("\n\n", samples)}
 
-Trình bày kết quả dưới dạng danh sách các đoạn văn ngắn, mỗi ý một đoạn.
+YÊU CẦU PHÂN TÍCH VÀ CẤU TRÚC ĐẦU RA:
+Bạn phải viết chính xác 4 đoạn nhận định phân tích độc lập. Mỗi đoạn bắt đầu BẮT BUỘC bằng tiền tố (tag) tương ứng, KHÔNG thêm số thứ tự hay ký hiệu gạch đầu dòng phía trước. Ví dụ: `[Nhịp độ & Tiết tấu] Nhận xét của bạn...`. Tuyệt đối không tự ý thay đổi tên tiền tố.
+
+1. Bắt đầu bằng tiền tố `[Nhịp độ & Tiết tấu]`: Phân tích sâu sắc về cách phân bổ nhịp điệu cốt truyện, đánh giá nhịp điệu nhanh/chậm có hợp lý không, các cao trào hành động hay khoảng lặng tâm lý có được sắp xếp hiệu quả không. Phải trích dẫn cụ thể 1 câu văn mẫu làm dẫn chứng.
+2. Bắt đầu bằng tiền tố `[Dòng cảm xúc]`: Phân tích mạch sắc thái cảm xúc tổng thể (valence) và cường độ biến thiên cảm xúc. Đánh giá bầu không khí u tối hay tươi sáng của truyện, tâm lý cảm xúc của nhân vật có đồng điệu với bối cảnh hay không. Phải trích dẫn cụ thể 1 câu văn mẫu làm dẫn chứng.
+3. Bắt đầu bằng tiền tố `[Động lực nhân vật]`: Nhận định về mật độ xuất hiện và tầm ảnh hưởng của các nhân vật chính được theo dõi lên mạch truyện, đánh giá các tương tác hoặc mối quan hệ giữa các nhân vật có tự nhiên và sâu sắc hay không. Phải trích dẫn cụ thể 1 câu văn mẫu làm dẫn chứng.
+4. Bắt đầu bằng tiền tố `[Đề xuất kịch bản]`: Đưa ra ít nhất 2 đến 3 lời khuyên mang tính chiến lược và cụ thể dành cho tác giả để cải thiện tác phẩm (ví dụ: cần kéo giãn nhịp độ hay thêm đối thoại ở chương nào, nhân vật nào cần làm đậm nét quan hệ hay bộc lộ chiều sâu nội tâm hơn).
+
 QUY TẮC BẮT BUỘC:
-- NGÔN NGỮ: BẮT BUỘC PHẢI DÙNG TIẾNG VIỆT.
-- TUYỆT ĐỐI KHÔNG lặp lại bất kỳ con số thống kê hay thông tin tóm tắt nào đã có trong prompt.
-- TUYỆT ĐỐI KHÔNG giải thích quy trình hay xác nhận đã hiểu yêu cầu.
-- BẮT BUỘC phải trích dẫn (quote) 1-2 câu văn từ truyện để làm bằng chứng.
-- Bắt đầu thẳng vào nhận xét đầu tiên, không chào hỏi, không tiêu đề thừa.";
+- NGÔN NGỮ: Chỉ sử dụng Tiếng Việt trong sáng, hành văn trôi chảy, mang tính chuyên môn văn học cao và truyền cảm hứng.
+- KHÔNG lặp lại một cách máy móc các con số thống kê thô có sẵn trong prompt.
+- KHÔNG giải thích quy trình phân tích hay thêm các lời chào hỏi, lời dẫn, kết luận thừa thãi. Hãy đi thẳng vào đoạn nhận định đầu tiên.
+- BẮT BUỘC phải trích dẫn (quote) nguyên văn câu từ truyện trong ngoặc kép ở mỗi đoạn phân tích để minh chứng thực tế.
+";
 
             var messages = new List<ChatMessage>
             {
@@ -338,7 +345,7 @@ QUY TẮC BẮT BUỘC:
             var text = response.Content.FirstOrDefault()?.Text ?? "";
             
             // Clean up any remaining tags or intro/outro fluff
-            text = Regex.Replace(text, @"^.*?(?=(1\.|-|\*|•))", "", RegexOptions.Singleline); 
+            text = Regex.Replace(text, @"^.*?(?=(\[|1\.|-|\*|•))", "", RegexOptions.Singleline); 
             
             var forbiddenLabels = new[] { 
                 "Story Content:", "Only final answer", "No repetition", "No tags", 
@@ -660,14 +667,14 @@ QUY TẮC BẮT BUỘC:
             minPoint.Label = $"Thấp nhất: {minPoint.Score:F0}";
 
             var avgScore = points.Average(p => p.Score);
-            insights.Add($"📊 Pacing: Nhịp độ trung bình {avgScore:F1}/100. Đỉnh cao nhất tại chương {maxPoint.ChapterNumber} (segment {maxPoint.SegmentIndex}, score {maxPoint.Score:F0}), thấp nhất tại chương {minPoint.ChapterNumber} (segment {minPoint.SegmentIndex}, score {minPoint.Score:F0}).");
+            insights.Add($"Nhịp độ: Nhịp độ trung bình {avgScore:F1}/100. Đỉnh cao nhất tại chương {maxPoint.ChapterNumber} (segment {maxPoint.SegmentIndex}, score {maxPoint.Score:F0}), thấp nhất tại chương {minPoint.ChapterNumber} (segment {minPoint.SegmentIndex}, score {minPoint.Score:F0}).");
 
             var highCount = points.Count(p => p.Score > 65);
             var lowCount = points.Count(p => p.Score < 35);
             if (highCount > lowCount * 2)
-                insights.Add("⚡ Nhịp độ nghiêng về nhanh/action liên tục — có thể cần thêm đoạn nghỉ để người đọc 'thở'.");
+                insights.Add("Nhịp độ nghiêng về nhanh/action liên tục — có thể cần thêm đoạn nghỉ để người đọc 'thở'.");
             else if (lowCount > highCount * 2)
-                insights.Add("🐌 Nhịp độ nghiêng về chậm/nội tâm — có thể cần thêm cảnh hành động để tăng kịch tính.");
+                insights.Add("Nhịp độ nghiêng về chậm/nội tâm — có thể cần thêm cảnh hành động để tăng kịch tính.");
         }
 
         private static void AnnotateEmotionPoints(List<EmotionPoint> points, List<string> insights)
@@ -694,11 +701,11 @@ QUY TẮC BẮT BUỘC:
                 .ToList();
 
             if (emotionCounts.Count > 0)
-                insights.Add($"🎭 Cảm xúc chủ đạo: {string.Join(", ", emotionCounts)}.");
+                insights.Add($"Cảm xúc chủ đạo: {string.Join(", ", emotionCounts)}.");
 
             var avgValence = points.Average(p => p.Valence);
             var tone = avgValence > 0.2 ? "tích cực" : avgValence < -0.2 ? "tiêu cực" : "trung tính";
-            insights.Add($"💫 Tone cảm xúc tổng thể: {tone} (valence trung bình: {avgValence:F2}).");
+            insights.Add($"Tone cảm xúc tổng thể: {tone} (valence trung bình: {avgValence:F2}).");
         }
 
         private static void GenerateCharacterInsights(
@@ -710,19 +717,19 @@ QUY TẮC BẮT BUỘC:
 
             var topN = Math.Min(frequencies.Count, 5);
             var topList = frequencies.Take(topN).Select(f => $"{f.CharacterName} ({f.TotalMentions} lần)").ToList();
-            insights.Add($"👥 Nhân vật xuất hiện nhiều nhất: {string.Join(", ", topList)}.");
+            insights.Add($"Nhân vật xuất hiện nhiều nhất: {string.Join(", ", topList)}.");
 
             if (frequencies.Count >= 2)
             {
                 var ratio = (double)frequencies[0].TotalMentions / Math.Max(1, frequencies[1].TotalMentions);
                 if (ratio > 3)
-                    insights.Add($"⚠️ Nhân vật {frequencies[0].CharacterName} áp đảo về lượng xuất hiện (gấp {ratio:F1}x nhân vật thứ 2). Các nhân vật phụ có thể cần phát triển thêm.");
+                    insights.Add($"Nhân vật {frequencies[0].CharacterName} áp đảo về lượng xuất hiện (gấp {ratio:F1}x nhân vật thứ 2). Các nhân vật phụ có thể cần phát triển thêm.");
             }
 
             if (relationships.Count > 0)
             {
                 var topRel = relationships[0];
-                insights.Add($"🔗 Mối quan hệ mạnh nhất: {topRel.SourceCharacter} ↔ {topRel.TargetCharacter} (đồng xuất hiện {topRel.Weight} lần).");
+                insights.Add($"Mối quan hệ mạnh nhất: {topRel.SourceCharacter} ↔ {topRel.TargetCharacter} (đồng xuất hiện {topRel.Weight} lần).");
             }
         }
 

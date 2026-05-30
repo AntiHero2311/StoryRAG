@@ -155,6 +155,8 @@ namespace Service.Implementations
                 cancellationToken);
 
             var chunksRaw = await _context.ChapterChunks
+                .Include(c => c.Version)
+                .ThenInclude(v => v.Chapter)
                 .Where(c => c.ProjectId == projectId && c.Embedding != null && snapshot.ActiveVersionIds.Contains(c.VersionId))
                 .ToListAsync(cancellationToken);
 
@@ -416,12 +418,15 @@ namespace Service.Implementations
                         var relStr = character.Relationships != null ? JsonSerializer.Serialize(character.Relationships) : "[]";
                         var encRel = EncryptionHelper.EncryptWithMasterKey(relStr, rawDek);
 
+                        var rawRole = character.Role ?? "Supporting";
+                        if (rawRole.Length > 50) rawRole = rawRole[..50];
+
                         _context.ReportCharacterEntries.Add(new ReportCharacterEntry
                         {
                             Id = Guid.NewGuid(),
                             ProjectReportId = report.Id,
                             Name = encName,
-                            Role = character.Role ?? "Supporting",
+                            Role = rawRole,
                             Description = encDesc,
                             Background = encBg,
                             TraitsJson = encTraits,
@@ -446,13 +451,16 @@ namespace Service.Implementations
                         var chaptersStr = worldSetting.SourceChapters != null ? JsonSerializer.Serialize(worldSetting.SourceChapters) : "[]";
                         var encChapters = EncryptionHelper.EncryptWithMasterKey(chaptersStr, rawDek);
 
+                        var rawCategory = worldSetting.Category ?? "Other";
+                        if (rawCategory.Length > 50) rawCategory = rawCategory[..50];
+
                         _context.ReportWorldbuildingEntries.Add(new ReportWorldbuildingEntry
                         {
                             Id = Guid.NewGuid(),
                             ProjectReportId = report.Id,
                             Title = encTitle,
                             Content = encContent,
-                            Category = worldSetting.Category ?? "Other",
+                            Category = rawCategory,
                             Importance = encImportance,
                             SourceChaptersJson = encChapters,
                             CreatedAt = DateTime.UtcNow
@@ -493,20 +501,27 @@ namespace Service.Implementations
                         var encTime = !string.IsNullOrWhiteSpace(timelineEvent.TimeLabel)
                             ? EncryptionHelper.EncryptWithMasterKey(timelineEvent.TimeLabel, rawDek)
                             : null;
-                        var encImportance = !string.IsNullOrWhiteSpace(timelineEvent.Importance)
-                            ? EncryptionHelper.EncryptWithMasterKey(timelineEvent.Importance, rawDek)
-                            : null;
+
+                        // Importance là metadata enum (Normal/High/Critical) — KHÔNG mã hóa, varchar(20)
+                        var rawImportance = !string.IsNullOrWhiteSpace(timelineEvent.Importance)
+                            ? timelineEvent.Importance.Length <= 20
+                                ? timelineEvent.Importance
+                                : timelineEvent.Importance[..20]
+                            : "Normal";
+
+                        var rawCategory = timelineEvent.Category ?? "Story";
+                        if (rawCategory.Length > 50) rawCategory = rawCategory[..50];
 
                         _context.ReportTimelineEvents.Add(new ReportTimelineEvent
                         {
                             Id = Guid.NewGuid(),
                             ProjectReportId = report.Id,
-                            Category = timelineEvent.Category ?? "Story",
+                            Category = rawCategory,
                             Title = encTitle,
                             Description = encDesc,
                             TimeLabel = encTime,
                             SortOrder = timelineEvent.SortOrder,
-                            Importance = encImportance ?? "Normal",
+                            Importance = rawImportance,
                             CreatedAt = DateTime.UtcNow
                         });
                     }
@@ -873,7 +888,8 @@ namespace Service.Implementations
     {""code"":""PLAGIARISM_RISK"",""severity"":""CRITICAL"",""title"":"""",""detail"":""""},
     {""code"":""INCONSISTENCY"",""severity"":""WARNING"",""title"":"""",""detail"":""""},
     {""code"":""SEXUAL_CONTENT"",""severity"":""WARNING"",""title"":"""",""detail"":""""},
-    {""code"":""ANTI_STATE"",""severity"":""CRITICAL"",""title"":"""",""detail"":""""}
+    {""code"":""ANTI_STATE"",""severity"":""CRITICAL"",""title"":"""",""detail"":""""},
+    {""code"":""SPELLING_FORMATTING"",""severity"":""WARNING"",""title"":"""",""detail"":""""}
   ],
   ""overallFeedback"": """"
 }";
@@ -900,6 +916,10 @@ namespace Service.Implementations
                 : $"\n\nGHI CHÚ CỦA TÁC GIẢ (lưu ý khi đọc, không ảnh hưởng điểm):\n{aiInstructions}";
 
             var prompt = $$"""
+                 LƯU Ý QUAN TRỌNG VỀ LỖI CHÍNH TẢ & KỸ THUẬT VĂN BẢN (code="SPELLING_FORMATTING"):
+                 - Bạn PHẢI quét kỹ toàn bộ tác phẩm để phát hiện các lỗi chính tả, lỗi gõ phím tiếng Việt (vd: 'loi' thay vì 'lỗi', 'đưọc' thay vì 'được'), viết hoa tùy tiện, khoảng trắng kép, dấu câu đặt sai vị trí hoặc định dạng văn bản bị lỗi.
+                 - BẮT BUỘC phải chỉ ra các ví dụ cụ thể của từ bị viết sai và định vị rõ chương nào, đoạn nào. Tuyệt đối KHÔNG nhận xét chung chung như "có một số lỗi chính tả". Nếu phát hiện lỗi chính tả, bắt buộc phải trả về warning này với severity="WARNING", title="Lỗi kỹ thuật văn bản & chính tả" và detail liệt kê cụ thể các lỗi kèm vị trí chương để tác giả sửa đổi.
+
                 Bạn là giám khảo văn học chuyên nghiệp. Nhiệm vụ: đọc kỹ toàn bộ văn bản, đánh giá 20 tiêu chí và phát hiện các vấn đề đặc biệt (CHƯA KẾT THÚC, LẶP LẠI, ĐẠO NHÁI...).
 
                 THÔNG TIN HOÀN THIỆN TÁC PHẨM:

@@ -110,14 +110,26 @@ namespace Service.Implementations
                         return;
                     }
 
-                    var contextParts = new List<string>(ranked.Count);
-                    foreach (var (ch, ord) in ranked)
+                    // Sắp xếp các đoạn trích (chunks) theo đúng thứ tự dòng thời gian của câu chuyện (chronological order)
+                    // để tránh AI bị hiểu sai hoặc đánh giá rời rạc các tình tiết nằm ngoài thứ tự.
+                    var chronRanked = ranked.OrderBy(r => r.Ordinal).ToList();
+
+                    var contextParts = new List<string>(chronRanked.Count);
+                    foreach (var (ch, ord) in chronRanked)
                     {
                         var plain = decryptedChunks[ordinalByChunkId[ch.Id]];
                         var snippet = TruncateForPrompt(PromptSanitizer.SanitizeUserContent(plain), 1600);
-                        contextParts.Add($"[chunk_ord={ord}]\n{snippet}");
+
+                        var chNum = ch.Version?.Chapter?.ChapterNumber;
+                        var chTitle = ch.Version?.Chapter?.Title;
+                        var locationStr = chNum.HasValue
+                            ? (string.IsNullOrWhiteSpace(chTitle) ? $"Chương {chNum.Value}" : $"Chương {chNum.Value}: {chTitle}")
+                            : "Không rõ chương";
+
+                        contextParts.Add($"[Đoạn trích (chunk_ord={ord}) - Vị trí: {locationStr}]\n{snippet}");
                     }
 
+                    var auditGuide = GetRubricAuditGuide(key);
                     var judgeUserPrompt = $$"""
                         Bạn là giám khảo văn học. Chấm ĐÚNG MỘT tiêu chí rubric dưới đây dựa trên các đoạn truyện đã trích (RAG), facts đã trích trước đó, và tham chiếu nền (bible).
 
@@ -126,6 +138,8 @@ namespace Service.Implementations
 
                         TIÊU CHÍ (key={{key}}, nhóm={{group}}, tên={{name}}, điểm tối đa={{max}}).
 
+                        {{auditGuide}}
+
                         FACTS JSON (Stage 1, có thể rút gọn):
                         {{factsForPrompt}}
 
@@ -133,15 +147,19 @@ namespace Service.Implementations
                         {{(string.IsNullOrEmpty(bibleForPrompt) ? "(Không có)" : bibleForPrompt)}}
                         {{instructionsPart}}
 
-                        ĐOẠN TRUYỆN TRÍCH (chỉ dùng làm bằng chứng; chunk_ord là id nguyên số để trả về evidence_chunk_ids):
+                        ĐOẠN TRUYỆN TRÍCH (Đã được sắp xếp theo đúng thứ tự thời gian của truyện để đảm bảo tính liên kết cốt truyện; chunk_ord là id nguyên số dùng để điền evidence_chunk_ids):
                         {{string.Join("\n\n---\n\n", contextParts)}}
+
+                        QUY TẮC PHÂN BIỆT TRÙNG LẶP KỸ THUẬT VS LẶP CỐT TRUYỆN THỰC TẾ:
+                        1. LẶP KỸ THUẬT (OVERLAP): Giữa các đoạn trích kề nhau của cùng một chương (ví dụ cùng thuộc 'Chương 2') có thể có sự trùng lặp nhẹ về câu chữ ở ranh giới biên (đây là kỹ thuật overlap để không mất context khi cắt nhỏ văn bản). Bạn PHẢI bỏ qua sự lặp lại kỹ thuật này, tuyệt đối không được đánh giá là tác giả viết lặp ý hay lỗi văn phong.
+                        2. LẶP CHƯƠNG THỰC TẾ (DUPLICATE): Nếu bạn phát hiện hai hoặc nhiều đoạn trích thuộc các chương KHÁC NHAU (ví dụ một đoạn thuộc 'Chương 2' và một đoạn thuộc 'Chương 3') có nội dung giống hệt nhau hoặc gần như giống hệt nhau, đây là lỗi trùng lặp nội dung thực tế do tác giả (ví dụ tác giả copy nhầm chương hoặc viết lặp chương). Bạn PHẢI chỉ ra lỗi nghiêm trọng này trong phần 'errors' để tác giả biết và xử lý.
 
                         Trả về JSON thuần túy một object với các field:
                         - score (0 đến {{max}})
-                        - feedback (3-5 câu tiếng Việt)
+                        - feedback (3-5 câu tiếng Việt đánh giá tích cực/tiêu cực khách quan, tuyệt đối không dùng từ 'chunk' hay 'chunk_ord')
                         - evidence (trích dẫn ngắn từ đoạn trên)
-                        - errors (mảng ≥3 chuỗi): Mỗi chuỗi phải chỉ rõ một vấn đề/sạn cốt truyện cụ thể phát hiện được trong phần trích. Yêu cầu chỉ rõ chương nào, tình tiết nào hoặc nhân vật nào gặp vấn đề, và đưa ra ví dụ cụ thể, tuyệt đối KHÔNG viết chung chung lý thuyết.
-                        - suggestions (mảng ≥3 chuỗi): Mỗi chuỗi là giải pháp/khuyến nghị tương ứng cho vấn đề ở trên. Yêu cầu đưa ra ví dụ cụ thể (như gợi ý cách viết lại, lời thoại mẫu hoặc hướng điều chỉnh tình tiết rõ ràng), tuyệt đối KHÔNG khuyên bảo chung chung mơ hồ.
+                        - errors (mảng ≥3 chuỗi): Mỗi chuỗi đóng vai trò là một NHÀ PHÊ BÌNH VĂN HỌC KHẮT KHE, vạch trần cụ thể một hạt sạn/lỗ hổng văn học dựa trên cẩm nang truy quét sạn ở trên. Yêu cầu chỉ rõ chương nào (dựa trên thông tin 'Vị trí: Chương X' của đoạn trích), nhân vật hoặc tình tiết nào mắc lỗi, và trích dẫn câu văn mắc lỗi làm minh chứng thực tế. Tuyệt đối KHÔNG viết chung chung mơ hồ, không lý thuyết suông, và TUYỆT ĐỐI KHÔNG đề cập đến các từ kỹ thuật hệ thống như 'chunk', 'chunk_ord' hay 'đoạn trích' trong nội dung phản hồi cho tác giả.
+                        - suggestions (mảng ≥3 chuỗi): Mỗi chuỗi đóng vai trò là một HUẤN LUYỆN VIÊN VIẾT VĂN THỰC CHIẾN. Với mỗi lỗi đã chỉ ra ở mảng errors, bạn BẮT BUỘC phải đưa ra giải pháp viết lại cụ thể. Bạn phải cung cấp ít nhất một PHƯƠNG ÁN VIẾT LẠI MẪU (Example Rewrite) hiển thị trực quan cách chỉnh sửa câu văn hoặc hội thoại bị lỗi để tác giả dễ dàng sửa đổi ngay lập tức. Tuyệt đối KHÔNG khuyên bảo chung chung mơ hồ, không lý thuyết suông, và TUYỆT ĐỐI KHÔNG sử dụng các từ kỹ thuật như 'chunk' hay 'chunk_ord' trong đề xuất.
                         - bibleComparison (chuỗi hoặc null)
                         - evidence_chunk_ids (mảng số nguyên — các chunk_ord đã dùng).
 
@@ -179,6 +197,28 @@ namespace Service.Implementations
                         .Where(id => ranked.Any(r => r.Ordinal == id))
                         .Distinct()
                         .ToList();
+
+                    // TRÙNG KHỚP TRỰC TIẾP QUOTE VỚI CHƯƠNG THỰC TẾ:
+                    // Nếu AI trích xuất quote (evidence) nhưng chỉ định sai ordinal (sai chương),
+                    // chúng ta quét toàn bộ danh sách plaintext đã giải mã của câu chuyện để tìm vị trí thực tế của quote đó.
+                    var cleanEvidence = (judge.Evidence ?? "").Trim();
+                    if (cleanEvidence.Length >= 5)
+                    {
+                        var normEvidence = System.Text.RegularExpressions.Regex.Replace(cleanEvidence, @"\s+", " ").ToLower();
+                        for (var i = 0; i < decryptedChunks.Count; i++)
+                        {
+                            var normPlain = System.Text.RegularExpressions.Regex.Replace(decryptedChunks[i], @"\s+", " ").ToLower();
+                            if (normPlain.Contains(normEvidence))
+                            {
+                                // Tìm thấy phân đoạn chứa trích dẫn chính xác! Cập nhật ordinal này vào danh sách minh chứng
+                                if (!evidenceIds.Contains(i))
+                                {
+                                    evidenceIds.Insert(0, i); // Đưa lên đầu tiên
+                                }
+                            }
+                        }
+                    }
+
                     if (evidenceIds.Count == 0)
                         evidenceIds = ranked.Select(r => r.Ordinal).Take(topK).ToList();
 
@@ -357,7 +397,7 @@ namespace Service.Implementations
             var userPrompt = $$"""
                 Dựa trên các nhận xét đã chấm theo từng tiêu chí (RAG, có thể thiếu ngữ cảnh toàn văn), hãy viết overallFeedback (4-6 câu tiếng Việt tâm huyết) và mảng warnings (0..n) giống schema StoryWarning: code, severity, title, detail.
 
-                Mã warnings hợp lệ: INCOMPLETE, REPETITION, PLAGIARISM_RISK, INCONSISTENCY, SEXUAL_CONTENT, ANTI_STATE, OTHER.
+                Mã warnings hợp lệ: INCOMPLETE, REPETITION, PLAGIARISM_RISK, INCONSISTENCY, SEXUAL_CONTENT, ANTI_STATE, SPELLING_FORMATTING, OTHER.
                 Severity: INFO, WARNING, CRITICAL.
                 Hướng dẫn severity cho từng code:
                 - INCOMPLETE: WARNING nếu dừng giữa chừng không giải quyết, INFO nếu cliffhanger có chủ ý
@@ -366,6 +406,7 @@ namespace Service.Implementations
                 - INCONSISTENCY: WARNING/CRITICAL nếu có mâu thuẫn RÕ RÀNG (nhân vật chết rồi sống lại không giải thích, timeline đảo lộn...)
                 - SEXUAL_CONTENT: WARNING nếu nội dung người lớn explicit, CRITICAL nếu liên quan trẻ em/nhân vật chưa thành niên. KHÔNG báo với cảnh lãng mạn, hôn, ám chỉ tinh tế.
                 - ANTI_STATE: CRITICAL nếu có nội dung xuyên tạc lịch sử/chủ quyền Việt Nam, kích động chống phá. KHÔNG báo với phê phán xã hội mang tính văn học thông thường.
+                - SPELLING_FORMATTING: WARNING nếu văn bản có các lỗi chính tả tiếng Việt hoặc lỗi đánh máy (vd: 'loi' thay vì 'lỗi', 'đưọc' thay vì 'được'), lỗi khoảng trắng kép, dấu câu đặt không đúng chỗ, hoặc định dạng văn bản bị lỗi. BẮT BUỘC phải chỉ ra các ví dụ cụ thể của từ bị viết sai và định vị rõ chương nào, đoạn nào. Tuyệt đối KHÔNG được nhận xét chung chung mơ hồ như "Có một số lỗi chính tả".
                 - Nếu không phát hiện vấn đề: warnings=[]
 
                 THÔNG TIN HOÀN THIỆN:
@@ -489,6 +530,99 @@ namespace Service.Implementations
             [JsonPropertyName("severity"), JsonConverter(typeof(SafeStringConverter))] public string? Severity { get; set; }
             [JsonPropertyName("title"), JsonConverter(typeof(SafeStringConverter))] public string? Title { get; set; }
             [JsonPropertyName("detail"), JsonConverter(typeof(SafeStringConverter))] public string? Detail { get; set; }
+        }
+
+        private static string GetRubricAuditGuide(string key)
+        {
+            return key.Trim() switch
+            {
+                // Nhóm 1: Kỳ vọng
+                "1.1" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 1.1 - THỂ LOẠI]
+- Kiểm tra tính nhất quán của tone giọng thể loại (ví dụ: truyện trinh thám nhưng văn phong sến súa ngôn tình, truyện kinh dị nhưng không tạo được cảm giác sợ hãi).
+- Phát hiện các tình tiết đi chệch khỏi quy ước/tropes đặc trưng của thể loại (ví dụ: fantasy nhưng thiếu tính nhất quán về phép thuật, kỳ vọng không được đáp ứng).
+- Chỉ ra các hạt sạn về nhịp điệu (pacing) sai lệch so với kỳ vọng thể loại (ví dụ: thriller giật gân nhưng tình tiết kéo dài lê thê).",
+
+                "1.2" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 1.2 - TIỀN ĐỀ]
+- Đánh giá xem thế giới và mâu thuẫn trung tâm (tiền đề) có được mở đầu ấn tượng, lôi cuốn ngay lập tức (hook) hay không.
+- Phát hiện lỗi mở đầu lê thê, dài dòng, nhồi nhét thông tin (info-dumping) về bối cảnh quá nhiều làm loãng tiền đề.
+- Chỉ ra sự thiếu rõ ràng hoặc thiếu kịch tính trong việc thiết lập các xung đột ban đầu (stakes) của câu chuyện.",
+
+                // Nhóm 2: Nhân vật
+                "2.1" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 2.1 - PHÁT TRIỂN NHÂN VẬT]
+- Truy quét lỗi 'Mary Sue' hoặc 'Gary Stu': Nhân vật quá hoàn hảo, không có khuyết điểm thực sự, mọi khó khăn đều được giải quyết dễ dàng không cần nỗ lực.
+- Lỗi biến chuyển tâm lý đứt gãy: Nhân vật thay đổi tính cách, thái độ hoặc thế giới quan quá nhanh, đột ngột chỉ sau 1-2 sự kiện ngắn mà không có quá trình tích lũy tâm lý hợp lý.
+- Lỗi nhân vật thụ động (Passive protagonist): Nhân vật chính chỉ hành động theo sự sắp đặt khiên cưỡng của tác giả để đẩy cốt truyện đi lên, chứ không có động cơ nội tại (desire/motivation) thúc đẩy từ bên trong.",
+
+                "2.2" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 2.2 - TÍNH CÁCH & SỰ HẤP DẪN]
+- Truy quét lỗi nhân vật một chiều, mờ nhạt: Tính cách nhân vật rập khuôn (ví dụ: lạnh lùng, hiền lành...) không có nét đặc trưng riêng biệt, thiếu giọng văn (voice) độc bản hoặc hành vi thiếuBelievability.
+- Lỗi thiếu sự đồng cảm (empathy): Nhân vật chính hành xử ích kỷ vô lý hoặc có những hành động khó hiểu khiến người đọc không thể thấu cảm hoặc đầu tư cảm xúc.",
+
+                "2.3" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 2.3 - MỐI QUAN HỆ & TƯƠNG TÁC]
+- Truy quét lỗi đối thoại gượng gạo (Unnatural/Passive dialogue): Lời thoại nhân vật quá trang trọng, mang tính giải thích thông tin kịch bản (infodump qua thoại), hoặc tất cả nhân vật đều có chung một cách nói chuyện giống hệt nhau.
+- Lỗi thiếu chất xúc tác (Chemistry): Mối quan hệ phát triển khiên cưỡng, ví dụ: tình yêu 'sét đánh' thiếu sự gắn kết tâm hồn sâu sắc, hoặc xung đột tình cảm khiên cưỡng, trẻ con.",
+
+                "2.4" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 2.4 - SỰ ĐA DẠNG NHÂN VẬT]
+- Truy quét lỗi tuyến nhân vật phụ rập khuôn, làm nền (One-dimensional side characters): Các nhân vật phụ xuất hiện chỉ để làm công cụ tung hứng cho nhân vật chính mà không có cuộc sống, động cơ hay tính cách riêng.
+- Lỗi đối thủ yếu ớt hoặc phản diện sáo rỗng (Flat antagonist): Nhân vật phản diện ác độc một cách vô lý, thiếu chiều sâu động cơ hoặc quá dễ dàng bị đánh bại.",
+
+                // Nhóm 3: Cốt truyện & Cấu trúc
+                "3.1" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 3.1 - DIỄN BIẾN CỐT TRUYỆN]
+- Truy quét lỗi giải quyết xung đột khiên cưỡng (Deus Ex Machina): Giải quyết mâu thuẫn lớn bằng sự may mắn đột ngột hoặc nhân vật phụ thần bí tự dưng xuất hiện gánh team.
+- Lỗi cảnh thừa (Filler Scenes): Các phân đoạn viết ra chỉ để kéo dài chữ, không giúp thúc đẩy cốt truyện tiến triển và không có giá trị phát triển nhân vật.
+- Lỗi trôi nổi cốt truyện (Plot drift): Cốt truyện bị phân tán vào các nhánh phụ rườm rà làm loãng mạch truyện chính.",
+
+                "3.2" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 3.2 - CẤU TRÚC & TỔ CHỨC]
+- Truy quét lỗi cấu trúc chương lộn xộn: Sự chuyển tiếp giữa các chương/cảnh bị đứt gãy đột ngột, thiếu sự liên kết nhân quả (cause and effect).
+- Lỗi sắp đặt chi tiết đệm yếu (Weak foreshadowing): Các tình tiết cao trào nổ ra quá bất ngờ mà không có sự cài cắm chi tiết ẩn ý trước đó, khiến người đọc cảm thấy bị lừa hoặc khiên cưỡng.",
+
+                "3.3" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 3.3 - KẾT THÚC]
+- Truy quét lỗi kết thúc vội vã (Rushed ending): Các mâu thuẫn tích lũy cả chương được giải quyết quá nhanh, chớp nhoáng chỉ trong vài câu văn khiến độc giả bị hụt hẫng.
+- Lỗi kết thúc không thỏa mãn (Unsatisfying payoff): Thiếu sự đóng lại của các tuyến nhân vật, hoặc kết thúc để lại quá nhiều câu hỏi logic cốt lõi chưa được làm rõ một cách vô lý.",
+
+                // Nhóm 4: Ngôn ngữ & Văn phong
+                "4.1" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 4.1 - PHONG CÁCH & GIỌNG VĂN]
+- Truy quét lỗi 'Kể thay vì tả' (Tell, don't show): Chỉ đơn thuần thông báo cảm xúc hoặc bối cảnh (""Anh ấy vô cùng giận dữ"", ""Căn phòng rất đẹp"") thay vì dùng hình ảnh ẩn dụ, chi tiết giác quan hoặc ngôn ngữ cơ thể để diễn tả.
+- Lỗi lạm dụng từ ngữ ước lệ, sáo rỗng (Cliches): Sử dụng các mô tả rập khuôn đã quá mòn cũ trong văn học mạng.",
+
+                "4.2" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 4.2 - NGỮ PHÁP & SỰ TRÔI CHẢY]
+- Truy quét các lỗi diễn đạt lủng củng, câu văn dài dòng tối nghĩa, lạm dụng hư từ (thì, mà, là, bị, được) làm loãng nhịp câu.
+- Phát hiện lỗi lặp từ vựng nghiêm trọng trong cùng một đoạn văn ngắn.",
+
+                "4.3" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 4.3 - TÍNH DỄ ĐỌC]
+- Truy quét lỗi viết câu phức tạp thái quá: Các câu văn quá nhiều vế phụ gây khó hiểu, tối nghĩa hoặc cách xuống dòng vô lý phá vỡ dòng chảy đọc.
+- Phát hiện lỗi dùng từ Hán Việt hoặc biệt ngữ tối nghĩa, không phù hợp với ngữ cảnh câu chuyện.",
+
+                // Nhóm 5: Sự hấp dẫn
+                "5.1" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 5.1 - MỨC ĐỘ THÚ VỊ]
+- Truy quét lỗi cảnh nhàm chán, đều đều: Câu chuyện trôi qua êm đềm quá lâu mà không có các yếu tố khơi gợi sự tò mò, thiếu đi các xung đột vi mô giữ chân độc giả.",
+
+                "5.2" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 5.2 - MỨC ĐỘ CUỐN HÚT]
+- Truy quét lỗi kết thúc chương/phân đoạn mờ nhạt: Thiếu đi các điểm treo (cliffhangers) hay những nút thắt kịch tính thôi thúc độc giả lật trang đọc chương tiếp theo.",
+
+                // Nhóm 6: Tác động cảm xúc
+                "6.1" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 6.1 - SỰ ĐỒNG CẢM]
+- Truy quét lỗi cảm xúc hời hợt: Miêu tả nỗi đau hay niềm vui quá chớp nhoáng, hời hợt khiến độc giả chỉ đóng vai trò người xem đứng ngoài chứ không thể rung động cùng nhân vật.",
+
+                "6.2" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 6.2 - CHIỀU SÂU CẢM XÚC]
+- Truy quét lỗi bi kịch hóa thái quá (Melodrama): Cố tình khóc lóc gượng ép, cường điệu hóa cảm xúc đau đớn một cách sến súa mà không có nền tảng hoàn cảnh hợp lý.",
+
+                // Nhóm 7: Chủ đề
+                "7.1" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 7.1 - KHÁM PHÁ CHỦ ĐỀ]
+- Truy quét lỗi giáo điều, lên lớp (Preachy writing): Tác giả cố tình nhồi nhét triết lý sống trực tiếp qua lời thoại hoặc lời kể, thay vì để chủ đề tự toát ra từ hành động và lựa chọn của nhân vật.",
+
+                "7.2" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 7.2 - CHIỀU SÂU CHỦ ĐỀ]
+- Truy quét lỗi chủ đề nông cạn, hời hợt: Câu chuyện giải quyết mâu thuẫn đạo đức một cách trắng đen rõ ràng, thiếu đi những vùng xám đạo đức đầy tính suy ngẫm.",
+
+                // Nhóm 8: Xây dựng thế giới
+                "8.1" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 8.1 - XÂY DỰNG THẾ GIỚI]
+- Truy quét lỗi mâu thuẫn thiết lập thế giới (Worldbuilding inconsistencies): Chương trước quy định quy tắc A, chương sau lại vi phạm quy tắc đó mà không có giải thích.
+- Lỗi thiếu chiều sâu thiết lập: Thế giới được xây dựng hời hợt, chỉ như một cái nền phẳng lì thiếu đi lịch sử, văn hóa hay luật lệ vận hành chân thực.",
+
+                "8.2" => @"[CẨM NANG TRUY QUÉT SẠN VĂN HỌC CHO TIÊU CHÍ 8.2 - BỐI CẢNH]
+- Truy quét lỗi bối cảnh rỗng (White room syndrome): Nhân vật trò chuyện hoặc hành động trong một không gian mờ nhạt, tác giả hoàn toàn quên miêu tả âm thanh, ánh sáng, nhiệt độ hoặc chi tiết giác quan xung quanh.",
+
+                _ => ""
+            };
         }
     }
 }

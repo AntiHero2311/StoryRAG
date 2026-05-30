@@ -32,6 +32,7 @@ function renderHighlightedContent(text: string, highlight: string): ReactNode {
     const before = text.slice(0, idx);
     const mid = text.slice(idx, idx + matchLen);
     const after = text.slice(idx + matchLen);
+
     return (
         <>
             {before}
@@ -86,7 +87,7 @@ export default function EvidenceChunksPanel({
         setLoading(true);
         setError(null);
         reportService
-            .getEvidenceChunks(projectId, { ordinals: ordinalsParam })
+            .getEvidenceChunks(projectId, { ordinals: ordinalsParam, highlight: evidenceHighlight })
             .then(data => {
                 if (!cancelled) {
                     setChunks(data);
@@ -104,7 +105,7 @@ export default function EvidenceChunksPanel({
         return () => {
             cancelled = true;
         };
-    }, [open, projectId, ordinalsParam, ordinals.length]);
+    }, [open, projectId, ordinalsParam, ordinals.length, evidenceHighlight]);
 
     if (!open) return null;
 

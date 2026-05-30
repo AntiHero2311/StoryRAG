@@ -46,6 +46,73 @@ public class PdfExportTests
             OverallFeedback = "Đây là phản hồi tổng quan mẫu để kiểm thử export PDF.",
             ProjectVersion = "v1.2.3",
             CreatedAt = DateTime.UtcNow,
+            ContentAnalysis = new ContentAnalysisResult
+            {
+                WorldSettings = new List<WorldSettingItem>
+                {
+                    new WorldSettingItem
+                    {
+                        Title = "Vương quốc Aethelgard",
+                        Category = "Geography",
+                        Description = "Một vương quốc cổ kính nằm ở phía Bắc, bao bọc bởi dãy núi tuyết vĩnh cửu.",
+                        Importance = "High",
+                        SourceChapters = new List<int> { 1, 2 }
+                    }
+                },
+                Characters = new List<CharacterItem>
+                {
+                    new CharacterItem
+                    {
+                        Name = "Kaelen",
+                        Role = "Protagonist",
+                        Description = "Chiến binh trẻ tuổi mang trong mình dòng máu rồng.",
+                        Background = "Sinh ra ở làng rồng cổ...",
+                        Traits = new List<string> { "Dũng cảm", "Chính trực" },
+                        FirstAppearance = 1,
+                        Relationships = new List<CharacterRelationshipItem>
+                        {
+                            new CharacterRelationshipItem
+                            {
+                                TargetName = "Lyra",
+                                Type = "Companion",
+                                Description = "Người bạn thơ ấu và cũng là đồng đội kề vai sát cánh."
+                            }
+                        }
+                    }
+                },
+                TimelineEvents = new List<TimelineEventItem>
+                {
+                    new TimelineEventItem
+                    {
+                        Title = "Khai phong long kiếm",
+                        Category = "Plot",
+                        TimeLabel = "Chương 1",
+                        Description = "Kaelen rút được thanh long kiếm cổ xưa tại phế tích rồng.",
+                        Importance = "Critical",
+                        SortOrder = 1
+                    }
+                },
+                Themes = new List<ThemeItem>
+                {
+                    new ThemeItem
+                    {
+                        Title = "Sự trỗi dậy của lòng kiêu hãnh",
+                        Description = "Khám phá bản ngã con người trước cám dỗ quyền lực.",
+                        Evidence = "Kaelen quyết định không dùng long kiếm để báo thù..."
+                    }
+                },
+                AnalysisNote = "Bản thảo có chiều sâu nhân vật rất tốt."
+            },
+            EmotionPacing = new EmotionPacingResult
+            {
+                OverallPacingProfile = "Nhịp điệu dồn dập ở các phân cảnh hành động, chậm rãi ở các đoạn tả bối cảnh.",
+                DominantEmotionProfile = "Mạch cảm xúc đi từ u tối, u sầu sang hy vọng tươi sáng.",
+                Insights = new List<string>
+                {
+                    "Điểm cao trào của nhịp độ nằm ở Chương 1 khi Kaelen đấu kiếm.",
+                    "Sự thay đổi cảm xúc của Kaelen diễn ra nhất quán và tự nhiên."
+                }
+            },
             Warnings =
             [
                 new StoryWarning
@@ -135,7 +202,7 @@ public class PdfExportTests
             return Task.FromResult<ProjectReportResponse?>(_report);
         }
 
-        public Task<List<EvidenceChunkItemDto>> GetProjectEvidenceChunksAsync(Guid projectId, Guid userId, string? ids, string? ordinals, CancellationToken cancellationToken = default)
+        public Task<List<EvidenceChunkItemDto>> GetProjectEvidenceChunksAsync(Guid projectId, Guid userId, string? ids, string? ordinals, string? highlight = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
         public Task<List<ProjectReportSnapshotItem>> GetReportSnapshotsAsync(Guid reportId, Guid projectId, Guid userId, CancellationToken cancellationToken = default)

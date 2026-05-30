@@ -127,6 +127,9 @@ function DowngradeNotice({ sub }: { sub: UserSubscription }) {
                     Gói này sẽ chính thức có hiệu lực vào ngày <span className="font-black text-amber-300">[{new Date(sub.endDate).toLocaleDateString('vi-VN')}]</span>. 
                     Từ giờ đến lúc đó, bạn vẫn tiếp tục sử dụng gói <span className="font-black text-white">[{sub.planName}]</span>.
                 </p>
+                <p className="text-[11px] font-semibold text-rose-300 mt-1">
+                    * Lưu ý: Hệ thống không hoàn tiền chênh lệch cho chu kỳ hiện tại.
+                </p>
             </div>
         </div>
     );

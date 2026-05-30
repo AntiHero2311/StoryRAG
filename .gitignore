@@ -441,3 +441,8 @@ planCopilotCliPlan.md
 # Ignore local build error/log artifacts
 **/build_error*.txt
 **/build_log*.txt
+
+# Ignore report folder and its contents
+**/[Rr]eport/
+**/[Rr]eports/
+

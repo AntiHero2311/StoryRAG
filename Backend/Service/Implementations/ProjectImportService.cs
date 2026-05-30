@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenAI.Chat;
 using Repository.Data;
@@ -22,6 +23,7 @@ namespace Service.Implementations
         private readonly IEmbeddingService _embeddingService;
         private readonly INotificationService _notificationService;
         private readonly GeminiChatFailoverExecutor _gemini;
+        private readonly IServiceScopeFactory _scopeFactory;
 
         // Giới hạn số chương AI đọc để tránh tốn quá nhiều token
         private const int MaxChaptersForAiScan = 20;
@@ -34,7 +36,8 @@ namespace Service.Implementations
             ILogger<ProjectImportService> logger,
             IChunkingService chunkingService,
             IEmbeddingService embeddingService,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            IServiceScopeFactory scopeFactory)
         {
             _context = context;
             _config = config;
@@ -42,6 +45,7 @@ namespace Service.Implementations
             _chunkingService = chunkingService;
             _embeddingService = embeddingService;
             _notificationService = notificationService;
+            _scopeFactory = scopeFactory;
             // Dùng ImportModels (gemini flash, RPM cao) thay vì ChatModels (gemma, 15 RPM)
             _gemini = new GeminiChatFailoverExecutor(
                 config,
@@ -148,50 +152,10 @@ namespace Service.Implementations
             }
             await _context.SaveChangesAsync();
 
-            // ── Bước 5: Trích xuất metadata nhanh bằng heuristic (không gọi AI) ─
+            // ── Bước 5: Trích xuất nhanh bằng heuristic (Bỏ qua theo yêu cầu: không trích xuất nội dung khác ngoài chương truyện) ─
+            int genresLinked = 0;
             int timelineEventsExtracted = 0;
             string? extractedSummary = null;
-
-            // Summary heuristic: ưu tiên tóm tắt/lời mở đầu của tác giả trước Chương 1
-            var heuristicSummary = ExtractHeuristicSummary(plainText, chapterParts);
-            if (!string.IsNullOrWhiteSpace(heuristicSummary))
-            {
-                extractedSummary = heuristicSummary;
-                project.Summary = EncryptionHelper.EncryptWithMasterKey(heuristicSummary, rawDek);
-            }
-
-            // Genre heuristic: parse "Thể loại: X, Y" rồi match với DB
-            int genresLinked = 0;
-            var genreNames = ExtractGenreNames(plainText);
-            if (genreNames.Count > 0)
-            {
-                var allGenres = await _context.Genres.ToListAsync();
-                foreach (var rawName in genreNames)
-                {
-                    var normalized = NormalizeForMatch(rawName);
-                    var match = allGenres.FirstOrDefault(g =>
-                        NormalizeForMatch(g.Name).Contains(normalized) ||
-                        normalized.Contains(NormalizeForMatch(g.Name)) ||
-                        NormalizeForMatch(g.Slug).Contains(normalized) ||
-                        normalized.Contains(NormalizeForMatch(g.Slug)));
-
-                    if (match == null) continue;
-
-                    // Không thêm trùng
-                    var alreadyAdded = _context.ProjectGenres.Local
-                        .Any(pg => pg.ProjectId == project.Id && pg.GenreId == match.Id);
-                    if (alreadyAdded) continue;
-
-                    _context.ProjectGenres.Add(new ProjectGenre
-                    {
-                        ProjectId = project.Id,
-                        GenreId = match.Id,
-                    });
-                    genresLinked++;
-                }
-                if (genresLinked > 0)
-                    await _context.SaveChangesAsync();
-            }
 
 
 
@@ -222,23 +186,41 @@ namespace Service.Implementations
                 _context.ChapterChunks.AddRange(chunksToInsert);
             await _context.SaveChangesAsync();
 
-            // ── Bước 7: Embed tất cả chương ─────────────────────────────────────
-            _logger.LogInformation("Import {ProjectId}: bắt đầu embed {Count} chương.", project.Id, chaptersToInsert.Count);
-            int embeddedChapters = 0;
-            foreach (var chapter in chaptersToInsert)
+            // ── Bước 7: Nhúng tất cả chương trong nền song song (không chặn response HTTP) ──
+            _logger.LogInformation("Import {ProjectId}: Khởi chạy tiến trình nhúng dữ liệu song song trong nền ({Count} chương).", project.Id, chaptersToInsert.Count);
+            _ = Task.Run(async () =>
             {
                 try
                 {
-                    await _embeddingService.EmbedChapterAsync(chapter.Id, userId);
-                    embeddedChapters++;
+                    // Chạy song song tối đa 5 chương cùng lúc để tránh làm nghẽn DbConnection pool hoặc rate limit
+                    using var semaphore = new SemaphoreSlim(5);
+                    var embeddingTasks = chaptersToInsert.Select(async chapter =>
+                    {
+                        await semaphore.WaitAsync();
+                        try
+                        {
+                            using var scope = _scopeFactory.CreateScope();
+                            var scopedEmbeddingService = scope.ServiceProvider.GetRequiredService<IEmbeddingService>();
+                            await scopedEmbeddingService.EmbedChapterAsync(chapter.Id, userId);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Import {ProjectId} trong nền: embed chương {ChapterId} thất bại, worker sẽ tự động retry sau.", project.Id, chapter.Id);
+                        }
+                        finally
+                        {
+                            semaphore.Release();
+                        }
+                    });
+
+                    await Task.WhenAll(embeddingTasks);
+                    _logger.LogInformation("Import {ProjectId}: Đã hoàn thành nhúng dữ liệu trong nền thành công.", project.Id);
                 }
                 catch (Exception ex)
                 {
-                    // Embed thất bại không fatal: AutoEmbeddingWorker sẽ retry sau
-                    _logger.LogWarning(ex, "Import {ProjectId}: embed chương {ChapterId} thất bại, worker sẽ retry.", project.Id, chapter.Id);
+                    _logger.LogError(ex, "Import {ProjectId}: Lỗi nghiêm trọng khi nhúng dữ liệu trong nền.", project.Id);
                 }
-            }
-            _logger.LogInformation("Import {ProjectId}: đã embed {Done}/{Total} chương.", project.Id, embeddedChapters, chaptersToInsert.Count);
+            });
 
             // ── Bước 8: Chạy AI trích xuất thông tin bằng AI (Tóm tắt, nhân vật, bối cảnh, timeline) ──
             int charactersExtracted = 0;
@@ -421,7 +403,9 @@ namespace Service.Implementations
             bool isReExtract)
         {
             string? extractedSummary = null;
-            int charactersExtracted = 0, settingsExtracted = 0, timelineEventsExtracted = 0;
+            int charactersExtracted = 0;
+            int settingsExtracted = 0;
+            int timelineEventsExtracted = 0;
 
             if (!string.IsNullOrWhiteSpace(aiExtracted.Summary))
             {
@@ -442,20 +426,13 @@ namespace Service.Implementations
         {
             var jsonSchema = """
                 {
-                  "summary": "Tóm tắt cốt truyện tổng thể trong 3-5 câu",
-                  "characters": [{"name": "Tên nhân vật", "description": "Mô tả nhân vật"}],
-                  "settings": [{"name": "Tên bối cảnh/địa điểm", "description": "Mô tả bối cảnh"}],
-                  "timeline": [{"title": "Tên sự kiện", "description": "Mô tả sự kiện"}]
+                  "summary": "Tóm tắt cốt truyện tổng thể trong 3-5 câu"
                 }
                 """;
 
             var prompt = "Bạn là trợ lý phân tích bản thảo văn học. Dưới đây là nội dung (hoặc một phần) của tác phẩm \"" + projectTitle + "\".\n\n" +
                 "Hãy đọc và trả về dữ liệu dưới dạng JSON theo đúng cấu trúc sau (KHÔNG có markdown, KHÔNG có giải thích thêm):\n\n" +
                 jsonSchema + "\n\n" +
-                "Giới hạn:\n" +
-                "- Tối đa 10 nhân vật quan trọng nhất\n" +
-                "- Tối đa 5 bối cảnh/địa điểm chính\n" +
-                "- Tối đa 8 sự kiện chính theo thứ tự thời gian trong truyện\n\n" +
                 "NỘI DUNG BẢN THẢO:\n" + combinedContent;
 
             var messages = new List<ChatMessage>

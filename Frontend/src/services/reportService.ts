@@ -235,10 +235,10 @@ export const reportService = {
         api.get<ProjectReportResponse>(`/ai/${projectId}/reports/${reportId}`).then(r => r.data),
 
     /** Chunk đã giải mã (ids = Guid CSV, ordinals = số CSV). */
-    getEvidenceChunks: (projectId: string, params: { ids?: string; ordinals?: string }) =>
+    getEvidenceChunks: (projectId: string, params: { ids?: string; ordinals?: string; highlight?: string }) =>
         api
             .get<EvidenceChunkItemDto[]>(`/projects/${projectId}/chunks`, {
-                params: { ids: params.ids, ordinals: params.ordinals },
+                params: { ids: params.ids, ordinals: params.ordinals, highlight: params.highlight },
             })
             .then(r => r.data),
 

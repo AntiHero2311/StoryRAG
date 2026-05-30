@@ -105,6 +105,8 @@ namespace Service.Implementations
                 .ToListAsync();
 
             var topChunks = await _context.ChapterChunks
+                .Include(c => c.Version)
+                .ThenInclude(v => v.Chapter)
                 .Where(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId))
                 .OrderBy(c => c.Embedding!.CosineDistance(queryVector))
                 .Take(contextProfile.ChunkTopK)
@@ -147,9 +149,19 @@ namespace Service.Implementations
                 : null;
 
             var contextTexts = topChunks
-                .Select(c => TruncateForContext(
-                    EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek),
-                    contextProfile.MaxChunkChars))
+                .Select(c => {
+                    var plain = TruncateForContext(
+                        EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek),
+                        contextProfile.MaxChunkChars);
+                    
+                    var chNum = c.Version?.Chapter?.ChapterNumber;
+                    var chTitle = c.Version?.Chapter?.Title;
+                    var locationStr = chNum.HasValue
+                        ? (string.IsNullOrWhiteSpace(chTitle) ? $"Chương {chNum.Value}" : $"Chương {chNum.Value}: {chTitle}")
+                        : "Không rõ chương";
+
+                    return $"[Vị trí: {locationStr}]\n{plain}";
+                })
                 .ToList();
 
             var worldbuildingTexts = topWorldbuilding
@@ -192,11 +204,37 @@ namespace Service.Implementations
 
             var systemPrompt = BuildSystemPrompt(projectTitle, sanitizedSummary, sanitizedInstructions, sanitizedContextTexts, sanitizedWorldTexts, sanitizedCharTexts);
 
+            // Tải 5 lượt đối thoại gần nhất (tối đa 10 tin nhắn) để làm bộ nhớ ngữ cảnh hội thoại đa lượt
+            var recentMessages = await _context.ChatMessages
+                .Where(m => m.ProjectId == projectId && m.UserId == userId)
+                .OrderByDescending(m => m.CreatedAt)
+                .Take(5)
+                .ToListAsync();
+
+            // Đảo ngược để xếp theo trình tự thời gian tăng dần (từ cũ đến mới)
+            recentMessages.Reverse();
+
             var messages = new List<ChatMessage>
             {
-                ChatMessage.CreateSystemMessage(systemPrompt),
-                ChatMessage.CreateUserMessage(sanitizedQuestion),
+                ChatMessage.CreateSystemMessage(systemPrompt)
             };
+
+            foreach (var msg in recentMessages)
+            {
+                var pastQuestion = EncryptionHelper.DecryptWithMasterKey(msg.Question, rawDek);
+                var pastAnswer = EncryptionHelper.DecryptWithMasterKey(msg.Answer, rawDek);
+
+                if (!string.IsNullOrWhiteSpace(pastQuestion))
+                {
+                    messages.Add(ChatMessage.CreateUserMessage(PromptSanitizer.SanitizeUserContent(pastQuestion)));
+                }
+                if (!string.IsNullOrWhiteSpace(pastAnswer))
+                {
+                    messages.Add(ChatMessage.CreateAssistantMessage(pastAnswer));
+                }
+            }
+
+            messages.Add(ChatMessage.CreateUserMessage(sanitizedQuestion));
 
             var response = await CompleteChatWithGeminiAsync(messages);
             var completion = response;
@@ -387,6 +425,7 @@ namespace Service.Implementations
 
                 Hướng dẫn:
                 - Trả lời dựa trên nội dung được cung cấp trong <story_context>.
+                - Khi trích dẫn hoặc nhắc đến các tình tiết, nhân vật hay sự kiện, hãy chỉ rõ chương nào (dựa trên nhãn '[Vị trí: Chương X]' được cung cấp ở đầu mỗi đoạn truyện tương ứng) để tác giả dễ dàng tra cứu. Tuyệt đối KHÔNG sử dụng các thuật ngữ kỹ thuật hệ thống như 'chunk', 'chunk_ord' hay 'đoạn trích X' trong phản hồi dành cho tác giả.
                 - Được phép suy luận và tổng hợp thông tin từ các đoạn để đưa ra câu trả lời hợp lý.
                 - Nếu thực sự không có thông tin liên quan trong context, hãy nói rõ "Nội dung được cung cấp chưa đề cập đến thông tin này."
                 - Trả lời bằng tiếng Việt, súc tích và chính xác.

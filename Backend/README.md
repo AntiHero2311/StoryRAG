@@ -158,12 +158,8 @@ Authorization: Bearer <access_token>
 - Khi AI hoàn tất, báo cáo phân tích được phát hành trực tiếp (`Released`) giúp tác giả xem được kết quả ngay lập tức.
 
 **AI Context được đưa vào khi phân tích:**
-
-- `WorldbuildingEntries` — Nhóm 8: Xây dựng thế giới
-- `CharacterEntries` — Nhóm 2: Nhân vật
-- `StyleGuideEntries` — Nhóm 4: Ngôn ngữ & phong cách
-- `ThemeEntries` — Nhóm 7: Chủ đề tác phẩm
-- `PlotNoteEntries` — Nhóm 3 & 5: Cốt truyện & sự cuốn hút
+- Dữ liệu cốt truyện thô trích xuất ở Stage 1 (Facts context).
+- Cẩm nang truyện (Story Bible) tự động trích xuất trước đó từ tác phẩm (bối cảnh bối cảnh thế giới, nhân vật, dòng thời gian, chủ đề).
 
 **Response `GET /analyze/jobs/{jobId}/result` (`200`)**
 
@@ -226,106 +222,13 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 📚 Story Bible — Context Tables
+## 📚 Story Bible — Tự Động Trích Xuất (Không Nhập Thủ Công)
 
-> Tất cả endpoint yêu cầu 🔒 ✍️. Base: `/api/projects/{projectId}`
+> [!WARNING]
+> Các bảng nhập thủ công trước đây (`WorldbuildingEntries`, `CharacterEntries`, `StyleGuideEntries`, `ThemeEntries`, `PlotNoteEntries`, `TimelineEvents`) đã bị **XÓA HOÀN TOÀN** trong migration `RemoveManualStoryBibleTables` (tháng 5/2026).
+> 
+> Giờ đây, tác giả không cần phải tốn công nhập liệu thủ công nữa. Hệ thống phân tích AI sẽ tự động đọc toàn bộ bản thảo, trích xuất đầy đủ thông tin bối cảnh thế giới, nhân vật, dòng thời gian, chủ đề và lưu trữ dưới dạng snapshot trong `ProjectAnalysisFacts` và `ProjectReports` (ReportCharacterEntries, ReportWorldbuildingEntries, ReportThemeEntries, ReportTimelineEvents) sau mỗi phiên phân tích.
 
-Các bảng này cung cấp **context tự động** cho AI khi phân tích — lưu vào là AI biết ngay, không cần thao tác thêm.
-
-### Worldbuilding — `/worldbuilding`
-
-| Method   | Route                       | Mô tả             |
-| -------- | --------------------------- | ----------------- |
-| `GET`    | `/worldbuilding`            | Danh sách entries |
-| `POST`   | `/worldbuilding`            | Tạo mới           |
-| `PUT`    | `/worldbuilding/{id}`       | Cập nhật          |
-| `DELETE` | `/worldbuilding/{id}`       | Xóa               |
-| `POST`   | `/worldbuilding/{id}/embed` | Embed cho AI      |
-
-**Category values:** `Scene` (Cảnh), `Setting`, `Location`, `Rules`, `Glossary`, `Timeline`, `Magic`, `History`, `Religion`, `Geography`, `Technology`, `World`, `Other`
-
-> **`Scene` (mới):** Dùng để mô tả phân cảnh cụ thể (căn phòng, vị trí kịch tính), khác với `Location` (vũng rộng) hay `Setting` (bối cảnh toàn cục).
-
-### Characters — `/characters`
-
-| Method   | Route                    | Mô tả              |
-| -------- | ------------------------ | ------------------ |
-| `GET`    | `/characters`            | Danh sách nhân vật |
-| `POST`   | `/characters`            | Tạo nhân vật       |
-| `PUT`    | `/characters/{id}`       | Cập nhật           |
-| `DELETE` | `/characters/{id}`       | Xóa                |
-| `POST`   | `/characters/{id}/embed` | Embed cho AI       |
-
-**Role values:** `Protagonist`, `Antagonist`, `Supporting`, `Minor`
-
-### Style Guide — `/style-guides`
-
-| Method   | Route                      | Mô tả                        |
-| -------- | -------------------------- | ---------------------------- |
-| `GET`    | `/style-guides`            | Danh sách quy tắc phong cách |
-| `POST`   | `/style-guides`            | Tạo mới                      |
-| `PUT`    | `/style-guides/{id}`       | Cập nhật                     |
-| `DELETE` | `/style-guides/{id}`       | Xóa                          |
-| `POST`   | `/style-guides/{id}/embed` | Embed cho AI                 |
-
-Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
-
-**Aspect values:** `POV`, `Tone`, `Vocabulary`, `Dialogue`, `Pacing`, `Other`
-
-**Body `POST /style-guides`**
-
-```json
-{
-  "aspect": "Tone",
-  "content": "Giọng văn tối và u ám, thỉnh thoảng xen kẽ sự hài hước chua cay."
-}
-```
-
-### Themes — `/themes`
-
-| Method   | Route                | Mô tả            |
-| -------- | -------------------- | ---------------- |
-| `GET`    | `/themes`            | Danh sách chủ đề |
-| `POST`   | `/themes`            | Tạo chủ đề       |
-| `PUT`    | `/themes/{id}`       | Cập nhật         |
-| `DELETE` | `/themes/{id}`       | Xóa              |
-| `POST`   | `/themes/{id}/embed` | Embed cho AI     |
-
-Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
-
-**Body `POST /themes`**
-
-```json
-{
-  "title": "Sự cô đơn của quyền lực",
-  "description": "Nhân vật chính càng leo lên đỉnh quyền lực, càng mất đi những người thân yêu.",
-  "notes": "Thể hiện qua arc chương 5-12"
-}
-```
-
-### Plot Notes — `/plot-notes`
-
-| Method   | Route                    | Mô tả                        |
-| -------- | ------------------------ | ---------------------------- |
-| `GET`    | `/plot-notes`            | Danh sách ghi chú cốt truyện |
-| `POST`   | `/plot-notes`            | Tạo mới                      |
-| `PUT`    | `/plot-notes/{id}`       | Cập nhật                     |
-| `DELETE` | `/plot-notes/{id}`       | Xóa                          |
-| `POST`   | `/plot-notes/{id}/embed` | Embed cho AI                 |
-
-Lưu mới/cập nhật sẽ tự động tạo embedding cho mục vừa lưu.
-
-**Type values:** `Arc`, `Conflict`, `Foreshadowing`, `Twist`, `Climax`, `Resolution`, `Other`
-
-**Body `POST /plot-notes`**
-
-```json
-{
-  "type": "Foreshadowing",
-  "title": "Chiếc gương vỡ",
-  "content": "Cảnh gương vỡ ở chương 3 báo trước cái chết của nhân vật X ở chương 18."
-}
-```
 
 ---
 
@@ -505,11 +408,11 @@ Chapters                — uuid PK, FK→Projects
 ChapterVersions         — uuid PK, FK→Chapters, Content, IsChunked, IsEmbedded, IsPinned
 ChapterChunks           — uuid PK, FK→ChapterVersions, Embedding vector(768)
 
-WorldbuildingEntries    — uuid PK, FK→Projects, Embedding vector(768)
-CharacterEntries        — uuid PK, FK→Projects, Embedding vector(768)
-StyleGuideEntries       — uuid PK, FK→Projects, Aspect, Embedding vector(768)
-ThemeEntries            — uuid PK, FK→Projects, Title/Description, Embedding vector(768)
-PlotNoteEntries         — uuid PK, FK→Projects, Type, Embedding vector(768)
+ProjectAnalysisFacts   — uuid PK, FK→Projects, Payload jsonb (Story Bible snapshot)
+ReportCharacterEntries  — uuid PK, FK→ProjectReports, Name, Role, Description, etc.
+ReportWorldbuildingEntries — uuid PK, FK→ProjectReports, Title, Category, Description, etc.
+ReportThemeEntries      — uuid PK, FK→ProjectReports, Title, Description, Evidence
+ReportTimelineEvents    — uuid PK, FK→ProjectReports, Title, Category, TimeLabel, Description, etc.
 
 ChatMessages            — uuid PK, FK→Projects, FK→Users
 ProjectReports          — uuid PK, FK→Projects, CriteriaJson (jsonb), ProjectVersion (text)
