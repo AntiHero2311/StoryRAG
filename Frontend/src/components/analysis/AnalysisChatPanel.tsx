@@ -334,7 +334,7 @@ export default function AnalysisChatPanel({ projectId, report }: AnalysisChatPan
 
             saveSessions(sessions.map(s => s.id === activeSession.id ? finalSession : s));
         } catch (err: any) {
-            const msg = err?.response?.data?.message ?? 'Trò chuyện thất bại. Vui lòng thử lại sau.';
+            const msg = err?.response?.data?.message ?? err?.response?.data?.Message ?? 'Trò chuyện thất bại. Vui lòng thử lại sau.';
             const errMsg: ChatMsg = {
                 role: 'assistant',
                 content: `⚠️ Có lỗi xảy ra: ${msg}`,

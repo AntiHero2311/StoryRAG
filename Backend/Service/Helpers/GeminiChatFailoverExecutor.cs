@@ -24,7 +24,7 @@ namespace Service.Helpers
         /// Chỉ dùng các model flash có quota thực tế; KHÔNG dùng gemini-2.0-flash hoặc gemini-2.5-flash
         /// vì quota = 0 trên nhiều project key.
         /// </summary>
-        private const string DefaultChatModels = "gemini-3.1-flash-lite,gemini-3-flash-preview,gemini-2.5-flash-lite";
+        private const string DefaultChatModels = "gemini-1.5-flash,gemini-1.5-pro,gemini-2.0-flash";
         private static readonly Uri GeminiOpenAiEndpoint = new("https://generativelanguage.googleapis.com/v1beta/openai/");
         private static readonly HttpClient TraceHttpClient = new();
         private static readonly ConcurrentDictionary<string, DateTime> ApiKeyCooldownUntilUtc = new();

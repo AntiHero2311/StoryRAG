@@ -94,7 +94,7 @@ export default function ChatPanel({ projectId, isEmbedded, onEmbed, isSyncing }:
                 role: 'assistant', content: safeAnswer, tokens: result.totalTokens,
             }]);
         } catch (e: any) {
-            const msg = e?.response?.data?.message ?? 'AI Chat thất bại. Vui lòng thử lại.';
+            const msg = e?.response?.data?.message ?? e?.response?.data?.Message ?? 'AI Chat thất bại. Vui lòng thử lại.';
             setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${msg}` }]);
         } finally {
             setLoading(false);

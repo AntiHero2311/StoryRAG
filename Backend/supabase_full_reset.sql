@@ -12,6 +12,11 @@
 DROP TABLE IF EXISTS "Notifications"         CASCADE;
 DROP TABLE IF EXISTS "Payments"              CASCADE;
 DROP TABLE IF EXISTS "character_relationships"   CASCADE;
+DROP TABLE IF EXISTS "ReportCharacterEntries"    CASCADE;
+DROP TABLE IF EXISTS "ReportThemeEntries"        CASCADE;
+DROP TABLE IF EXISTS "ReportTimelineEvents"      CASCADE;
+DROP TABLE IF EXISTS "ReportWorldbuildingEntries" CASCADE;
+DROP TABLE IF EXISTS "StaffGenres"               CASCADE;
 DROP TABLE IF EXISTS "analysis_job_rerun_audits" CASCADE;
 DROP TABLE IF EXISTS "writing_tips"              CASCADE;
 DROP TABLE IF EXISTS "faqs"                      CASCADE;
@@ -20,7 +25,6 @@ DROP TABLE IF EXISTS "BugReports"            CASCADE;
 DROP TABLE IF EXISTS "StaffAnalysisReviews"  CASCADE;
 DROP TABLE IF EXISTS "StaffKnowledgeBaseItems" CASCADE;
 DROP TABLE IF EXISTS "StaffFeedbacks"        CASCADE;
-DROP TABLE IF EXISTS "RewriteHistories"      CASCADE;
 DROP TABLE IF EXISTS "AiAnalysisHistories"   CASCADE;
 DROP TABLE IF EXISTS "ChatMessages"          CASCADE;
 DROP TABLE IF EXISTS "ProjectAbuseFlags"     CASCADE;
@@ -193,6 +197,25 @@ CREATE TABLE "ProjectGenres" (
 
 CREATE INDEX "IX_ProjectGenres_GenreId" ON "ProjectGenres" ("GenreId");
 
+-- ── StaffGenres ─────────────────────────────────────────────────
+CREATE TABLE "StaffGenres" (
+    "StaffId"    uuid                     NOT NULL,
+    "GenreId"    integer                  NOT NULL,
+    "AssignedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
+    "AssignedBy" uuid,
+    CONSTRAINT "PK_StaffGenres" PRIMARY KEY ("StaffId", "GenreId"),
+    CONSTRAINT "FK_StaffGenres_Genres_GenreId" FOREIGN KEY ("GenreId")
+        REFERENCES "Genres" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_StaffGenres_Users_AssignedBy" FOREIGN KEY ("AssignedBy")
+        REFERENCES "Users" ("Id") ON DELETE SET NULL,
+    CONSTRAINT "FK_StaffGenres_Users_StaffId" FOREIGN KEY ("StaffId")
+        REFERENCES "Users" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_StaffGenres_AssignedBy" ON "StaffGenres" ("AssignedBy");
+CREATE INDEX "IX_StaffGenres_GenreId"    ON "StaffGenres" ("GenreId");
+CREATE INDEX "IX_StaffGenres_StaffId"    ON "StaffGenres" ("StaffId");
+
 -- ── ProjectAbuseFlags (AbuseDetector / rate limit — staff API flagged-projects)
 CREATE TABLE "ProjectAbuseFlags" (
     "Id"          uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
@@ -350,6 +373,75 @@ CREATE TABLE "ProjectReportSnapshots" (
 
 CREATE UNIQUE INDEX "IX_ReportItems_ProjectReportId_CriterionKey"
     ON "ReportItems" ("ProjectReportId", "CriterionKey");
+
+-- ── ReportCharacterEntries ──────────────────────────────────────
+CREATE TABLE "ReportCharacterEntries" (
+    "Id"                uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "ProjectReportId"   uuid                     NOT NULL,
+    "Name"              text                     NOT NULL,
+    "Role"              character varying(50)    NOT NULL DEFAULT 'Supporting',
+    "Description"       text                     NOT NULL DEFAULT '',
+    "Background"        text,
+    "TraitsJson"        text,
+    "RelationshipsJson" text,
+    "FirstAppearance"   integer,
+    "CreatedAt"         timestamp with time zone NOT NULL DEFAULT NOW(),
+    CONSTRAINT "PK_ReportCharacterEntries" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_ReportCharacterEntries_ProjectReports_ProjectReportId" FOREIGN KEY ("ProjectReportId")
+        REFERENCES "ProjectReports" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_ReportCharacterEntries_ProjectReportId" ON "ReportCharacterEntries" ("ProjectReportId");
+
+-- ── ReportThemeEntries ──────────────────────────────────────────
+CREATE TABLE "ReportThemeEntries" (
+    "Id"              uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "ProjectReportId" uuid                     NOT NULL,
+    "Title"           text                     NOT NULL,
+    "Description"     text                     NOT NULL DEFAULT '',
+    "Evidence"        text,
+    "CreatedAt"       timestamp with time zone NOT NULL DEFAULT NOW(),
+    CONSTRAINT "PK_ReportThemeEntries" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_ReportThemeEntries_ProjectReports_ProjectReportId" FOREIGN KEY ("ProjectReportId")
+        REFERENCES "ProjectReports" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_ReportThemeEntries_ProjectReportId" ON "ReportThemeEntries" ("ProjectReportId");
+
+-- ── ReportTimelineEvents ─────────────────────────────────────────
+CREATE TABLE "ReportTimelineEvents" (
+    "Id"              uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "ProjectReportId" uuid                     NOT NULL,
+    "Category"        character varying(50)    NOT NULL DEFAULT 'Story',
+    "Title"           text                     NOT NULL,
+    "Description"     text                     NOT NULL DEFAULT '',
+    "TimeLabel"       character varying(100),
+    "SortOrder"       integer                  NOT NULL DEFAULT 0,
+    "Importance"      character varying(20)    NOT NULL DEFAULT 'Normal',
+    "CreatedAt"       timestamp with time zone NOT NULL DEFAULT NOW(),
+    CONSTRAINT "PK_ReportTimelineEvents" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_ReportTimelineEvents_ProjectReports_ProjectReportId" FOREIGN KEY ("ProjectReportId")
+        REFERENCES "ProjectReports" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_ReportTimelineEvents_ProjectReportId" ON "ReportTimelineEvents" ("ProjectReportId");
+
+-- ── ReportWorldbuildingEntries ──────────────────────────────────
+CREATE TABLE "ReportWorldbuildingEntries" (
+    "Id"                 uuid                     NOT NULL DEFAULT (uuid_generate_v4()),
+    "ProjectReportId"    uuid                     NOT NULL,
+    "Title"              text                     NOT NULL,
+    "Content"            text                     NOT NULL DEFAULT '',
+    "Category"           character varying(50)    NOT NULL DEFAULT 'Other',
+    "Importance"         text,
+    "SourceChaptersJson" text,
+    "CreatedAt"          timestamp with time zone NOT NULL DEFAULT NOW(),
+    CONSTRAINT "PK_ReportWorldbuildingEntries" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_ReportWorldbuildingEntries_ProjectReports_ProjectReportId" FOREIGN KEY ("ProjectReportId")
+        REFERENCES "ProjectReports" ("Id") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_ReportWorldbuildingEntries_ProjectReportId" ON "ReportWorldbuildingEntries" ("ProjectReportId");
 
 -- ── ProjectAnalysisJobs ────────────────────────────────────────
 CREATE TABLE "ProjectAnalysisJobs" (
@@ -737,4 +829,8 @@ INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
     ('20260519150000_SeedHelpContent', '9.0.0'),
     ('20260520120000_UpsertHelpContent', '9.0.0'),
     ('20260520140000_DropStaffKnowledgeBaseItems', '9.0.0'),
-    ('20260529000000_RemoveManualStoryBibleTables', '9.0.5');
+    ('20260525080816_RemoveRewriteHistoriesTable', '9.0.0'),
+    ('20260527074345_AddProjectReportSnapshots', '9.0.0'),
+    ('20260529000000_RemoveManualStoryBibleTables', '9.0.5'),
+    ('20260529034757_AddReportStoryBible', '9.0.0'),
+    ('20260529170249_AddStaffGenres', '9.0.0');

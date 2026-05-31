@@ -545,8 +545,8 @@ namespace Service.Implementations
                     {
                         ProjectReportId = report.Id,
                         ChapterNumber = chapter.ChapterNumber,
-                        Title = version.Title,
-                        Content = version.Content, // Already encrypted in DB
+                        Title = version.Title ?? string.Empty,
+                        Content = version.Content ?? string.Empty, // Already encrypted in DB
                         WordCount = version.WordCount
                     });
                 }
