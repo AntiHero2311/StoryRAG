@@ -38,6 +38,7 @@ const NAV_ADMIN: NavItem[] = [
     { key: 'sub-admin',      label: 'Gói dịch vụ', icon: CreditCard,      path: '/admin/subscription' },
     { key: 'admin-system',   label: 'Hệ thống',    icon: Settings,        path: '/admin/system' },
     { key: 'admin-logs',     label: 'Nhật ký',     icon: Activity,        path: '/admin/logs' },
+    { key: 'admin-feedbacks',label: 'Phản hồi',    icon: MessageSquare,   path: '/staff/feedbacks' },
     { key: 'staff-ops',      label: 'Vận hành',    icon: Headphones,      path: '/staff' },
     { key: 'profile',        label: 'Hồ sơ',       icon: User,            path: '/profile' },
 ];
