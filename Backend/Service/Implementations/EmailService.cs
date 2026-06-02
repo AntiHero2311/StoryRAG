@@ -30,9 +30,10 @@ namespace Service.Implementations
             message.To.Add(new MailboxAddress(fullName, toEmail));
             message.Subject = "Chào mừng bạn đến với StoryNest! 🎉";
 
+            var frontendUrl = _config["App:FrontendUrl"] ?? "http://localhost:5173";
             var bodyBuilder = new BodyBuilder
             {
-                HtmlBody = BuildHtmlBody(fullName),
+                HtmlBody = BuildHtmlBody(fullName, frontendUrl),
                 TextBody = $"Chào {fullName},\n\nChào mừng bạn đến với StoryNest!\n\nTài khoản của bạn đã được tạo thành công. Hãy bắt đầu hành trình sáng tác cùng AI ngay hôm nay.\n\nTrân trọng,\nĐội ngũ StoryNest"
             };
             message.Body = bodyBuilder.ToMessageBody();
@@ -106,7 +107,7 @@ namespace Service.Implementations
             </html>
             """;
 
-        private static string BuildHtmlBody(string fullName) => $"""
+        private static string BuildHtmlBody(string fullName, string frontendUrl) => $"""
             <!DOCTYPE html>
             <html lang="vi">
             <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -139,7 +140,7 @@ namespace Service.Implementations
                   </div>
 
                   <!-- CTA -->
-                  <a href="http://localhost:5173/login"
+                  <a href="{frontendUrl}/login"
                      style="display:block;text-align:center;padding:14px 28px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:14px;letter-spacing:0.3px;">
                     Đăng nhập ngay →
                   </a>
