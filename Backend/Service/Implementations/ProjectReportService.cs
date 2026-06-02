@@ -93,6 +93,7 @@ namespace Service.Implementations
             IEnumerable<ChatMessage> messages,
             int maxTokens = 2500,
             float temperature = 0.7f,
+            bool jsonMode = false,
             CancellationToken cancellationToken = default)
         {
             await WaitForAnalyzeRateSlotAsync(cancellationToken);
@@ -103,6 +104,11 @@ namespace Service.Implementations
                 MaxOutputTokenCount = maxTokens,
                 Temperature = temperature,
             };
+
+            if (jsonMode)
+            {
+                options.ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat();
+            }
 
             return await _geminiChatExecutor.CompleteAsync(messages, options, cancellationToken);
         }
@@ -1057,6 +1063,7 @@ namespace Service.Implementations
                     attemptMessages,
                     maxTokens: 16000, // Tăng thêm budget cho report dài
                     temperature: 0.1f,
+                    jsonMode: true,
                     cancellationToken: cancellationToken);
 
                 totalTokensUsed += response.Usage?.TotalTokenCount ?? 0;

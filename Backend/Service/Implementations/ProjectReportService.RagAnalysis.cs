@@ -172,12 +172,59 @@ namespace Service.Implementations
                         ChatMessage.CreateUserMessage(judgeUserPrompt),
                     };
 
-                    var completion = await CompleteChatWithGeminiAsync(messages, maxTokens: 3500, temperature: 0.15f, cancellationToken);
+                    var completion = await CompleteChatWithGeminiAsync(messages, maxTokens: 3500, temperature: 0.15f, jsonMode: true, cancellationToken: cancellationToken);
                     System.Threading.Interlocked.Add(ref tokensUsed, completion.Usage?.TotalTokenCount ?? 0);
 
                     var raw = NormalizeAiText(completion.Content.FirstOrDefault()?.Text ?? string.Empty);
-                    if (!TryParseRagJudge(raw, out var judge, out var parseErr))
-                        throw new InvalidOperationException($"RAG judge {key}: {parseErr}");
+                    bool parseSuccess = TryParseRagJudge(raw, out var judge, out var parseErr);
+
+                    if (!parseSuccess)
+                    {
+                        _logger.LogWarning("RAG: Phân tích tiêu chí {Key} lần 1 bị lỗi JSON: {Error}. Tiến hành gọi AI thử lại...", key, parseErr);
+                        try
+                        {
+                            var retryMessages = new List<ChatMessage>(messages)
+                            {
+                                ChatMessage.CreateAssistantMessage(raw),
+                                ChatMessage.CreateUserMessage("Kết quả trả về trước đó bị lỗi cú pháp JSON: '" + parseErr + "'. Hãy trả về ĐÚNG cấu trúc JSON hợp lệ, KHÔNG có bất kỳ văn bản giải thích hay markdown nào ngoài JSON.")
+                            };
+
+                            var retryCompletion = await CompleteChatWithGeminiAsync(retryMessages, maxTokens: 3500, temperature: 0.1f, jsonMode: true, cancellationToken: cancellationToken);
+                            System.Threading.Interlocked.Add(ref tokensUsed, retryCompletion.Usage?.TotalTokenCount ?? 0);
+                            
+                            var retryRaw = NormalizeAiText(retryCompletion.Content.FirstOrDefault()?.Text ?? string.Empty);
+                            parseSuccess = TryParseRagJudge(retryRaw, out judge, out parseErr);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "RAG: Gọi AI thử lại cho tiêu chí {Key} thất bại.", key);
+                        }
+                    }
+
+                    if (!parseSuccess)
+                    {
+                        _logger.LogError("RAG: Phân tích tiêu chí {Key} bị lỗi định dạng sau 2 lần thử. Tự động áp dụng kết quả fallback dự phòng.", key);
+                        
+                        judge = new RagCriterionJudgeDto
+                        {
+                            Score = Math.Round(max * 0.6m, 1),
+                            Feedback = "Phân tích tiêu chí này gặp lỗi phản hồi từ AI. Chúng tôi đã tạm thời áp dụng điểm trung bình đạt yêu cầu. Vui lòng bấm chạy lại phân tích sau ít phút để hệ thống cập nhật nhận xét chi tiết hơn.",
+                            Evidence = ranked.Count > 0 ? TruncateForPrompt(decryptedChunks[ordinalByChunkId[ranked[0].Chunk.Id]], 300) : "",
+                            Errors = new List<string>
+                            {
+                                "Không trích xuất được danh sách lỗi cụ thể do sự cố phản hồi tạm thời từ AI.",
+                                "Tác giả vui lòng tự đối chiếu bối cảnh và tình tiết của chương tương ứng.",
+                                "Khuyên dùng: Bấm chạy lại phân tích để hệ thống cập nhật đánh giá."
+                            },
+                            Suggestions = new List<string>
+                            {
+                                "Đọc kỹ hướng dẫn viết văn trong cẩm nang tác giả.",
+                                "Mở rộng nội dung chương và bổ sung chi tiết cụ thể hơn để AI dễ phân tích.",
+                                "Thử chạy lại phân tích báo cáo sau ít phút."
+                            },
+                            EvidenceChunkIds = ranked.Count > 0 ? new List<int> { ranked[0].Ordinal } : new List<int>()
+                        };
+                    }
 
                     var score = Math.Clamp(judge.Score, 0m, max);
                     var feedback = string.IsNullOrWhiteSpace(judge.Feedback) ? (judge.Comment ?? "").Trim() : judge.Feedback.Trim();
@@ -339,7 +386,7 @@ namespace Service.Implementations
                     ChatMessage.CreateUserMessage(userPrompt),
                 };
 
-                var completion = await CompleteChatWithGeminiAsync(messages, maxTokens: 3000, temperature: 0.1f, cancellationToken);
+                var completion = await CompleteChatWithGeminiAsync(messages, maxTokens: 3000, temperature: 0.1f, jsonMode: true, cancellationToken: cancellationToken);
                 batchTokens += completion.Usage?.TotalTokenCount ?? 0;
                 var raw = NormalizeAiText(completion.Content.FirstOrDefault()?.Text ?? string.Empty);
                 var extracted = ExtractJsonPayload(raw.Trim());
@@ -442,7 +489,7 @@ namespace Service.Implementations
                 ChatMessage.CreateUserMessage(userPrompt),
             };
 
-            var completion = await CompleteChatWithGeminiAsync(messages, maxTokens: 2500, temperature: 0.2f, cancellationToken);
+            var completion = await CompleteChatWithGeminiAsync(messages, maxTokens: 2500, temperature: 0.2f, jsonMode: true, cancellationToken: cancellationToken);
             var tokens = completion.Usage?.TotalTokenCount ?? 0;
             var raw = NormalizeAiText(completion.Content.FirstOrDefault()?.Text ?? string.Empty);
             raw = ExtractJsonPayload(raw.Trim());
