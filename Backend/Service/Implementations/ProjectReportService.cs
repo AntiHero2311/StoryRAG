@@ -1407,17 +1407,24 @@ namespace Service.Implementations
             if (string.IsNullOrWhiteSpace(text))
                 return text;
 
+            var extracted = text;
             var objStart = text.IndexOf('{');
             var objEnd = text.LastIndexOf('}');
             if (objStart >= 0 && objEnd > objStart)
-                return text[objStart..(objEnd + 1)];
+            {
+                extracted = text[objStart..(objEnd + 1)];
+            }
+            else
+            {
+                var arrStart = text.IndexOf('[');
+                var arrEnd = text.LastIndexOf(']');
+                if (arrStart >= 0 && arrEnd > arrStart)
+                {
+                    extracted = text[arrStart..(arrEnd + 1)];
+                }
+            }
 
-            var arrStart = text.IndexOf('[');
-            var arrEnd = text.LastIndexOf(']');
-            if (arrStart >= 0 && arrEnd > arrStart)
-                return text[arrStart..(arrEnd + 1)];
-
-            return text;
+            return JsonSanitizer.Sanitize(extracted);
         }
 
         private static string BuildCompletenessNote(int chapterCount, int totalWords)

@@ -28,7 +28,7 @@ namespace Service.Implementations
             if (chunkEntities.Count != decryptedChunks.Count)
                 throw new InvalidOperationException("Chunk entities và plaintext không khớp số lượng.");
 
-            var topK             = Math.Clamp(await _sysConfig.GetAsync("rag.top_k_report", 12), 1, 64);
+            var topK             = Math.Clamp(await _sysConfig.GetAsync("rag.top_k_report", 15), 1, 64);
             var stage1BatchChunks = Math.Clamp(await _sysConfig.GetAsync("rag.stage1_batch_chunks", 8), 1, 20);
             var stage1MaxChars   = Math.Clamp(await _sysConfig.GetAsync("rag.stage1_max_chunk_chars", 900), 200, 4000);
             var factsMaxChars    = Math.Clamp(await _sysConfig.GetAsync("rag.facts_json_max_chars", 12000), 2000, 50000);
@@ -199,28 +199,38 @@ namespace Service.Implementations
                         .ToList();
 
                     // TRÙNG KHỚP TRỰC TIẾP QUOTE VỚI CHƯƠNG THỰC TẾ:
-                    // Nếu AI trích xuất quote (evidence) nhưng chỉ định sai ordinal (sai chương),
-                    // chúng ta quét toàn bộ danh sách plaintext đã giải mã của câu chuyện để tìm vị trí thực tế của quote đó.
+                    // Quét toàn bộ danh sách plaintext đã giải mã của câu chuyện để tìm vị trí thực tế của quote đó.
                     var cleanEvidence = (judge.Evidence ?? "").Trim();
+                    var matchedByQuote = new List<int>();
                     if (cleanEvidence.Length >= 5)
                     {
-                        var normEvidence = System.Text.RegularExpressions.Regex.Replace(cleanEvidence, @"\s+", " ").ToLower();
-                        for (var i = 0; i < decryptedChunks.Count; i++)
+                        var normEvidence = NormalizeForMatching(cleanEvidence);
+                        if (normEvidence.Length >= 5)
                         {
-                            var normPlain = System.Text.RegularExpressions.Regex.Replace(decryptedChunks[i], @"\s+", " ").ToLower();
-                            if (normPlain.Contains(normEvidence))
+                            for (var i = 0; i < decryptedChunks.Count; i++)
                             {
-                                // Tìm thấy phân đoạn chứa trích dẫn chính xác! Cập nhật ordinal này vào danh sách minh chứng
-                                if (!evidenceIds.Contains(i))
+                                var normPlain = NormalizeForMatching(decryptedChunks[i]);
+                                if (normPlain.Contains(normEvidence))
                                 {
-                                    evidenceIds.Insert(0, i); // Đưa lên đầu tiên
+                                    matchedByQuote.Add(i);
                                 }
                             }
                         }
                     }
 
-                    if (evidenceIds.Count == 0)
-                        evidenceIds = ranked.Select(r => r.Ordinal).Take(topK).ToList();
+                    // Tối ưu hóa minh chứng: Ưu tiên phân đoạn khớp với trích dẫn thực tế thay vì mảng quá rộng hoặc lười biếng từ AI
+                    if (matchedByQuote.Count > 0)
+                    {
+                        evidenceIds = matchedByQuote.Take(2).ToList();
+                    }
+                    else if (evidenceIds.Count == 0 || evidenceIds.Count > 2)
+                    {
+                        // Fallback: Chỉ lấy đúng 1 phân đoạn tốt nhất từ RAG để tránh bôi đen/hiển thị tràn lan cả chương
+                        if (ranked.Count > 0)
+                        {
+                            evidenceIds = new List<int> { ranked[0].Ordinal };
+                        }
+                    }
 
                     aiScoresArray[idx] = new AiScoreItem
                     {
@@ -623,6 +633,15 @@ namespace Service.Implementations
 
                 _ => ""
             };
+        }
+
+        private static string NormalizeForMatching(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+            var normalized = text.ToLowerInvariant();
+            normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"[“”""'’«».,!?;:()\[\]\-\r\n\t]", " ");
+            normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"\s+", " ").Trim();
+            return normalized;
         }
     }
 }

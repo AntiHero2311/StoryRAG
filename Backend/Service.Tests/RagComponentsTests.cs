@@ -79,6 +79,29 @@ public class RagComponentsTests
         Assert.Equal("123", numStr);
     }
 
+    [Fact]
+    public void JsonSanitizer_sanitizes_malformed_json_safely()
+    {
+        var malformedJson = "{\n" +
+            "  \"score\": 4.5,\n" +
+            "  \"feedback\": \"Nhân vật chính là \\\"Mary Sue\\\" nhưng thoại của cô ta \"rất tệ\".\n" +
+            "Tuy nhiên cốt truyện vẫn ổn.\",\n" +
+            "  \"comment\": \"Đường dẫn C:\\Users\\admin\\file.txt\",\n" +
+            "  \"evidence\": \"Cô ta nói: \\\"Không sao\\\"\"\n" +
+            "}";
+
+        var sanitized = JsonSanitizer.Sanitize(malformedJson);
+
+        using var doc = System.Text.Json.JsonDocument.Parse(sanitized);
+        var root = doc.RootElement;
+
+        Assert.Equal(4.5m, root.GetProperty("score").GetDecimal());
+        Assert.Contains("Nhân vật chính là \"Mary Sue\" nhưng thoại của cô ta \"rất tệ\".", root.GetProperty("feedback").GetString());
+        Assert.Contains("Tuy nhiên cốt truyện vẫn ổn.", root.GetProperty("feedback").GetString());
+        Assert.Equal("Đường dẫn C:\\Users\\admin\\file.txt", root.GetProperty("comment").GetString());
+        Assert.Equal("Cô ta nói: \"Không sao\"", root.GetProperty("evidence").GetString());
+    }
+
     private static float[] Pad(float[] shorter, int dim)
     {
         var a = new float[dim];

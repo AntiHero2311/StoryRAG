@@ -33,7 +33,7 @@ namespace Api.Controllers
         private const int DefaultChunkSize = 800;
         private const int DefaultChunkOverlap = 100;
         private const int DefaultTopKChat = 5;
-        private const int DefaultTopKReport = 8;
+        private const int DefaultTopKReport = 15;
         private const string DefaultSplitter = "paragraph";
 
         private const int DefaultStage1BatchChunks = 8;
