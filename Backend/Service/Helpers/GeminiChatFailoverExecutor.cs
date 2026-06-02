@@ -152,7 +152,9 @@ namespace Service.Helpers
                     attemptedCandidates++;
                     try
                     {
-                        var geminiMessages = GeminiRetryHelper.FlattenSystemForGemma(sourceMessages);
+                        var geminiMessages = candidate.Model.Contains("gemma", StringComparison.OrdinalIgnoreCase)
+                            ? GeminiRetryHelper.FlattenSystemForGemma(sourceMessages)
+                            : sourceMessages.ToList();
 
                         ClientResult<ChatCompletion> result;
                         if (options == null)
@@ -298,9 +300,13 @@ namespace Service.Helpers
 
         private async Task TraceCandidateMatrixAsync(IEnumerable<ChatMessage> messages)
         {
-            var flat = GeminiRetryHelper.FlattenSystemForGemma(messages);
             foreach (var candidate in _candidates)
+            {
+                var flat = candidate.Model.Contains("gemma", StringComparison.OrdinalIgnoreCase)
+                    ? GeminiRetryHelper.FlattenSystemForGemma(messages)
+                    : messages.ToList();
                 await TraceRawHttpAsync(candidate, flat);
+            }
         }
 
         private static List<object> BuildTraceMessages(IEnumerable<ChatMessage> messages)

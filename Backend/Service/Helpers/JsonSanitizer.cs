@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Text.Json;
 
 namespace Service.Helpers
 {
@@ -9,6 +10,19 @@ namespace Service.Helpers
         {
             if (string.IsNullOrWhiteSpace(json))
                 return json;
+
+            // If already valid JSON, don't sanitize at all to avoid messing up properly escaped quotes!
+            try
+            {
+                using (JsonDocument.Parse(json))
+                {
+                    return json;
+                }
+            }
+            catch
+            {
+                // Proceed to sanitize only if it is malformed
+            }
 
             var sb = new StringBuilder(json.Length);
             bool inString = false;

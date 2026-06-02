@@ -154,21 +154,23 @@ namespace Service.Implementations
                         1. LẶP KỸ THUẬT (OVERLAP): Giữa các đoạn trích kề nhau của cùng một chương (ví dụ cùng thuộc 'Chương 2') có thể có sự trùng lặp nhẹ về câu chữ ở ranh giới biên (đây là kỹ thuật overlap để không mất context khi cắt nhỏ văn bản). Bạn PHẢI bỏ qua sự lặp lại kỹ thuật này, tuyệt đối không được đánh giá là tác giả viết lặp ý hay lỗi văn phong.
                         2. LẶP CHƯƠNG THỰC TẾ (DUPLICATE): Nếu bạn phát hiện hai hoặc nhiều đoạn trích thuộc các chương KHÁC NHAU (ví dụ một đoạn thuộc 'Chương 2' và một đoạn thuộc 'Chương 3') có nội dung giống hệt nhau hoặc gần như giống hệt nhau, đây là lỗi trùng lặp nội dung thực tế do tác giả (ví dụ tác giả copy nhầm chương hoặc viết lặp chương). Bạn PHẢI chỉ ra lỗi nghiêm trọng này trong phần 'errors' để tác giả biết và xử lý.
 
-                        Trả về JSON thuần túy một object với các field:
-                        - score (0 đến {{max}})
-                        - feedback (3-5 câu tiếng Việt đánh giá tích cực/tiêu cực khách quan, tuyệt đối không dùng từ 'chunk' hay 'chunk_ord')
-                        - evidence (trích dẫn ngắn từ đoạn trên)
-                        - errors (mảng ≥3 chuỗi): Mỗi chuỗi đóng vai trò là một NHÀ PHÊ BÌNH VĂN HỌC KHẮT KHE, vạch trần cụ thể một hạt sạn/lỗ hổng văn học dựa trên cẩm nang truy quét sạn ở trên. Yêu cầu chỉ rõ chương nào (dựa trên thông tin 'Vị trí: Chương X' của đoạn trích), nhân vật hoặc tình tiết nào mắc lỗi, và trích dẫn câu văn mắc lỗi làm minh chứng thực tế. Tuyệt đối KHÔNG viết chung chung mơ hồ, không lý thuyết suông, và TUYỆT ĐỐI KHÔNG đề cập đến các từ kỹ thuật hệ thống như 'chunk', 'chunk_ord' hay 'đoạn trích' trong nội dung phản hồi cho tác giả.
-                        - suggestions (mảng ≥3 chuỗi): Mỗi chuỗi đóng vai trò là một HUẤN LUYỆN VIÊN VIẾT VĂN THỰC CHIẾN. Với mỗi lỗi đã chỉ ra ở mảng errors, bạn BẮT BUỘC phải đưa ra giải pháp viết lại cụ thể. Bạn phải cung cấp ít nhất một PHƯƠNG ÁN VIẾT LẠI MẪU (Example Rewrite) hiển thị trực quan cách chỉnh sửa câu văn hoặc hội thoại bị lỗi để tác giả dễ dàng sửa đổi ngay lập tức. Tuyệt đối KHÔNG khuyên bảo chung chung mơ hồ, không lý thuyết suông, và TUYỆT ĐỐI KHÔNG sử dụng các từ kỹ thuật như 'chunk' hay 'chunk_ord' trong đề xuất.
-                        - bibleComparison (chuỗi hoặc null)
-                        - evidence_chunk_ids (mảng số nguyên — các chunk_ord đã dùng).
+                        Trả về JSON thuần túy một object khớp với JSON schema sau:
+                        {
+                            "score": 0.0,
+                            "feedback": "3-5 câu nhận xét bằng tiếng Việt...",
+                            "evidence": "trích dẫn ngắn từ đoạn văn làm bằng chứng...",
+                            "errors": ["lỗi 1...", "lỗi 2...", "lỗi 3..."],
+                            "suggestions": ["gợi ý 1...", "gợi ý 2...", "gợi ý 3..."],
+                            "bibleComparison": "so sánh trung lập..." (hoặc null),
+                            "evidence_chunk_ids": [1, 2]
+                        }
 
                         Quy tắc: evidence_chunk_ids phải là tập con các chunk_ord đã liệt kê; không bịa trích dẫn ngoài đoạn trích.
                         """;
 
                     var messages = new List<ChatMessage>
                     {
-                        ChatMessage.CreateSystemMessage("Chỉ trả về một JSON object hợp lệ, không markdown, không giải thích ngoài JSON. ZERO HALLUCINATION: không bịa trích dẫn ngoài đoạn trích."),
+                        ChatMessage.CreateSystemMessage("Bạn là giám khảo văn học nghiêm khắc. BẮT BUỘC chỉ trả ra MỘT JSON object hợp lệ theo đúng cấu trúc mẫu sau (không giải thích ngoài JSON, không markdown): {\"score\":0.0,\"feedback\":\"\",\"evidence\":\"\",\"errors\":[],\"suggestions\":[],\"bibleComparison\":null,\"evidence_chunk_ids\":[]}. Tuân thủ nghiêm ngặt quy tắc ZERO HALLUCINATION."),
                         ChatMessage.CreateUserMessage(judgeUserPrompt),
                     };
 
