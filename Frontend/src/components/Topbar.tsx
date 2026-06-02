@@ -125,11 +125,15 @@ export default function Topbar({ fullName, role, userId, pageTitle, onLogout, on
         const sync = () => setNotifications(appNotificationService.getAll());
         sync();
         return appNotificationService.subscribe(sync);
-    }, []);
+    }, [userId]);
 
     useEffect(() => {
         let disposed = false;
         const syncServerNotifications = async () => {
+            if (!userId) {
+                setServerNotifications([]);
+                return;
+            }
             try {
                 const items = await notificationService.getMy(60);
                 if (disposed) return;
@@ -153,7 +157,7 @@ export default function Topbar({ fullName, role, userId, pageTitle, onLogout, on
             disposed = true;
             window.clearInterval(intervalId);
         };
-    }, []);
+    }, [userId]);
 
     useEffect(() => {
         if (role !== 'Author' || !userId) return;

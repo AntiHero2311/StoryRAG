@@ -243,7 +243,7 @@ namespace Service.Implementations
 
             int newVersionNum = chapter.CurrentVersionNum + 1;
 
-            // Snapshot current content (copy from active version, not empty)
+            // Snapshot nội dung từ version đang active
             string snapshotContent = string.Empty;
             if (chapter.CurrentVersionId.HasValue)
             {
@@ -271,10 +271,10 @@ namespace Service.Implementations
             chapter.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
-            // Auto-prune: keep max 20 versions, delete oldest non-pinned first
-            await PruneVersionsAsync(chapterId, maxVersions: 20);
+            // Auto-prune: giữ tối đa 10 version, ưu tiên xóa version cũ nhất chưa pin.
+            await PruneVersionsAsync(chapterId, maxVersions: 10);
 
-            // Giống CreateChapter / UpdateChapter: version mới phải được chunk ngay (EmbedChapterAsync yêu cầu IsChunked).
+            // Chunk ngay sau khi tạo (EmbedChapterAsync yêu cầu IsChunked = true).
             await PerformChunkingInternalAsync(version, snapshotContent, rawDek, chapter.ProjectId);
 
             var versions = await _context.ChapterVersions
@@ -444,9 +444,16 @@ namespace Service.Implementations
 
         // ── Private Helpers ────────────────────────────────────────────────────
 
-        private async Task PruneVersionsAsync(Guid chapterId, int maxVersions = 20)
+        /// <summary>
+        /// Xóa bớt version cũ: giữ tối đa <paramref name="maxVersions"/> version.<br/>
+        /// Ưu tiên xóa version cũ nhất, chưa pin, không phải active.<br/>
+        /// Nếu không đủ ứng viên để xóa do quá nhiều version đã pin → báo lỗi rõ để user unpin bớt.
+        /// </summary>
+        private async Task PruneVersionsAsync(Guid chapterId, int maxVersions = 10)
         {
             var chapter = await _context.Chapters.FindAsync(chapterId);
+            if (chapter == null) return;
+
             var all = await _context.ChapterVersions
                 .Where(v => v.ChapterId == chapterId)
                 .OrderBy(v => v.VersionNumber)
@@ -454,21 +461,33 @@ namespace Service.Implementations
 
             if (all.Count <= maxVersions) return;
 
-            // Candidates: oldest, non-pinned, not the currently active version
-            var toDelete = all
-                .Where(v => !v.IsPinned && v.Id != chapter?.CurrentVersionId)
+            int toDeleteCount = all.Count - maxVersions;
+
+            // Ứng viên xóa: cũ nhất, chưa pin, không phải version đang active
+            var candidates = all
+                .Where(v => !v.IsPinned && v.Id != chapter.CurrentVersionId)
                 .OrderBy(v => v.VersionNumber)
-                .Take(all.Count - maxVersions)
                 .ToList();
 
-            if (toDelete.Count == 0) return;
+            if (candidates.Count < toDeleteCount)
+            {
+                // Không đủ ứng viên — quá nhiều version đã được pin
+                int pinnedCount = all.Count(v => v.IsPinned && v.Id != chapter.CurrentVersionId);
+                throw new InvalidOperationException(
+                    $"Không thể tạo phiên bản mới: chương đã có {all.Count} phiên bản (giới hạn {maxVersions}), " +
+                    $"trong đó {pinnedCount} phiên bản đang bị ghím (pin). " +
+                    "Vui lòng bỏ ghím bớ phiên bản để tiếp tục.");
+            }
 
-            // Remove chunks belonging to deleted versions
+            var toDelete = candidates.Take(toDeleteCount).ToList();
+
+            // Xóa chunks của các version bị xóa
             var deleteIds = toDelete.Select(v => v.Id).ToList();
             var chunks = await _context.ChapterChunks
                 .Where(c => deleteIds.Contains(c.VersionId))
                 .ToListAsync();
-            _context.ChapterChunks.RemoveRange(chunks);
+            if (chunks.Count > 0)
+                _context.ChapterChunks.RemoveRange(chunks);
 
             _context.ChapterVersions.RemoveRange(toDelete);
             await _context.SaveChangesAsync();

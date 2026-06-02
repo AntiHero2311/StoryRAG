@@ -87,6 +87,21 @@ namespace Service.Implementations
             if (sub == null)
                 throw new InvalidOperationException("Bạn chưa có gói đăng ký hợp lệ. Vui lòng đăng ký gói để dùng AI Chat.");
 
+            // Pre-check token TRƯỚC khi gọi AI — tránh tốn chi phí API khi đã hết quota.
+            // Ước tính nhanh: ~4 ký tự = 1 token (phù hợp với tiếng Việt và tiếng Anh).
+            var remainingTokens = sub.Plan.MaxTokenLimit - sub.UsedTokens;
+            if (remainingTokens <= 0)
+                throw new InvalidOperationException(
+                    $"Bạn đã dùng hết {sub.Plan.MaxTokenLimit:N0} token trong kỳ này. " +
+                    "Vui lòng nâng cấp gói để tiếp tục sử dụng AI Chat.");
+
+            // Ước tính token đầu vào tối thiểu (chỉ câu hỏi, chưa tính context) để cảnh báo sớm.
+            var estimatedMinInputTokens = (question.Length + 200) / 4; // +200 cho system overhead
+            if (remainingTokens < estimatedMinInputTokens)
+                throw new InvalidOperationException(
+                    $"Không đủ token để xử lý yêu cầu này. Còn lại: {remainingTokens:N0} token. " +
+                    "Vui lòng nâng cấp gói hoặc đặt câu hỏi ngắn hơn.");
+
             // Chat chỉ kiểm tra token, không tiêu hao lượt phân tích
 
             // 3. Chunk/embed các chapter active nếu chưa sẵn sàng

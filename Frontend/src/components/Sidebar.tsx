@@ -51,9 +51,10 @@ function getNav(role: string) {
 interface SidebarProps {
     role: string;
     onNavigate: (path: string) => void;
+    userId?: string;
 }
 
-export default function Sidebar({ role, onNavigate }: SidebarProps) {
+export default function Sidebar({ role, onNavigate, userId }: SidebarProps) {
     const nav = getNav(role);
     const location = useLocation();
     const [collapsed, setCollapsed] = useState(false);
@@ -87,7 +88,7 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
             disposed = true;
             window.clearInterval(id);
         };
-    }, [role]);
+    }, [role, userId]);
 
     return (
         <aside

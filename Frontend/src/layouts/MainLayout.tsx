@@ -48,7 +48,7 @@ export default function MainLayout({ children, pageTitle, onSettings }: MainLayo
                 />
             </div>
 
-            <Sidebar role={userInfo.role} onNavigate={navigate} />
+            <Sidebar role={userInfo.role} onNavigate={navigate} userId={userInfo.userId} />
 
             <div className="relative flex flex-col flex-1 min-w-0 z-10">
                 <Topbar

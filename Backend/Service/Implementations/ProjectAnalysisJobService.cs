@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using Repository.Data;
 using Repository.Entities;
 using Service.DTOs;
@@ -39,6 +40,7 @@ namespace Service.Implementations
         private readonly INotificationService _notificationService;
         private readonly IEmbeddingService _embeddingService;
         private readonly ILogger<ProjectAnalysisJobService> _logger;
+        private readonly IConfiguration _config;
         private readonly SemaphoreSlim _progressLock = new(1, 1);
 
         public ProjectAnalysisJobService(
@@ -48,7 +50,8 @@ namespace Service.Implementations
             IAnalysisJobCancellationRegistry analysisJobCancellationRegistry,
             INotificationService notificationService,
             IEmbeddingService embeddingService,
-            ILogger<ProjectAnalysisJobService> logger)
+            ILogger<ProjectAnalysisJobService> logger,
+            IConfiguration config)
         {
             _context = context;
             _projectReportService = projectReportService;
@@ -57,6 +60,7 @@ namespace Service.Implementations
             _notificationService = notificationService;
             _embeddingService = embeddingService;
             _logger = logger;
+            _config = config;
         }
 
         public async Task<ProjectAnalysisJobResponse> EnqueueAsync(
@@ -504,8 +508,8 @@ namespace Service.Implementations
                 
                 // Gửi thông báo chung chung, không chứa mã lỗi hoặc chi tiết exception cho Tác giả (Author)
                 var failureMessageAuthor = $"Job phân tích cho dự án \"{projectTitle}\" thất bại. Vui lòng thử lại.";
-                await _notificationService.CreateForRolesAsync(
-                    ["Author"],
+                await _notificationService.CreateForUserAsync(
+                    job.UserId,
                     "error",
                     "Phân tích AI gặp lỗi",
                     failureMessageAuthor,
@@ -762,13 +766,34 @@ namespace Service.Implementations
 
         private async Task<string> GetProjectTitleAsync(Guid projectId, CancellationToken cancellationToken)
         {
-            var title = await _context.Projects
+            var project = await _context.Projects
                 .AsNoTracking()
+                .Include(p => p.Author)
                 .Where(p => p.Id == projectId)
-                .Select(p => p.Title)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            return string.IsNullOrWhiteSpace(title) ? projectId.ToString() : title;
+            if (project == null || string.IsNullOrWhiteSpace(project.Title))
+                return projectId.ToString();
+
+            try
+            {
+                var masterKey = _config["Security:MasterKey"];
+                if (!string.IsNullOrWhiteSpace(masterKey) && !string.IsNullOrWhiteSpace(project.Author?.DataEncryptionKey))
+                {
+                    var authorDek = EncryptionHelper.DecryptWithMasterKey(project.Author.DataEncryptionKey, masterKey);
+                    var plainTitle = EncryptionHelper.DecryptWithMasterKey(project.Title, authorDek);
+                    if (!string.IsNullOrWhiteSpace(plainTitle))
+                    {
+                        return plainTitle;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to decrypt project title for project {ProjectId}.", projectId);
+            }
+
+            return project.Title;
         }
 
         private static string? Truncate(string? value, int maxLen)
