@@ -139,10 +139,10 @@ export default function LandingPage() {
             <main className="relative z-10">
                 <section className="mx-auto grid min-h-screen max-w-7xl items-center gap-12 px-5 pb-20 pt-32 lg:grid-cols-2 lg:pt-24">
                     <div>
-                        <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-gradient-to-r from-indigo-500/15 via-fuchsia-500/10 to-cyan-500/10 px-4 py-2 text-sm font-bold text-indigo-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md">
+                        {/* <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-gradient-to-r from-indigo-500/15 via-fuchsia-500/10 to-cyan-500/10 px-4 py-2 text-sm font-bold text-indigo-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md">
                             <Sparkles className="h-4 w-4 shrink-0 text-fuchsia-300 drop-shadow-[0_0_8px_rgba(232,121,249,0.5)]" />
                             RAG workspace cho truyện dài
-                        </div>
+                        </div> */}
 
                         <h1 className="max-w-4xl text-balance text-5xl font-black leading-[0.98] tracking-tight sm:text-6xl lg:text-[4.35rem] lg:leading-[1.03]">
                             <span className="bg-gradient-to-br from-white via-[#e8e8ff] to-[#a5b4fc] bg-clip-text text-transparent">
