@@ -193,7 +193,7 @@ QUY TẮC QUAN TRỌNG:
 
         private async Task<(EmotionPacingResult Pacing, int TokensUsed)> AnalyzeEmotionPacingAsync(
             string projectTitle,
-            List<string> decryptedChunks,
+            List<(string Content, int ChapterNumber, string? ChapterTitle)> decryptedChunks,
             Func<int, string?, CancellationToken, Task>? progressCallback,
             CancellationToken cancellationToken)
         {
@@ -211,8 +211,10 @@ QUY TẮC QUAN TRỌNG:
             var segments = new List<TextSegmentLocal>();
             var segmentIndex = 0;
 
-            foreach (var chunk in decryptedChunks)
+            foreach (var item in decryptedChunks)
             {
+                var chunk = item.Content;
+                var chNumber = item.ChapterNumber;
                 if (string.IsNullOrWhiteSpace(chunk)) continue;
 
                 foreach (var segmentText in SplitTextIntoSegmentsLocal(chunk, 220))
@@ -228,7 +230,7 @@ QUY TẮC QUAN TRỌNG:
                     segments.Add(new TextSegmentLocal
                     {
                         SegmentIndex = segmentIndex++,
-                        ChapterNumber = 1 + (segmentIndex / 10), // Approximated chapter ordering
+                        ChapterNumber = chNumber,
                         Text = segmentText,
                         WordCount = wordCount,
                         Tokens = tokens
@@ -338,7 +340,7 @@ QUY TẮC QUAN TRỌNG:
                 {
                     var idx = i * segments.Count / sampleSize;
                     var s = segments[idx];
-                    sampleText.Add($"[Đoạn {s.SegmentIndex}]: {s.Text[..Math.Min(350, s.Text.Length)]}...");
+                    sampleText.Add($"[Chương {s.ChapterNumber} - Đoạn {s.SegmentIndex}]: {s.Text[..Math.Min(350, s.Text.Length)]}...");
                 }
 
                 var pacingStats = $"Nhịp độ TB: {pacingPoints.Average(p => p.Score):F1}, Max: {pacingPoints.Max(p => p.Score):F1}";
@@ -348,6 +350,16 @@ QUY TẮC QUAN TRỌNG:
 
 Bạn là nhà phê bình văn học chuyên nghiệp người Việt. Hãy phân tích nhịp điệu (pacing) và dòng cảm xúc (emotion/sentiment) của tác phẩm văn học được cung cấp.
 Nhiệm vụ của bạn là đưa ra đúng 5 nhận xét, đánh giá sâu sắc và chi tiết (mỗi nhận xét là một đoạn văn ngắn gồm 2-4 câu).
+
+PHÂN LOẠI NHẬN XÉT (BẮT BUỘC):
+Mỗi nhận xét trong danh sách 'insights' PHẢI bắt đầu bằng một trong các tiền tố phân loại sau (bao gồm cả dấu ngoặc vuông) để phân loại chủ đề:
+- `[Nhịp độ & Tiết tấu]`: Phân tích về tốc độ cốt truyện, nhịp điệu hành động, nhịp kể chuyện nhanh/chậm.
+- `[Dòng cảm xúc]`: Phân tích về sự biến đổi cảm xúc, bầu không khí, sắc thái tình cảm của các phân đoạn.
+- `[Động lực nhân vật]`: Phân tích về tương tác tâm lý, động lực nội tâm hoặc các quan hệ xung đột.
+- `[Đề xuất kịch bản]`: Các đề xuất chỉnh sửa thực tế, giải pháp để cải thiện chất lượng nghệ thuật của tác phẩm.
+
+Ví dụ: ""[Nhịp độ & Tiết tấu] Tác phẩm có tốc độ phát triển khá hợp lý...""
+
 YÊU CẦU NỘI DUNG:
 1. Đánh giá khách quan, đa chiều (phải có cả nhận xét khen/điểm mạnh và nhận xét chê/điểm yếu/điểm cần cải thiện).
 2. Phải chỉ ra các bước ngoặt cốt truyện (plot twists), biến cố hoặc các chi tiết nghệ thuật cụ thể làm nổi bật nhịp điệu nhanh/chậm hoặc sự thay đổi cảm xúc của nhân vật trong tác phẩm.
@@ -356,11 +368,11 @@ YÊU CẦU NỘI DUNG:
 JSON SCHEMA (trả đúng định dạng này, không bọc trong markdown, không có comment):
 {
   ""insights"": [
-    ""Đoạn văn nhận xét thứ 1..."",
-    ""Đoạn văn nhận xét thứ 2..."",
-    ""Đoạn văn nhận xét thứ 3..."",
-    ""Đoạn văn nhận xét thứ 4..."",
-    ""Đoạn văn nhận xét thứ 5...""
+    ""[Nhịp độ & Tiết tấu] Nhận xét thứ 1..."",
+    ""[Dòng cảm xúc] Nhận xét thứ 2..."",
+    ""[Động lực nhân vật] Nhận xét thứ 3..."",
+    ""[Đề xuất kịch bản] Nhận xét thứ 4..."",
+    ""[Đề xuất kịch bản] Nhận xét thứ 5...""
   ]
 }";
 

@@ -199,13 +199,14 @@ userService.ts          # /api/user — profile
 - Phân tích chạy song song 5 tiêu chí rubric mỗi đợt (`rag.rubric_batch_size = 5`) để tối ưu tốc độ mà không vượt giới hạn RPM của Gemini.
 
 # Cảnh báo Đặc biệt (Warnings):
-- AI phát hiện **6 nội dung nhạy cảm và chất lượng**:
+- AI phát hiện **7 nội dung nhạy cảm và chất lượng**:
   1. `ANTI_STATE`           - Nội dung vi phạm chính trị pháp lý (Critical)
   2. `SEXUAL_CONTENT`       - Nội dung người lớn/tình dục thô tục (Warning/Critical)
   3. `PLAGIARISM_RISK`      - Nguy cơ đạo văn (Critical)
   4. `INCOMPLETE`           - Bản thảo bị đứt đoạn, chưa hoàn thiện (Warning)
   5. `INCONSISTENCY`        - Mâu thuẫn logic cốt truyện/nhân vật (Info/Warning)
   6. `REPETITION`           - Trùng lặp/lặp từ nghiêm trọng (Warning)
+  7. `SPELLING_FORMATTING`  - Lỗi chính tả, định dạng hoặc gõ phím tiếng Việt (Warning)
 - Các bản thảo bị cắm cảnh báo sẽ tự động bị gắn cờ và gửi tới trang hậu kiểm của Staff (`/api/staff/manuscripts/flagged`).
 
 # Chapter Version & Pruning:

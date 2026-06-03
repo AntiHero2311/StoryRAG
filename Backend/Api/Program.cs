@@ -398,7 +398,7 @@ app.Run();
 
 static string GetAuthLoginPartitionKey(HttpContext context)
 {
-    var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown-ip";
+    var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown-zip";
     var email = context.Items.TryGetValue("AuthLoginEmail", out var value)
         ? value?.ToString()
         : null;

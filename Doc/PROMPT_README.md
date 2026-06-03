@@ -267,7 +267,7 @@ Quy tắc: evidence_chunk_ids phải là tập con các chunk_ord đã liệt k�
 
 **File:** `Backend/Service/Implementations/ProjectReportService.RagAnalysis.cs`  
 **Method:** `SynthesizeRagOverallAndWarningsAsync()`  
-**Kích hoạt khi:** Đã thu thập đủ điểm số của toàn bộ 20 tiêu chí Rubric trong pipeline RAG. AI tiến hành tổng hợp nhận xét tổng quan toàn dự án và kiểm tra rà soát 6 lỗi nghiêm trọng.
+**Kích hoạt khi:** Đã thu thập đủ điểm số của toàn bộ 20 tiêu chí Rubric trong pipeline RAG. AI tiến hành tổng hợp nhận xét tổng quan toàn dự án và kiểm tra rà soát 7 lỗi nghiêm trọng.
 
 ### Prompt Template
 ```
@@ -281,8 +281,8 @@ Bạn là Biên tập viên trưởng Hội đồng thẩm định. Hãy viết 
 
 QUY TẮC TỔNG HỢP:
 1. overallFeedback: Viết một đoạn văn dài 4-6 câu tâm huyết, có tính định hướng nghệ thuật cao cho tác giả dựa trên phân bổ điểm số của họ.
-2. warnings: Rà soát nghiêm ngặt toàn bộ tác phẩm để phát hiện 6 lỗi đặc biệt dưới đây.
-   Mã warnings hợp lệ: INCOMPLETE, REPETITION, PLAGIARISM_RISK, INCONSISTENCY, SEXUAL_CONTENT, ANTI_STATE, OTHER.
+2. warnings: Rà soát nghiêm ngặt toàn bộ tác phẩm để phát hiện 7 lỗi đặc biệt dưới đây.
+   Mã warnings hợp lệ: INCOMPLETE, REPETITION, PLAGIARISM_RISK, INCONSISTENCY, SEXUAL_CONTENT, ANTI_STATE, SPELLING_FORMATTING, OTHER.
    Severity: INFO, WARNING, CRITICAL.
 
 Hướng dẫn phân loại Warnings:
@@ -292,6 +292,7 @@ Hướng dẫn phân loại Warnings:
 - INCONSISTENCY (INFO/WARNING): Mâu thuẫn logic cốt truyện nghiêm trọng.
 - INCOMPLETE (WARNING): Kết thúc đột ngột hoặc dừng viết giữa chừng.
 - REPETITION (WARNING): Lặp đi lặp lại một phân đoạn văn bản dài.
+- SPELLING_FORMATTING (WARNING): Phát hiện lỗi chính tả gõ phím tiếng Việt, khoảng trắng kép hoặc lỗi định dạng dấu câu sai chỗ. Bắt buộc chỉ ra ví dụ cụ thể của từ bị viết sai và định vị rõ chương nào, đoạn nào.
 
 Chỉ trả về JSON thuần theo cấu trúc:
 {

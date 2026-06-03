@@ -3,45 +3,95 @@ import { Loader2, X, FileText } from 'lucide-react';
 import { reportService, type EvidenceChunkItemDto } from '../../services/reportService';
 
 function renderHighlightedContent(text: string, highlight: string): ReactNode {
-    const needle = highlight.replace(/\s+/g, ' ').trim().slice(0, 100);
-    if (needle.length < 6) return text;
+    if (!highlight || highlight.trim().length < 5) return text;
 
-    let idx = text.indexOf(needle);
-    let matchLen = needle.length;
-    if (idx < 0) {
-        const low = needle.toLowerCase();
-        idx = text.toLowerCase().indexOf(low);
+    // Split the highlight string by ellipses, newlines or quotes
+    const subNeedles = highlight
+        .split(/(?:\.\.\.|\.\.|\n|…)/g)
+        .map(s => s.replace(/["'“”«»]/g, '').replace(/\s+/g, ' ').trim())
+        .filter(s => s.length >= 6);
+
+    if (subNeedles.length === 0) return text;
+
+    // List of index ranges to highlight
+    interface Range {
+        start: number;
+        end: number;
     }
-    if (idx < 0) {
-        for (let n = Math.min(needle.length, 72); n >= 12; n -= 6) {
-            const sub = needle.slice(0, n);
-            idx = text.indexOf(sub);
-            if (idx >= 0) {
-                matchLen = sub.length;
-                break;
-            }
-            idx = text.toLowerCase().indexOf(sub.toLowerCase());
-            if (idx >= 0) {
-                matchLen = sub.length;
-                break;
+    const ranges: Range[] = [];
+
+    subNeedles.forEach(needle => {
+        let idx = text.indexOf(needle);
+        let matchLen = needle.length;
+        if (idx < 0) {
+            const low = needle.toLowerCase();
+            idx = text.toLowerCase().indexOf(low);
+        }
+        // Try matching prefixes if no exact match
+        if (idx < 0) {
+            for (let n = Math.min(needle.length, 72); n >= 12; n -= 6) {
+                const sub = needle.slice(0, n);
+                idx = text.indexOf(sub);
+                if (idx >= 0) {
+                    matchLen = sub.length;
+                    break;
+                }
+                idx = text.toLowerCase().indexOf(sub.toLowerCase());
+                if (idx >= 0) {
+                    matchLen = sub.length;
+                    break;
+                }
             }
         }
+
+        if (idx >= 0) {
+            ranges.push({ start: idx, end: idx + matchLen });
+        }
+    });
+
+    if (ranges.length === 0) return text;
+
+    // Sort ranges and merge overlapping/contiguous ones
+    ranges.sort((a, b) => a.start - b.start);
+    const mergedRanges: Range[] = [];
+    let current = ranges[0];
+
+    for (let i = 1; i < ranges.length; i++) {
+        const next = ranges[i];
+        if (next.start <= current.end) {
+            current.end = Math.max(current.end, next.end);
+        } else {
+            mergedRanges.push(current);
+            current = next;
+        }
     }
-    if (idx < 0) return text;
+    mergedRanges.push(current);
 
-    const before = text.slice(0, idx);
-    const mid = text.slice(idx, idx + matchLen);
-    const after = text.slice(idx + matchLen);
+    // Build the React Nodes
+    const result: ReactNode[] = [];
+    let lastIdx = 0;
 
-    return (
-        <>
-            {before}
-            <mark className="rounded px-0.5" style={{ background: 'rgba(245,166,35,0.35)', color: 'inherit' }}>
-                {mid}
+    mergedRanges.forEach((range, rIdx) => {
+        if (range.start > lastIdx) {
+            result.push(text.slice(lastIdx, range.start));
+        }
+        result.push(
+            <mark 
+                key={rIdx} 
+                className="rounded px-0.5" 
+                style={{ background: 'rgba(245,166,35,0.45)', color: 'inherit', fontWeight: 'bold' }}
+            >
+                {text.slice(range.start, range.end)}
             </mark>
-            {after}
-        </>
-    );
+        );
+        lastIdx = range.end;
+    });
+
+    if (lastIdx < text.length) {
+        result.push(text.slice(lastIdx));
+    }
+
+    return <>{result}</>;
 }
 
 export interface EvidenceChunksPanelProps {

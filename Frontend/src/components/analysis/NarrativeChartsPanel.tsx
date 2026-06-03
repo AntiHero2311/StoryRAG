@@ -43,8 +43,8 @@ function AreaChart({ values, color, labels, onPointSelect, selectedIndex }: {
         return <div className="h-32 rounded-xl flex items-center justify-center text-xs text-[var(--text-secondary)]" style={{ background: 'var(--bg-hover)' }}>Không có dữ liệu biểu đồ</div>;
     }
 
-    const width = 420;
-    const height = 96;
+    const width = Math.max(700, values.length * 28);
+    const height = 180;
 
     // Coordinate mapping
     const pointCoords = values.map((value, index) => ({
@@ -67,194 +67,209 @@ function AreaChart({ values, color, labels, onPointSelect, selectedIndex }: {
 
     return (
         <div className="w-full overflow-hidden rounded-xl p-3 relative group" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
-            <svg viewBox={`-35 -30 ${width + 50} ${height + 55}`} className="w-full h-48 select-none">
-                <defs>
-                    <linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" style={{ stopColor: color, stopOpacity: 0.35 }} />
-                        <stop offset="100%" style={{ stopColor: color, stopOpacity: 0.00 }} />
-                    </linearGradient>
-                    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                        <feGaussianBlur stdDeviation="3" result="blur" />
-                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                    </filter>
-                    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-                        <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.5"/>
-                    </filter>
-                </defs>
+            <style>{`
+                .chart-scrollbar::-webkit-scrollbar {
+                    height: 6px;
+                }
+                .chart-scrollbar::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .chart-scrollbar::-webkit-scrollbar-thumb {
+                    background: rgba(255, 255, 255, 0.12);
+                    border-radius: 999px;
+                }
+                .chart-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: rgba(255, 255, 255, 0.25);
+                }
+            `}</style>
+            <div className="w-full overflow-x-auto scrollbar-thin pb-2 chart-scrollbar">
+                <div style={{ width: `${width}px`, minWidth: '100%' }}>
+                    <svg viewBox={`-35 -30 ${width + 50} ${height + 55}`} className="w-full h-auto select-none">
+                        <defs>
+                            <linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" style={{ stopColor: color, stopOpacity: 0.35 }} />
+                                <stop offset="100%" style={{ stopColor: color, stopOpacity: 0.00 }} />
+                            </linearGradient>
+                            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="3" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+                                <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.5"/>
+                            </filter>
+                        </defs>
 
-                {/* Y-axis gridlines & labels */}
-                {[0, 25, 50, 75, 100].map((tick) => {
-                    const yVal = height - (tick / 100) * height;
-                    return (
-                        <g key={tick}>
-                            <line 
-                                x1="0" 
-                                y1={yVal} 
-                                x2={width} 
-                                y2={yVal} 
-                                stroke="rgba(255, 255, 255, 0.06)" 
-                                strokeWidth="1" 
-                                strokeDasharray={tick === 0 || tick === 100 ? "0" : "3 4"}
+                        {/* Y-axis gridlines & labels */}
+                        {[0, 25, 50, 75, 100].map((tick) => {
+                            const yVal = height - (tick / 100) * height;
+                            return (
+                                <g key={tick}>
+                                    <line 
+                                        x1="0" 
+                                        y1={yVal} 
+                                        x2={width} 
+                                        y2={yVal} 
+                                        stroke="rgba(255, 255, 255, 0.06)" 
+                                        strokeWidth="1" 
+                                        strokeDasharray={tick === 0 || tick === 100 ? "0" : "3 4"}
+                                    />
+                                    <text
+                                        x="-10"
+                                        y={yVal + 3.5}
+                                        textAnchor="end"
+                                        fill="rgba(255, 255, 255, 0.45)"
+                                        fontSize="9"
+                                        fontWeight="600"
+                                        style={{ fontFamily: 'monospace' }}
+                                    >
+                                        {tick}
+                                    </text>
+                                </g>
+                            );
+                        })}
+
+                        {/* Area Gradient */}
+                        {pointCoords.length > 0 && (
+                            <path
+                                d={areaPathData}
+                                fill={`url(#${gradientId})`}
                             />
-                            <text
-                                x="-10"
-                                y={yVal + 3.5}
-                                textAnchor="end"
-                                fill="rgba(255, 255, 255, 0.45)"
-                                fontSize="9"
-                                fontWeight="600"
-                                style={{ fontFamily: 'monospace' }}
-                            >
-                                {tick}
-                            </text>
-                        </g>
-                    );
-                })}
+                        )}
 
-                {/* Area Gradient */}
-                {pointCoords.length > 0 && (
-                    <path
-                        d={areaPathData}
-                        fill={`url(#${gradientId})`}
-                    />
-                )}
+                        {/* Curve Line */}
+                        {pointCoords.length > 0 && (
+                            <path
+                                d={pathData}
+                                fill="none"
+                                stroke={color}
+                                strokeWidth="3.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                filter="url(#glow)"
+                            />
+                        )}
 
-                {/* Curve Line */}
-                {pointCoords.length > 0 && (
-                    <path
-                        d={pathData}
-                        fill="none"
-                        stroke={color}
-                        strokeWidth="3.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        filter="url(#glow)"
-                    />
-                )}
+                        {/* Vertical guide line on hover */}
+                        {hoveredIdx !== null && pointCoords[hoveredIdx] && (
+                            <line 
+                                x1={pointCoords[hoveredIdx].x}
+                                y1={0}
+                                x2={pointCoords[hoveredIdx].x}
+                                y2={height}
+                                stroke={color}
+                                strokeWidth="1.2"
+                                strokeDasharray="3 3"
+                                opacity="0.75"
+                            />
+                        )}
 
-                {/* Vertical guide line on hover */}
-                {hoveredIdx !== null && pointCoords[hoveredIdx] && (
-                    <line 
-                        x1={pointCoords[hoveredIdx].x}
-                        y1={0}
-                        x2={pointCoords[hoveredIdx].x}
-                        y2={height}
-                        stroke={color}
-                        strokeWidth="1.2"
-                        strokeDasharray="3 3"
-                        opacity="0.75"
-                    />
-                )}
+                        {/* Interactive Points */}
+                        {pointCoords.map((p, i) => {
+                            const isSelected = selectedIndex === i;
+                            const isHovered = hoveredIdx === i;
+                            return (
+                                <circle 
+                                    key={i} 
+                                    cx={p.x} 
+                                    cy={p.y} 
+                                    r={isSelected ? "7" : isHovered ? "6.5" : "4"} 
+                                    fill={isSelected ? "#ffffff" : color} 
+                                    stroke={isSelected ? color : "var(--bg-app)"}
+                                    strokeWidth={isSelected ? "3" : "2"}
+                                    className="cursor-pointer transition-all duration-150"
+                                    style={{ filter: isSelected || isHovered ? 'url(#shadow)' : 'none' }}
+                                    onClick={() => onPointSelect?.(i)}
+                                    onMouseEnter={() => setHoveredIdx(i)}
+                                    onMouseLeave={() => setHoveredIdx(null)}
+                                />
+                            );
+                        })}
 
-                {/* Interactive Points */}
-                {pointCoords.map((p, i) => {
-                    const isSelected = selectedIndex === i;
-                    const isHovered = hoveredIdx === i;
-                    return (
-                        <circle 
-                            key={i} 
-                            cx={p.x} 
-                            cy={p.y} 
-                            r={isSelected ? "7" : isHovered ? "6.5" : "4"} 
-                            fill={isSelected ? "#ffffff" : color} 
-                            stroke={isSelected ? color : "var(--bg-app)"}
-                            strokeWidth={isSelected ? "3" : "2"}
-                            className="cursor-pointer transition-all duration-150"
-                            style={{ filter: isSelected || isHovered ? 'url(#shadow)' : 'none' }}
-                            onClick={() => onPointSelect?.(i)}
-                            onMouseEnter={() => setHoveredIdx(i)}
-                            onMouseLeave={() => setHoveredIdx(null)}
-                        />
-                    );
-                })}
+                        {/* X-axis labels */}
+                        {values.map((_, index) => {
+                            const pointSpacing = values.length === 1 ? width : width / (values.length - 1);
+                            const labelStep = Math.max(1, Math.ceil(65 / pointSpacing));
+                            const shouldRenderLabel = index % labelStep === 0 || index === values.length - 1;
 
-                {/* X-axis labels */}
-                {values.map((_, index) => {
-                    const shouldRenderLabel = 
-                        values.length <= 10 || 
-                        index === 0 || 
-                        index === values.length - 1 || 
-                        (values.length <= 22 && index % 2 === 0) || 
-                        (values.length <= 45 && index % 5 === 0) || 
-                        (index % 10 === 0);
+                            if (!shouldRenderLabel) return null;
 
-                    if (!shouldRenderLabel) return null;
+                            const xVal = values.length === 1 ? width / 2 : (index / (values.length - 1)) * width;
+                            const isChapterLabel = labels && labels[index] && labels[index]!.startsWith("Chương");
+                            const labelText = isChapterLabel ? labels[index] : `Đoạn ${index + 1}`;
 
-                    const xVal = values.length === 1 ? width / 2 : (index / (values.length - 1)) * width;
-                    const isChapterLabel = labels && labels[index] && labels[index]!.startsWith("Chương");
-                    const labelText = isChapterLabel ? labels[index] : `Đoạn ${index + 1}`;
+                            return (
+                                <text
+                                    key={index}
+                                    x={xVal}
+                                    y={height + 18}
+                                    textAnchor="middle"
+                                    fill="rgba(255, 255, 255, 0.45)"
+                                    fontSize="8.5"
+                                    fontWeight="600"
+                                >
+                                    {labelText}
+                                </text>
+                            );
+                        })}
 
-                    return (
-                        <text
-                            key={index}
-                            x={xVal}
-                            y={height + 18}
-                            textAnchor="middle"
-                            fill="rgba(255, 255, 255, 0.45)"
-                            fontSize="8.5"
-                            fontWeight="600"
-                        >
-                            {labelText}
-                        </text>
-                    );
-                })}
+                        {/* Dynamic SVG Tooltip on Hover */}
+                        {hoveredIdx !== null && pointCoords[hoveredIdx] && (
+                            <g className="pointer-events-none" style={{ filter: 'url(#shadow)' }}>
+                                <rect 
+                                    x={Math.max(5, Math.min(width - 115, pointCoords[hoveredIdx].x - 55))} 
+                                    y="-24" 
+                                    width="110" 
+                                    height="18" 
+                                    rx="5" 
+                                    fill="rgba(15, 23, 42, 0.95)" 
+                                    stroke={color}
+                                    strokeWidth="1"
+                                />
+                                <text
+                                    x={Math.max(60, Math.min(width - 60, pointCoords[hoveredIdx].x))}
+                                    y="-12"
+                                    textAnchor="middle"
+                                    fill="white"
+                                    fontSize="9"
+                                    fontWeight="700"
+                                >
+                                    {labels && labels[hoveredIdx] && !labels[hoveredIdx]!.includes(':')
+                                        ? `${labels[hoveredIdx]}: ${values[hoveredIdx].toFixed(1)}` 
+                                        : `Đoạn ${hoveredIdx + 1}: ${values[hoveredIdx].toFixed(1)}`}
+                                </text>
+                            </g>
+                        )}
 
-                {/* Dynamic SVG Tooltip on Hover */}
-                {hoveredIdx !== null && pointCoords[hoveredIdx] && (
-                    <g className="pointer-events-none" style={{ filter: 'url(#shadow)' }}>
-                        <rect 
-                            x={Math.max(5, Math.min(width - 115, pointCoords[hoveredIdx].x - 55))} 
-                            y="-24" 
-                            width="110" 
-                            height="18" 
-                            rx="5" 
-                            fill="rgba(15, 23, 42, 0.95)" 
-                            stroke={color}
-                            strokeWidth="1"
-                        />
-                        <text
-                            x={Math.max(60, Math.min(width - 60, pointCoords[hoveredIdx].x))}
-                            y="-12"
-                            textAnchor="middle"
-                            fill="white"
-                            fontSize="9"
-                            fontWeight="700"
-                        >
-                            {labels && labels[hoveredIdx] && !labels[hoveredIdx]!.includes(':')
-                                ? `${labels[hoveredIdx]}: ${values[hoveredIdx].toFixed(1)}` 
-                                : `Đoạn ${hoveredIdx + 1}: ${values[hoveredIdx].toFixed(1)}`}
-                        </text>
-                    </g>
-                )}
-
-                {/* Peak/Trough Static Badges */}
-                {annotatedPoints.map((p, i) => (
-                    <g key={i}>
-                        <rect 
-                            x={p.x - 45} 
-                            y={p.y - 30} 
-                            width="90" 
-                            height="16" 
-                            rx="5" 
-                            fill="rgba(20,20,20,0.88)" 
-                            stroke={color}
-                            strokeWidth="1"
-                            style={{ filter: 'url(#shadow)' }}
-                        />
-                        <text
-                            x={p.x}
-                            y={p.y - 19}
-                            textAnchor="middle"
-                            fill="#fff"
-                            fontSize="8"
-                            fontWeight="800"
-                        >
-                            {p.label}
-                        </text>
-                        <path d={`M ${p.x} ${p.y-14} L ${p.x} ${p.y-6}`} stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-                    </g>
-                ))}
-            </svg>
+                        {/* Peak/Trough Static Badges */}
+                        {annotatedPoints.map((p, i) => (
+                            <g key={i}>
+                                <rect 
+                                    x={p.x - 45} 
+                                    y={p.y - 30} 
+                                    width="90" 
+                                    height="16" 
+                                    rx="5" 
+                                    fill="rgba(20,20,20,0.88)" 
+                                    stroke={color}
+                                    strokeWidth="1"
+                                    style={{ filter: 'url(#shadow)' }}
+                                />
+                                <text
+                                    x={p.x}
+                                    y={p.y - 19}
+                                    textAnchor="middle"
+                                    fill="#fff"
+                                    fontSize="8"
+                                    fontWeight="800"
+                                >
+                                    {p.label}
+                                </text>
+                                <path d={`M ${p.x} ${p.y-14} L ${p.x} ${p.y-6}`} stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+                            </g>
+                        ))}
+                    </svg>
+                </div>
+            </div>
         </div>
     );
 }
@@ -386,8 +401,9 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
             if (insight.includes('PHÂN TÍCH CHUYÊN SÂU')) return;
 
             let matched = false;
+            // 1. Try exact bracket tag matching
             for (const config of categoriesConfig) {
-                if (insight.startsWith(config.tag)) {
+                if (insight.includes(config.tag)) {
                     const cleanContent = insight.replace(config.tag, '').trim();
                     result.push({
                         category: config.key,
@@ -403,6 +419,42 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
                 }
             }
 
+            // 2. Secondary fallback: keyword checking
+            if (!matched) {
+                const lowerText = insight.toLowerCase();
+                let matchedConfig = null;
+
+                if (lowerText.includes('nhịp độ') || lowerText.includes('tiết tấu') || lowerText.includes('tốc độ') || lowerText.includes('kịch tính') || lowerText.includes('mạch kể')) {
+                    matchedConfig = categoriesConfig[0]; // pacing
+                } else if (lowerText.includes('cảm xúc') || lowerText.includes('không khí') || lowerText.includes('tâm trạng') || lowerText.includes('u sầu') || lowerText.includes('sắc thái')) {
+                    matchedConfig = categoriesConfig[1]; // emotion
+                } else if (lowerText.includes('nhân vật') || lowerText.includes('tương tác') || lowerText.includes('động lực') || lowerText.includes('đối thoại') || lowerText.includes('quan hệ')) {
+                    matchedConfig = categoriesConfig[2]; // characters
+                } else if (lowerText.includes('đề xuất') || lowerText.includes('chỉnh sửa') || lowerText.includes('cải thiện') || lowerText.includes('giải pháp') || lowerText.includes('khuyên')) {
+                    matchedConfig = categoriesConfig[3]; // blueprint
+                }
+
+                if (matchedConfig) {
+                    let cleanContent = insight;
+                    categoriesConfig.forEach(c => {
+                        cleanContent = cleanContent.replace(c.tag, '');
+                    });
+                    cleanContent = cleanContent.trim();
+
+                    result.push({
+                        category: matchedConfig.key,
+                        title: matchedConfig.title,
+                        icon: matchedConfig.icon,
+                        color: matchedConfig.color,
+                        bgGradient: matchedConfig.bgGradient,
+                        borderColor: matchedConfig.borderColor,
+                        content: cleanContent
+                    });
+                    matched = true;
+                }
+            }
+
+            // 3. Absolute fallback
             if (!matched) {
                 result.push({
                     category: 'general',
@@ -416,11 +468,77 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
             }
         });
 
-        return result;
+        // Deduplicate titles by adding index if multiple exist for a category
+        const categoryCounts: Record<string, number> = {};
+        result.forEach(insight => {
+            categoryCounts[insight.category] = (categoryCounts[insight.category] || 0) + 1;
+        });
+
+        const categoryIndices: Record<string, number> = {};
+        return result.map(insight => {
+            if (categoryCounts[insight.category] > 1) {
+                const currentIdx = (categoryIndices[insight.category] || 0) + 1;
+                categoryIndices[insight.category] = currentIdx;
+                return {
+                    ...insight,
+                    title: `${insight.title} (${currentIdx})`
+                };
+            }
+            return insight;
+        });
     }, [data.insights]);
 
+    const formatInsightContent = (content: string, color: string) => {
+        const lines = content.split('\n').filter(l => l.trim().length > 0);
+        return lines.map((line, lIdx) => {
+            const isListItem = line.trim().startsWith('-') || line.trim().startsWith('*') || /^\d+\./.test(line.trim());
+            const cleanLine = isListItem 
+                ? line.trim().replace(/^[-*\s]+|^\d+\.\s*/, '') 
+                : line;
+
+            const parts = cleanLine.split(/(".*?")/g);
+            const renderedLine = (
+                <span key={lIdx} className="leading-relaxed">
+                    {parts.map((part, ptIdx) => {
+                        if (part.startsWith('"') && part.endsWith('"')) {
+                            return (
+                                <span 
+                                    key={ptIdx} 
+                                    className="px-2 py-0.5 mx-0.5 rounded italic font-serif inline-block text-[13px] border transition-all duration-300"
+                                    style={{ 
+                                        backgroundColor: `${color}0d`, 
+                                        borderColor: `${color}22`,
+                                        color: 'rgba(255,255,255,0.95)'
+                                    }}
+                                >
+                                    {part}
+                                </span>
+                            );
+                        }
+                        return part;
+                    })}
+                </span>
+            );
+
+            if (isListItem) {
+                return (
+                    <div key={lIdx} className="flex items-start gap-2 mt-1.5 pl-1">
+                        <span className="text-[10px] mt-1.5 select-none" style={{ color }}>●</span>
+                        <span className="text-sm leading-relaxed text-[rgba(255,255,255,0.85)]">{renderedLine}</span>
+                    </div>
+                );
+            }
+
+            return (
+                <p key={lIdx} className="text-sm leading-relaxed text-[rgba(255,255,255,0.85)] mb-2">
+                    {renderedLine}
+                </p>
+            );
+        });
+    };
+
     return (
-        <div className="rounded-2xl p-6 mt-5 flex flex-col gap-6" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+        <div className="rounded-2xl p-6 mt-5 flex flex-col gap-6 animate-fade-in" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
             
             {/* Header with Switcher */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4" style={{ borderColor: 'var(--border-color)' }}>
@@ -510,8 +628,8 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
                 </details>
             </div>
 
-            {/* Charts Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Charts Vertical Stack */}
+            <div className="flex flex-col gap-6">
                 <div className="rounded-xl p-5" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
                     <div className="flex justify-between items-center mb-3">
                         <p className="text-[var(--text-primary)] text-sm font-bold flex items-center gap-2">
@@ -567,57 +685,55 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
 
             {/* structured Deep AI Insights Grid */}
             {parsedInsights.length > 0 && (
-                <div className="rounded-xl p-6 flex flex-col gap-5" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(139,92,246,0.03) 100%)', border: '1px solid rgba(99,102,241,0.15)' }}>
-                    <div>
-                        <h4 className="text-[var(--text-primary)] text-base font-extrabold flex items-center gap-2 tracking-tight">
-                            <span className="text-lg">✨</span> PHÂN TÍCH CHUYÊN SÂU TỪ AI (Literary Insights)
+                <div 
+                    className="rounded-2xl p-6 flex flex-col gap-6 relative overflow-hidden backdrop-blur-md" 
+                    style={{ 
+                        background: 'linear-gradient(135deg, rgba(30,30,45,0.7) 0%, rgba(15,15,25,0.5) 100%)', 
+                        border: '1px solid rgba(99,102,241,0.18)' 
+                    }}
+                >
+                    <div className="flex flex-col gap-1 border-b border-[rgba(255,255,255,0.06)] pb-4">
+                        <h4 className="text-[var(--text-primary)] text-lg font-extrabold flex items-center gap-2.5 tracking-tight text-gradient-bright">
+                            <span className="text-xl">✨</span> PHÂN TÍCH CHUYÊN SÂU TỪ AI (Literary Insights)
                         </h4>
-                        <p className="text-xs text-[var(--text-secondary)] mt-1 opacity-80">Phân tích cốt truyện nâng cao và các đánh giá nghệ thuật văn học từ AI.</p>
+                        <p className="text-xs text-[var(--text-secondary)] mt-0.5 opacity-80">Đánh giá cấu trúc nhịp điệu kể chuyện và gợi ý định hướng viết nâng cao từ trí tuệ nhân tạo.</p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {parsedInsights.map((insight, idx) => {
-                            const isSpecial = insight.category === 'blueprint';
                             return (
                                 <div 
                                     key={idx} 
-                                    className="rounded-xl p-5 flex flex-col gap-3 transition-all hover:scale-[1.005] duration-200" 
+                                    className="group rounded-2xl p-6 flex flex-col gap-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)] relative" 
                                     style={{ 
-                                        background: insight.bgGradient,
+                                        background: `linear-gradient(135deg, rgba(20, 20, 25, 0.7) 0%, ${insight.color}05 100%)`,
                                         border: `1px solid ${insight.borderColor}`,
-                                        boxShadow: isSpecial ? '0 4px 20px rgba(167, 139, 250, 0.08)' : 'none'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.borderColor = insight.color;
+                                        e.currentTarget.style.boxShadow = `0 10px 30px -10px ${insight.color}25`;
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.borderColor = insight.borderColor;
+                                        e.currentTarget.style.boxShadow = 'none';
                                     }}
                                 >
-                                    <div className="flex items-center gap-2 pb-2.5 border-b border-[rgba(255,255,255,0.05)]">
-                                        <span className="text-lg">{insight.icon}</span>
-                                        <span className="text-sm font-extrabold tracking-tight" style={{ color: insight.color }}>
-                                            {insight.title}
+                                    <div className="flex items-center justify-between pb-3 border-b border-[rgba(255,255,255,0.06)]">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xl p-2 rounded-xl bg-opacity-10 transition-transform duration-300 group-hover:scale-110 select-none" style={{ backgroundColor: `${insight.color}1c`, color: insight.color }}>
+                                                {insight.icon}
+                                            </span>
+                                            <span className="text-sm font-extrabold tracking-tight text-[var(--text-primary)]">
+                                                {insight.title}
+                                            </span>
+                                        </div>
+                                        <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border" style={{ borderColor: `${insight.color}33`, color: insight.color, backgroundColor: `${insight.color}0f` }}>
+                                            {insight.category === 'pacing' ? 'Nhịp kể' : insight.category === 'emotion' ? 'Cảm xúc' : insight.category === 'characters' ? 'Nhân vật' : insight.category === 'blueprint' ? 'Chiến lược' : 'Tổng hợp'}
                                         </span>
                                     </div>
                                     
-                                    {/* Format Text to Highlight Quotes */}
-                                    <div className="text-sm leading-relaxed text-[rgba(255,255,255,0.85)] font-medium space-y-2">
-                                        {insight.content.split('\n').map((para, pIdx) => {
-                                            // Make any text in double quotes have a styling block
-                                            const parts = para.split(/(".*?")/g);
-                                            return (
-                                                <p key={pIdx} className="leading-relaxed">
-                                                    {parts.map((part, ptIdx) => {
-                                                        if (part.startsWith('"') && part.endsWith('"')) {
-                                                            return (
-                                                                <span 
-                                                                    key={ptIdx} 
-                                                                    className="px-2 py-0.5 mx-0.5 rounded italic bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)] text-[rgba(255,255,255,0.95)] font-serif"
-                                                                >
-                                                                    {part}
-                                                                </span>
-                                                            );
-                                                        }
-                                                        return part;
-                                                    })}
-                                                </p>
-                                            );
-                                        })}
+                                    <div className="text-sm leading-relaxed text-[rgba(255,255,255,0.85)] font-medium">
+                                        {formatInsightContent(insight.content, insight.color)}
                                     </div>
                                 </div>
                             );

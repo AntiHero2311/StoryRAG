@@ -69,8 +69,8 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
     genres, summary, characters, worldbuilding,
     style guide, themes, plot notes, ai instructions
   + batch summarize context
-  + gọi Gemini để chấm 20 tiêu chí + 6 warnings + overallFeedback
-  + warnings: INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY / SEXUAL_CONTENT / ANTI_STATE
+  + gọi Gemini để chấm 20 tiêu chí + 7 warnings + overallFeedback
+  + warnings: INCOMPLETE / REPETITION / PLAGIARISM_RISK / INCONSISTENCY / SEXUAL_CONTENT / ANTI_STATE / SPELLING_FORMATTING
   + parse/repair JSON nếu cần
   + validate quality output (đủ key rubric, đủ errors/suggestions...)
   + retry nếu output không đạt
@@ -96,6 +96,7 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
   + dùng chapter active versions
   + tách segment từ text
   + tính pacing/emotion (đã lược bỏ biểu đồ xuất hiện nhân vật và mạng quan hệ nhân vật để tối ưu độ nhiễu và làm rõ hơn lý do phân tích nhịp độ/cảm xúc kịch tính)
+  + Biểu đồ pacing và emotion ở frontend hiển thị ở dạng xếp chồng dọc (full-width stacked) và cuộn ngang linh hoạt để không bị nén chữ khi truyện có nhiều chương (ví dụ 100 chương).
   + Báo cáo phân tích được phát hành trực tiếp (`Released`) cho tác giả ngay khi AI hoàn tất.
 - **Hậu kiểm & Moderation của Staff:** Staff/Admin không chặn luồng xem báo cáo của tác giả mà thực hiện hậu kiểm:
   + Xem chi tiết báo cáo (warnings, criteria) qua `GET /api/staff/analyses/{reportId}`
@@ -109,6 +110,7 @@ TOÀN BỘ LUỒNG AI END-TO-END CỦA STORYRAG
   3. `PLAGIARISM_RISK`      — vi phạm bản quyền
   4. `INCOMPLETE_STORY`     — AI cắm INCOMPLETE
   5. `INCONSISTENCY_DETECTED` — AI cắm INCONSISTENCY
+  6. `SPELLING_FORMATTING`   — AI cắm lỗi chính tả/định dạng
   + Ngoài ra: NO_ANALYSIS / INCOMPLETE_ANALYSIS / LOW_QUALITY_SCORE (score < 60)
 
 6) Luồng Scene / Cliffhanger

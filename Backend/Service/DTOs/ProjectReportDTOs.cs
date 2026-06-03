@@ -1,3 +1,7 @@
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
+using Service.Helpers;
+
 namespace Service.DTOs
 {
     // ─── Criterion detail ────────────────────────────────────────────────────────
@@ -62,55 +66,111 @@ namespace Service.DTOs
         /// "ANTI_STATE"       — nội dung chính trị nhạy cảm, xuyên tạc, chống phá
         /// "OTHER"            — vấn đề đặc biệt khác
         /// </summary>
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Code { get; set; } = string.Empty;
         /// <summary>Mức độ: "INFO" | "WARNING" | "CRITICAL"</summary>
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Severity { get; set; } = string.Empty;
         /// <summary>Tiêu đề ngắn gọn của cảnh báo</summary>
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Title { get; set; } = string.Empty;
         /// <summary>Mô tả chi tiết, có thể trích dẫn đoạn văn bản cụ thể</summary>
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Detail { get; set; } = string.Empty;
     }
 
     // ─── Content Analysis (Story Bible Extracted) ────────────────────────────────
     public class WorldSettingItem {
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Title { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Category { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Description { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Importance { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeIntListConverter))]
         public List<int> SourceChapters { get; set; } = new();
     }
     public class CharacterRelationshipItem {
+        [JsonConverter(typeof(SafeStringConverter))]
         public string TargetName { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Type { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Description { get; set; } = string.Empty;
     }
     public class CharacterItem {
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Name { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Role { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Description { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Background { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringListConverter))]
         public List<string> Traits { get; set; } = new();
+        
+        [JsonConverter(typeof(SafeListObjectConverter<CharacterRelationshipItem>))]
         public List<CharacterRelationshipItem> Relationships { get; set; } = new();
+        
+        [JsonConverter(typeof(SafeIntConverter))]
         public int FirstAppearance { get; set; }
     }
     public class TimelineEventItem {
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Title { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Category { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
         public string TimeLabel { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Description { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Importance { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeIntConverter))]
         public int SortOrder { get; set; }
     }
     public class ThemeItem {
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Title { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Description { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Evidence { get; set; } = string.Empty;
     }
     public class ContentAnalysisResult {
+        [JsonConverter(typeof(SafeListObjectConverter<WorldSettingItem>))]
         public List<WorldSettingItem> WorldSettings { get; set; } = new();
+        
+        [JsonConverter(typeof(SafeListObjectConverter<CharacterItem>))]
         public List<CharacterItem> Characters { get; set; } = new();
+        
+        [JsonConverter(typeof(SafeListObjectConverter<TimelineEventItem>))]
         public List<TimelineEventItem> TimelineEvents { get; set; } = new();
+        
+        [JsonConverter(typeof(SafeListObjectConverter<ThemeItem>))]
         public List<ThemeItem> Themes { get; set; } = new();
+        
+        [JsonConverter(typeof(SafeStringConverter))]
         public string AnalysisNote { get; set; } = string.Empty;
     }
 

@@ -162,4 +162,98 @@ namespace Service.Helpers
             JsonSerializer.Serialize(writer, value, options);
         }
     }
+
+    public class SafeIntConverter : JsonConverter<int>
+    {
+        public override int Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            switch (reader.TokenType)
+            {
+                case JsonTokenType.Number:
+                    if (reader.TryGetInt32(out int val)) return val;
+                    if (reader.TryGetDouble(out double d)) return (int)Math.Round(d);
+                    break;
+                case JsonTokenType.String:
+                    var s = reader.GetString();
+                    if (int.TryParse(s, out int parsed)) return parsed;
+                    if (double.TryParse(s, out double dVal)) return (int)Math.Round(dVal);
+                    break;
+                case JsonTokenType.True:
+                    return 1;
+                case JsonTokenType.False:
+                    return 0;
+                case JsonTokenType.Null:
+                    return 0;
+            }
+            return 0;
+        }
+
+        public override void Write(Utf8JsonWriter writer, int value, JsonSerializerOptions options)
+        {
+            writer.WriteNumberValue(value);
+        }
+    }
+
+    public class SafeListObjectConverter<T> : JsonConverter<List<T>> where T : class, new()
+    {
+        public override List<T> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var list = new List<T>();
+            if (reader.TokenType == JsonTokenType.Null)
+                return list;
+
+            if (reader.TokenType == JsonTokenType.StartArray)
+            {
+                while (reader.Read())
+                {
+                    if (reader.TokenType == JsonTokenType.EndArray)
+                        break;
+
+                    if (reader.TokenType == JsonTokenType.StartObject)
+                    {
+                        try
+                        {
+                            using (var doc = JsonDocument.ParseValue(ref reader))
+                            {
+                                var obj = JsonSerializer.Deserialize<T>(doc.RootElement.GetRawText(), options);
+                                if (obj != null)
+                                    list.Add(obj);
+                            }
+                        }
+                        catch
+                        {
+                            // Skip elements that fail to deserialize
+                        }
+                    }
+                    else
+                    {
+                        // Skip string, number, array, or nested values
+                        reader.TrySkip();
+                    }
+                }
+            }
+            else if (reader.TokenType == JsonTokenType.StartObject)
+            {
+                using (var doc = JsonDocument.ParseValue(ref reader))
+                {
+                    try
+                    {
+                        var obj = JsonSerializer.Deserialize<T>(doc.RootElement.GetRawText(), options);
+                        if (obj != null)
+                            list.Add(obj);
+                    }
+                    catch
+                    {
+                        // Skip
+                    }
+                }
+            }
+            return list;
+        }
+
+        public override void Write(Utf8JsonWriter writer, List<T> value, JsonSerializerOptions options)
+        {
+            JsonSerializer.Serialize(writer, value, options);
+        }
+    }
 }

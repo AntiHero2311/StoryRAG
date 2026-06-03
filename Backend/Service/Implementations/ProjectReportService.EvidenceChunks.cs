@@ -86,26 +86,54 @@ namespace Service.Implementations
             var cleanHighlight = highlight?.Trim();
             if (!string.IsNullOrEmpty(cleanHighlight) && cleanHighlight.Length >= 5)
             {
-                var normalizedHighlight = System.Text.RegularExpressions.Regex.Replace(cleanHighlight, @"\s+", " ").ToLower();
-                for (var i = 0; i < ordered.Count; i++)
-                {
-                    // Kiểm tra xem trích dẫn có khớp trong chunk đơn lẻ này không
-                    var normPlain = System.Text.RegularExpressions.Regex.Replace(plains[i], @"\s+", " ").ToLower();
-                    if (normPlain.Contains(normalizedHighlight))
-                    {
-                        pickOrdinal.Add(i);
-                        continue;
-                    }
+                var subHighlights = cleanHighlight
+                    .Split(new[] { "...", "..", "\n", "…" }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(q => q.Trim().Trim('"', '\'', '“', '”', '«', '»'))
+                    .Where(q => q.Length >= 5)
+                    .ToList();
 
-                    // Kiểm tra xem trích dẫn có khớp do bị cắt ngang giữa 2 chunk liên tiếp trong cùng chương không
-                    if (i < ordered.Count - 1 && ordered[i].Chunk.VersionId == ordered[i + 1].Chunk.VersionId)
+                if (subHighlights.Count > 0)
+                {
+                    for (var i = 0; i < ordered.Count; i++)
                     {
-                        var combined = plains[i] + plains[i + 1];
-                        var normCombined = System.Text.RegularExpressions.Regex.Replace(combined, @"\s+", " ").ToLower();
-                        if (normCombined.Contains(normalizedHighlight))
+                        var normPlain = NormalizeForMatching(plains[i]);
+                        bool matchesAny = false;
+                        foreach (var sub in subHighlights)
+                        {
+                            var normSub = NormalizeForMatching(sub);
+                            if (normSub.Length >= 5 && normPlain.Contains(normSub))
+                            {
+                                matchesAny = true;
+                                break;
+                            }
+                        }
+
+                        if (matchesAny)
                         {
                             pickOrdinal.Add(i);
-                            pickOrdinal.Add(i + 1);
+                            continue;
+                        }
+
+                        // Kiểm tra xem trích dẫn có khớp do bị cắt ngang giữa 2 chunk liên tiếp trong cùng chương không
+                        if (i < ordered.Count - 1 && ordered[i].Chunk.VersionId == ordered[i + 1].Chunk.VersionId)
+                        {
+                            var combined = plains[i] + plains[i + 1];
+                            var normCombined = NormalizeForMatching(combined);
+                            bool matchesCombined = false;
+                            foreach (var sub in subHighlights)
+                            {
+                                var normSub = NormalizeForMatching(sub);
+                                if (normSub.Length >= 5 && normCombined.Contains(normSub))
+                                {
+                                    matchesCombined = true;
+                                    break;
+                                }
+                            }
+                            if (matchesCombined)
+                            {
+                                pickOrdinal.Add(i);
+                                pickOrdinal.Add(i + 1);
+                            }
                         }
                     }
                 }

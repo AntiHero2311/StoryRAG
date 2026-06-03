@@ -240,38 +240,61 @@ namespace Service.Implementations
                             ? TruncateForPrompt(decryptedChunks[ordinalByChunkId[ranked[0].Chunk.Id]], 400)
                             : "";
 
-                    var errors = PadStringList(judge.Errors, "RAG: đánh giá dựa trên phần trích, có thể thiếu toàn cục.", 3);
-                    var suggestions = PadStringList(judge.Suggestions, "Đọc thêm các chương liên quan hoặc mở rộng truy vấn để củng cố nhận định.", 3);
+                    var errors = CleanStringList(judge.Errors);
+                    var suggestions = CleanStringList(judge.Suggestions);
 
                     var evidenceIds = (judge.EvidenceChunkIds ?? new List<int>())
                         .Where(id => ranked.Any(r => r.Ordinal == id))
                         .Distinct()
                         .ToList();
 
-                    // TRÙNG KHỚP TRỰC TIẾP QUOTE VỚI CHƯƠNG THỰC TẾ:
-                    // Quét toàn bộ danh sách plaintext đã giải mã của câu chuyện để tìm vị trí thực tế của quote đó.
+                    // TRÙNG KHỚP TRỰC TIẾP QUOTE VỚI CHƯƠNG THỰC TẾ (Chia nhỏ theo dấu chấm lửng/xuống dòng):
                     var cleanEvidence = (judge.Evidence ?? "").Trim();
                     var matchedByQuote = new List<int>();
                     if (cleanEvidence.Length >= 5)
                     {
-                        var normEvidence = NormalizeForMatching(cleanEvidence);
-                        if (normEvidence.Length >= 5)
+                        var subQuotes = cleanEvidence
+                            .Split(new[] { "...", "..", "\n", "…" }, StringSplitOptions.RemoveEmptyEntries)
+                            .Select(q => q.Trim().Trim('"', '\'', '“', '”', '«', '»'))
+                            .Where(q => q.Length >= 5)
+                            .ToList();
+
+                        if (subQuotes.Count > 0)
                         {
+                            var chunkMatches = new List<(int Index, int MatchCount)>();
                             for (var i = 0; i < decryptedChunks.Count; i++)
                             {
                                 var normPlain = NormalizeForMatching(decryptedChunks[i]);
-                                if (normPlain.Contains(normEvidence))
+                                int matchCount = 0;
+                                foreach (var sub in subQuotes)
                                 {
-                                    matchedByQuote.Add(i);
+                                    var normSub = NormalizeForMatching(sub);
+                                    if (normSub.Length >= 5 && normPlain.Contains(normSub))
+                                    {
+                                        matchCount++;
+                                    }
+                                }
+                                if (matchCount > 0)
+                                {
+                                    chunkMatches.Add((i, matchCount));
                                 }
                             }
+
+                            // Lấy tối đa 2 chunk khớp tốt nhất (có chứa nhiều câu trong dẫn chứng nhất)
+                            var bestMatches = chunkMatches
+                                .OrderByDescending(cm => cm.MatchCount)
+                                .Select(cm => cm.Index)
+                                .Take(2)
+                                .ToList();
+
+                            matchedByQuote.AddRange(bestMatches);
                         }
                     }
 
                     // Tối ưu hóa minh chứng: Ưu tiên phân đoạn khớp với trích dẫn thực tế thay vì mảng quá rộng hoặc lười biếng từ AI
                     if (matchedByQuote.Count > 0)
                     {
-                        evidenceIds = matchedByQuote.Take(2).ToList();
+                        evidenceIds = matchedByQuote;
                     }
                     else if (evidenceIds.Count == 0 || evidenceIds.Count > 2)
                     {
@@ -530,15 +553,12 @@ namespace Service.Implementations
             return text[..maxChars] + "\n[...]";
         }
 
-        private static List<string> PadStringList(List<string>? source, string filler, int minCount)
+        private static List<string> CleanStringList(List<string>? source)
         {
-            var list = (source ?? new List<string>())
+            return (source ?? new List<string>())
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .Select(s => s.Trim())
                 .ToList();
-            while (list.Count < minCount)
-                list.Add(filler);
-            return list;
         }
 
         private static bool TryParseRagJudge(string raw, out RagCriterionJudgeDto dto, out string? error)

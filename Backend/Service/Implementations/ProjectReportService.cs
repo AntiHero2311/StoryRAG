@@ -174,6 +174,13 @@ namespace Service.Implementations
             var decryptedChunks = chunks
                 .Select(c => EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek))
                 .ToList();
+            var decryptedChunksWithMeta = orderedTuples
+                .Select(t => (
+                    Content: EncryptionHelper.DecryptWithMasterKey(t.Chunk.Content, rawDek),
+                    ChapterNumber: t.ChapterNumber,
+                    ChapterTitle: t.ChapterTitle
+                ))
+                .ToList();
 
             // 5. Fetch Story Bible context (genres, summary, characters, worldbuilding)
             var projectFull = await _context.Projects
@@ -328,7 +335,7 @@ namespace Service.Implementations
 
                 var emotionTask = AnalyzeEmotionPacingAsync(
                     projectTitle,
-                    decryptedChunks,
+                    decryptedChunksWithMeta,
                     progressCallback,
                     cancellationToken);
 
@@ -1602,7 +1609,9 @@ namespace Service.Implementations
             public string Evidence { get; set; } = string.Empty;
             [JsonConverter(typeof(SafeStringConverter))]
             public string? BibleComparison { get; set; }
+            [JsonConverter(typeof(SafeStringListConverter))]
             public List<string> Errors { get; set; } = new();
+            [JsonConverter(typeof(SafeStringListConverter))]
             public List<string> Suggestions { get; set; } = new();
         }
 

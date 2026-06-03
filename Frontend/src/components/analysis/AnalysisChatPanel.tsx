@@ -221,13 +221,16 @@ export default function AnalysisChatPanel({ projectId, report }: AnalysisChatPan
         return sessions.find(s => s.id === activeSessionId) || null;
     }, [sessions, activeSessionId]);
 
-    const saveSessions = (updated: ChatSession[]) => {
-        setSessions(updated);
-        try {
-            localStorage.setItem(storageKey, JSON.stringify(updated));
-        } catch (e) {
-            console.error('Failed to save chat sessions:', e);
-        }
+    const saveSessions = (updatedOrFn: ChatSession[] | ((prev: ChatSession[]) => ChatSession[])) => {
+        setSessions(prev => {
+            const updated = typeof updatedOrFn === 'function' ? updatedOrFn(prev) : updatedOrFn;
+            try {
+                localStorage.setItem(storageKey, JSON.stringify(updated));
+            } catch (e) {
+                console.error('Failed to save chat sessions:', e);
+            }
+            return updated;
+        });
     };
 
     const scrollToBottom = () => {
@@ -255,35 +258,40 @@ export default function AnalysisChatPanel({ projectId, report }: AnalysisChatPan
             createdAt: new Date().toISOString(),
             messages: []
         };
-        const updated = [newSess, ...sessions];
-        saveSessions(updated);
+        saveSessions(prev => [newSess, ...prev]);
         setActiveSessionId(newSess.id);
         setInput('');
     };
 
     const handleDeleteSession = (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        const updated = sessions.filter(s => s.id !== id);
-        if (updated.length === 0) {
-            const defaultSess: ChatSession = {
-                id: 'session-' + Date.now(),
-                title: 'Thảo luận tổng quan',
-                createdAt: new Date().toISOString(),
-                messages: []
-            };
-            saveSessions([defaultSess]);
-            setActiveSessionId(defaultSess.id);
-        } else {
-            saveSessions(updated);
-            if (activeSessionId === id) {
-                setActiveSessionId(updated[0].id);
+        saveSessions(prev => {
+            const updated = prev.filter(s => s.id !== id);
+            if (updated.length === 0) {
+                const defaultSess: ChatSession = {
+                    id: 'session-' + Date.now(),
+                    title: 'Thảo luận tổng quan',
+                    createdAt: new Date().toISOString(),
+                    messages: []
+                };
+                setTimeout(() => setActiveSessionId(defaultSess.id), 0);
+                return [defaultSess];
+            } else {
+                if (activeSessionId === id) {
+                    setTimeout(() => setActiveSessionId(updated[0].id), 0);
+                }
+                return updated;
             }
-        }
+        });
     };
 
     const handleSend = async (customText?: string) => {
         const textToSend = (customText || input).trim();
-        if (!textToSend || !activeSession || loading) return;
+        if (!textToSend || !activeSessionId || loading) return;
+
+        const targetSessionId = activeSessionId;
+        const targetSession = sessions.find(s => s.id === targetSessionId);
+        if (!targetSession) return;
 
         setInput('');
         
@@ -294,27 +302,26 @@ export default function AnalysisChatPanel({ projectId, report }: AnalysisChatPan
             createdAt: new Date().toISOString()
         };
 
-        const updatedMessages = [...activeSession.messages, userMsg];
-        
-        // Dynamically update session title if it's the first message
-        let newTitle = activeSession.title;
-        if (activeSession.messages.length === 0) {
-            newTitle = textToSend.length > 30 ? textToSend.slice(0, 27) + '...' : textToSend;
-        }
+        saveSessions(prev => prev.map(s => {
+            if (s.id === targetSessionId) {
+                let newTitle = s.title;
+                if (s.messages.length === 0) {
+                    newTitle = textToSend.length > 30 ? textToSend.slice(0, 27) + '...' : textToSend;
+                }
+                return {
+                    ...s,
+                    title: newTitle,
+                    messages: [...s.messages, userMsg]
+                };
+            }
+            return s;
+        }));
 
-        const updatedSession: ChatSession = {
-            ...activeSession,
-            title: newTitle,
-            messages: updatedMessages
-        };
-
-        const updatedSessions = sessions.map(s => s.id === activeSession.id ? updatedSession : s);
-        saveSessions(updatedSessions);
         setLoading(true);
         scrollToBottom();
 
-        // 2. Build full context prompt
-        const prompt = buildCombinedPrompt(report, activeSession.messages, textToSend);
+        // 2. Build full context prompt using the current session's history
+        const prompt = buildCombinedPrompt(report, targetSession.messages, textToSend);
 
         try {
             const result = await aiService.chat(projectId, prompt);
@@ -327,12 +334,15 @@ export default function AnalysisChatPanel({ projectId, report }: AnalysisChatPan
                 createdAt: new Date().toISOString()
             };
 
-            const finalSession = {
-                ...updatedSession,
-                messages: [...updatedMessages, assistantMsg]
-            };
-
-            saveSessions(sessions.map(s => s.id === activeSession.id ? finalSession : s));
+            saveSessions(prev => prev.map(s => {
+                if (s.id === targetSessionId) {
+                    return {
+                        ...s,
+                        messages: [...s.messages, assistantMsg]
+                    };
+                }
+                return s;
+            }));
         } catch (err: any) {
             const msg = err?.response?.data?.message ?? err?.response?.data?.Message ?? 'Trò chuyện thất bại. Vui lòng thử lại sau.';
             const errMsg: ChatMsg = {
@@ -340,11 +350,15 @@ export default function AnalysisChatPanel({ projectId, report }: AnalysisChatPan
                 content: `⚠️ Có lỗi xảy ra: ${msg}`,
                 createdAt: new Date().toISOString()
             };
-            const finalSession = {
-                ...updatedSession,
-                messages: [...updatedMessages, errMsg]
-            };
-            saveSessions(sessions.map(s => s.id === activeSession.id ? finalSession : s));
+            saveSessions(prev => prev.map(s => {
+                if (s.id === targetSessionId) {
+                    return {
+                        ...s,
+                        messages: [...s.messages, errMsg]
+                    };
+                }
+                return s;
+            }));
         } finally {
             setLoading(false);
             scrollToBottom();
