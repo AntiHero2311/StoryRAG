@@ -19,5 +19,7 @@ namespace Repository.Entities
         public DateTime? RefreshTokenExpiryTime { get; set; }
         public string? PasswordResetToken { get; set; }
         public DateTime? PasswordResetTokenExpiryTime { get; set; }
+        public string? EmailVerificationOtp { get; set; }
+        public DateTime? EmailVerificationOtpExpiry { get; set; }
     }
 }

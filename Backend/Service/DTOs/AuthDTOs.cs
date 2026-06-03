@@ -16,6 +16,19 @@ namespace Service.DTOs
         [Required]
         [MinLength(6)]
         public string Password { get; set; } = string.Empty;
+
+        [Required]
+        [MinLength(6)]
+        [MaxLength(6)]
+        public string Otp { get; set; } = string.Empty;
+    }
+
+    public class SendOtpRequest
+    {
+        [Required]
+        [EmailAddress]
+        [MaxLength(255)]
+        public string Email { get; set; } = string.Empty;
     }
 
     public class LoginRequest

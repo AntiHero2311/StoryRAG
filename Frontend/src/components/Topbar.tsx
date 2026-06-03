@@ -152,7 +152,7 @@ export default function Topbar({ fullName, role, userId, pageTitle, onLogout, on
         };
 
         void syncServerNotifications();
-        const intervalId = window.setInterval(() => { void syncServerNotifications(); }, 30000);
+        const intervalId = window.setInterval(() => { void syncServerNotifications(); }, 10000);
         return () => {
             disposed = true;
             window.clearInterval(intervalId);

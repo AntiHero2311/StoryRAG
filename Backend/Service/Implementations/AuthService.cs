@@ -33,36 +33,106 @@ namespace Service.Implementations
             _emailService = emailService;
         }
 
+        public async Task SendRegisterOtpAsync(SendOtpRequest request)
+        {
+            var email = request.Email.Trim().ToLower();
+            if (!System.Text.RegularExpressions.Regex.IsMatch(email, @"^[a-zA-Z0-9._%+-]+@gmail\.com$"))
+            {
+                throw new Exception("Chỉ chấp nhận đăng ký bằng tài khoản Gmail (@gmail.com).");
+            }
+
+            var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            if (existingUser != null && existingUser.IsActive)
+            {
+                throw new Exception("Email đã được sử dụng.");
+            }
+
+            var otp = Random.Shared.Next(100000, 999999).ToString();
+            var expiry = DateTime.UtcNow.AddMinutes(10);
+
+            if (existingUser == null)
+            {
+                existingUser = new User
+                {
+                    FullName = "Người dùng",
+                    Email = email,
+                    PasswordHash = string.Empty,
+                    PasswordSalt = string.Empty,
+                    IsActive = false,
+                    Role = "Author",
+                    EmailVerificationOtp = otp,
+                    EmailVerificationOtpExpiry = expiry,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Users.Add(existingUser);
+            }
+            else
+            {
+                existingUser.EmailVerificationOtp = otp;
+                existingUser.EmailVerificationOtpExpiry = expiry;
+                _context.Users.Update(existingUser);
+            }
+
+            await _context.SaveChangesAsync();
+
+            // Gửi mail OTP (fire-and-forget)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _emailService.SendOtpEmailAsync(existingUser.Email, existingUser.FullName, otp);
+                }
+                catch
+                {
+                    // Log error or ignore
+                }
+            });
+        }
+
         public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
         {
-            if (await _context.Users.AnyAsync(u => u.Email == request.Email))
+            var email = request.Email.Trim().ToLower();
+            if (!System.Text.RegularExpressions.Regex.IsMatch(email, @"^[a-zA-Z0-9._%+-]+@gmail\.com$"))
             {
-                throw new Exception("Email already exists.");
+                throw new Exception("Chỉ chấp nhận đăng ký bằng tài khoản Gmail (@gmail.com).");
+            }
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            if (user == null || user.IsActive)
+            {
+                throw new Exception("Yêu cầu đăng ký không hợp lệ hoặc đã được kích hoạt.");
+            }
+
+            if (user.EmailVerificationOtp != request.Otp || user.EmailVerificationOtpExpiry < DateTime.UtcNow)
+            {
+                throw new Exception("Mã OTP không chính xác hoặc đã hết hạn.");
             }
 
             CreatePasswordHash(request.Password, out string passwordHash, out string passwordSalt);
 
             // Generate raw DEK for the user, then encrypt it with system MasterKey
-            string rawDek = EncryptionHelper.GenerateDataEncryptionKey();
-            string masterKey = _config["Security:MasterKey"] ?? throw new Exception("MasterKey not found in config");
-            string encryptedDek = EncryptionHelper.EncryptWithMasterKey(rawDek, masterKey);
-
-            var user = new User
+            if (string.IsNullOrEmpty(user.DataEncryptionKey))
             {
-                FullName = request.FullName,
-                Email = request.Email,
-                PasswordHash = passwordHash,
-                PasswordSalt = passwordSalt,
-                PasswordFormatVersion = Pbkdf2PasswordFormatVersion,
-                DataEncryptionKey = encryptedDek
-            };
+                string rawDek = EncryptionHelper.GenerateDataEncryptionKey();
+                string masterKey = _config["Security:MasterKey"] ?? throw new Exception("MasterKey not found in config");
+                string encryptedDek = EncryptionHelper.EncryptWithMasterKey(rawDek, masterKey);
+                user.DataEncryptionKey = encryptedDek;
+            }
+
+            user.FullName = request.FullName.Trim();
+            user.PasswordHash = passwordHash;
+            user.PasswordSalt = passwordSalt;
+            user.PasswordFormatVersion = Pbkdf2PasswordFormatVersion;
+            user.IsActive = true;
+            user.EmailVerificationOtp = null;
+            user.EmailVerificationOtpExpiry = null;
 
             var refreshToken = GenerateRefreshToken();
             user.Role = "Author"; // Force role to Author
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7); // 7 days expiry
 
-            _context.Users.Add(user);
+            _context.Users.Update(user);
             await _context.SaveChangesAsync();
 
             // Cấp gói Free mặc định cho user mới

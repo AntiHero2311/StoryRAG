@@ -8,6 +8,31 @@ import { AdminPageShell } from '../../components/admin/AdminShared';
 const CATEGORIES = ['', 'User', 'Config', 'Payment', 'Auth'];
 const LEVELS = ['', 'Info', 'Warning', 'Error'];
 
+const CATEGORY_MAP: Record<string, string> = {
+    'User': 'Người dùng',
+    'Config': 'Cấu hình',
+    'Payment': 'Thanh toán',
+    'Auth': 'Xác thực'
+};
+
+const LEVEL_MAP: Record<string, string> = {
+    'Info': 'Thông tin',
+    'Warning': 'Cảnh báo',
+    'Error': 'Lỗi'
+};
+
+const ACTION_MAP: Record<string, string> = {
+    'Create': 'Tạo mới',
+    'Update': 'Cập nhật',
+    'Delete': 'Xóa',
+    'Deactivate': 'Khóa',
+    'Activate': 'Mở khóa',
+    'Limits': 'Giới hạn hệ thống',
+    'Register': 'Đăng ký',
+    'Login': 'Đăng nhập',
+    'OTP': 'Gửi OTP'
+};
+
 export default function AdminLogsPage() {
     const navigate = useNavigate();
     const [data, setData] = useState<SystemLogsPage | null>(null);
@@ -54,12 +79,12 @@ export default function AdminLogsPage() {
                         <select value={category} onChange={e => { setCategory(e.target.value); setPage(1); }}
                             className="rounded-xl border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2 text-sm">
                             <option value="">Tất cả danh mục</option>
-                            {CATEGORIES.filter(Boolean).map(c => <option key={c} value={c}>{c}</option>)}
+                            {CATEGORIES.filter(Boolean).map(c => <option key={c} value={c}>{CATEGORY_MAP[c] || c}</option>)}
                         </select>
                         <select value={level} onChange={e => { setLevel(e.target.value); setPage(1); }}
                             className="rounded-xl border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2 text-sm">
-                            <option value="">Tất cả mức</option>
-                            {LEVELS.filter(Boolean).map(l => <option key={l} value={l}>{l}</option>)}
+                            <option value="">Tất cả mức độ</option>
+                            {LEVELS.filter(Boolean).map(l => <option key={l} value={l}>{LEVEL_MAP[l] || l}</option>)}
                         </select>
                     </div>
 
@@ -86,11 +111,11 @@ export default function AdminLogsPage() {
                                             </td>
                                             <td className="px-4 py-2">
                                                 <span className={`text-xs font-semibold ${log.level === 'Error' ? 'text-rose-400' : log.level === 'Warning' ? 'text-amber-400' : 'text-emerald-400'}`}>
-                                                    {log.level}
+                                                    {LEVEL_MAP[log.level] || log.level}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-2 text-xs">{log.category}</td>
-                                            <td className="px-4 py-2 text-xs">{log.action}</td>
+                                            <td className="px-4 py-2 text-xs">{CATEGORY_MAP[log.category] || log.category}</td>
+                                            <td className="px-4 py-2 text-xs">{ACTION_MAP[log.action] || log.action}</td>
                                             <td className="px-4 py-2 max-w-md truncate" title={log.message}>{log.message}</td>
                                             <td className="px-4 py-2 text-xs text-[var(--text-secondary)]">{log.actorName ?? '—'}</td>
                                         </tr>

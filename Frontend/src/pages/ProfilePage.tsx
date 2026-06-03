@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     Mail, Shield, Calendar, Edit3, Save, CheckCircle, Camera, User, X
 } from 'lucide-react';
@@ -25,6 +25,37 @@ function ProfileContent({ jwtRole }: { jwtRole: string }) {
     const [success, setSuccess] = useState('');
     const [fullName, setFullName] = useState('');
     const [avatarUrl, setAvatarUrl] = useState('');
+    
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const getFullUrl = (url?: string) => {
+        if (!url) return '';
+        if (url.startsWith('http') || url.startsWith('data:')) return url;
+        const base = import.meta.env.VITE_API_BASE_URL ?? 'https://localhost:7259/api';
+        const cleanBase = base.endsWith('/api') ? base.slice(0, -4) : base;
+        return `${cleanBase}${url.startsWith('/') ? '' : '/'}${url}`;
+    };
+
+    const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) {
+            setError('Dung lượng ảnh tối đa là 5MB.');
+            return;
+        }
+        setSaving(true);
+        setError('');
+        try {
+            const url = await userService.uploadAvatar(file);
+            setAvatarUrl(url);
+            setSuccess('Tải ảnh lên thành công! Nhấp Lưu để cập nhật hồ sơ.');
+            setTimeout(() => setSuccess(''), 3000);
+        } catch {
+            setError('Tải ảnh đại diện thất bại. Vui lòng thử lại.');
+        } finally {
+            setSaving(false);
+        }
+    };
 
     useEffect(() => {
         (async () => {
@@ -89,8 +120,8 @@ function ProfileContent({ jwtRole }: { jwtRole: string }) {
                         {/* Avatar - Adjusted overlap and vertical space */}
                         <div className="flex items-end gap-5 -mt-12 mb-6">
                             <div className="relative">
-                                {profile?.avatarURL ? (
-                                    <img src={profile.avatarURL} alt="Avatar"
+                                {profile?.avatarURL || avatarUrl ? (
+                                    <img src={getFullUrl(avatarUrl || profile?.avatarURL)} alt="Avatar"
                                         className="w-24 h-24 rounded-2xl object-cover"
                                         style={{ outline: '4px solid var(--bg-surface)', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)' }} />
                                 ) : (
@@ -100,9 +131,22 @@ function ProfileContent({ jwtRole }: { jwtRole: string }) {
                                     </div>
                                 )}
                                 {editing && (
-                                    <button className="absolute -bottom-1 -right-1 w-8 h-8 rounded-lg bg-[#f5a623] flex items-center justify-center shadow-lg hover:bg-[#f97316] transition-colors border-2 border-[var(--bg-surface)]">
-                                        <Camera className="w-4 h-4 text-white" />
-                                    </button>
+                                    <>
+                                        <input
+                                            type="file"
+                                            ref={fileInputRef}
+                                            onChange={handleAvatarChange}
+                                            accept="image/*"
+                                            className="hidden"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="absolute -bottom-1 -right-1 w-8 h-8 rounded-lg bg-[#f5a623] flex items-center justify-center shadow-lg hover:bg-[#f97316] transition-colors border-2 border-[var(--bg-surface)]"
+                                        >
+                                            <Camera className="w-4 h-4 text-white" />
+                                        </button>
+                                    </>
                                 )}
                             </div>
                             <div className="relative">

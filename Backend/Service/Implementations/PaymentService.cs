@@ -18,18 +18,40 @@ namespace Service.Implementations
         private readonly AppDbContext _context;
         private readonly ILogger<PaymentService> _logger;
         private readonly ISubscriptionService _subscriptionService;
+        private readonly ISystemConfigService _sysConfig;
         private readonly VnPayOptions _vnPayOptions;
 
         public PaymentService(
             AppDbContext context,
             ILogger<PaymentService> logger,
             ISubscriptionService subscriptionService,
-            IOptions<VnPayOptions> vnPayOptions)
+            IOptions<VnPayOptions> vnPayOptions,
+            ISystemConfigService sysConfig)
         {
             _context = context;
             _logger = logger;
             _subscriptionService = subscriptionService;
             _vnPayOptions = vnPayOptions.Value;
+            _sysConfig = sysConfig;
+        }
+
+        private async Task<VnPayOptions> GetDynamicVnPayOptionsAsync()
+        {
+            return new VnPayOptions
+            {
+                Version = _vnPayOptions.Version,
+                Command = _vnPayOptions.Command,
+                TmnCode = await _sysConfig.GetAsync("vnpay.tmn_code", _vnPayOptions.TmnCode),
+                HashSecret = await _sysConfig.GetAsync("vnpay.hash_secret", _vnPayOptions.HashSecret),
+                PaymentUrl = await _sysConfig.GetAsync("vnpay.payment_url", _vnPayOptions.PaymentUrl),
+                ReturnUrl = await _sysConfig.GetAsync("vnpay.return_url", _vnPayOptions.ReturnUrl),
+                Locale = _vnPayOptions.Locale,
+                CurrCode = _vnPayOptions.CurrCode,
+                OrderType = _vnPayOptions.OrderType,
+                DefaultIpAddress = _vnPayOptions.DefaultIpAddress,
+                TimeZoneId = _vnPayOptions.TimeZoneId,
+                ExpireMinutes = _vnPayOptions.ExpireMinutes
+            };
         }
 
         public async Task<PaymentResponse> CreatePaymentAsync(Guid userId, CreatePaymentRequest request)
@@ -63,7 +85,8 @@ namespace Service.Implementations
 
         public async Task<CreateVnPayPaymentUrlResponse> CreateVnPayPaymentUrlAsync(Guid userId, CreateVnPayPaymentUrlRequest request)
         {
-            EnsureVnPayConfigured();
+            var opts = await GetDynamicVnPayOptionsAsync();
+            await EnsureVnPayConfiguredAsync(opts);
 
             var user = await _context.Users.FindAsync(userId);
             if (user == null)
@@ -85,8 +108,8 @@ namespace Service.Implementations
             var txnRef = await GenerateUniqueTxnRefAsync();
             var amount = (long)plan.Price;
             var orderInfo = BuildVnPayOrderInfo(request.PlanId, userId);
-            var nowVn = ConvertUtcToVnTime(DateTime.UtcNow);
-            var expireVn = nowVn.AddMinutes(Math.Max(1, _vnPayOptions.ExpireMinutes));
+            var nowVn = ConvertUtcToVnTime(DateTime.UtcNow, opts);
+            var expireVn = nowVn.AddMinutes(Math.Max(1, opts.ExpireMinutes));
 
             var payment = new Payment
             {
@@ -106,24 +129,24 @@ namespace Service.Implementations
 
             var payload = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["vnp_Version"] = _vnPayOptions.Version,
-                ["vnp_Command"] = _vnPayOptions.Command,
-                ["vnp_TmnCode"] = _vnPayOptions.TmnCode,
+                ["vnp_Version"] = opts.Version,
+                ["vnp_Command"] = opts.Command,
+                ["vnp_TmnCode"] = opts.TmnCode,
                 ["vnp_Amount"] = (amount * 100).ToString(CultureInfo.InvariantCulture),
                 ["vnp_CreateDate"] = nowVn.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture),
-                ["vnp_CurrCode"] = _vnPayOptions.CurrCode,
-                ["vnp_IpAddr"] = string.IsNullOrWhiteSpace(_vnPayOptions.DefaultIpAddress) ? "127.0.0.1" : _vnPayOptions.DefaultIpAddress,
-                ["vnp_Locale"] = _vnPayOptions.Locale,
+                ["vnp_CurrCode"] = opts.CurrCode,
+                ["vnp_IpAddr"] = string.IsNullOrWhiteSpace(opts.DefaultIpAddress) ? "127.0.0.1" : opts.DefaultIpAddress,
+                ["vnp_Locale"] = opts.Locale,
                 ["vnp_OrderInfo"] = orderInfo,
-                ["vnp_OrderType"] = _vnPayOptions.OrderType,
-                ["vnp_ReturnUrl"] = _vnPayOptions.ReturnUrl,
+                ["vnp_OrderType"] = opts.OrderType,
+                ["vnp_ReturnUrl"] = opts.ReturnUrl,
                 ["vnp_TxnRef"] = txnRef,
                 ["vnp_ExpireDate"] = expireVn.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture)
             };
 
             var hashData = BuildVnPayDataString(payload);
-            var secureHash = ComputeHmacSha512(_vnPayOptions.HashSecret, hashData);
-            var checkoutUrl = $"{_vnPayOptions.PaymentUrl}?{hashData}&vnp_SecureHashType=HmacSHA512&vnp_SecureHash={WebUtility.UrlEncode(secureHash)}";
+            var secureHash = ComputeHmacSha512(opts.HashSecret, hashData);
+            var checkoutUrl = $"{opts.PaymentUrl}?{hashData}&vnp_SecureHashType=HmacSHA512&vnp_SecureHash={WebUtility.UrlEncode(secureHash)}";
 
             _logger.LogInformation("Created VNPay URL for payment {PaymentId}, txnRef {TxnRef}", payment.Id, txnRef);
 
@@ -139,7 +162,8 @@ namespace Service.Implementations
 
         public async Task<VnPayIpnProcessResponse> HandleVnPayIpnAsync(IReadOnlyDictionary<string, string?> queryParameters)
         {
-            EnsureVnPayConfigured();
+            var opts = await GetDynamicVnPayOptionsAsync();
+            await EnsureVnPayConfiguredAsync(opts);
 
             if (!queryParameters.TryGetValue("vnp_SecureHash", out var secureHash) || string.IsNullOrWhiteSpace(secureHash))
                 throw new Exception("Thiếu chữ ký VNPay.");
@@ -152,7 +176,7 @@ namespace Service.Implementations
                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value!, StringComparer.Ordinal);
 
             var hashData = BuildVnPayDataString(signedParams);
-            var expectedHash = ComputeHmacSha512(_vnPayOptions.HashSecret, hashData);
+            var expectedHash = ComputeHmacSha512(opts.HashSecret, hashData);
             if (!string.Equals(expectedHash, secureHash, StringComparison.OrdinalIgnoreCase))
                 throw new Exception("VNPay IPN signature không hợp lệ.");
 
@@ -366,12 +390,12 @@ namespace Service.Implementations
             return MapToResponse(payment, payment.Plan.PlanName);
         }
 
-        private void EnsureVnPayConfigured()
+        private async Task EnsureVnPayConfiguredAsync(VnPayOptions opts)
         {
-            if (string.IsNullOrWhiteSpace(_vnPayOptions.PaymentUrl)
-                || string.IsNullOrWhiteSpace(_vnPayOptions.TmnCode)
-                || string.IsNullOrWhiteSpace(_vnPayOptions.HashSecret)
-                || string.IsNullOrWhiteSpace(_vnPayOptions.ReturnUrl))
+            if (string.IsNullOrWhiteSpace(opts.PaymentUrl)
+                || string.IsNullOrWhiteSpace(opts.TmnCode)
+                || string.IsNullOrWhiteSpace(opts.HashSecret)
+                || string.IsNullOrWhiteSpace(opts.ReturnUrl))
             {
                 throw new Exception("Thiếu cấu hình VNPay (PaymentUrl/TmnCode/HashSecret/ReturnUrl).");
             }
@@ -415,11 +439,11 @@ namespace Service.Implementations
             return Convert.ToHexString(hash).ToUpperInvariant();
         }
 
-        private DateTime ConvertUtcToVnTime(DateTime utcTime)
+        private DateTime ConvertUtcToVnTime(DateTime utcTime, VnPayOptions opts)
         {
             try
             {
-                var timeZone = TimeZoneInfo.FindSystemTimeZoneById(_vnPayOptions.TimeZoneId);
+                var timeZone = TimeZoneInfo.FindSystemTimeZoneById(opts.TimeZoneId);
                 return TimeZoneInfo.ConvertTimeFromUtc(utcTime, timeZone);
             }
             catch (TimeZoneNotFoundException)

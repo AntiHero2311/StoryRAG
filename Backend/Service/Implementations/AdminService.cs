@@ -223,14 +223,20 @@ namespace Service.Implementations
             if (!request.IsActive && user.Role == "Admin")
                 await EnsureAnotherAdminExistsAsync(id);
 
+            var oldFullName = user.FullName;
+            var oldEmail = user.Email;
+            var oldRole = user.Role;
+            var oldIsActive = user.IsActive;
+            var isPasswordChanged = !string.IsNullOrWhiteSpace(request.NewPassword);
+
             user.FullName = request.FullName.Trim();
             user.Email = email;
             user.Role = request.Role;
             user.IsActive = request.IsActive;
 
-            if (!string.IsNullOrWhiteSpace(request.NewPassword))
+            if (isPasswordChanged)
             {
-                PasswordHasher.CreateHash(request.NewPassword, out var passwordHash, out var passwordSalt);
+                PasswordHasher.CreateHash(request.NewPassword!, out var passwordHash, out var passwordSalt);
                 user.PasswordHash = passwordHash;
                 user.PasswordSalt = passwordSalt;
                 user.PasswordFormatVersion = PasswordHasher.Pbkdf2PasswordFormatVersion;
@@ -239,7 +245,20 @@ namespace Service.Implementations
             }
 
             await _context.SaveChangesAsync();
-            await _auditLog.LogAsync("User", "Update", $"Cập nhật user {user.Email}", actingAdminId);
+
+            var diffs = new System.Collections.Generic.List<string>();
+            if (oldFullName != user.FullName) diffs.Add($"Họ tên: '{oldFullName}' -> '{user.FullName}'");
+            if (oldEmail != user.Email) diffs.Add($"Email: '{oldEmail}' -> '{user.Email}'");
+            if (oldRole != user.Role) diffs.Add($"Vai trò: '{oldRole}' -> '{user.Role}'");
+            if (oldIsActive != user.IsActive) diffs.Add($"Hoạt động: {oldIsActive} -> {user.IsActive}");
+            if (isPasswordChanged) diffs.Add("Mật khẩu: Đã thay đổi");
+
+            var logMsg = $"Cập nhật user {user.Email}";
+            if (diffs.Count > 0)
+            {
+                logMsg += $": [{string.Join(", ", diffs)}]";
+            }
+            await _auditLog.LogAsync("User", "Update", logMsg, actingAdminId);
             return MapSummary(user);
         }
 
@@ -304,6 +323,19 @@ namespace Service.Implementations
             var totalChapters = await _context.Chapters.LongCountAsync(c => !c.IsDeleted);
             var totalWords = await _context.Chapters.Where(c => !c.IsDeleted).SumAsync(c => (long)c.WordCount);
 
+            var smtpHost = await _sysConfig.GetAsync("smtp.host", _config["Email:SmtpHost"] ?? "smtp.gmail.com");
+            var smtpPortRaw = await _sysConfig.GetAsync("smtp.port", _config["Email:SmtpPort"] ?? "587");
+            var smtpPort = int.TryParse(smtpPortRaw.ToString(), out var sp) ? sp : 587;
+            var smtpUsername = await _sysConfig.GetAsync("smtp.username", _config["Email:Username"] ?? "");
+            var smtpPassword = await _sysConfig.GetAsync("smtp.password", _config["Email:Password"] ?? "");
+            var smtpFromName = await _sysConfig.GetAsync("smtp.from_name", _config["Email:FromName"] ?? "StoryNest");
+            var smtpFromAddress = await _sysConfig.GetAsync("smtp.from_address", _config["Email:FromAddress"] ?? smtpUsername);
+
+            var vnPayPaymentUrl = await _sysConfig.GetAsync("vnpay.payment_url", _config["VnPay:PaymentUrl"] ?? "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html");
+            var vnPayTmnCode = await _sysConfig.GetAsync("vnpay.tmn_code", _config["VnPay:TmnCode"] ?? "");
+            var vnPayHashSecret = await _sysConfig.GetAsync("vnpay.hash_secret", _config["VnPay:HashSecret"] ?? "");
+            var vnPayReturnUrl = await _sysConfig.GetAsync("vnpay.return_url", _config["VnPay:ReturnUrl"] ?? "");
+
             return new SystemLimitsResponse
             {
                 MaxUploadMb = maxUpload,
@@ -312,6 +344,18 @@ namespace Service.Implementations
                 TotalProjects = totalProjects,
                 TotalChapters = totalChapters,
                 TotalWordCount = totalWords,
+
+                SmtpHost = smtpHost,
+                SmtpPort = smtpPort,
+                SmtpUsername = smtpUsername,
+                SmtpPassword = smtpPassword,
+                SmtpFromName = smtpFromName,
+                SmtpFromAddress = smtpFromAddress,
+
+                VnPayPaymentUrl = vnPayPaymentUrl,
+                VnPayTmnCode = vnPayTmnCode,
+                VnPayHashSecret = vnPayHashSecret,
+                VnPayReturnUrl = vnPayReturnUrl
             };
         }
 
@@ -322,10 +366,67 @@ namespace Service.Implementations
             if (request.MaxProjectsPerAuthor < 1 || request.MaxProjectsPerAuthor > 500)
                 throw new ArgumentException("max_projects_per_author phải từ 1–500.");
 
+            var oldMaxUpload = await _sysConfig.GetAsync(KeyMaxUploadMb, 10);
+            var oldMaxProjects = await _sysConfig.GetAsync(KeyMaxProjectsPerAuthor, 50);
+            var oldMaintenance = await _sysConfig.GetAsync(KeyMaintenanceMode, false);
+
+            var oldSmtpHost = await _sysConfig.GetAsync("smtp.host", _config["Email:SmtpHost"] ?? "smtp.gmail.com");
+            var oldSmtpPortRaw = await _sysConfig.GetAsync("smtp.port", _config["Email:SmtpPort"] ?? "587");
+            var oldSmtpPort = int.TryParse(oldSmtpPortRaw.ToString(), out var sp) ? sp : 587;
+            var oldSmtpUsername = await _sysConfig.GetAsync("smtp.username", _config["Email:Username"] ?? "");
+            var oldSmtpPassword = await _sysConfig.GetAsync("smtp.password", _config["Email:Password"] ?? "");
+            var oldSmtpFromName = await _sysConfig.GetAsync("smtp.from_name", _config["Email:FromName"] ?? "StoryNest");
+            var oldSmtpFromAddress = await _sysConfig.GetAsync("smtp.from_address", _config["Email:FromAddress"] ?? oldSmtpUsername);
+
+            var oldVnPayPaymentUrl = await _sysConfig.GetAsync("vnpay.payment_url", _config["VnPay:PaymentUrl"] ?? "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html");
+            var oldVnPayTmnCode = await _sysConfig.GetAsync("vnpay.tmn_code", _config["VnPay:TmnCode"] ?? "");
+            var oldVnPayHashSecret = await _sysConfig.GetAsync("vnpay.hash_secret", _config["VnPay:HashSecret"] ?? "");
+            var oldVnPayReturnUrl = await _sysConfig.GetAsync("vnpay.return_url", _config["VnPay:ReturnUrl"] ?? "");
+
             await _sysConfig.SetAsync(KeyMaxUploadMb, request.MaxUploadMb, adminId);
             await _sysConfig.SetAsync(KeyMaxProjectsPerAuthor, request.MaxProjectsPerAuthor, adminId);
             await _sysConfig.SetAsync(KeyMaintenanceMode, request.MaintenanceMode, adminId);
-            await _auditLog.LogAsync("Config", "Limits", "Cập nhật giới hạn hệ thống", adminId);
+
+            await _sysConfig.SetAsync("smtp.host", request.SmtpHost ?? "", adminId);
+            await _sysConfig.SetAsync("smtp.port", request.SmtpPort.ToString(), adminId);
+            await _sysConfig.SetAsync("smtp.username", request.SmtpUsername ?? "", adminId);
+            await _sysConfig.SetAsync("smtp.password", request.SmtpPassword ?? "", adminId);
+            await _sysConfig.SetAsync("smtp.from_name", request.SmtpFromName ?? "", adminId);
+            await _sysConfig.SetAsync("smtp.from_address", request.SmtpFromAddress ?? "", adminId);
+
+            await _sysConfig.SetAsync("vnpay.payment_url", request.VnPayPaymentUrl ?? "", adminId);
+            await _sysConfig.SetAsync("vnpay.tmn_code", request.VnPayTmnCode ?? "", adminId);
+            await _sysConfig.SetAsync("vnpay.hash_secret", request.VnPayHashSecret ?? "", adminId);
+            await _sysConfig.SetAsync("vnpay.return_url", request.VnPayReturnUrl ?? "", adminId);
+
+            var diffs = new System.Collections.Generic.List<string>();
+            if (oldMaxUpload != request.MaxUploadMb) diffs.Add($"Dung lượng tải lên tối đa: {oldMaxUpload}MB -> {request.MaxUploadMb}MB");
+            if (oldMaxProjects != request.MaxProjectsPerAuthor) diffs.Add($"Số dự án tối đa/tác giả: {oldMaxProjects} -> {request.MaxProjectsPerAuthor}");
+            if (oldMaintenance != request.MaintenanceMode) diffs.Add($"Bảo trì: {oldMaintenance} -> {request.MaintenanceMode}");
+
+            if (oldSmtpHost != request.SmtpHost) diffs.Add($"SMTP Host: '{oldSmtpHost}' -> '{request.SmtpHost}'");
+            if (oldSmtpPort != request.SmtpPort) diffs.Add($"SMTP Port: {oldSmtpPort} -> {request.SmtpPort}");
+            if (oldSmtpUsername != request.SmtpUsername) diffs.Add($"SMTP Username: '{oldSmtpUsername}' -> '{request.SmtpUsername}'");
+            if (oldSmtpPassword != request.SmtpPassword) diffs.Add($"SMTP Password: '***' -> '***'");
+            if (oldSmtpFromName != request.SmtpFromName) diffs.Add($"SMTP From Name: '{oldSmtpFromName}' -> '{request.SmtpFromName}'");
+            if (oldSmtpFromAddress != request.SmtpFromAddress) diffs.Add($"SMTP From Address: '{oldSmtpFromAddress}' -> '{request.SmtpFromAddress}'");
+
+            if (oldVnPayPaymentUrl != request.VnPayPaymentUrl) diffs.Add($"VNPay Url: '{oldVnPayPaymentUrl}' -> '{request.VnPayPaymentUrl}'");
+            if (oldVnPayTmnCode != request.VnPayTmnCode) diffs.Add($"VNPay TmnCode: '{oldVnPayTmnCode}' -> '{request.VnPayTmnCode}'");
+            if (oldVnPayHashSecret != request.VnPayHashSecret) diffs.Add($"VNPay HashSecret: '***' -> '***'");
+            if (oldVnPayReturnUrl != request.VnPayReturnUrl) diffs.Add($"VNPay ReturnUrl: '{oldVnPayReturnUrl}' -> '{request.VnPayReturnUrl}'");
+
+            var logMsg = "Cập nhật cấu hình hệ thống";
+            if (diffs.Count > 0)
+            {
+                logMsg += $": [{string.Join(", ", diffs)}]";
+            }
+            else
+            {
+                logMsg += " (không thay đổi dữ liệu)";
+            }
+
+            await _auditLog.LogAsync("Config", "Limits", logMsg, adminId);
 
             return await GetSystemLimitsAsync();
         }

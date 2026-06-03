@@ -165,12 +165,36 @@ export interface SystemLimits {
     totalProjects: number;
     totalChapters: number;
     totalWordCount: number;
+
+    smtpHost: string;
+    smtpPort: number;
+    smtpUsername: string;
+    smtpPassword?: string;
+    smtpFromName: string;
+    smtpFromAddress: string;
+
+    vnPayPaymentUrl: string;
+    vnPayTmnCode: string;
+    vnPayHashSecret?: string;
+    vnPayReturnUrl: string;
 }
 
 export interface SystemLimitsRequest {
     maxUploadMb: number;
     maxProjectsPerAuthor: number;
     maintenanceMode: boolean;
+
+    smtpHost: string;
+    smtpPort: number;
+    smtpUsername: string;
+    smtpPassword?: string;
+    smtpFromName: string;
+    smtpFromAddress: string;
+
+    vnPayPaymentUrl: string;
+    vnPayTmnCode: string;
+    vnPayHashSecret?: string;
+    vnPayReturnUrl: string;
 }
 
 export interface PlanRevenueItem {

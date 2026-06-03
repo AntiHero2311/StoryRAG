@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -42,7 +43,7 @@ namespace Api.Controllers
 
         // Staff/Admin CRUD
         [HttpGet("admin")]
-        [Authorize(Roles = "Staff,Admin")]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Staff,Admin")]
         public async Task<IActionResult> GetAll([FromQuery] string? category, [FromQuery] bool? published)
         {
             var query = _db.Faqs.AsNoTracking().AsQueryable();
@@ -67,7 +68,7 @@ namespace Api.Controllers
         }
 
         [HttpGet("admin/{id:guid}")]
-        [Authorize(Roles = "Staff,Admin")]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Staff,Admin")]
         public async Task<IActionResult> GetOne(Guid id)
         {
             var item = await _db.Faqs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
@@ -85,7 +86,7 @@ namespace Api.Controllers
         }
 
         [HttpPost("admin")]
-        [Authorize(Roles = "Staff,Admin")]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Staff,Admin")]
         public async Task<IActionResult> Create([FromBody] FaqUpsertRequest req)
         {
             if (string.IsNullOrWhiteSpace(req.Question) || string.IsNullOrWhiteSpace(req.Answer))
@@ -108,7 +109,7 @@ namespace Api.Controllers
         }
 
         [HttpPut("admin/{id:guid}")]
-        [Authorize(Roles = "Staff,Admin")]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Staff,Admin")]
         public async Task<IActionResult> Update(Guid id, [FromBody] FaqUpsertRequest req)
         {
             var entity = await _db.Faqs.FirstOrDefaultAsync(x => x.Id == id);
@@ -129,7 +130,7 @@ namespace Api.Controllers
         }
 
         [HttpPatch("admin/{id:guid}/publish")]
-        [Authorize(Roles = "Staff,Admin")]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Staff,Admin")]
         public async Task<IActionResult> TogglePublish(Guid id, [FromBody] bool published)
         {
             var entity = await _db.Faqs.FirstOrDefaultAsync(x => x.Id == id);
@@ -142,7 +143,7 @@ namespace Api.Controllers
         }
 
         [HttpDelete("admin/{id:guid}")]
-        [Authorize(Roles = "Staff,Admin")]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Staff,Admin")]
         public async Task<IActionResult> Delete(Guid id)
         {
             var entity = await _db.Faqs.FirstOrDefaultAsync(x => x.Id == id);

@@ -33,6 +33,18 @@ namespace Service.DTOs
         public long TotalProjects { get; set; }
         public long TotalChapters { get; set; }
         public long TotalWordCount { get; set; }
+        
+        public string SmtpHost { get; set; } = string.Empty;
+        public int SmtpPort { get; set; }
+        public string SmtpUsername { get; set; } = string.Empty;
+        public string SmtpPassword { get; set; } = string.Empty;
+        public string SmtpFromName { get; set; } = string.Empty;
+        public string SmtpFromAddress { get; set; } = string.Empty;
+
+        public string VnPayPaymentUrl { get; set; } = string.Empty;
+        public string VnPayTmnCode { get; set; } = string.Empty;
+        public string VnPayHashSecret { get; set; } = string.Empty;
+        public string VnPayReturnUrl { get; set; } = string.Empty;
     }
 
     public class SystemLimitsRequest
@@ -40,5 +52,17 @@ namespace Service.DTOs
         public int MaxUploadMb { get; set; }
         public int MaxProjectsPerAuthor { get; set; }
         public bool MaintenanceMode { get; set; }
+
+        public string SmtpHost { get; set; } = string.Empty;
+        public int SmtpPort { get; set; }
+        public string SmtpUsername { get; set; } = string.Empty;
+        public string SmtpPassword { get; set; } = string.Empty;
+        public string SmtpFromName { get; set; } = string.Empty;
+        public string SmtpFromAddress { get; set; } = string.Empty;
+
+        public string VnPayPaymentUrl { get; set; } = string.Empty;
+        public string VnPayTmnCode { get; set; } = string.Empty;
+        public string VnPayHashSecret { get; set; } = string.Empty;
+        public string VnPayReturnUrl { get; set; } = string.Empty;
     }
 }

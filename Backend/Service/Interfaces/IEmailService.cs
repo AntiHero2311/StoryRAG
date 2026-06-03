@@ -7,5 +7,6 @@ namespace Service.Interfaces
         Task SendWelcomeEmailAsync(string toEmail, string fullName);
         Task SendPasswordResetEmailAsync(string toEmail, string fullName, string resetLink);
         Task SendModerationWarningEmailAsync(string toEmail, string fullName, string message);
+        Task SendOtpEmailAsync(string toEmail, string fullName, string otp);
     }
 }

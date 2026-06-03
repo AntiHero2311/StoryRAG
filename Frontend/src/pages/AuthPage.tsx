@@ -89,6 +89,8 @@ export default function AuthPage() {
     const [showRegPass, setShowRegPass] = useState(false);
     const [showConfirmPass, setShowConfirmPass] = useState(false);
     const [agreed, setAgreed] = useState(false);
+    const [otpStep, setOtpStep] = useState(false);
+    const [otpVal, setOtpVal] = useState('');
 
     const emailLoginRef = useRef<HTMLInputElement>(null);
     const nameRegRef = useRef<HTMLInputElement>(null);
@@ -105,6 +107,8 @@ export default function AuthPage() {
         setMode(newMode);
         setErrorMsg('');
         setSuccess(false);
+        setOtpStep(false);
+        setOtpVal('');
         window.history.pushState(null, '', `/${newMode}`);
     };
 
@@ -135,8 +139,8 @@ export default function AuthPage() {
         }
     };
 
-    const handleRegisterSubmit = async (event: React.FormEvent) => {
-        event.preventDefault();
+    const handleSendOtp = async (event?: React.FormEvent) => {
+        if (event) event.preventDefault();
         if (!agreed) {
             setErrorMsg('Vui lòng đồng ý với Điều khoản & Chính sách.');
             return;
@@ -145,18 +149,52 @@ export default function AuthPage() {
             setErrorMsg('Mật khẩu xác nhận không khớp.');
             return;
         }
+        if (!/^[a-zA-Z0-9._%+-]+@gmail\.com$/.test(regEmail.trim())) {
+            setErrorMsg('Chỉ chấp nhận đăng ký bằng tài khoản Gmail (@gmail.com).');
+            return;
+        }
 
         setLoading(true);
         setErrorMsg('');
 
         try {
-            const data: RegisterData = { fullName: regName, email: regEmail, password: regPassword };
+            await authService.sendOtp(regEmail.trim());
+            setOtpStep(true);
+            setLoading(false);
+        } catch (error: any) {
+            setErrorMsg(error.response?.data?.message || 'Không thể gửi mã OTP. Vui lòng thử lại.');
+            setLoading(false);
+        }
+    };
+
+    const handleRegisterSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!otpStep) {
+            await handleSendOtp();
+            return;
+        }
+
+        if (!otpVal.trim() || otpVal.trim().length !== 6) {
+            setErrorMsg('Mã OTP phải có 6 chữ số.');
+            return;
+        }
+
+        setLoading(true);
+        setErrorMsg('');
+
+        try {
+            const data: RegisterData = {
+                fullName: regName,
+                email: regEmail,
+                password: regPassword,
+                otp: otpVal.trim()
+            };
             const response = await authService.register(data);
             persistAuth(response);
             setSuccess(true);
             window.setTimeout(() => navigate('/home'), 1000);
         } catch (error: any) {
-            setErrorMsg(error.response?.data?.message || 'Đăng ký thất bại. Vui lòng thử lại.');
+            setErrorMsg(error.response?.data?.message || 'Xác nhận OTP thất bại. Vui lòng thử lại.');
             setLoading(false);
         }
     };
@@ -332,6 +370,8 @@ export default function AuthPage() {
                                             showConfirmPassword={showConfirmPass}
                                             agreed={agreed}
                                             loading={loading}
+                                            otpStep={otpStep}
+                                            otpVal={otpVal}
                                             onNameChange={(value) => { setRegName(value); setErrorMsg(''); }}
                                             onEmailChange={(value) => { setRegEmail(value); setErrorMsg(''); }}
                                             onPasswordChange={(value) => { setRegPassword(value); setErrorMsg(''); }}
@@ -339,6 +379,9 @@ export default function AuthPage() {
                                             onTogglePassword={() => setShowRegPass((value) => !value)}
                                             onToggleConfirmPassword={() => setShowConfirmPass((value) => !value)}
                                             onAgreedChange={() => setAgreed((value) => !value)}
+                                            onOtpChange={(value) => { setOtpVal(value); setErrorMsg(''); }}
+                                            onResendOtp={() => { void handleSendOtp(); }}
+                                            onBackToInfo={() => { setOtpStep(false); setErrorMsg(''); }}
                                             onSubmit={handleRegisterSubmit}
                                         />
                                     )}
@@ -443,6 +486,8 @@ function RegisterForm(props: {
     showConfirmPassword: boolean;
     agreed: boolean;
     loading: boolean;
+    otpStep: boolean;
+    otpVal: string;
     onNameChange: (value: string) => void;
     onEmailChange: (value: string) => void;
     onPasswordChange: (value: string) => void;
@@ -450,8 +495,48 @@ function RegisterForm(props: {
     onTogglePassword: () => void;
     onToggleConfirmPassword: () => void;
     onAgreedChange: () => void;
+    onOtpChange: (value: string) => void;
+    onResendOtp: () => void;
+    onBackToInfo: () => void;
     onSubmit: (event: React.FormEvent) => void;
 }) {
+    if (props.otpStep) {
+        return (
+            <form onSubmit={props.onSubmit} className="space-y-4">
+                <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/10 px-4 py-3.5 text-sm text-indigo-300">
+                    Mã xác minh đã được gửi đến Gmail <strong>{props.email}</strong>. Vui lòng kiểm tra hộp thư của bạn.
+                </div>
+                <Field
+                    icon={Lock}
+                    label="Mã xác minh OTP"
+                    type="text"
+                    maxLength={6}
+                    value={props.otpVal}
+                    placeholder="Nhập mã OTP 6 chữ số"
+                    onChange={props.onOtpChange}
+                    required
+                />
+                <div className="flex justify-between gap-3 pt-2">
+                    <button
+                        type="button"
+                        onClick={props.onBackToInfo}
+                        className="flex-1 min-h-[48px] rounded-xl border border-white/10 bg-white/5 text-xs font-black uppercase text-zinc-400 transition hover:bg-white/10 hover:text-white"
+                    >
+                        Quay lại
+                    </button>
+                    <button
+                        type="button"
+                        onClick={props.onResendOtp}
+                        className="flex-1 min-h-[48px] rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-xs font-black uppercase text-indigo-300 transition hover:bg-indigo-500/20"
+                    >
+                        Gửi lại mã
+                    </button>
+                </div>
+                <SubmitButton loading={props.loading} label="Hoàn tất đăng ký" loadingLabel="Đang đăng ký..." />
+            </form>
+        );
+    }
+
     return (
         <form onSubmit={props.onSubmit} className="space-y-4">
             <Field
@@ -510,7 +595,7 @@ function RegisterForm(props: {
                     .
                 </span>
             </label>
-            <SubmitButton loading={props.loading} label="Tạo tài khoản" loadingLabel="Đang tạo tài khoản..." />
+            <SubmitButton loading={props.loading} label="Gửi mã OTP" loadingLabel="Đang gửi mã..." />
         </form>
     );
 }
