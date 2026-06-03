@@ -8,6 +8,7 @@ interface RouteGuardProps {
 const RouteGuard: React.FC<RouteGuardProps> = ({ children }) => {
   const location = useLocation();
   const token = localStorage.getItem('token');
+  const refreshToken = localStorage.getItem('refreshToken');
 
   useEffect(() => {
     // Check token validity
@@ -16,7 +17,7 @@ const RouteGuard: React.FC<RouteGuardProps> = ({ children }) => {
         const payload = JSON.parse(atob(token.split('.')[1]));
         const isExpired = payload.exp * 1000 < Date.now();
         
-        if (isExpired) {
+        if (isExpired && !refreshToken) {
           localStorage.removeItem('token');
           localStorage.removeItem('refreshToken');
         }
@@ -26,9 +27,9 @@ const RouteGuard: React.FC<RouteGuardProps> = ({ children }) => {
         localStorage.removeItem('refreshToken');
       }
     }
-  }, [token]);
+  }, [token, refreshToken]);
 
-  if (!token) {
+  if (!token && !refreshToken) {
     // Redirect to login, save the attempted location
     return <Navigate to="/login" state={{ from: location }} replace />;
   }

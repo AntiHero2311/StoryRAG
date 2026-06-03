@@ -185,7 +185,7 @@ export default function AdminSystemPage() {
                                         </div>
                                         <div className="sm:col-span-2">
                                             <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase block mb-1">URL phản hồi (Return URL)</label>
-                                            <input type="text" placeholder="http://localhost:5173/payment/callback" className={inputCls} value={form.vnPayReturnUrl}
+                                            <input type="text" placeholder="http://localhost:5173/payment/success" className={inputCls} value={form.vnPayReturnUrl}
                                                 onChange={e => setForm(f => ({ ...f, vnPayReturnUrl: e.target.value }))} />
                                         </div>
                                     </div>
