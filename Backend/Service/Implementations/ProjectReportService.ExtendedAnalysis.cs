@@ -344,42 +344,73 @@ QUY TẮC QUAN TRỌNG:
                 var pacingStats = $"Nhịp độ TB: {pacingPoints.Average(p => p.Score):F1}, Max: {pacingPoints.Max(p => p.Score):F1}";
                 var emotionStats = $"Cảm xúc chủ đạo: {string.Join(", ", emotionPoints.GroupBy(e => e.DominantEmotion).OrderByDescending(g => g.Count()).Take(2).Select(g => g.Key))}";
 
-                var insightPrompt = $@"Bạn là nhà phê bình văn học chuyên nghiệp người Việt. Hãy phân tích nhịp điệu và dòng cảm xúc của tác phẩm.
+                var sysPrompt = @"OUTPUT RULE (ABSOLUTE): Respond with ONE valid JSON object only. Start with '{', end with '}'. NO markdown, NO comments, NO text outside JSON.
 
-DỮ LIỆU ĐỊNH LƯỢNG BIỂU ĐỒ:
+Bạn là nhà phê bình văn học chuyên nghiệp người Việt. Hãy phân tích nhịp điệu (pacing) và dòng cảm xúc (emotion/sentiment) của tác phẩm văn học được cung cấp.
+Nhiệm vụ của bạn là đưa ra đúng 5 nhận xét, đánh giá sâu sắc và chi tiết (mỗi nhận xét là một đoạn văn ngắn gồm 2-4 câu).
+YÊU CẦU NỘI DUNG:
+1. Đánh giá khách quan, đa chiều (phải có cả nhận xét khen/điểm mạnh và nhận xét chê/điểm yếu/điểm cần cải thiện).
+2. Phải chỉ ra các bước ngoặt cốt truyện (plot twists), biến cố hoặc các chi tiết nghệ thuật cụ thể làm nổi bật nhịp điệu nhanh/chậm hoặc sự thay đổi cảm xúc của nhân vật trong tác phẩm.
+3. Tuyệt đối không lặp lại các số liệu thống kê thô có sẵn trong prompt một cách máy móc.
+
+JSON SCHEMA (trả đúng định dạng này, không bọc trong markdown, không có comment):
+{
+  ""insights"": [
+    ""Đoạn văn nhận xét thứ 1..."",
+    ""Đoạn văn nhận xét thứ 2..."",
+    ""Đoạn văn nhận xét thứ 3..."",
+    ""Đoạn văn nhận xét thứ 4..."",
+    ""Đoạn văn nhận xét thứ 5...""
+  ]
+}";
+
+                var insightPrompt = $@"DỮ LIỆU ĐỊNH LƯỢNG BIỂU ĐỒ:
 - {pacingStats}
 - {emotionStats}
 
 NỘI DUNG TÁC PHẨM (MẪU ĐẠI DIỆN):
-{string.Join("\n\n", sampleText)}
-
-Nhiệm vụ: Hãy đưa ra đúng 3 nhận xét sâu sắc (mỗi nhận xét là 1 dòng) về diễn biến nhịp độ và cảm sắc thái của tác phẩm.
-QUY TẮC BẮT BUỘC:
-1. Đảm bảo ngôn ngữ đầu ra hoàn toàn bằng TIẾNG VIỆT.
-2. TUYỆT ĐỐI KHÔNG lặp lại bất kỳ con số thống kê thô nào đã có trong prompt.
-3. Không thêm các nhãn meta-talk hoặc tiêu đề.
-4. Trả về đúng 3 dòng nhận xét tương ứng với 3 ý phân tích văn học.";
+{string.Join("\n\n", sampleText)}";
 
                 var insightMessages = new List<ChatMessage>
                 {
-                    ChatMessage.CreateSystemMessage("Bạn là chuyên gia phê bình văn học người Việt. Chỉ trả về 3 dòng nhận xét."),
+                    ChatMessage.CreateSystemMessage(sysPrompt),
                     ChatMessage.CreateUserMessage(insightPrompt)
                 };
 
                 var insightResponse = await CompleteChatWithGeminiAsync(
                     insightMessages,
-                    maxTokens: 1000,
+                    maxTokens: 3000,
                     temperature: 0.3f,
+                    jsonMode: true,
                     cancellationToken: cancellationToken);
 
                 tokensUsed = insightResponse.Usage?.TotalTokenCount ?? 0;
                 var rawInsights = insightResponse.Content.FirstOrDefault()?.Text ?? "";
+                var jsonText = ExtractJsonPayload(rawInsights);
 
-                insights = rawInsights.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                                      .Select(l => l.Trim().TrimStart('-', '*', ' ', '•'))
-                                      .Where(l => !string.IsNullOrWhiteSpace(l) && l.Length > 10)
-                                      .Take(3)
-                                      .ToList();
+                try
+                {
+                    var parsedInsights = JsonSerializer.Deserialize<PacingInsightsRaw>(jsonText, new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+                    if (parsedInsights?.Insights != null)
+                    {
+                        insights = parsedInsights.Insights
+                            .Where(l => !string.IsNullOrWhiteSpace(l) && l.Length > 10)
+                            .Take(5)
+                            .ToList();
+                    }
+                }
+                catch (Exception pEx)
+                {
+                    _logger.LogWarning(pEx, "Failed to parse pacing insights JSON. Fallback to line splitting.");
+                    insights = rawInsights.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                                          .Select(l => l.Trim().TrimStart('-', '*', ' ', '•'))
+                                          .Where(l => !string.IsNullOrWhiteSpace(l) && l.Length > 10)
+                                          .Take(5)
+                                          .ToList();
+                }
             }
             catch (Exception ex)
             {
@@ -388,8 +419,11 @@ QUY TẮC BẮT BUỘC:
 
             if (insights.Count == 0)
             {
-                insights.Add($"Nhịp độ trung bình tác phẩm đạt {pacingPoints.Average(p => p.Score):F1}/100, thể hiện sự phát triển cốt truyện ổn định.");
+                insights.Add($"Nhịp độ trung bình tác phẩm đạt {pacingPoints.Average(p => p.Score):F1}/100, thể hiện sự phát triển cốt truyện ổn định và nhịp điệu vừa phải.");
                 insights.Add($"Trạng thái cảm xúc chủ đạo nổi bật là {string.Join(", ", emotionPoints.GroupBy(e => e.DominantEmotion).OrderByDescending(g => g.Count()).Take(2).Select(g => g.Key))}.");
+                insights.Add("Tác phẩm có sự phối hợp tốt giữa các phân cảnh hành động nhanh và khoảng lặng nội tâm.");
+                insights.Add("Một số phân đoạn chuyển cảnh cần được làm mượt mà hơn để giữ vững dòng cảm xúc của độc giả.");
+                insights.Add("Các bước ngoặt tâm lý nhân vật phát triển tương đối hợp lý nhưng cần tăng thêm tính bất ngờ.");
             }
 
             var result = new EmotionPacingResult
@@ -466,6 +500,11 @@ QUY TẮC BẮT BUỘC:
             public string Text { get; init; } = string.Empty;
             public int WordCount { get; init; }
             public List<string> Tokens { get; init; } = new();
+        }
+
+        private sealed class PacingInsightsRaw
+        {
+            public List<string>? Insights { get; set; }
         }
     }
 }

@@ -424,46 +424,57 @@ namespace Service.Implementations
 
         private async Task<AiExtractionResponse?> ExtractProjectInfoWithAiAsync(string combinedContent, string projectTitle)
         {
-            var jsonSchema = """
-                {
-                  "summary": "Tóm tắt cốt truyện tổng thể trong 3-5 câu"
-                }
-                """;
+            var sysPrompt = "OUTPUT RULE (ABSOLUTE): Respond with ONE valid JSON object only. Start with '{', end with '}'. NO markdown, NO comments, NO text outside JSON.\n" +
+                            "Bạn là trợ lý phân tích bản thảo văn học.\n" +
+                            "Nhiệm vụ: đọc nội dung tác phẩm và trích xuất tóm tắt cốt truyện tổng thể.\n" +
+                            "JSON SCHEMA:\n" +
+                            "{\n  \"summary\": \"Tóm tắt cốt truyện tổng thể trong 3-5 câu\"\n}";
 
-            var prompt = "Bạn là trợ lý phân tích bản thảo văn học. Dưới đây là nội dung (hoặc một phần) của tác phẩm \"" + projectTitle + "\".\n\n" +
-                "Hãy đọc và trả về dữ liệu dưới dạng JSON theo đúng cấu trúc sau (KHÔNG có markdown, KHÔNG có giải thích thêm):\n\n" +
-                jsonSchema + "\n\n" +
-                "NỘI DUNG BẢN THẢO:\n" + combinedContent;
+            var userMsg = $"Tác phẩm: \"{projectTitle}\".\n\nNỘI DUNG BẢN THẢO:\n{combinedContent}";
 
             var messages = new List<ChatMessage>
             {
-                new UserChatMessage(prompt)
+                ChatMessage.CreateSystemMessage(sysPrompt),
+                ChatMessage.CreateUserMessage(userMsg)
             };
 
-            var completion = await _gemini.CompleteAsync(messages);
-            var rawJson = completion.Content[0].Text?.Trim() ?? string.Empty;
-
-            // Strip markdown code fences nếu AI vẫn bọc JSON trong ```json ... ```
-            if (rawJson.StartsWith("```"))
+            var options = new ChatCompletionOptions
             {
-                var firstNewline = rawJson.IndexOf('\n');
-                var lastFence = rawJson.LastIndexOf("```");
-                if (firstNewline > 0 && lastFence > firstNewline)
-                    rawJson = rawJson[(firstNewline + 1)..lastFence].Trim();
-            }
+                MaxOutputTokenCount = 2000,
+                Temperature = 0.2f,
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+            };
 
             try
             {
-                return JsonSerializer.Deserialize<AiExtractionResponse>(rawJson, new JsonSerializerOptions
+                var completion = await _gemini.CompleteAsync(messages, options);
+                var rawJson = completion.Content[0].Text?.Trim() ?? string.Empty;
+                var jsonText = ExtractJsonPayload(rawJson);
+
+                return JsonSerializer.Deserialize<AiExtractionResponse>(jsonText, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true,
                 });
             }
-            catch (JsonException ex)
+            catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to parse AI extraction JSON. Raw: {Raw}", rawJson[..Math.Min(500, rawJson.Length)]);
+                _logger.LogWarning(ex, "Failed to parse AI extraction JSON during import.");
                 return null;
             }
+        }
+
+        private static string ExtractJsonPayload(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return text;
+
+            var objStart = text.IndexOf('{');
+            var objEnd = text.LastIndexOf('}');
+            if (objStart >= 0 && objEnd > objStart)
+            {
+                return text[objStart..(objEnd + 1)];
+            }
+            return text;
         }
 
         // Từ khóa nhận diện trường tóm tắt/nội dung của tác giả (dùng cả dạng "Key:" và dạng heading)
