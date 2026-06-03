@@ -73,6 +73,16 @@ namespace Service.Helpers
             if (chatModels.Count == 0)
                 chatModels = ReadValues(DefaultChatModels);
 
+            // Chủ động lọc bỏ các model Gemma và OpenRouter trong code theo yêu cầu hệ thống
+            chatModels = chatModels
+                .Where(m => !m.Contains("gemma", StringComparison.OrdinalIgnoreCase) 
+                         && !m.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (chatModels.Count == 0)
+            {
+                chatModels = ReadValues(DefaultChatModels);
+            }
+
             // Nếu đang ở chế độ Analyze và AnalyzeModels được chỉ định, chỉ dùng Analyze key (không fallback sang Chat key)
             _preferAnalyzeOnly = primaryRole == GeminiPrimaryKeyRole.Analyze && !string.IsNullOrWhiteSpace(config["Gemini:AnalyzeModels"]);
             // Nếu preferAnalyzeOnly, ưu tiên CHỈ dùng model Analyze đầu tiên để tránh thử nhiều model khi Analyze toàn bộ dự án.

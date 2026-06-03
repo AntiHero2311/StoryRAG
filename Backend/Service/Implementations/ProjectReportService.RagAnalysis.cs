@@ -154,23 +154,19 @@ namespace Service.Implementations
                         1. LẶP KỸ THUẬT (OVERLAP): Giữa các đoạn trích kề nhau của cùng một chương (ví dụ cùng thuộc 'Chương 2') có thể có sự trùng lặp nhẹ về câu chữ ở ranh giới biên (đây là kỹ thuật overlap để không mất context khi cắt nhỏ văn bản). Bạn PHẢI bỏ qua sự lặp lại kỹ thuật này, tuyệt đối không được đánh giá là tác giả viết lặp ý hay lỗi văn phong.
                         2. LẶP CHƯƠNG THỰC TẾ (DUPLICATE): Nếu bạn phát hiện hai hoặc nhiều đoạn trích thuộc các chương KHÁC NHAU (ví dụ một đoạn thuộc 'Chương 2' và một đoạn thuộc 'Chương 3') có nội dung giống hệt nhau hoặc gần như giống hệt nhau, đây là lỗi trùng lặp nội dung thực tế do tác giả (ví dụ tác giả copy nhầm chương hoặc viết lặp chương). Bạn PHẢI chỉ ra lỗi nghiêm trọng này trong phần 'errors' để tác giả biết và xử lý.
 
-                        Trả về JSON thuần túy một object khớp với JSON schema sau:
-                        {
-                            "score": 0.0,
-                            "feedback": "3-5 câu nhận xét bằng tiếng Việt...",
-                            "evidence": "trích dẫn ngắn từ đoạn văn làm bằng chứng...",
-                            "errors": ["lỗi 1...", "lỗi 2...", "lỗi 3..."],
-                            "suggestions": ["gợi ý 1...", "gợi ý 2...", "gợi ý 3..."],
-                            "bibleComparison": "so sánh trung lập..." (hoặc null),
-                            "evidence_chunk_ids": [1, 2]
-                        }
+                        OUTPUT: Chỉ trả về JSON object duy nhất, bắt đầu bằng '{', kết thúc bằng '}', không có bất kỳ văn bản nào trước hoặc sau:
+                        {"score":0.0,"feedback":"3-5 câu nhận xét tiếng Việt","evidence":"trích dẫn ngắn từ văn bản","errors":["lỗi 1","lỗi 2","lỗi 3"],"suggestions":["gợi ý 1","gợi ý 2","gợi ý 3"],"bibleComparison":null,"evidence_chunk_ids":[1,2]}
 
-                        Quy tắc: evidence_chunk_ids phải là tập con các chunk_ord đã liệt kê; không bịa trích dẫn ngoài đoạn trích.
+                        Lưu ý: bibleComparison là string nếu có cẩm nang, hoặc null (không phải chú thích). evidence_chunk_ids phải là tập con các chunk_ord đã liệt kê; không bịa trích dẫn ngoài đoạn trích.
                         """;
 
                     var messages = new List<ChatMessage>
                     {
-                        ChatMessage.CreateSystemMessage("Bạn là giám khảo văn học nghiêm khắc. BẮT BUỘC chỉ trả ra MỘT JSON object hợp lệ theo đúng cấu trúc mẫu sau (không giải thích ngoài JSON, không markdown): {\"score\":0.0,\"feedback\":\"\",\"evidence\":\"\",\"errors\":[],\"suggestions\":[],\"bibleComparison\":null,\"evidence_chunk_ids\":[]}. Tuân thủ nghiêm ngặt quy tắc ZERO HALLUCINATION."),
+                        ChatMessage.CreateSystemMessage(
+                            "OUTPUT RULE (ABSOLUTE): Your ENTIRE response must be ONE valid JSON object. " +
+                            "Start with '{' and end with '}'. NO text before or after the JSON. NO markdown. NO explanation. " +
+                            "Required schema: {\"score\":0.0,\"feedback\":\"string\",\"evidence\":\"string\",\"errors\":[\"string\"],\"suggestions\":[\"string\"],\"bibleComparison\":null,\"evidence_chunk_ids\":[0]} " +
+                            "where bibleComparison is a string or null (not a comment). ZERO HALLUCINATION."),
                         ChatMessage.CreateUserMessage(judgeUserPrompt),
                     };
 
@@ -188,8 +184,13 @@ namespace Service.Implementations
                             var retryMessages = new List<ChatMessage>(messages)
                             {
                                 ChatMessage.CreateAssistantMessage(raw),
-                                ChatMessage.CreateUserMessage("Kết quả trả về trước đó bị lỗi cú pháp JSON: '" + parseErr + "'. Hãy trả về ĐÚNG cấu trúc JSON hợp lệ, KHÔNG có bất kỳ văn bản giải thích hay markdown nào ngoài JSON.")
+                                ChatMessage.CreateUserMessage(
+                                    "Phản hồi trước bị lỗi: '" + parseErr + "'. " +
+                                    "Hãy trả về DUY NHẤT một JSON object, BẮT ĐẦU BẰNG '{' và KẾT THÚC BẰNG '}', " +
+                                    "KHÔNG có bất kỳ văn bản, lời giải thích, hay markdown nào trước hoặc sau JSON. " +
+                                    "Schema bắt buộc: {\"score\":0.0,\"feedback\":\"\",\"evidence\":\"\",\"errors\":[],\"suggestions\":[],\"bibleComparison\":null,\"evidence_chunk_ids\":[]}")
                             };
+
 
                             var retryCompletion = await CompleteChatWithGeminiAsync(retryMessages, maxTokens: 3500, temperature: 0.1f, jsonMode: true, cancellationToken: cancellationToken);
                             System.Threading.Interlocked.Add(ref tokensUsed, retryCompletion.Usage?.TotalTokenCount ?? 0);
@@ -547,6 +548,23 @@ namespace Service.Implementations
             try
             {
                 var normalized = ExtractJsonPayload(raw.Trim());
+
+                // Guard: nếu AI không trả về JSON object hợp lệ (không bắt đầu bằng '{'),
+                // trả về false ngay để trigger retry thay vì để deserializer ném lỗi mập mờ.
+                if (string.IsNullOrWhiteSpace(normalized))
+                {
+                    error = "AI trả về chuỗi rỗng sau khi extract JSON.";
+                    return false;
+                }
+
+                var trimmed = normalized.TrimStart();
+                if (!trimmed.StartsWith('{'))
+                {
+                    var preview = trimmed.Length > 120 ? trimmed[..120] + "..." : trimmed;
+                    error = $"AI không trả về JSON object (bắt đầu bằng '{trimmed[0]}'). Preview: {preview}";
+                    return false;
+                }
+
                 var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 var parsed = JsonSerializer.Deserialize<RagCriterionJudgeDto>(normalized, opts);
                 if (parsed == null)

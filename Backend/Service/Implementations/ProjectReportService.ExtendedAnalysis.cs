@@ -56,7 +56,9 @@ namespace Service.Implementations
             // Đưa toàn bộ các đoạn bản thảo của tác phẩm vào phân tích để đảm bảo trích xuất trọn vẹn và đầy đủ nhất, tránh bỏ sót.
             var sampledChunks = decryptedChunks;
 
-            var sysPrompt = @"Bạn là trợ lý AI chuyên nghiệp phân tích cốt truyện, nhân vật và bối cảnh tác phẩm văn học.
+            var sysPrompt = @"OUTPUT RULE (ABSOLUTE): Respond with ONE valid JSON object only. Start with '{', end with '}'. NO markdown, NO comments, NO text outside JSON.
+
+Bạn là trợ lý AI chuyên nghiệp phân tích cốt truyện, nhân vật và bối cảnh tác phẩm văn học.
 Nhiệm vụ của bạn là trích xuất Cẩm nang truyện (Story Bible) cực kỳ chi tiết, phong phú và chuyên sâu từ nội dung bản thảo được cung cấp.
 
 MỖI THÀNH PHẦN TRÍCH XUẤT CẦN CÓ MỘT NỘI DUNG RẤT CHI TIẾT VÀ ĐẦY ĐỦ. Hãy tuân thủ nghiêm ngặt các yêu cầu về số lượng và chất lượng sau:
@@ -65,49 +67,49 @@ MỖI THÀNH PHẦN TRÍCH XUẤT CẦN CÓ MỘT NỘI DUNG RẤT CHI TIẾT V�
 - Đối với sự kiện dòng thời gian (timelineEvents): Trích xuất TỐI THIỂU từ 8 đến 15 sự kiện dòng thời gian cốt lõi theo đúng trình tự thời gian xảy ra. Diễn biến sự kiện (description) và ý nghĩa (importance) PHẢI là những đoạn văn chi tiết (tối thiểu từ 3 đến 5 câu dài trở lên), kể lại trọn vẹn diễn biến sự việc, nguyên nhân kết quả và tác động của nó tới mạch truyện.
 - Đối với chủ đề (themes): Trích xuất TỐI THIỂU từ 3 đến 5 chủ đề cốt lõi. Phần phân tích chủ đề (description) và dẫn chứng (evidence) PHẢI đạt độ dài tối thiểu từ 3 đến 5 câu dài trở lên, đi sâu mổ xẻ thông điệp triết học, tư tưởng cốt lõi của tác phẩm, và cách tác giả lồng ghép nó qua các chi tiết nghệ thuật cụ thể.
 
-Hãy trả về kết quả dưới dạng JSON duy nhất khớp HOÀN TOÀN với cấu trúc C# sau (không bọc trong thẻ markdown ```json):
+JSON SCHEMA (trả đúng định dạng này, các mảng và số nguyên KHÔNG được có bất kỳ comment nào):
 {
   ""worldSettings"": [
     {
-      ""title"": ""Tên bối cảnh/Địa danh/Luật lệ bối cảnh"",
-      ""category"": ""Thể loại bối cảnh (Ví dụ: Địa lý, Phép thuật, Xã hội, Lịch sử, v.v.)"",
-      ""description"": ""Đoạn văn mô tả chi tiết, sâu sắc bối cảnh (tối thiểu từ 3-5 câu dài trở lên)"",
-      ""importance"": ""Đoạn văn phân tích kỹ lưỡng tầm quan trọng đối với cốt truyện (tối thiểu từ 3-5 câu dài)"",
-      ""sourceChapters"": [] // Danh sách số chương trích dẫn bối cảnh này (nếu có, số nguyên)
+      ""title"": ""Tên bối cảnh"",
+      ""category"": ""Loại bối cảnh"",
+      ""description"": ""Đoạn văn mô tả chi tiết"",
+      ""importance"": ""Đoạn văn tầm quan trọng"",
+      ""sourceChapters"": [1, 2]
     }
   ],
   ""characters"": [
     {
-      ""name"": ""Tên nhân vật (Viết hoa)"",
-      ""role"": ""Vai trò (Ví dụ: Nhân vật chính, Nhân vật phản diện, Đồng hành, Phụ, v.v.)"",
-      ""description"": ""Đoạn văn mô tả rất chi tiết ngoại hình, tâm lý, tính cách, động cơ chính (tối thiểu từ 3-5 câu dài)"",
-      ""background"": ""Đoạn văn phân tích sâu sắc tiểu sử/Thân thế/Lịch sử phát triển của nhân vật (tối thiểu từ 3-5 câu dài)"",
-      ""traits"": [""Tính cách 1"", ""Tính cách 2""], // Mảng chuỗi các nét tính cách/đặc điểm nổi bật
+      ""name"": ""Tên nhân vật"",
+      ""role"": ""Vai trò"",
+      ""description"": ""Đoạn văn mô tả"",
+      ""background"": ""Đoạn văn tiểu sử"",
+      ""traits"": [""Tính cách 1"", ""Tính cách 2""],
       ""relationships"": [
         {
           ""targetName"": ""Tên nhân vật mục tiêu"",
-          ""type"": ""Kiểu quan hệ (Ví dụ: Bạn bè, Kẻ thù, Gia đình, Tình yêu, Đồng nghiệp, v.v.)"",
-          ""description"": ""Đoạn văn chi tiết phân tích mối quan hệ và sự ảnh hưởng lẫn nhau giữa hai người (tối thiểu từ 3-5 câu dài)""
+          ""type"": ""Kiểu quan hệ"",
+          ""description"": ""Đoạn văn chi tiết mối quan hệ""
         }
       ],
-      ""firstAppearance"": 1 // Số chương xuất hiện lần đầu (số nguyên)
+      ""firstAppearance"": 1
     }
   ],
   ""timelineEvents"": [
     {
       ""title"": ""Tiêu đề sự kiện nổi bật"",
-      ""category"": ""Loại sự kiện (Ví dụ: Khởi đầu, Mâu thuẫn, Cao trào, Bước ngoặt, Kết thúc)"",
-      ""timeLabel"": ""Thời điểm xảy ra (Ví dụ: Chương 1, Ngày hôm sau, Năm 2026, v.v.)"",
-      ""description"": ""Đoạn văn mô tả chi tiết diễn biến sự kiện đầy đủ nguyên nhân hệ quả (tối thiểu từ 3-5 câu dài)"",
-      ""importance"": ""Đoạn văn phân tích ý nghĩa sâu sắc của sự kiện này đối với mạch truyện (tối thiểu từ 3-5 câu dài)"",
-      ""sortOrder"": 0 // Thứ tự sắp xếp tăng dần theo thời gian (0, 1, 2, ...)
+      ""category"": ""Loại sự kiện"",
+      ""timeLabel"": ""Thời điểm xảy ra"",
+      ""description"": ""Đoạn văn mô tả chi tiết diễn biến sự kiện"",
+      ""importance"": ""Đoạn văn phân tích ý nghĩa sâu sắc"",
+      ""sortOrder"": 0
     }
   ],
   ""themes"": [
     {
-      ""title"": ""Tên chủ đề chính/thông điệp (Ví dụ: Sự hy sinh, Tình bạn, Lòng tham, Sự chuộc tội, v.v.)"",
-      ""description"": ""Đoạn văn phân tích sâu sắc cách chủ đề này được thể hiện trong tác phẩm (tối thiểu từ 3-5 câu dài)"",
-      ""evidence"": ""Đoạn văn đưa ra dẫn chứng, chi tiết cụ thể từ truyện thể hiện chủ đề này (tối thiểu từ 3-5 câu dài)""
+      ""title"": ""Tên chủ đề chính/thông điệp"",
+      ""description"": ""Đoạn văn phân tích sâu sắc"",
+      ""evidence"": ""Đoạn văn đưa ra dẫn chứng""
     }
   ],
   ""analysisNote"": ""Ghi chú tóm tắt chung về cẩm nang truyện (1-2 câu).""
@@ -121,7 +123,7 @@ QUY TẮC QUAN TRỌNG:
             var messages = new List<ChatMessage>
             {
                 ChatMessage.CreateSystemMessage(sysPrompt),
-                ChatMessage.CreateUserMessage($"Tên tác phẩm: {projectTitle}\n\nToàn bộ nội dung của tác phẩm:\n\n{string.Join("\n\n---\n\n", sampledChunks)}")
+                ChatMessage.CreateUserMessage($"Tên tác phẩm: {projectTitle}\n\nToàn bộ nội dung của tác phẩm:\n\n{string.Join('\n', sampledChunks)}")
             };
 
             int tokensUsed = 0;
@@ -133,11 +135,38 @@ QUY TẮC QUAN TRỌNG:
                     messages,
                     maxTokens: 8000,
                     temperature: 0.2f,
+                    jsonMode: true,
                     cancellationToken: cancellationToken);
 
                 tokensUsed = response.Usage?.TotalTokenCount ?? 0;
                 var rawText = NormalizeAiText(response.Content.FirstOrDefault()?.Text ?? string.Empty);
                 var jsonText = ExtractJsonPayload(rawText);
+
+                // Guard: phải bắt đầu bằng '{'
+                if (string.IsNullOrWhiteSpace(jsonText) || !jsonText.TrimStart().StartsWith('{'))
+                {
+                    _logger.LogWarning("Story Bible: AI không trả về JSON object hợp lệ, tiến hành retry...");
+
+                    var retryMessages = new List<ChatMessage>(messages)
+                    {
+                        ChatMessage.CreateAssistantMessage(rawText),
+                        ChatMessage.CreateUserMessage(
+                            "Phản hồi trước không phải JSON object hợp lệ. " +
+                            "Hãy trả về DUY NHẤT một JSON object bắt đầu bằng '{' và kết thúc bằng '}', " +
+                            "không có bất kỳ văn bản nào trước hoặc sau, không có markdown.")
+                    };
+
+                    var retryResponse = await CompleteChatWithGeminiAsync(
+                        retryMessages,
+                        maxTokens: 8000,
+                        temperature: 0.1f,
+                        jsonMode: true,
+                        cancellationToken: cancellationToken);
+
+                    tokensUsed += retryResponse.Usage?.TotalTokenCount ?? 0;
+                    rawText = NormalizeAiText(retryResponse.Content.FirstOrDefault()?.Text ?? string.Empty);
+                    jsonText = ExtractJsonPayload(rawText);
+                }
 
                 var options = new JsonSerializerOptions
                 {
