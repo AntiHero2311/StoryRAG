@@ -71,6 +71,16 @@ namespace Service.Implementations
             await VerifyOwnershipAsync(projectId, userId, cancellationToken);
             var subscription = await EnsureCanAnalyzeAsync(userId, cancellationToken);
             await EnsureProjectHasEmbeddedContentAsync(projectId, cancellationToken);
+
+            var totalWords = await _context.Chapters
+                .Where(c => c.ProjectId == projectId && !c.IsDeleted)
+                .SumAsync(c => c.WordCount, cancellationToken);
+
+            if (totalWords < 1000)
+            {
+                throw new InvalidOperationException($"Tác phẩm cần đạt tối thiểu 1.000 chữ để có thể phân tích (hiện tại có {totalWords:N0} chữ). Hãy sáng tác thêm để AI có đủ dữ liệu đánh giá nhé!");
+            }
+
             var priority = AnalysisJobPriorityHelper.CalculatePriority(subscription);
 
             var currentSnapshot = await BuildProjectSnapshotAsync(projectId, cancellationToken);

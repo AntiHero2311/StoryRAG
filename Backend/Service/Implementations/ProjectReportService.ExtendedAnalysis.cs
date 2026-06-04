@@ -399,24 +399,97 @@ NỘI DUNG TÁC PHẨM (MẪU ĐẠI DIỆN):
 
                 try
                 {
-                    var parsedInsights = JsonSerializer.Deserialize<PacingInsightsRaw>(jsonText, new JsonSerializerOptions
+                    using (var doc = JsonDocument.Parse(jsonText))
                     {
-                        PropertyNameCaseInsensitive = true
-                    });
-                    if (parsedInsights?.Insights != null)
-                    {
-                        insights = parsedInsights.Insights
-                            .Where(l => !string.IsNullOrWhiteSpace(l) && l.Length > 10)
-                            .Take(5)
-                            .ToList();
+                        var list = new List<string>();
+                        JsonElement arrayElement = default;
+                        bool foundArray = false;
+
+                        if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                        {
+                            foreach (var prop in doc.RootElement.EnumerateObject())
+                            {
+                                if (prop.Name.Equals("insights", StringComparison.OrdinalIgnoreCase) && prop.Value.ValueKind == JsonValueKind.Array)
+                                {
+                                    arrayElement = prop.Value;
+                                    foundArray = true;
+                                    break;
+                                }
+                            }
+
+                            if (!foundArray)
+                            {
+                                foreach (var prop in doc.RootElement.EnumerateObject())
+                                {
+                                    if (prop.Value.ValueKind == JsonValueKind.Array)
+                                    {
+                                        arrayElement = prop.Value;
+                                        foundArray = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        else if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                        {
+                            arrayElement = doc.RootElement;
+                            foundArray = true;
+                        }
+
+                        if (foundArray)
+                        {
+                            foreach (var item in arrayElement.EnumerateArray())
+                            {
+                                if (item.ValueKind == JsonValueKind.String)
+                                {
+                                    var val = item.GetString();
+                                    if (!string.IsNullOrWhiteSpace(val))
+                                    {
+                                        list.Add(val);
+                                    }
+                                }
+                            }
+                        }
+
+                        if (list.Count > 0)
+                        {
+                            insights = list.Where(l => !string.IsNullOrWhiteSpace(l) && l.Length > 10).Take(5).ToList();
+                        }
                     }
                 }
                 catch (Exception pEx)
                 {
-                    _logger.LogWarning(pEx, "Failed to parse pacing insights JSON. Fallback to line splitting.");
+                    _logger.LogWarning(pEx, "Failed to parse pacing insights JSON. Fallback to robust text extraction.");
+                }
+
+                if (insights.Count == 0)
+                {
+                    // Fallback 1: Extract tag patterns like [Tag] Content
+                    var matches = Regex.Matches(rawInsights, @"\[([^\]]+)\]\s*([^\n\[]+)");
+                    foreach (Match match in matches)
+                    {
+                        var tag = match.Groups[1].Value.Trim();
+                        var content = match.Groups[2].Value.Trim();
+                        if (!string.IsNullOrWhiteSpace(content) && content.Length > 10)
+                        {
+                            insights.Add($"[{tag}] {content}");
+                        }
+                    }
+                    insights = insights.Distinct().Take(5).ToList();
+                }
+
+                if (insights.Count == 0)
+                {
+                    // Fallback 2: Line splitting with heavy syntax cleaning
                     insights = rawInsights.Split('\n', StringSplitOptions.RemoveEmptyEntries)
                                           .Select(l => l.Trim().TrimStart('-', '*', ' ', '•'))
-                                          .Where(l => !string.IsNullOrWhiteSpace(l) && l.Length > 10)
+                                          .Select(l => l.Trim('"', '\'', ',', '[', ']', '{', '}'))
+                                          .Select(l => l.Trim())
+                                          .Where(l => !string.IsNullOrWhiteSpace(l) 
+                                                      && l.Length > 10
+                                                      && !l.StartsWith("insights", StringComparison.OrdinalIgnoreCase)
+                                                      && !l.Contains("insights\":", StringComparison.OrdinalIgnoreCase)
+                                                      && !l.Contains("insights\" :", StringComparison.OrdinalIgnoreCase))
                                           .Take(5)
                                           .ToList();
                 }

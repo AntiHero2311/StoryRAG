@@ -64,9 +64,8 @@ function getFeatures(plan: SubscriptionPlan) {
             ? `${(plan.maxTokenLimit / 1_000_000).toFixed(1)}M token AI/tháng`
             : `${(plan.maxTokenLimit / 1000).toFixed(0)}K token AI/tháng`,
         'Lịch sử phân tích',
-        ...(plan.planName !== 'Free' ? ['Xuất báo cáo PDF'] : []),
-        ...(plan.planName === 'Pro' || plan.planName === 'Enterprise' ? ['Hỗ trợ ưu tiên'] : []),
-        ...(plan.planName === 'Enterprise' ? ['API access', 'SLA 99.9%'] : []),
+        ...(plan.price > 0 ? ['Xuất báo cáo PDF'] : []),
+        ...(plan.price >= 200000 ? ['Hỗ trợ ưu tiên'] : []),
     ];
 }
 

@@ -525,29 +525,23 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
                 .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
 
             // 2. Filter out obvious JSON structure lines
-            const lowerInsight = insight.toLowerCase().trim();
+            const cleanCheck = insight.replace(/^["'\s,\[\]\{\}:“”«»\\/]+|["'\s,\[\]\{\}:“”«»\\/]+$/g, '').toLowerCase().trim();
             const hasNoLettersOrDigits = !/[a-zA-Z0-9\u00C0-\u1EF9]/.test(insight);
             const isJsonBoilerplate = 
                 hasNoLettersOrDigits ||
-                lowerInsight === '{' || 
-                lowerInsight === '}' || 
-                lowerInsight === '[' || 
-                lowerInsight === ']' || 
-                lowerInsight === '],' || 
-                lowerInsight === '},' ||
-                lowerInsight === ',' ||
-                lowerInsight.includes('"insights"') ||
-                lowerInsight.includes('insights:') ||
-                lowerInsight.includes('insights" :') ||
-                /^\s*["']?insights["']?\s*:/i.test(insight) ||
-                /^\s*["']?insights["']?\s*:\s*\[/i.test(insight) ||
-                lowerInsight === '"insights"' ||
-                lowerInsight === 'insights';
+                cleanCheck === 'insights' ||
+                cleanCheck === 'insight' ||
+                cleanCheck === '{' || 
+                cleanCheck === '}' || 
+                cleanCheck === '[' || 
+                cleanCheck === ']' || 
+                cleanCheck === ',' ||
+                cleanCheck === '';
 
             if (isJsonBoilerplate || !insight) return;
 
-            // 3. Strip leading/trailing double/single quotes, commas, brackets, braces, and formatting spaces
-            insight = insight.replace(/^["'\s,\[\]\{\}“”«»]+|["'\s,\[\]\{\}“”«»]+$/g, '').trim();
+            // 3. Strip leading/trailing double/single quotes, commas, braces, and formatting spaces (leave brackets to keep tags intact)
+            insight = insight.replace(/^["'\s,\{\}“”«»]+|["'\s,\{\}“”«»]+$/g, '').trim();
             if (!insight || insight.length < 5) return;
 
             if (insight.includes('PHÂN TÍCH CHUYÊN SÂU')) return;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
     Plus, Pencil, X, Check, Loader2, Power, PowerOff,
-    BarChart2, MessageSquare, DollarSign, Trash2
+    BarChart2, MessageSquare, DollarSign, Trash2, AlertCircle
 } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import {
@@ -70,6 +70,14 @@ function PlanModal({ plan, onClose, onSaved }: {
                             <X className="w-4 h-4 shrink-0" /> {error}
                         </div>
                     )}
+
+                    <div className="flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs leading-relaxed">
+                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <div>
+                            <span className="font-bold text-[11px] uppercase tracking-wider block mb-0.5">Lưu ý phân khúc giá:</span>
+                            Gói có phí (&gt; 0đ) được hỗ trợ xuất báo cáo PDF. Gói từ 200,000đ/tháng trở lên sẽ kích hoạt "Hỗ trợ ưu tiên" và hàng đợi phân tích AI có độ ưu tiên cao.
+                        </div>
+                    </div>
 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="col-span-2">

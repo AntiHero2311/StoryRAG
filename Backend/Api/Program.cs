@@ -190,12 +190,12 @@ builder.Services.AddRateLimiter(options =>
         opt.QueueLimit = 0;
     });
 
-    // Analyze: tối đa 3 requests / 10 phút / user (operation nặng)
+    // Analyze: tối đa 60 requests / 1 phút / user (đã tăng theo yêu cầu để tránh network error)
     options.AddSlidingWindowLimiter("AiAnalyze", opt =>
     {
-        opt.PermitLimit = 3;
-        opt.Window = TimeSpan.FromMinutes(10);
-        opt.SegmentsPerWindow = 5;
+        opt.PermitLimit = 60;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.SegmentsPerWindow = 4;
         opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         opt.QueueLimit = 0;
     });

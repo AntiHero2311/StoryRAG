@@ -154,6 +154,11 @@ namespace Service.Implementations
             var chapterCount = chapters.Count;
             var totalWords = chapters.Sum(c => c.WordCount);
 
+            if (totalWords < 1000)
+            {
+                throw new InvalidOperationException($"Tác phẩm cần đạt tối thiểu 1.000 chữ để có thể phân tích (hiện tại có {totalWords:N0} chữ). Hãy sáng tác thêm để AI có đủ dữ liệu đánh giá nhé!");
+            }
+
             var snapshot = await EnsureProjectAnalysisSnapshotAsync(
                 projectId,
                 userId,

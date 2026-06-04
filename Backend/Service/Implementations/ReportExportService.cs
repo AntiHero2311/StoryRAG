@@ -297,14 +297,39 @@ namespace Service.Implementations
                                     .SemiBold()
                                     .FontColor(Colors.Teal.Darken2);
 
-                                foreach (var insight in report.EmotionPacing.Insights)
+                                foreach (var rawInsight in report.EmotionPacing.Insights)
                                 {
-                                    if (insight.Contains("PHÂN TÍCH CHUYÊN SÂU")) continue;
+                                    if (string.IsNullOrWhiteSpace(rawInsight)) continue;
+                                    if (rawInsight.Contains("PHÂN TÍCH CHUYÊN SÂU")) continue;
+
+                                    var cleaned = rawInsight.Trim();
+
+                                    // Replace curly quotes with straight quotes for consistent trimming
+                                    cleaned = cleaned
+                                        .Replace('“', '"')
+                                        .Replace('”', '"')
+                                        .Replace('‘', '\'')
+                                        .Replace('’', '\'');
+
+                                    // Trim outer quotes, commas, colons, braces, backslashes, but leave tag brackets [ ]
+                                    char[] charsToTrim = { ' ', '"', '\'', ',', '{', '}', ':', '\\', '/' };
+                                    cleaned = cleaned.Trim(charsToTrim).Trim();
+
+                                    // Skip JSON structural markers and boilerplate lines
+                                    if (string.IsNullOrWhiteSpace(cleaned) ||
+                                        cleaned.Equals("[") ||
+                                        cleaned.Equals("]") ||
+                                        cleaned.Equals("insights", StringComparison.OrdinalIgnoreCase) ||
+                                        cleaned.Contains("insights\":", StringComparison.OrdinalIgnoreCase) ||
+                                        cleaned.Contains("insights\" :", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        continue;
+                                    }
 
                                     column.Item().PaddingLeft(8).Row(r =>
                                     {
                                         r.ConstantItem(12).Text("•");
-                                        r.RelativeItem().Text(insight);
+                                        r.RelativeItem().Text(cleaned);
                                     });
                                 }
                             }
