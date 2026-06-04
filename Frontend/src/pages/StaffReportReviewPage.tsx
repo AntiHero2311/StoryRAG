@@ -26,6 +26,7 @@ import RadarChart from '../components/analysis/RadarChart';
 import GroupCard from '../components/analysis/GroupCard';
 import NarrativeChartsPanel from '../components/analysis/NarrativeChartsPanel';
 import EvidenceChunksPanel from '../components/analysis/EvidenceChunksPanel';
+import StoryBiblePanel from '../components/analysis/StoryBiblePanel';
 
 type EditableCriterion = {
   key: string;
@@ -183,7 +184,7 @@ export default function StaffReportReviewPage() {
   const [readerTheme, setReaderTheme] = useState<'dark' | 'cream' | 'dim'>('dark');
 
   // Tab & Collapsibles States
-  const [activeTab, setActiveTab] = useState<'rubric' | 'narrative'>('rubric');
+  const [activeTab, setActiveTab] = useState<'rubric' | 'narrative' | 'storyBible'>('rubric');
   const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({ 0: true });
 
   const warnings = useMemo(() => {
@@ -492,6 +493,17 @@ export default function StaffReportReviewPage() {
                       Chi tiết Rubric
                     </button>
                     <button
+                      onClick={() => setActiveTab('storyBible')}
+                      className={`h-11 px-6 text-sm font-semibold flex items-center gap-2 border-b-2 transition-all relative ${
+                        activeTab === 'storyBible'
+                          ? 'border-amber-500 text-amber-400 font-bold'
+                          : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      Cẩm nang truyện
+                    </button>
+                    <button
                       onClick={() => setActiveTab('narrative')}
                       className={`h-11 px-6 text-sm font-semibold flex items-center gap-2 border-b-2 transition-all relative ${
                         activeTab === 'narrative'
@@ -505,8 +517,8 @@ export default function StaffReportReviewPage() {
                   </div>
 
                   {/* Tab Contents */}
-                  {activeTab === 'rubric' ? (
-                    <div className="space-y-3">
+                  {activeTab === 'rubric' && (
+                    <div className="space-y-3 animate-fade-in">
                       {mappedGroups.map((g, i) => (
                         <GroupCard
                           key={g.name}
@@ -522,8 +534,10 @@ export default function StaffReportReviewPage() {
                         />
                       ))}
                     </div>
-                  ) : (
-                    <div className="rounded-3xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-6">
+                  )}
+
+                  {activeTab === 'narrative' && (
+                    <div className="rounded-3xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-6 animate-fade-in">
                       <div className="flex items-center justify-between mb-4">
                         <div>
                            <h3 className="text-base font-black text-[var(--text-bright)]">Phân tích chuyên biệt (Narrative Analytics)</h3>
@@ -531,6 +545,22 @@ export default function StaffReportReviewPage() {
                         </div>
                       </div>
                       <NarrativeChartsPanel data={narrativeCharts} loading={loadingNarrativeCharts} />
+                    </div>
+                  )}
+
+                  {activeTab === 'storyBible' && (
+                    <div className="rounded-3xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-6 animate-fade-in">
+                      {detail.contentAnalysis ? (
+                        <StoryBiblePanel data={detail.contentAnalysis} />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-16 text-center">
+                          <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4 bg-zinc-500/10 text-zinc-400">
+                            <BookOpen className="w-6 h-6" />
+                          </div>
+                          <p className="text-[var(--text-primary)] font-semibold text-sm">Cẩm nang truyện</p>
+                          <p className="text-[var(--text-secondary)] text-xs mt-2">Báo cáo này không có dữ liệu cẩm nang truyện (phiên bản cũ).</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

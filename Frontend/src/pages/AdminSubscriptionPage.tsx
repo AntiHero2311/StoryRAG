@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import {
     Plus, Pencil, X, Check, Loader2, Power, PowerOff,
-    BarChart2, MessageSquare, DollarSign
+    BarChart2, MessageSquare, DollarSign, Trash2
 } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import {
     subscriptionService, SubscriptionPlan, CreatePlanRequest, UpdatePlanRequest
 } from '../services/subscriptionService';
 import { UserInfo } from '../utils/jwtHelper';
+import { DeleteConfirmationModal } from '../components/ui';
+import { useToast } from '../components/Toast';
 
 // ── Input helper ──────────────────────────────────────────────────────────────
 const inputCls = "w-full bg-[var(--input-bg)] border border-[var(--border-color)] focus:border-[#f5a623]/50 focus:ring-2 focus:ring-[#f5a623]/20 rounded-xl px-4 py-2.5 text-[var(--text-primary)] text-sm outline-none transition-all";
@@ -120,11 +122,14 @@ function PlanModal({ plan, onClose, onSaved }: {
 
 // ── Content ───────────────────────────────────────────────────────────────────
 function AdminSubscriptionContent() {
+    const toast = useToast();
     const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [togglingPlanId, setTogglingPlanId] = useState<number | null>(null);
     const [modal, setModal] = useState<'create' | SubscriptionPlan | null>(null);
+    const [deletingPlan, setDeletingPlan] = useState<SubscriptionPlan | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const load = async () => {
         setLoading(true);
@@ -157,6 +162,28 @@ function AdminSubscriptionContent() {
             setError(msg);
         } finally {
             setTogglingPlanId(null);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!deletingPlan) return;
+        setDeleting(true);
+        setError('');
+        try {
+            const result = await subscriptionService.deletePlan(deletingPlan.id);
+            const msg = (result as { message?: string; Message?: string })?.message 
+                || (result as { message?: string; Message?: string })?.Message 
+                || 'Đã thực hiện yêu cầu xoá/ngừng hoạt động gói dịch vụ.';
+            toast.success(msg);
+            setDeletingPlan(null);
+            await load();
+        } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { message?: string; Message?: string } } })?.response?.data?.message
+                ?? (err as { response?: { data?: { message?: string; Message?: string } } })?.response?.data?.Message
+                ?? 'Không thể xoá gói dịch vụ.';
+            toast.error(msg);
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -222,6 +249,7 @@ function AdminSubscriptionContent() {
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
                                         <button onClick={() => setModal(plan)}
+                                            title="Chỉnh sửa plan"
                                             className="w-8 h-8 flex items-center justify-center rounded-xl bg-[var(--text-primary)]/5 hover:bg-[var(--text-primary)]/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all">
                                             <Pencil className="w-3.5 h-3.5" />
                                         </button>
@@ -234,6 +262,11 @@ function AdminSubscriptionContent() {
                                                 : plan.isActive
                                                     ? <PowerOff className="w-3.5 h-3.5" />
                                                     : <Power className="w-3.5 h-3.5" />}
+                                        </button>
+                                        <button onClick={() => setDeletingPlan(plan)}
+                                            title="Xoá gói dịch vụ"
+                                            className="w-8 h-8 flex items-center justify-center rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 transition-all">
+                                            <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
                                 </div>
@@ -248,6 +281,23 @@ function AdminSubscriptionContent() {
             )}
             {modal && modal !== 'create' && (
                 <PlanModal plan={modal as SubscriptionPlan} onClose={() => setModal(null)} onSaved={() => { setModal(null); void load(); }} />
+            )}
+            {deletingPlan && (
+                <DeleteConfirmationModal
+                    isOpen={!!deletingPlan}
+                    onClose={() => setDeletingPlan(null)}
+                    onConfirm={handleDelete}
+                    title="Xác nhận xoá gói"
+                    itemName={deletingPlan.planName}
+                    itemType="gói dịch vụ"
+                    confirmText="Xoá"
+                    loading={deleting}
+                    warnings={[
+                        "Nếu gói đã có người đăng ký hoặc thanh toán, gói sẽ chuyển sang trạng thái Ngừng hoạt động (Inactive) để bảo toàn lịch sử.",
+                        "Nếu gói chưa từng được sử dụng, gói sẽ bị xoá vĩnh viễn khỏi hệ thống."
+                    ]}
+                    showWarnings={true}
+                />
             )}
         </div>
     );

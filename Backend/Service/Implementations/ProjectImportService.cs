@@ -222,59 +222,14 @@ namespace Service.Implementations
                 }
             });
 
-            // ── Bước 8: Chạy AI trích xuất thông tin bằng AI (Tóm tắt, nhân vật, bối cảnh, timeline) ──
+            // ── Bước 8: Chạy AI trích xuất thông tin bằng AI (Bỏ qua theo yêu cầu: không chạy AI khi import) ──
             int charactersExtracted = 0;
             int settingsExtracted = 0;
             bool aiExtractionFailed = false;
             string? aiExtractionError = null;
 
-            var samples = new List<string>();
-            int scanCount = 0;
-            foreach (var part in chapterParts)
-            {
-                if (scanCount >= MaxChaptersForAiScan) break;
-                var chapterTitle = part.Title ?? $"Chương {scanCount + 1}";
-                var sample = part.Content.Length > MaxCharsPerChapterSummary
-                    ? part.Content[..MaxCharsPerChapterSummary]
-                    : part.Content;
-                samples.Add($"--- {chapterTitle} ---\n{sample}");
-                scanCount++;
-            }
+            _logger.LogInformation("Import {ProjectId}: Bỏ qua chạy AI trích xuất thông tin theo yêu cầu (chỉ lấy nội dung truyện, chunk và nhúng).", project.Id);
 
-            if (samples.Count > 0)
-            {
-                var combinedContent = string.Join("\n\n", samples);
-                _logger.LogInformation("Import {ProjectId}: Bắt đầu chạy AI trích xuất thông tin.", project.Id);
-                try
-                {
-                    var aiExtracted = await ExtractProjectInfoWithAiAsync(combinedContent, projectTitle);
-                    if (aiExtracted != null)
-                    {
-                        var counts = await ApplyAiExtractionAsync(project, aiExtracted, rawDek, isReExtract: false);
-                        if (!string.IsNullOrWhiteSpace(counts.Summary))
-                        {
-                            extractedSummary = counts.Summary;
-                        }
-                        charactersExtracted = counts.Characters;
-                        settingsExtracted = counts.Settings;
-                        timelineEventsExtracted += counts.Timeline;
-                        _logger.LogInformation("Import {ProjectId}: AI trích xuất thành công tóm tắt, {CharCount} nhân vật, {SettingCount} bối cảnh, {TimelineCount} sự kiện.",
-                            project.Id, charactersExtracted, settingsExtracted, counts.Timeline);
-                    }
-                    else
-                    {
-                        aiExtractionFailed = true;
-                        aiExtractionError = "AI không trả về kết quả hợp lệ.";
-                        _logger.LogWarning("Import {ProjectId}: AI trích xuất trả về null hoặc không hợp lệ.", project.Id);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    aiExtractionFailed = true;
-                    aiExtractionError = ex.Message;
-                    _logger.LogError(ex, "Import {ProjectId}: Chạy AI trích xuất thất bại.", project.Id);
-                }
-            }
 
             var result = new ProjectImportResult
             {

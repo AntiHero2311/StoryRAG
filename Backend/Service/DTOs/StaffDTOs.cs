@@ -268,6 +268,9 @@ namespace Service.DTOs
 
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
+
+        /// <summary>Nội dung phân tích Story Bible do AI trích xuất</summary>
+        public ContentAnalysisResult? ContentAnalysis { get; set; }
     }
 
     public class StaffStoryChapterItem

@@ -1376,15 +1376,6 @@ export default function WorkspacePage() {
                                 </div>
                                 <div className="flex-1" />
                                 <span className="text-[var(--text-secondary)] text-xs mr-2">{wordCount} từ</span>
-                                {activeChapter && (
-                                    <button
-                                        onClick={() => setExportModal({ open: true, target: 'chapter' })}
-                                        className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5"
-                                        title="Xuất chương"
-                                    >
-                                        <Download className="w-4 h-4" />
-                                    </button>
-                                )}
                                 {projectId && (
                                     <>
                                         <span className="hidden xl:inline text-[10px] text-[var(--text-secondary)]">
@@ -1406,6 +1397,15 @@ export default function WorkspacePage() {
                                             onChange={handleImportFile}
                                         />
                                     </>
+                                )}
+                                {activeChapter && (
+                                    <button
+                                        onClick={() => setExportModal({ open: true, target: 'chapter' })}
+                                        className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5"
+                                        title="Xuất chương"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                    </button>
                                 )}
                                 <button
                                     onClick={() => {

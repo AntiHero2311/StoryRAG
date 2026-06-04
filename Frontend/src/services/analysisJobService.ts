@@ -1,4 +1,5 @@
 import { api } from './api';
+import type { ContentAnalysisResult } from './reportService';
 
 export type StaffAnalysisJobItem = {
   id: string;
@@ -45,6 +46,7 @@ export type StaffReportDetail = {
   staffEditedCriteriaJson: string | null;
   createdAt: string;
   updatedAt: string | null;
+  contentAnalysis?: ContentAnalysisResult;
 };
 
 export type StaffStoryChapterItem = {

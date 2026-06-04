@@ -458,26 +458,11 @@ function getSegmentExplanation(pacing: number, valence: number, dominant: string
 }
 
 export default function NarrativeChartsPanel({ data, loading }: Props) {
-    const [viewMode, setViewMode] = useState<'overview' | 'detail'>('overview');
-    const [selectedChapterState, setSelectedChapterState] = useState<number | null>(null);
-    const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
-
     // Compute list of unique chapters from pacing data
     const uniqueChapters = useMemo(() => {
         if (!data || !data.pacing) return [];
         return Array.from(new Set(data.pacing.map(p => p.chapterNumber))).sort((a, b) => a - b);
     }, [data]);
-
-    // Active selected chapter
-    const activeChapter = useMemo(() => {
-        if (selectedChapterState !== null) return selectedChapterState;
-        return uniqueChapters.length > 0 ? uniqueChapters[0] : 1;
-    }, [selectedChapterState, uniqueChapters]);
-
-    // Automatically reset selected segment preview when switching chapters or view mode
-    useEffect(() => {
-        setSelectedIdx(null);
-    }, [viewMode, activeChapter]);
 
     if (loading) {
         return (
@@ -505,75 +490,19 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
 
     const mapValenceToScore = (valence: number) => ((valence + 1) / 2) * 100;
 
-    const detailPacingPoints = useMemo(() => {
-        return data.pacing
-            .filter(p => p.chapterNumber === activeChapter)
-            .sort((a, b) => a.segmentIndex - b.segmentIndex);
-    }, [data.pacing, activeChapter]);
+    // ── COMPUTE OVERVIEW DATA (Grouped and Averaged by Chapter) ──
+    const overviewPacingValues = uniqueChapters.map(ch => {
+        const pts = data.pacing.filter(p => p.chapterNumber === ch);
+        return pts.reduce((sum, p) => sum + p.score, 0) / Math.max(1, pts.length);
+    });
 
-    const detailEmotionPoints = useMemo(() => {
-        return data.emotions
-            .filter(e => e.chapterNumber === activeChapter)
-            .sort((a, b) => a.segmentIndex - b.segmentIndex);
-    }, [data.emotions, activeChapter]);
+    const overviewEmotionValues = uniqueChapters.map(ch => {
+        const pts = data.emotions.filter(e => e.chapterNumber === ch);
+        const scores = pts.map(e => mapValenceToScore(e.valence));
+        return scores.reduce((sum, s) => sum + s, 0) / Math.max(1, scores.length);
+    });
 
-    // ── 1. COMPUTE OVERVIEW DATA (Grouped and Averaged by Chapter) ──
-    const overviewPacingValues = useMemo(() => {
-        return uniqueChapters.map(ch => {
-            const pts = data.pacing.filter(p => p.chapterNumber === ch);
-            return pts.reduce((sum, p) => sum + p.score, 0) / Math.max(1, pts.length);
-        });
-    }, [data.pacing, uniqueChapters]);
-
-    const overviewEmotionValues = useMemo(() => {
-        return uniqueChapters.map(ch => {
-            const pts = data.emotions.filter(e => e.chapterNumber === ch);
-            const scores = pts.map(e => mapValenceToScore(e.valence));
-            return scores.reduce((sum, s) => sum + s, 0) / Math.max(1, scores.length);
-        });
-    }, [data.emotions, uniqueChapters]);
-
-    const overviewLabels = useMemo(() => {
-        return uniqueChapters.map(ch => `Chương ${ch}`);
-    }, [uniqueChapters]);
-
-    // ── 2. COMPUTE DETAIL DATA (Filtered by selected chapter) ──
-    const detailPacingValues = useMemo(() => {
-        return detailPacingPoints.map(p => p.score);
-    }, [detailPacingPoints]);
-
-    const detailEmotionValues = useMemo(() => {
-        return detailPacingPoints.map(p => {
-            const match = detailEmotionPoints.find(e => e.segmentIndex === p.segmentIndex);
-            return match ? mapValenceToScore(match.valence) : 50;
-        });
-    }, [detailPacingPoints, detailEmotionPoints]);
-
-    const detailLabels = useMemo(() => {
-        return detailPacingPoints.map(p => p.label);
-    }, [detailPacingPoints]);
-
-    // Active chart series
-    const activePacingValues = viewMode === 'overview' ? overviewPacingValues : detailPacingValues;
-    const activeEmotionValues = viewMode === 'overview' ? overviewEmotionValues : detailEmotionValues;
-    const activeLabels = viewMode === 'overview' ? overviewLabels : detailLabels;
-
-    const segmentTexts = data.segmentTexts ?? [];
-
-    const handlePointSelect = (idx: number) => {
-        if (viewMode === 'overview') {
-            // Clicking a chapter point zooms into that chapter's details!
-            const chapterNum = uniqueChapters[idx];
-            setSelectedChapterState(chapterNum);
-            setViewMode('detail');
-        } else {
-            // Detail mode clicks view the text segment preview
-            const originalPt = detailPacingPoints[idx];
-            if (originalPt) {
-                setSelectedIdx(originalPt.segmentIndex);
-            }
-        }
-    };
+    const overviewLabels = uniqueChapters.map(ch => `Chương ${ch}`);
 
     // Parse deep AI structured insights
     const parsedInsights = useMemo((): ParsedInsight[] => {
@@ -587,24 +516,60 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
             { key: 'blueprint', tag: '[Đề xuất kịch bản]', title: 'Đề xuất chiến lược chỉnh sửa', icon: '💡', color: '#c084fc', bgGradient: 'linear-gradient(135deg, rgba(167, 139, 250, 0.09) 0%, rgba(167, 139, 250, 0.02) 100%)', borderColor: 'rgba(167, 139, 250, 0.35)' }
         ] as const;
 
-        raw.forEach(insight => {
+        raw.forEach(rawInsight => {
+            let insight = rawInsight.trim();
+
+            // 1. Normalize quotes to straight quotes for parsing and stripping
+            insight = insight
+                .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
+                .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
+
+            // 2. Filter out obvious JSON structure lines
+            const lowerInsight = insight.toLowerCase().trim();
+            const hasNoLettersOrDigits = !/[a-zA-Z0-9\u00C0-\u1EF9]/.test(insight);
+            const isJsonBoilerplate = 
+                hasNoLettersOrDigits ||
+                lowerInsight === '{' || 
+                lowerInsight === '}' || 
+                lowerInsight === '[' || 
+                lowerInsight === ']' || 
+                lowerInsight === '],' || 
+                lowerInsight === '},' ||
+                lowerInsight === ',' ||
+                lowerInsight.includes('"insights"') ||
+                lowerInsight.includes('insights:') ||
+                lowerInsight.includes('insights" :') ||
+                /^\s*["']?insights["']?\s*:/i.test(insight) ||
+                /^\s*["']?insights["']?\s*:\s*\[/i.test(insight) ||
+                lowerInsight === '"insights"' ||
+                lowerInsight === 'insights';
+
+            if (isJsonBoilerplate || !insight) return;
+
+            // 3. Strip leading/trailing double/single quotes, commas, brackets, braces, and formatting spaces
+            insight = insight.replace(/^["'\s,\[\]\{\}“”«»]+|["'\s,\[\]\{\}“”«»]+$/g, '').trim();
+            if (!insight || insight.length < 5) return;
+
             if (insight.includes('PHÂN TÍCH CHUYÊN SÂU')) return;
 
             let matched = false;
             // 1. Try exact bracket tag matching
             for (const config of categoriesConfig) {
                 if (insight.includes(config.tag)) {
-                    const cleanContent = insight.replace(config.tag, '').trim();
-                    result.push({
-                        category: config.key,
-                        title: config.title,
-                        icon: config.icon,
-                        color: config.color,
-                        bgGradient: config.bgGradient,
-                        borderColor: config.borderColor,
-                        content: cleanContent
-                    });
-                    matched = true;
+                    let cleanContent = insight.replace(config.tag, '').trim();
+                    cleanContent = cleanContent.replace(/^["'\s,\[\]\{\}“”«»]+|["'\s,\[\]\{\}“”«»]+$/g, '').trim();
+                    if (cleanContent) {
+                        result.push({
+                            category: config.key,
+                            title: config.title,
+                            icon: config.icon,
+                            color: config.color,
+                            bgGradient: config.bgGradient,
+                            borderColor: config.borderColor,
+                            content: cleanContent
+                        });
+                        matched = true;
+                    }
                     break;
                 }
             }
@@ -629,18 +594,20 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
                     categoriesConfig.forEach(c => {
                         cleanContent = cleanContent.replace(c.tag, '');
                     });
-                    cleanContent = cleanContent.trim();
+                    cleanContent = cleanContent.replace(/^["'\s,\[\]\{\}“”«»]+|["'\s,\[\]\{\}“”«»]+$/g, '').trim();
 
-                    result.push({
-                        category: matchedConfig.key,
-                        title: matchedConfig.title,
-                        icon: matchedConfig.icon,
-                        color: matchedConfig.color,
-                        bgGradient: matchedConfig.bgGradient,
-                        borderColor: matchedConfig.borderColor,
-                        content: cleanContent
-                    });
-                    matched = true;
+                    if (cleanContent) {
+                        result.push({
+                            category: matchedConfig.key,
+                            title: matchedConfig.title,
+                            icon: matchedConfig.icon,
+                            color: matchedConfig.color,
+                            bgGradient: matchedConfig.bgGradient,
+                            borderColor: matchedConfig.borderColor,
+                            content: cleanContent
+                        });
+                        matched = true;
+                    }
                 }
             }
 
@@ -686,20 +653,19 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
                 ? line.trim().replace(/^[-*\s]+|^\d+\.\s*/, '') 
                 : line;
 
-            const parts = cleanLine.split(/(".*?")/g);
+            // Split by straight double quotes or curly double quotes to style quotes nicely
+            const parts = cleanLine.split(/("[^"]*?"|“[^”]*?”)/g);
             const renderedLine = (
-                <span key={lIdx} className="leading-relaxed">
+                <span key={lIdx} className="leading-relaxed" style={{ fontFamily: "var(--font-sans)" }}>
                     {parts.map((part, ptIdx) => {
-                        if (part.startsWith('"') && part.endsWith('"')) {
+                        const isQuote = (part.startsWith('"') && part.endsWith('"')) || 
+                                        (part.startsWith('“') && part.endsWith('”'));
+                        if (isQuote) {
                             return (
                                 <span 
                                     key={ptIdx} 
-                                    className="px-2 py-0.5 mx-0.5 rounded italic font-serif inline-block text-[13px] border transition-all duration-300"
-                                    style={{ 
-                                        backgroundColor: `${color}0d`, 
-                                        borderColor: `${color}22`,
-                                        color: 'rgba(255,255,255,0.95)'
-                                    }}
+                                    className="px-1 py-0.5 mx-0.5 rounded italic inline border transition-all duration-300 font-sans text-[13px] bg-white/5 border-white/10 text-amber-300"
+                                    style={{ fontFamily: "var(--font-sans)" }}
                                 >
                                     {part}
                                 </span>
@@ -712,109 +678,60 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
 
             if (isListItem) {
                 return (
-                    <div key={lIdx} className="flex items-start gap-2 mt-1.5 pl-1">
+                    <div key={lIdx} className="flex items-start gap-2 mt-1.5 pl-1" style={{ fontFamily: "var(--font-sans)" }}>
                         <span className="text-[10px] mt-1.5 select-none" style={{ color }}>●</span>
-                        <span className="text-sm leading-relaxed text-[rgba(255,255,255,0.85)]">{renderedLine}</span>
+                        <span className="text-sm leading-relaxed text-[rgba(255,255,255,0.85)] font-sans">{renderedLine}</span>
                     </div>
                 );
             }
 
             return (
-                <p key={lIdx} className="text-sm leading-relaxed text-[rgba(255,255,255,0.85)] mb-2">
+                <p key={lIdx} className="text-sm leading-relaxed text-[rgba(255,255,255,0.85)] mb-2 font-sans" style={{ fontFamily: "var(--font-sans)" }}>
                     {renderedLine}
                 </p>
             );
         });
     };
 
-    const activePacingPoint = selectedIdx !== null ? data.pacing.find(p => p.segmentIndex === selectedIdx) : null;
-    const activeEmotionPoint = selectedIdx !== null ? data.emotions.find(e => e.segmentIndex === selectedIdx) : null;
-
     return (
-        <div className="rounded-2xl p-6 mt-5 flex flex-col gap-6 animate-fade-in" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+        <div className="rounded-2xl p-6 mt-5 flex flex-col gap-6 animate-fade-in" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', fontFamily: "var(--font-sans)" }}>
             
-            {/* Header with Switcher */}
+            {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4" style={{ borderColor: 'var(--border-color)' }}>
                 <div>
-                    <h3 className="text-[var(--text-primary)] font-extrabold text-xl tracking-tight flex items-center gap-2">
+                    <h3 className="text-[var(--text-primary)] font-extrabold text-xl tracking-tight flex items-center gap-2 font-sans">
                         <span className="text-xl">📊</span> Phân tích chuyên biệt (Narrative Analytics)
                     </h3>
-                    <p className="text-[var(--text-secondary)] text-sm mt-1 opacity-85">
-                        {viewMode === 'overview' 
-                            ? 'Báo cáo nhịp độ và cảm xúc trung bình theo từng chương của tác phẩm. Nhấp vào điểm để thu nhỏ chi tiết.' 
-                            : `Chi tiết nhịp điệu kể chuyện từng đoạn trong Chương ${activeChapter}. Nhấp điểm để xem văn bản mẫu.`}
+                    <p className="text-[var(--text-secondary)] text-sm mt-1 opacity-85 font-sans">
+                        Báo cáo nhịp độ và cảm xúc trung bình theo từng chương của tác phẩm.
                     </p>
-                </div>
-
-                {/* View Mode Controls */}
-                <div className="flex items-center gap-3 w-full sm:w-auto">
-                    <div className="flex p-0.5 rounded-lg border text-xs font-semibold" style={{ background: 'rgba(255,255,255,0.03)', borderColor: 'var(--border-color)' }}>
-                        <button 
-                            onClick={() => setViewMode('overview')}
-                            className="px-3.5 py-1.5 rounded-md transition-all"
-                            style={{
-                                background: viewMode === 'overview' ? 'var(--bg-hover)' : 'transparent',
-                                color: viewMode === 'overview' ? 'var(--text-primary)' : 'var(--text-secondary)'
-                            }}
-                        >
-                            🌐 Toàn cảnh
-                        </button>
-                        <button 
-                            onClick={() => setViewMode('detail')}
-                            className="px-3.5 py-1.5 rounded-md transition-all"
-                            style={{
-                                background: viewMode === 'detail' ? 'var(--bg-hover)' : 'transparent',
-                                color: viewMode === 'detail' ? 'var(--text-primary)' : 'var(--text-secondary)'
-                            }}
-                        >
-                            🔎 Chi tiết chương
-                        </button>
-                    </div>
-
-                    {/* Chapter Dropdown in Detail Mode */}
-                    {viewMode === 'detail' && uniqueChapters.length > 0 && (
-                        <select
-                            value={activeChapter}
-                            onChange={(e) => setSelectedChapterState(Number(e.target.value))}
-                            className="px-3 py-1.5 rounded-lg border text-xs font-semibold select-custom cursor-pointer transition-all hover:bg-[var(--bg-hover)]"
-                            style={{
-                                background: 'var(--bg-app)',
-                                borderColor: 'var(--border-color)',
-                                color: 'var(--text-primary)'
-                            }}
-                        >
-                            {uniqueChapters.map(ch => (
-                                <option key={ch} value={ch}>Chương {ch}</option>
-                            ))}
-                        </select>
-                    )}
                 </div>
             </div>
 
             {/* Explanations Card */}
-            <div className="p-4 rounded-xl text-xs leading-relaxed border" style={{ borderColor: 'rgba(245,166,35,0.15)', background: 'linear-gradient(145deg, rgba(245,166,35,0.04), rgba(249,115,22,0.01))' }}>
+            <div className="p-4 rounded-xl text-xs leading-relaxed border font-sans" style={{ borderColor: 'rgba(245,166,35,0.15)', background: 'linear-gradient(145deg, rgba(245,166,35,0.04), rgba(249,115,22,0.01))' }}>
                 <details className="cursor-pointer group">
-                    <summary className="font-bold mb-1 flex items-center justify-between text-sm" style={{ color: '#fbbf24' }}>
-                        <span className="flex items-center gap-1.5 select-none">
+                    <summary className="font-bold mb-1 flex items-center justify-between text-sm text-gradient-bright font-sans" style={{ color: '#fbbf24' }}>
+                        <span className="flex items-center gap-1.5 select-none font-sans">
                             ℹ️ Hướng dẫn đọc biểu đồ Nhịp độ & Cảm xúc (Mở rộng)
                         </span>
                         <span className="text-xs transition-transform duration-200 group-open:rotate-180 opacity-70">▼</span>
                     </summary>
-                    <div className="mt-3 pt-3 border-t border-[rgba(245,166,35,0.1)] grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="mt-3 pt-3 border-t border-[rgba(245,166,35,0.1)] grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
                         <div>
-                            <span className="font-bold text-[var(--text-primary)] text-sm flex items-center gap-1">📈 <span className="text-amber-400">Pacing (Nhịp độ kịch tính):</span></span>
-                            <p className="text-[var(--text-secondary)] mt-1">Được tính toán tự động dựa trên tần suất hành động, tỷ lệ hội thoại, độ dài câu và dấu câu kịch tính:</p>
-                            <ul className="list-disc list-inside mt-1.5 space-y-1 pl-1 text-[var(--text-secondary)]">
-                                <li><span className="text-[var(--text-primary)] font-medium">Nhịp độ cao (&gt; 65)</span>: Hồi hộp, hành động gay cấn, mâu thuẫn đẩy lên cao trào.</li>
-                                <li><span className="text-[var(--text-primary)] font-medium">Nhịp độ thấp (&lt; 35)</span>: Tĩnh lặng, tả cảnh, suy ngẫm nội tâm hoặc chuẩn bị sự kiện mới.</li>
+                            <span className="font-bold text-[var(--text-primary)] text-sm flex items-center gap-1 font-sans">📈 <span className="text-amber-400">Pacing (Nhịp độ kịch tính):</span></span>
+                            <p className="text-[var(--text-secondary)] mt-1 font-sans">Được tính toán tự động dựa trên tần suất hành động, tỷ lệ hội thoại, độ dài câu và dấu câu kịch tính:</p>
+                            <ul className="list-disc list-inside mt-1.5 space-y-1 pl-1 text-[var(--text-secondary)] font-sans">
+                                <li><span className="text-[var(--text-primary)] font-medium font-sans">Nhịp độ cao (&gt; 65)</span>: Hồi hộp, hành động gay cấn, mâu thuẫn đẩy lên cao trào.</li>
+                                <li><span className="text-[var(--text-primary)] font-medium font-sans">Nhịp độ thấp (&lt; 35)</span>: Tĩnh lặng, tả cảnh, suy ngẫm nội tâm hoặc chuẩn bị sự kiện mới.</li>
                             </ul>
                         </div>
                         <div>
-                            <span className="font-bold text-[var(--text-primary)] text-sm flex items-center gap-1">🎭 <span className="text-emerald-400">Emotion (Tích cực & Tiêu cực):</span></span>
-                            <p className="text-[var(--text-secondary)] mt-1">Quy đổi từ chỉ số Valence (-1 đến +1) phản ánh sắc thái tâm lý nhân vật và bầu không khí:</p>
-                            <ul className="list-disc list-inside mt-1.5 space-y-1 pl-1 text-[var(--text-secondary)]">
-                                <li><span className="text-[var(--text-primary)] font-medium">Cảm xúc tích cực (&gt; 65)</span>: Vui tươi, chiến thắng, ấm áp, lãng mạn hoặc chữa lành.</li>
-                                <li><span className="text-[var(--text-primary)] font-medium">Cảm xúc tiêu cực (&lt; 35)</span>: Bi thương, tuyệt vọng, giận dữ, u ám hoặc lo lắng hiểm họa.</li>
+                            <span className="font-bold text-[var(--text-primary)] text-sm flex items-center gap-1 font-sans">🎭 <span className="text-emerald-400">Emotion (Tích cực & Tiêu cực):</span></span>
+                            <p className="text-[var(--text-secondary)] mt-1 font-sans">Quy đổi từ chỉ số Valence (-1 đến +1) phản ánh sắc thái tâm lý nhân vật và bầu không khí:</p>
+                            <ul className="list-disc list-inside mt-1.5 space-y-1 pl-1 text-[var(--text-secondary)] font-sans">
+                                <li><span className="text-[var(--text-primary)] font-medium font-sans">Cảm xúc tích cực (&gt; 65)</span>: Vui tươi, chiến thắng, ấm áp, lãng mạn hoặc chữa lành.</li>
+                                <li><span className="text-[var(--text-primary)] font-medium font-sans">Cảm xúc tiêu cực (&lt; 35)</span>: Bi thương, tuyệt vọng, giận dữ, u ám hoặc lo lắng hiểm họa.</li>
                             </ul>
                         </div>
                     </div>
@@ -822,130 +739,53 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
             </div>
 
             {/* Charts Vertical Stack */}
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-6 font-sans">
                 <div className="rounded-xl p-5" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-                        <p className="text-[var(--text-primary)] text-sm font-bold flex items-center gap-2">
+                        <p className="text-[var(--text-primary)] text-sm font-bold flex items-center gap-2 font-sans">
                             <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" /> Biểu đồ Nhịp độ & Cảm xúc tích hợp
                         </p>
-                        <div className="flex items-center gap-4 text-xs font-semibold">
-                            <div className="flex items-center gap-1.5 text-amber-400">
+                        <div className="flex items-center gap-4 text-xs font-semibold font-sans">
+                            <div className="flex items-center gap-1.5 text-amber-400 font-sans">
                                 <span className="w-3 h-1.5 rounded-full bg-amber-500" />
                                 <span>⚡ Nhịp độ (Pacing)</span>
                             </div>
-                            <div className="flex items-center gap-1.5 text-emerald-400">
+                            <div className="flex items-center gap-1.5 text-emerald-400 font-sans">
                                 <span className="w-3 h-1.5 rounded bg-emerald-500" />
                                 <span>🎭 Cảm xúc (Emotion)</span>
                             </div>
-                            {viewMode === 'detail' && (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full border border-indigo-500/25 text-indigo-400 bg-indigo-500/5 font-semibold">
-                                    Chương {activeChapter}
-                                </span>
-                            )}
                         </div>
                     </div>
                     <DualAreaChart 
-                        pacingValues={activePacingValues} 
-                        emotionValues={activeEmotionValues} 
-                        labels={activeLabels} 
-                        onPointSelect={handlePointSelect} 
-                        selectedIndex={viewMode === 'detail' && selectedIdx !== null ? (detailPacingPoints.findIndex(p => p.segmentIndex === selectedIdx)) : null} 
+                        pacingValues={overviewPacingValues} 
+                        emotionValues={overviewEmotionValues} 
+                        labels={overviewLabels} 
                     />
                 </div>
             </div>
 
-            {/* Segment Preview Section */}
-            {viewMode === 'detail' && selectedIdx !== null && segmentTexts[selectedIdx] && (
-                <div className="rounded-xl p-5 animate-in fade-in slide-in-from-top-3 duration-300 relative overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)', border: '1px dashed var(--border-color)' }}>
-                    <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500" />
-                    
-                    <div className="flex justify-between items-center mb-3.5 pl-2">
-                        <p className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
-                            <span>📖</span> Đối chứng nội dung chương {activeChapter} — Phân đoạn {detailPacingPoints.findIndex(p => p.segmentIndex === selectedIdx) + 1}
-                        </p>
-                        <button 
-                            onClick={() => {
-                                setSelectedIdx(null);
-                            }}
-                            className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-semibold px-2 py-1 rounded hover:bg-[var(--bg-hover)] transition-all"
-                        >
-                            Đóng xem trước
-                        </button>
-                    </div>
-                    <div className="max-h-48 overflow-y-auto pr-2 custom-scrollbar pl-2">
-                        <p className="text-sm leading-relaxed italic opacity-95 text-[rgba(255,255,255,0.92)] font-serif">
-                            "...{segmentTexts[selectedIdx]}..."
-                        </p>
-                    </div>
-                    
-                    {/* Explanation Card */}
-                    {(() => {
-                        const pacingScore = activePacingPoint ? activePacingPoint.score : 50;
-                        const valence = activeEmotionPoint ? activeEmotionPoint.valence : 0;
-                        const dominantEmotion = activeEmotionPoint ? activeEmotionPoint.dominantEmotion : 'Bình thường';
-                        const emotionScore = mapValenceToScore(valence);
-                        const explanation = getSegmentExplanation(pacingScore, valence, dominantEmotion);
-
-                        return (
-                            <div 
-                                className="mt-4 p-4 rounded-xl border flex flex-col gap-3 transition-all duration-300 pl-4"
-                                style={{ 
-                                    backgroundColor: explanation.bgColor,
-                                    borderColor: explanation.borderColor,
-                                }}
-                            >
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-lg select-none">{explanation.icon}</span>
-                                        <span className="font-extrabold text-sm" style={{ color: explanation.color }}>
-                                            Trạng thái: {explanation.tag}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-3 text-xs font-mono font-bold">
-                                        <span className="px-2 py-0.5 rounded text-amber-400 bg-amber-500/10 border border-amber-500/20">
-                                            ⚡ Nhịp độ: {pacingScore.toFixed(0)}/100
-                                        </span>
-                                        <span className="px-2 py-0.5 rounded text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
-                                            🎭 Cảm xúc: {emotionScore.toFixed(0)}/100
-                                        </span>
-                                    </div>
-                                </div>
-                                <p className="text-xs leading-relaxed text-[rgba(255,255,255,0.85)] font-medium">
-                                    {explanation.desc}
-                                </p>
-                                {activeEmotionPoint && (
-                                    <div className="text-[11px] font-semibold text-[rgba(255,255,255,0.5)] flex items-center gap-1.5">
-                                        <span>🎯</span> Cảm xúc cốt lõi: <span className="text-[rgba(255,255,255,0.85)] uppercase">{activeEmotionPoint.dominantEmotion}</span> (Cường độ: {(activeEmotionPoint.intensity * 100).toFixed(0)}%)
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })()}
-                </div>
-            )}
-
             {/* structured Deep AI Insights Grid */}
             {parsedInsights.length > 0 && (
                 <div 
-                    className="rounded-2xl p-6 flex flex-col gap-6 relative overflow-hidden backdrop-blur-md" 
+                    className="rounded-2xl p-6 flex flex-col gap-6 relative overflow-hidden backdrop-blur-md font-sans" 
                     style={{ 
                         background: 'linear-gradient(135deg, rgba(30,30,45,0.7) 0%, rgba(15,15,25,0.5) 100%)', 
                         border: '1px solid rgba(99,102,241,0.18)' 
                     }}
                 >
-                    <div className="flex flex-col gap-1 border-b border-[rgba(255,255,255,0.06)] pb-4">
-                        <h4 className="text-[var(--text-primary)] text-lg font-extrabold flex items-center gap-2.5 tracking-tight text-gradient-bright">
+                    <div className="flex flex-col gap-1 border-b border-[rgba(255,255,255,0.06)] pb-4 font-sans">
+                        <h4 className="text-[var(--text-primary)] text-lg font-extrabold flex items-center gap-2.5 tracking-tight text-gradient-bright font-sans">
                             <span className="text-xl">✨</span> PHÂN TÍCH CHUYÊN SÂU TỪ AI (Literary Insights)
                         </h4>
-                        <p className="text-xs text-[var(--text-secondary)] mt-0.5 opacity-80">Đánh giá cấu trúc nhịp điệu kể chuyện và gợi ý định hướng viết nâng cao từ trí tuệ nhân tạo.</p>
+                        <p className="text-xs text-[var(--text-secondary)] mt-0.5 opacity-80 font-sans">Đánh giá cấu trúc nhịp điệu kể chuyện và gợi ý định hướng viết nâng cao từ trí tuệ nhân tạo.</p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-sans">
                         {parsedInsights.map((insight, idx) => {
                             return (
                                 <div 
                                     key={idx} 
-                                    className="group rounded-2xl p-6 flex flex-col gap-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)] relative" 
+                                    className="group rounded-2xl p-6 flex flex-col gap-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)] relative font-sans" 
                                     style={{ 
                                         background: `linear-gradient(135deg, rgba(20, 20, 25, 0.7) 0%, ${insight.color}05 100%)`,
                                         border: `1px solid ${insight.borderColor}`,
@@ -959,16 +799,16 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
                                         e.currentTarget.style.boxShadow = 'none';
                                     }}
                                 >
-                                    <div className="flex items-center justify-between pb-3 border-b border-[rgba(255,255,255,0.06)]">
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-xl p-2 rounded-xl bg-opacity-10 transition-transform duration-300 group-hover:scale-110 select-none" style={{ backgroundColor: `${insight.color}1c`, color: insight.color }}>
+                                    <div className="flex items-center justify-between pb-3 border-b border-[rgba(255,255,255,0.06)] font-sans">
+                                        <div className="flex items-center gap-3 font-sans">
+                                            <span className="text-xl p-2 rounded-xl bg-opacity-10 transition-transform duration-300 group-hover:scale-110 select-none font-sans" style={{ backgroundColor: `${insight.color}1c`, color: insight.color }}>
                                                 {insight.icon}
                                             </span>
-                                            <span className="text-sm font-extrabold tracking-tight text-[var(--text-primary)]">
+                                            <span className="text-sm font-extrabold tracking-tight text-[var(--text-primary)] font-sans">
                                                 {insight.title}
                                             </span>
                                         </div>
-                                        <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border" style={{ borderColor: `${insight.color}33`, color: insight.color, backgroundColor: `${insight.color}0f` }}>
+                                        <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border font-sans" style={{ borderColor: `${insight.color}33`, color: insight.color, backgroundColor: `${insight.color}0f` }}>
                                             {insight.category === 'pacing' ? 'Nhịp kể' : insight.category === 'emotion' ? 'Cảm xúc' : insight.category === 'characters' ? 'Nhân vật' : insight.category === 'blueprint' ? 'Chiến lược' : 'Tổng hợp'}
                                         </span>
                                     </div>

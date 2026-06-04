@@ -390,16 +390,18 @@ export default function Topbar({ fullName, role, userId, avatarUrl, pageTitle, o
                                             <span className="text-[var(--text-primary)] text-sm font-semibold">Thông báo</span>
                                         </div>
                                         <div className="flex items-center gap-1">
-                                            <button
-                                                onClick={() => {
-                                                    setNotifCreateOpen(v => !v);
-                                                    setNotifCreateError(null);
-                                                }}
-                                                className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[var(--text-primary)]/5 text-[var(--text-secondary)] transition-colors"
-                                                title="Tạo thông báo mới cho tất cả vai trò"
-                                            >
-                                                <Plus className="w-3.5 h-3.5" />
-                                            </button>
+                                            {(role === 'Admin' || role === 'Staff') && (
+                                                <button
+                                                    onClick={() => {
+                                                        setNotifCreateOpen(v => !v);
+                                                        setNotifCreateError(null);
+                                                    }}
+                                                    className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[var(--text-primary)]/5 text-[var(--text-secondary)] transition-colors"
+                                                    title="Tạo thông báo mới cho tất cả vai trò"
+                                                >
+                                                    <Plus className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
                                             <button onClick={() => setNotifOpen(false)}
                                                 className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[var(--text-primary)]/5 text-[var(--text-secondary)] transition-colors">
                                                 <X className="w-3.5 h-3.5" />

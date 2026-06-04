@@ -845,7 +845,7 @@ export default function MyProjectsSection({ onNavigate, createRequestToken, onPr
                                 </div>
                                 <div>
                                     <h2 className="text-white font-black text-xl drop-shadow-md">Nhập truyện từ bản thảo</h2>
-                                    <p className="text-zinc-400 text-xs mt-0.5">Hướng dẫn định dạng file để AI phân tích tốt nhất</p>
+                                    <p className="text-zinc-400 text-xs mt-0.5">Hướng dẫn định dạng file để phân tách chương tốt nhất</p>
                                 </div>
                             </div>
                             <button onClick={() => setImportModalOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors">
@@ -877,7 +877,7 @@ export default function MyProjectsSection({ onNavigate, createRequestToken, onPr
                                         <strong>Không chứa các nội dung ngoài lề khác</strong> (như phần tóm tắt do tác giả tự viết, danh sách nhân vật, thông tin thế giới...).
                                     </p>
                                     <p className="text-zinc-400 text-[11px] mt-1.5 leading-relaxed">
-                                        AI sẽ quét tác phẩm và tự động phân tích để <strong>đưa ra tóm tắt tổng thể duy nhất</strong> cho truyện của bạn. Các thông tin sâu hơn như nhân vật, bối cảnh sẽ được phân tích ở tính năng phân tích chi tiết.
+                                        Hệ thống sẽ tự động phân tách các chương truyện, chia đoạn (chunk) và tạo vector nhúng (embedding) để phục vụ cho các tính năng tìm kiếm và phân tích.
                                     </p>
                                 </div>
                             </div>

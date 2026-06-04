@@ -255,6 +255,7 @@ builder.Services.AddSingleton<IAnalysisJobQueue, AnalysisJobQueue>();
 builder.Services.AddSingleton<IAnalysisJobCancellationRegistry, AnalysisJobCancellationRegistry>();
 builder.Services.AddHostedService<ProjectAnalysisJobWorker>();
 builder.Services.AddHostedService<AutoEmbeddingWorker>();
+builder.Services.AddHostedService<PaymentCleanupWorker>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<ISystemConfigService, SystemConfigService>();
 builder.Services.AddScoped<ISystemAuditLogService, SystemAuditLogService>();

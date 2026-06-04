@@ -39,7 +39,7 @@ namespace Service.Implementations
 
         private async Task<(ContentAnalysisResult Content, int TokensUsed)> ExtractStoryBibleAsync(
             string projectTitle,
-            List<string> decryptedChunks,
+            string fullManuscriptText,
             Func<int, string?, CancellationToken, Task>? progressCallback,
             CancellationToken cancellationToken)
         {
@@ -48,13 +48,10 @@ namespace Service.Implementations
                 await progressCallback(45, "Đang phân tích Story Bible bằng AI (World, Characters, Timeline, Themes)...", cancellationToken);
             }
 
-            if (decryptedChunks == null || decryptedChunks.Count == 0)
+            if (string.IsNullOrWhiteSpace(fullManuscriptText))
             {
                 return (new ContentAnalysisResult { AnalysisNote = "Không có nội dung bản thảo để trích xuất." }, 0);
             }
-
-            // Đưa toàn bộ các đoạn bản thảo của tác phẩm vào phân tích để đảm bảo trích xuất trọn vẹn và đầy đủ nhất, tránh bỏ sót.
-            var sampledChunks = decryptedChunks;
 
             var sysPrompt = @"OUTPUT RULE (ABSOLUTE): Respond with ONE valid JSON object only. Start with '{', end with '}'. NO markdown, NO comments, NO text outside JSON.
 
@@ -123,7 +120,7 @@ QUY TẮC QUAN TRỌNG:
             var messages = new List<ChatMessage>
             {
                 ChatMessage.CreateSystemMessage(sysPrompt),
-                ChatMessage.CreateUserMessage($"Tên tác phẩm: {projectTitle}\n\nToàn bộ nội dung của tác phẩm:\n\n{string.Join('\n', sampledChunks)}")
+                ChatMessage.CreateUserMessage($"Tên tác phẩm: {projectTitle}\n\nToàn bộ nội dung của tác phẩm (đã chia theo chương):\n\n{fullManuscriptText}")
             };
 
             int tokensUsed = 0;

@@ -11,6 +11,7 @@ using Service.Helpers;
 using Service.Interfaces;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text;
 
 namespace Service.Implementations
 {
@@ -315,6 +316,19 @@ namespace Service.Implementations
 
             if (useRag)
             {
+                var sbManuscript = new StringBuilder();
+                var currentChapterNum = -1;
+                foreach (var item in decryptedChunksWithMeta)
+                {
+                    if (item.ChapterNumber != currentChapterNum)
+                    {
+                        currentChapterNum = item.ChapterNumber;
+                        sbManuscript.AppendLine($"\n--- CHƯƠNG {item.ChapterNumber}{(string.IsNullOrWhiteSpace(item.ChapterTitle) ? "" : $": {item.ChapterTitle}")} ---");
+                    }
+                    sbManuscript.AppendLine(item.Content);
+                }
+                var fullManuscriptText = sbManuscript.ToString().Trim();
+
                 var rubricTask = EvaluateWithRagPipelineAsync(
                     projectTitle,
                     chunks,
@@ -329,7 +343,7 @@ namespace Service.Implementations
 
                 var contentTask = ExtractStoryBibleAsync(
                     projectTitle,
-                    decryptedChunks,
+                    fullManuscriptText,
                     progressCallback,
                     cancellationToken);
 

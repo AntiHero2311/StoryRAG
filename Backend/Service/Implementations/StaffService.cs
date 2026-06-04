@@ -599,17 +599,25 @@ namespace Service.Implementations
             var masterKey = _config["Security:MasterKey"] ?? throw new InvalidOperationException("Thiếu cấu hình Security:MasterKey.");
 
             var projectTitle = "[Encrypted Title]";
+            ContentAnalysisResult? contentRes = null;
             if (!string.IsNullOrWhiteSpace(report.Project?.Author?.DataEncryptionKey))
             {
                 var authorDek = EncryptionHelper.DecryptWithMasterKey(report.Project.Author.DataEncryptionKey, masterKey);
                 projectTitle = EncryptionHelper.DecryptWithMasterKey(report.Project.Title, authorDek);
+
+                if (!string.IsNullOrWhiteSpace(report.ContentAnalysisJson))
+                {
+                    var decData = EncryptionHelper.DecryptWithMasterKey(report.ContentAnalysisJson, authorDek);
+                    var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    try { contentRes = System.Text.Json.JsonSerializer.Deserialize<ContentAnalysisResult>(decData, jsonOpts); } catch { }
+                }
             }
             else if (report.Project != null)
             {
                 projectTitle = report.Project.Title;
             }
 
-            return MapReportDetail(report, projectTitle);
+            return MapReportDetail(report, projectTitle, contentRes);
         }
 
         public async Task<StaffReportStoryResponse> GetReportStoryAsync(Guid reportId)
@@ -829,17 +837,25 @@ namespace Service.Implementations
 
             var masterKey = _config["Security:MasterKey"] ?? throw new InvalidOperationException("Thiếu cấu hình Security:MasterKey.");
             var projectTitle = "[Encrypted Title]";
+            ContentAnalysisResult? contentRes = null;
             if (!string.IsNullOrWhiteSpace(report.Project?.Author?.DataEncryptionKey))
             {
                 var authorDek = EncryptionHelper.DecryptWithMasterKey(report.Project.Author.DataEncryptionKey, masterKey);
                 projectTitle = EncryptionHelper.DecryptWithMasterKey(report.Project.Title, authorDek);
+
+                if (!string.IsNullOrWhiteSpace(report.ContentAnalysisJson))
+                {
+                    var decData = EncryptionHelper.DecryptWithMasterKey(report.ContentAnalysisJson, authorDek);
+                    var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    try { contentRes = System.Text.Json.JsonSerializer.Deserialize<ContentAnalysisResult>(decData, jsonOpts); } catch { }
+                }
             }
             else if (report.Project != null)
             {
                 projectTitle = report.Project.Title;
             }
 
-            return MapReportDetail(report, projectTitle);
+            return MapReportDetail(report, projectTitle, contentRes);
         }
 
         private static HashSet<string> ParseStatuses(string? status)
@@ -916,7 +932,7 @@ namespace Service.Implementations
             };
         }
 
-        private static StaffReportDetailResponse MapReportDetail(ProjectReport report, string projectTitle)
+        private static StaffReportDetailResponse MapReportDetail(ProjectReport report, string projectTitle, ContentAnalysisResult? contentAnalysis = null)
         {
             // Phân loại điểm số
             var classification = report.TotalScore >= 85 ? "Xuất sắc"
@@ -962,6 +978,7 @@ namespace Service.Implementations
                 StaffEditedCriteriaJson = report.StaffEditedCriteriaJson,
                 CreatedAt = report.CreatedAt,
                 UpdatedAt = report.UpdatedAt,
+                ContentAnalysis = contentAnalysis,
             };
         }
 
