@@ -170,40 +170,40 @@ builder.Services.AddRateLimiter(options =>
     };
 
     // SlidingWindow tránh burst tại ranh giới window
-    // Chat: tối đa 20 requests / phút / user
+    // Chat: tối đa 100 requests / phút / user
     options.AddSlidingWindowLimiter("AiChat", opt =>
     {
-        opt.PermitLimit = 20;
+        opt.PermitLimit = 100;
         opt.Window = TimeSpan.FromMinutes(1);
         opt.SegmentsPerWindow = 4;
         opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         opt.QueueLimit = 0;
     });
 
-    // Rewrite: tối đa 15 requests / phút / user
+    // Rewrite: tối đa 100 requests / phút / user
     options.AddSlidingWindowLimiter("AiRewrite", opt =>
     {
-        opt.PermitLimit = 15;
+        opt.PermitLimit = 100;
         opt.Window = TimeSpan.FromMinutes(1);
         opt.SegmentsPerWindow = 4;
         opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         opt.QueueLimit = 0;
     });
 
-    // Analyze: tối đa 60 requests / 1 phút / user (đã tăng theo yêu cầu để tránh network error)
+    // Analyze: tối đa 100 requests / phút / user
     options.AddSlidingWindowLimiter("AiAnalyze", opt =>
     {
-        opt.PermitLimit = 60;
+        opt.PermitLimit = 100;
         opt.Window = TimeSpan.FromMinutes(1);
         opt.SegmentsPerWindow = 4;
         opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         opt.QueueLimit = 0;
     });
 
-    // Embed: tối đa 30 requests / phút / user
+    // Embed: tối đa 200 requests / phút / user (đã tăng để tránh lỗi khi lưu/đồng bộ nhiều chương)
     options.AddSlidingWindowLimiter("AiEmbed", opt =>
     {
-        opt.PermitLimit = 30;
+        opt.PermitLimit = 200;
         opt.Window = TimeSpan.FromMinutes(1);
         opt.SegmentsPerWindow = 4;
         opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;

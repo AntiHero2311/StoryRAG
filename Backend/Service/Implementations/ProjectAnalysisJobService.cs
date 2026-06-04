@@ -620,57 +620,12 @@ namespace Service.Implementations
                 .ToListAsync(cancellationToken);
 
             if (activeVersionIds.Count == 0)
-                throw new InvalidOperationException(MissingEmbeddedContentMessage);
-
-            // Find chapters that are not fully embedded (have chunks without embeddings)
-            var chaptersWithMissingEmbeddings = await _context.Chapters
-                .Where(c => c.ProjectId == projectId && !c.IsDeleted && c.CurrentVersionId.HasValue)
-                .Select(c => new { c.Id, c.CurrentVersionId })
-                .ToListAsync(cancellationToken);
-
-            var chaptersToEmbed = new List<Guid>();
-            foreach (var chapter in chaptersWithMissingEmbeddings)
             {
-                if (!chapter.CurrentVersionId.HasValue)
-                    continue;
-
-                var hasAllChunksEmbedded = await _context.ChapterChunks
-                    .Where(cc => cc.VersionId == chapter.CurrentVersionId.Value && cc.ProjectId == projectId)
-                    .AllAsync(cc => cc.Embedding != null, cancellationToken);
-
-                if (!hasAllChunksEmbedded)
-                {
-                    chaptersToEmbed.Add(chapter.Id);
-                }
+                throw new InvalidOperationException("Dự án chưa có chương nào được soạn thảo hoặc lưu nháp. Vui lòng tạo chương trước khi phân tích.");
             }
 
-            // Auto-embed missing chapters
-            if (chaptersToEmbed.Any())
-            {
-                _logger.LogInformation(
-                    "Auto-embedding {ChapterCount} chapters for project {ProjectId} before analysis.",
-                    chaptersToEmbed.Count, projectId);
-
-                foreach (var chapterId in chaptersToEmbed)
-                {
-                    try
-                    {
-                        await _embeddingService.EmbedChapterAsync(chapterId, project.AuthorId);
-                        _logger.LogInformation("Successfully embedded chapter {ChapterId}.", chapterId);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to auto-embed chapter {ChapterId}. Continuing anyway.", chapterId);
-                    }
-                }
-            }
-
-            // Final check: ensure at least some embedded content exists
-            var hasEmbeddedChunks = await _context.ChapterChunks
-                .AnyAsync(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId), cancellationToken);
-
-            if (!hasEmbeddedChunks)
-                throw new InvalidOperationException(MissingEmbeddedContentMessage);
+            // Bỏ việc chặn hoặc tự động nhúng đồng bộ trên luồng HTTP để tránh timeout / lỗi mạng (network error).
+            // Tiến trình chạy ngầm ProjectAnalysisJobWorker sẽ tự động thực hiện tách chunk và nhúng các chương còn thiếu khi chạy job.
         }
 
         private async Task<ProjectAnalysisSnapshotState> BuildProjectSnapshotAsync(Guid projectId, CancellationToken cancellationToken)
