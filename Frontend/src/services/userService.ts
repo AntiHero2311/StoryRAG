@@ -28,11 +28,11 @@ export const userService = {
     uploadAvatar: async (file: File): Promise<string> => {
         const formData = new FormData();
         formData.append('file', file);
-        const response = await api.post<{ avatarUrl: string }>('/user/avatar', formData, {
+        const response = await api.post<{ avatarUrl?: string; AvatarUrl?: string }>('/user/avatar', formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
         });
-        return response.data.avatarUrl;
+        return response.data.avatarUrl ?? response.data.AvatarUrl ?? '';
     },
 };

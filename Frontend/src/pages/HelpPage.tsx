@@ -21,7 +21,6 @@ function normalizeList<T>(data: unknown): T[] {
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   'Tổng quan': { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/20' },
-  'General': { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/20' },
   'Bắt đầu': { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20' },
   'AI & RAG': { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20' },
   'Phân tích': { bg: 'bg-indigo-500/10', text: 'text-indigo-400', border: 'border-indigo-500/20' },
@@ -33,8 +32,9 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string
 
 function getCategoryStyle(cat?: string) {
   if (!cat) return { bg: 'bg-zinc-500/10', text: 'text-zinc-400', border: 'border-zinc-500/20' };
+  const normalizedKey = cat.toLowerCase() === 'general' ? 'Tổng quan' : cat;
   const normalized = Object.keys(CATEGORY_COLORS).find(
-    (k) => k.toLowerCase() === cat.toLowerCase()
+    (k) => k.toLowerCase() === normalizedKey.toLowerCase()
   );
   return normalized ? CATEGORY_COLORS[normalized] : { bg: 'bg-zinc-500/10', text: 'text-zinc-400', border: 'border-zinc-500/20' };
 }
@@ -95,7 +95,7 @@ export default function HelpPage() {
   const groupedFaqs = useMemo(() => {
     const groups: Record<string, Faq[]> = {};
     filteredFaqs.forEach((f) => {
-      const cat = f.category || 'Chung';
+      const cat = f.category && f.category.toLowerCase() === 'general' ? 'Tổng quan' : (f.category || 'Tổng quan');
       if (!groups[cat]) groups[cat] = [];
       groups[cat].push(f);
     });

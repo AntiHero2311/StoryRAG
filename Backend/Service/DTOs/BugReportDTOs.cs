@@ -11,6 +11,7 @@ namespace Service.DTOs
         public string Category { get; set; } = "Bug";
         // Low | Medium | High
         public string Priority { get; set; } = "Medium";
+        public string? ImageUrl { get; set; }
     }
 
     public class UpdateBugReportRequest
@@ -33,6 +34,7 @@ namespace Service.DTOs
         public string Status { get; set; } = string.Empty;
         public string? StaffNote { get; set; }
         public string? ResolvedByName { get; set; }
+        public string? ImageUrl { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
     }

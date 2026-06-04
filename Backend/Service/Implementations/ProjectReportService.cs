@@ -581,8 +581,23 @@ namespace Service.Implementations
                 }
             }
 
-            // 7. Deduct usage — trừ cả analysis count và token
-            sub.UsedAnalysisCount += 1;
+            // 7. Deduct usage — trừ cả analysis count và token, nhưng chỉ nếu phân tích hợp lệ
+            // Kiểm tra xem phân tích có dữ liệu thực tế không trước khi tính vào lượt
+            bool hasValidAnalysisData = criteria.Count > 0;
+            
+            if (!hasValidAnalysisData)
+            {
+                _logger.LogWarning(
+                    "Analysis for project {ProjectId} user {UserId} produced no criteria. " +
+                    "Report saved but UsedAnalysisCount NOT incremented.",
+                    projectId, userId);
+            }
+            else
+            {
+                // Chỉ tăng counter khi phân tích thực sự có kết quả
+                sub.UsedAnalysisCount += 1;
+            }
+            
             sub.UsedTokens += analyzeTokens;
             await _context.SaveChangesAsync(cancellationToken);
 

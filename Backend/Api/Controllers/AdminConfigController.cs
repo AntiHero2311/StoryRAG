@@ -141,6 +141,23 @@ namespace Api.Controllers
             var userId = GetUserId();
             if (userId == null) return Unauthorized(new { Message = "Không xác định được danh tính admin." });
 
+            // Get old config values for metadata logging
+            var oldConfig = new System.Collections.Generic.Dictionary<string, object>
+            {
+                [KeyChunkSize] = await _sysConfig.GetAsync(KeyChunkSize, DefaultChunkSize),
+                [KeyChunkOverlap] = await _sysConfig.GetAsync(KeyChunkOverlap, DefaultChunkOverlap),
+                [KeyTopKChat] = await _sysConfig.GetAsync(KeyTopKChat, DefaultTopKChat),
+                [KeyTopKReport] = await _sysConfig.GetAsync(KeyTopKReport, DefaultTopKReport),
+                [KeySplitter] = await _sysConfig.GetAsync(KeySplitter, DefaultSplitter),
+                [KeyStage1BatchChunks] = await _sysConfig.GetAsync(KeyStage1BatchChunks, DefaultStage1BatchChunks),
+                [KeyStage1MaxChunkChars] = await _sysConfig.GetAsync(KeyStage1MaxChunkChars, DefaultStage1MaxChunkChars),
+                [KeyFactsJsonMaxChars] = await _sysConfig.GetAsync(KeyFactsJsonMaxChars, DefaultFactsJsonMaxChars),
+                [KeyBibleMaxChars] = await _sysConfig.GetAsync(KeyBibleMaxChars, DefaultBibleMaxChars),
+                [KeyEstimatedTokensPerQueryEmbed] = await _sysConfig.GetAsync(KeyEstimatedTokensPerQueryEmbed, DefaultEstimatedTokensPerQueryEmbed),
+                [KeyRubricBatchSize] = await _sysConfig.GetAsync(KeyRubricBatchSize, DefaultRubricBatchSize),
+                [KeyAnalyzeRpmLimit] = await _sysConfig.GetAsync(KeyAnalyzeRpmLimit, DefaultAnalyzeRpmLimit)
+            };
+
             await _sysConfig.SetAsync(KeyChunkSize,    req.ChunkSize,    userId.Value);
             await _sysConfig.SetAsync(KeyChunkOverlap, req.ChunkOverlap, userId.Value);
             await _sysConfig.SetAsync(KeyTopKChat,     req.TopKChat,     userId.Value);
@@ -155,7 +172,24 @@ namespace Api.Controllers
             await _sysConfig.SetAsync(KeyRubricBatchSize, req.RubricBatchSize, userId.Value);
             await _sysConfig.SetAsync(KeyAnalyzeRpmLimit, req.AnalyzeRpmLimit, userId.Value);
 
-            await _auditLog.LogAsync("Config", "RAG", "Cập nhật cấu hình RAG và hiệu năng hệ thống nâng cao", userId.Value);
+            var newConfig = new System.Collections.Generic.Dictionary<string, object>
+            {
+                [KeyChunkSize] = req.ChunkSize,
+                [KeyChunkOverlap] = req.ChunkOverlap,
+                [KeyTopKChat] = req.TopKChat,
+                [KeyTopKReport] = req.TopKReport,
+                [KeySplitter] = req.Splitter!.ToLower(),
+                [KeyStage1BatchChunks] = req.Stage1BatchChunks,
+                [KeyStage1MaxChunkChars] = req.Stage1MaxChunkChars,
+                [KeyFactsJsonMaxChars] = req.FactsJsonMaxChars,
+                [KeyBibleMaxChars] = req.BibleMaxChars,
+                [KeyEstimatedTokensPerQueryEmbed] = req.EstimatedTokensPerQueryEmbed,
+                [KeyRubricBatchSize] = req.RubricBatchSize,
+                [KeyAnalyzeRpmLimit] = req.AnalyzeRpmLimit
+            };
+
+            var metadataJson = System.Text.Json.JsonSerializer.Serialize(new { old = oldConfig, @new = newConfig });
+            await _auditLog.LogAsync("Config", "RAG", "Cập nhật cấu hình RAG và hiệu năng hệ thống nâng cao", userId.Value, "Info", metadataJson);
 
             return Ok(new { Message = "Cấu hình RAG đã được cập nhật thành công." });
         }

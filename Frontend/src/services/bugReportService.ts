@@ -16,6 +16,7 @@ export interface BugReportResponse {
     status: BugStatus;
     staffNote: string | null;
     resolvedByName: string | null;
+    imageUrl: string | null;
     createdAt: string;
     updatedAt: string | null;
 }
@@ -33,6 +34,7 @@ export interface CreateBugReportRequest {
     description: string;
     category: BugCategory;
     priority: BugPriority;
+    imageUrl?: string;
 }
 
 export interface UpdateBugReportRequest {
@@ -43,6 +45,17 @@ export interface UpdateBugReportRequest {
 export const bugReportService = {
     create: (data: CreateBugReportRequest) =>
         api.post<BugReportResponse>('/bug-reports', data).then(r => r.data),
+
+    uploadImage: async (file: File): Promise<string> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await api.post<{ imageUrl?: string; ImageUrl?: string }>('/bug-reports/upload', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+        return response.data.imageUrl ?? response.data.ImageUrl ?? '';
+    },
 
     getMy: () =>
         api.get<BugReportResponse[]>('/bug-reports/my').then(r => r.data),

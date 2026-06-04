@@ -37,7 +37,7 @@ export const faqService = {
     api.put<Faq>(`/faqs/admin/${id}`, data).then(r => r.data),
 
   togglePublish: (id: string, published: boolean) =>
-    api.patch<Faq>(`/faqs/admin/${id}/publish`, published).then(r => r.data),
+    api.patch<Faq>(`/faqs/admin/${id}/publish`, { published }).then(r => r.data),
 
   delete: (id: string) =>
     api.delete(`/faqs/admin/${id}`),

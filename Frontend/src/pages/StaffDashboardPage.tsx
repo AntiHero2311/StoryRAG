@@ -58,6 +58,14 @@ function DetailModal({
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
+    const getFullUrl = (url?: string) => {
+        if (!url) return '';
+        if (url.startsWith('http') || url.startsWith('data:')) return url;
+        const base = import.meta.env.VITE_API_BASE_URL ?? 'https://localhost:7259/api';
+        const cleanBase = base.endsWith('/api') ? base.slice(0, -4) : base;
+        return `${cleanBase}${url.startsWith('/') ? '' : '/'}${url}`;
+    };
+
     const handleSave = async () => {
         setSaving(true);
         setError('');
@@ -116,6 +124,27 @@ function DetailModal({
                             {report.description}
                         </p>
                     </div>
+
+                    {/* Image / Attachment */}
+                    {report.imageUrl && (
+                        <div>
+                            <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-2">Ảnh minh chứng</label>
+                            <div className="w-full max-h-60 rounded-xl overflow-hidden border border-[var(--border-color)] bg-[var(--input-bg)] flex items-center justify-center p-2">
+                                <a 
+                                    href={getFullUrl(report.imageUrl)} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="w-full flex items-center justify-center hover:opacity-90 transition-opacity"
+                                >
+                                    <img 
+                                        src={getFullUrl(report.imageUrl)} 
+                                        alt="Minh chứng lỗi" 
+                                        className="max-w-full max-h-48 object-contain rounded-lg border border-[var(--border-color)]"
+                                    />
+                                </a>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Status picker */}
                     <div>

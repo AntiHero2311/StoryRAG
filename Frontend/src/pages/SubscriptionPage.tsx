@@ -151,7 +151,9 @@ function UsageCard({
     tone: UsageTone;
 }) {
     const unlimited = treatAsUnlimited && max >= 9999;
-    const pct = unlimited ? 12 : Math.min((used / Math.max(max, 1)) * 100, 100);
+    const pct = unlimited
+        ? (used > 0 ? 12 : 0)
+        : Math.min((used / Math.max(max, 1)) * 100, 100);
     const highUsage = !unlimited && pct >= 80;
 
     const gradient = highUsage
