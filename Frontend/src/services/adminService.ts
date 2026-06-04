@@ -148,6 +148,7 @@ export interface SystemLogItem {
     actorId: string | null;
     actorName: string | null;
     createdAt: string;
+    metadataJson?: string | null;
 }
 
 export interface SystemLogsPage {

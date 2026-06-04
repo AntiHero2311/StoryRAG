@@ -12,6 +12,7 @@ namespace Service.DTOs
         public string Message { get; set; } = string.Empty;
         public Guid? ActorId { get; set; }
         public string? ActorName { get; set; }
+        public string? MetadataJson { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 

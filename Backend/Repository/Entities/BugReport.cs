@@ -34,6 +34,9 @@ namespace Repository.Entities
         [MaxLength(1000)]
         public string? StaffNote { get; set; }
 
+        [MaxLength(500)]
+        public string? ImageUrl { get; set; }
+
         public Guid? ResolvedById { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

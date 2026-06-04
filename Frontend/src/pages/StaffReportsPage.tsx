@@ -7,8 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   BarChart2,
-  CheckCircle2,
-  Clock,
   Eye,
 } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
@@ -30,7 +28,6 @@ function formatDate(iso: string) {
 export default function StaffReportsPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'Pending' | 'Released'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [rows, setRows] = useState<StaffPendingReportItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -43,7 +40,7 @@ export default function StaffReportsPage() {
     setLoading(true);
     setError('');
     try {
-      const data = await analysisJobService.getPendingReports(page, PAGE_SIZE, statusFilter);
+      const data = await analysisJobService.getPendingReports(page, PAGE_SIZE, 'all');
       setRows(data.items ?? []);
       setTotalCount(data.totalCount ?? 0);
     } catch {
@@ -53,7 +50,7 @@ export default function StaffReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter]);
+  }, [page]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -110,27 +107,7 @@ export default function StaffReportsPage() {
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            {/* Filter Tabs */}
-            <div className="flex bg-[var(--bg-surface)] border border-[var(--border-color)] p-1 rounded-xl">
-              {(['all', 'Pending', 'Released'] as const).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => {
-                    setStatusFilter(status);
-                    setPage(1);
-                  }}
-                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                    statusFilter === status
-                      ? 'bg-indigo-600 text-white shadow-sm font-bold'
-                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  {status === 'all' ? 'Tất cả' : status === 'Pending' ? 'Chưa phát hành' : 'Đã phát hành'}
-                </button>
-              ))}
-            </div>
-
+          <div className="flex flex-wrap items-center justify-end gap-4">
             {/* Search Input */}
             <div className="relative w-full sm:w-80">
               <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[var(--text-secondary)]">
@@ -174,14 +151,12 @@ export default function StaffReportsPage() {
                       <th className="px-5 py-4 font-semibold">Tác phẩm</th>
                       <th className="px-5 py-4 font-semibold">Tác giả</th>
                       <th className="px-5 py-4 font-semibold text-center">Điểm số AI</th>
-                      <th className="px-5 py-4 font-semibold">Trạng thái</th>
                       <th className="px-5 py-4 font-semibold">Thời gian</th>
                       <th className="px-5 py-4 font-semibold text-right">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredRows.map((r) => {
-                      const isReleased = r.review_status === 'Released';
                       return (
                         <tr
                           key={r.report_id}
@@ -196,27 +171,6 @@ export default function StaffReportsPage() {
                           <td className="px-5 py-4 text-center">
                             <span className="font-bold text-base text-indigo-400 font-mono">
                               {r.total_score != null ? Math.round(r.total_score) : '—'}
-                            </span>
-                          </td>
-                          <td className="px-5 py-4 whitespace-nowrap">
-                            <span
-                              className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${
-                                isReleased
-                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                              }`}
-                            >
-                              {isReleased ? (
-                                <>
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Đã phát hành
-                                </>
-                              ) : (
-                                <>
-                                  <Clock className="w-3.5 h-3.5" />
-                                  Chưa phát hành
-                                </>
-                              )}
                             </span>
                           </td>
                           <td className="px-5 py-4 text-[var(--text-secondary)] whitespace-nowrap text-xs">

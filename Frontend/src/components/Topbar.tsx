@@ -19,6 +19,7 @@ interface TopbarProps {
     fullName: string;
     role: string;
     userId: string;
+    avatarUrl?: string;
     pageTitle?: string;
     onLogout: () => void;
     onSettings?: () => void;
@@ -90,7 +91,7 @@ function getBugStatusLabel(status: BugReportResponse['status']) {
 
 
 // ── Component ──────────────────────────────────────────────────────────────────
-export default function Topbar({ fullName, role, userId, pageTitle, onLogout, onSettings }: TopbarProps) {
+export default function Topbar({ fullName, role, userId, avatarUrl, pageTitle, onLogout, onSettings }: TopbarProps) {
     const navigate = useNavigate();
     const [userOpen, setUserOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
@@ -105,6 +106,14 @@ export default function Topbar({ fullName, role, userId, pageTitle, onLogout, on
     const [showWelcome, setShowWelcome] = useState(false);
     const [bugModalOpen, setBugModalOpen] = useState(false);
     const badge = getRoleBadge(role);
+    const getFullUrl = (url?: string) => {
+        if (!url) return '';
+        if (url.startsWith('http') || url.startsWith('data:')) return url;
+        const base = import.meta.env.VITE_API_BASE_URL ?? 'https://localhost:7259/api';
+        const cleanBase = base.endsWith('/api') ? base.slice(0, -4) : base;
+        return `${cleanBase}${url.startsWith('/') ? '' : '/'}${url}`;
+    };
+    const avatarSrc = getFullUrl(avatarUrl);
     const mergedNotifications = [...serverNotifications, ...notifications]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const unreadCount = mergedNotifications.filter(n => !n.isRead).length;
@@ -531,12 +540,21 @@ export default function Topbar({ fullName, role, userId, pageTitle, onLogout, on
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-active)'; }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
                     >
-                        <div
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-lg"
-                            style={{ background: 'var(--gradient-brand)', boxShadow: '0 0 12px rgba(99,102,241,0.35)' }}
-                        >
-                            {getInitials(fullName)}
-                        </div>
+                        {avatarSrc ? (
+                            <img
+                                src={avatarSrc}
+                                alt="Avatar"
+                                className="w-7 h-7 rounded-full object-cover"
+                                style={{ boxShadow: '0 0 12px rgba(99,102,241,0.35)' }}
+                            />
+                        ) : (
+                            <div
+                                className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-lg"
+                                style={{ background: 'var(--gradient-brand)', boxShadow: '0 0 12px rgba(99,102,241,0.35)' }}
+                            >
+                                {getInitials(fullName)}
+                            </div>
+                        )}
                         <span className="text-sm font-medium max-w-[120px] truncate hidden sm:block" style={{ color: 'var(--text-primary)' }}>
                             {fullName}
                         </span>
@@ -558,12 +576,21 @@ export default function Topbar({ fullName, role, userId, pageTitle, onLogout, on
                             >
                                 <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border-color)' }}>
                                     <div className="flex items-center gap-3">
-                                        <div
-                                            className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
-                                            style={{ background: 'var(--gradient-brand)', boxShadow: '0 0 16px rgba(99,102,241,0.3)' }}
-                                        >
-                                            {getInitials(fullName)}
-                                        </div>
+                                        {avatarSrc ? (
+                                            <img
+                                                src={avatarSrc}
+                                                alt="Avatar"
+                                                className="w-9 h-9 rounded-full object-cover shrink-0"
+                                                style={{ boxShadow: '0 0 16px rgba(99,102,241,0.3)' }}
+                                            />
+                                        ) : (
+                                            <div
+                                                className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
+                                                style={{ background: 'var(--gradient-brand)', boxShadow: '0 0 16px rgba(99,102,241,0.3)' }}
+                                            >
+                                                {getInitials(fullName)}
+                                            </div>
+                                        )}
                                         <div className="min-w-0">
                                             <p className="text-[var(--text-primary)] text-sm font-semibold truncate">{fullName}</p>
                                             <span className={`inline-block mt-0.5 text-[10px] px-2 py-0.5 rounded-full border font-medium ${badge.bg} ${badge.text} ${badge.border}`}>

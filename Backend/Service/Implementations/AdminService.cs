@@ -258,7 +258,24 @@ namespace Service.Implementations
             {
                 logMsg += $": [{string.Join(", ", diffs)}]";
             }
-            await _auditLog.LogAsync("User", "Update", logMsg, actingAdminId);
+
+            var oldUser = new System.Collections.Generic.Dictionary<string, object>
+            {
+                ["FullName"] = oldFullName,
+                ["Email"] = oldEmail,
+                ["Role"] = oldRole,
+                ["IsActive"] = oldIsActive
+            };
+            var newUser = new System.Collections.Generic.Dictionary<string, object>
+            {
+                ["FullName"] = user.FullName,
+                ["Email"] = user.Email,
+                ["Role"] = user.Role,
+                ["IsActive"] = user.IsActive
+            };
+            var metadataJson = System.Text.Json.JsonSerializer.Serialize(new { old = oldUser, @new = newUser });
+
+            await _auditLog.LogAsync("User", "Update", logMsg, actingAdminId, "Info", metadataJson);
             return MapSummary(user);
         }
 
@@ -426,7 +443,37 @@ namespace Service.Implementations
                 logMsg += " (không thay đổi dữ liệu)";
             }
 
-            await _auditLog.LogAsync("Config", "Limits", logMsg, adminId);
+            var oldLimits = new System.Collections.Generic.Dictionary<string, object>
+            {
+                ["MaxUploadMb"] = oldMaxUpload,
+                ["MaxProjectsPerAuthor"] = oldMaxProjects,
+                ["MaintenanceMode"] = oldMaintenance,
+                ["SmtpHost"] = oldSmtpHost,
+                ["SmtpPort"] = oldSmtpPort,
+                ["SmtpUsername"] = oldSmtpUsername,
+                ["SmtpFromName"] = oldSmtpFromName,
+                ["SmtpFromAddress"] = oldSmtpFromAddress,
+                ["VnPayPaymentUrl"] = oldVnPayPaymentUrl,
+                ["VnPayTmnCode"] = oldVnPayTmnCode,
+                ["VnPayReturnUrl"] = oldVnPayReturnUrl
+            };
+            var newLimits = new System.Collections.Generic.Dictionary<string, object>
+            {
+                ["MaxUploadMb"] = request.MaxUploadMb,
+                ["MaxProjectsPerAuthor"] = request.MaxProjectsPerAuthor,
+                ["MaintenanceMode"] = request.MaintenanceMode,
+                ["SmtpHost"] = request.SmtpHost ?? "",
+                ["SmtpPort"] = request.SmtpPort,
+                ["SmtpUsername"] = request.SmtpUsername ?? "",
+                ["SmtpFromName"] = request.SmtpFromName ?? "",
+                ["SmtpFromAddress"] = request.SmtpFromAddress ?? "",
+                ["VnPayPaymentUrl"] = request.VnPayPaymentUrl ?? "",
+                ["VnPayTmnCode"] = request.VnPayTmnCode ?? "",
+                ["VnPayReturnUrl"] = request.VnPayReturnUrl ?? ""
+            };
+            var metadataJson = System.Text.Json.JsonSerializer.Serialize(new { old = oldLimits, @new = newLimits });
+
+            await _auditLog.LogAsync("Config", "Limits", logMsg, adminId, "Info", metadataJson);
 
             return await GetSystemLimitsAsync();
         }

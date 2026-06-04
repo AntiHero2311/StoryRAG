@@ -259,7 +259,7 @@ namespace Service.Implementations
                 throw new Exception("User is inactive.");
             }
 
-            if (!string.IsNullOrWhiteSpace(payload.Picture))
+            if (!string.IsNullOrWhiteSpace(payload.Picture) && string.IsNullOrWhiteSpace(user.AvatarURL))
             {
                 user.AvatarURL = payload.Picture;
             }
@@ -382,6 +382,11 @@ namespace Service.Implementations
             if (!VerifyPasswordHash(request.OldPassword, user, out _))
             {
                 throw new Exception("Mật khẩu hiện tại không chính xác.");
+            }
+
+            if (request.OldPassword == request.NewPassword)
+            {
+                throw new Exception("Mật khẩu mới không được trùng với mật khẩu hiện tại.");
             }
 
             CreatePasswordHash(request.NewPassword, out string passwordHash, out string passwordSalt);

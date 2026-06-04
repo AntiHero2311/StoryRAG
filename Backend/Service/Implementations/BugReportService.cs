@@ -29,6 +29,7 @@ namespace Service.Implementations
                 Category = request.Category,
                 Priority = request.Priority,
                 Status = "Open",
+                ImageUrl = request.ImageUrl,
                 CreatedAt = DateTime.UtcNow,
             };
 
@@ -129,6 +130,7 @@ namespace Service.Implementations
             Status = r.Status,
             StaffNote = r.StaffNote,
             ResolvedByName = r.ResolvedBy?.FullName,
+            ImageUrl = r.ImageUrl,
             CreatedAt = r.CreatedAt,
             UpdatedAt = r.UpdatedAt,
         };
