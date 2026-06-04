@@ -1081,7 +1081,7 @@ function AnalysisContent() {
                                         onClick={() => setActiveTab('charts')}
                                         className={`pb-3 text-sm font-bold relative transition-colors ${activeTab === 'charts' ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
                                     >
-                                        Biểu đồ chuyên sâu
+                                        Nhịp độ & Cảm xúc
                                         {activeTab === 'charts' && (
                                             <div className="absolute bottom-0 left-0 w-full h-0.5 rounded-t-full bg-amber-500" />
                                         )}

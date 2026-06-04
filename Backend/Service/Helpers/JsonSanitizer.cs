@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 
@@ -274,7 +275,129 @@ namespace Service.Helpers
                 }
             }
 
-            return sb2.ToString();
+            string pass2 = sb2.ToString();
+            return RepairTruncatedJson(pass2);
+        }
+
+        public static string RepairTruncatedJson(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return "{}";
+
+            json = json.Trim();
+
+            // Try to parse first, if valid return as-is
+            try
+            {
+                using (JsonDocument.Parse(json))
+                {
+                    return json;
+                }
+            }
+            catch
+            {
+                // Proceed to repair
+            }
+
+            var sb = new StringBuilder(json);
+            bool inString = false;
+            bool isEscaped = false;
+            var stack = new List<char>();
+
+            for (int i = 0; i < sb.Length; i++)
+            {
+                char c = sb[i];
+                if (inString)
+                {
+                    if (isEscaped)
+                    {
+                        isEscaped = false;
+                    }
+                    else if (c == '\\')
+                    {
+                        isEscaped = true;
+                    }
+                    else if (c == '"')
+                    {
+                        inString = false;
+                    }
+                }
+                else
+                {
+                    if (c == '"')
+                    {
+                        inString = true;
+                    }
+                    else if (c == '{')
+                    {
+                        stack.Add('{');
+                    }
+                    else if (c == '[')
+                    {
+                        stack.Add('[');
+                    }
+                    else if (c == '}')
+                    {
+                        if (stack.Count > 0 && stack[^1] == '{')
+                            stack.RemoveAt(stack.Count - 1);
+                    }
+                    else if (c == ']')
+                    {
+                        if (stack.Count > 0 && stack[^1] == '[')
+                            stack.RemoveAt(stack.Count - 1);
+                    }
+                }
+            }
+
+            if (inString)
+            {
+                if (sb.Length > 0 && sb[^1] == '\\')
+                {
+                    sb.Length--;
+                }
+                sb.Append('"');
+            }
+
+            while (sb.Length > 0)
+            {
+                char last = sb[^1];
+                if (char.IsWhiteSpace(last) || last == ',' || last == ':')
+                {
+                    sb.Length--;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            for (int i = stack.Count - 1; i >= 0; i--)
+            {
+                char open = stack[i];
+                if (open == '{')
+                {
+                    sb.Append('}');
+                }
+                else if (open == '[')
+                {
+                    sb.Append(']');
+                }
+            }
+
+            string repaired = sb.ToString();
+
+            try
+            {
+                using (JsonDocument.Parse(repaired))
+                {
+                    return repaired;
+                }
+            }
+            catch
+            {
+                // Fallback
+            }
+
+            return repaired;
         }
     }
 }

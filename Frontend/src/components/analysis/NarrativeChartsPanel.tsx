@@ -30,40 +30,54 @@ function getBezierPath(points: { x: number; y: number }[]) {
     return path;
 }
 
-function AreaChart({ values, color, labels, onPointSelect, selectedIndex }: { 
-    values: number[]; 
-    color: string; 
+function DualAreaChart({ 
+    pacingValues, 
+    emotionValues, 
+    labels, 
+    onPointSelect, 
+    selectedIndex 
+}: { 
+    pacingValues: number[]; 
+    emotionValues: number[]; 
     labels?: (string | null | undefined)[];
     onPointSelect?: (index: number) => void;
     selectedIndex?: number | null;
 }) {
     const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
-    if (values.length === 0) {
+    if (pacingValues.length === 0) {
         return <div className="h-32 rounded-xl flex items-center justify-center text-xs text-[var(--text-secondary)]" style={{ background: 'var(--bg-hover)' }}>Không có dữ liệu biểu đồ</div>;
     }
 
-    const width = Math.max(700, values.length * 28);
+    const width = Math.max(700, pacingValues.length * 28);
     const height = 180;
 
     // Coordinate mapping
-    const pointCoords = values.map((value, index) => ({
-        x: values.length === 1 ? width / 2 : (index / (values.length - 1)) * width,
+    const pacingCoords = pacingValues.map((value, index) => ({
+        x: pacingValues.length === 1 ? width / 2 : (index / (pacingValues.length - 1)) * width,
         y: height - (Math.min(Math.max(value, 0), 100) / 100) * height,
     }));
 
-    const pathData = getBezierPath(pointCoords);
-    const areaPathData = pointCoords.length > 0 
-        ? `${pathData} L ${pointCoords[pointCoords.length - 1].x} ${height} L ${pointCoords[0].x} ${height} Z`
+    const emotionCoords = emotionValues.map((value, index) => ({
+        x: emotionValues.length === 1 ? width / 2 : (index / (emotionValues.length - 1)) * width,
+        y: height - (Math.min(Math.max(value, 0), 100) / 100) * height,
+    }));
+
+    const pacingPathData = getBezierPath(pacingCoords);
+    const pacingAreaPathData = pacingCoords.length > 0 
+        ? `${pacingPathData} L ${pacingCoords[pacingCoords.length - 1].x} ${height} L ${pacingCoords[0].x} ${height} Z`
+        : '';
+
+    const emotionPathData = getBezierPath(emotionCoords);
+    const emotionAreaPathData = emotionCoords.length > 0 
+        ? `${emotionPathData} L ${emotionCoords[emotionCoords.length - 1].x} ${height} L ${emotionCoords[0].x} ${height} Z`
         : '';
 
     const annotatedPoints = labels
-        ? pointCoords
+        ? pacingCoords
             .map((p, i) => ({ ...p, label: labels[i], index: i }))
             .filter(p => p.label && p.label.includes(':')) // Only render special highlights
         : [];
-
-    const gradientId = `grad-${color.replace('#', '')}`;
 
     return (
         <div className="w-full overflow-hidden rounded-xl p-3 relative group" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
@@ -86,12 +100,20 @@ function AreaChart({ values, color, labels, onPointSelect, selectedIndex }: {
                 <div style={{ width: `${width}px`, minWidth: '100%' }}>
                     <svg viewBox={`-35 -30 ${width + 50} ${height + 55}`} className="w-full h-auto select-none">
                         <defs>
-                            <linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" style={{ stopColor: color, stopOpacity: 0.35 }} />
-                                <stop offset="100%" style={{ stopColor: color, stopOpacity: 0.00 }} />
+                            <linearGradient id="grad-pacing" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" style={{ stopColor: '#f59e0b', stopOpacity: 0.22 }} />
+                                <stop offset="100%" style={{ stopColor: '#f59e0b', stopOpacity: 0.00 }} />
                             </linearGradient>
-                            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                                <feGaussianBlur stdDeviation="3" result="blur" />
+                            <linearGradient id="grad-emotion" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" style={{ stopColor: '#10b981', stopOpacity: 0.18 }} />
+                                <stop offset="100%" style={{ stopColor: '#10b981', stopOpacity: 0.00 }} />
+                            </linearGradient>
+                            <filter id="glow-pacing" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="2.5" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                            <filter id="glow-emotion" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="2.5" result="blur" />
                                 <feComposite in="SourceGraphic" in2="blur" operator="over" />
                             </filter>
                             <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
@@ -128,72 +150,103 @@ function AreaChart({ values, color, labels, onPointSelect, selectedIndex }: {
                             );
                         })}
 
-                        {/* Area Gradient */}
-                        {pointCoords.length > 0 && (
+                        {/* Area Gradients */}
+                        {pacingCoords.length > 0 && (
                             <path
-                                d={areaPathData}
-                                fill={`url(#${gradientId})`}
+                                d={pacingAreaPathData}
+                                fill="url(#grad-pacing)"
+                            />
+                        )}
+                        {emotionCoords.length > 0 && (
+                            <path
+                                d={emotionAreaPathData}
+                                fill="url(#grad-emotion)"
                             />
                         )}
 
-                        {/* Curve Line */}
-                        {pointCoords.length > 0 && (
+                        {/* Curve Lines */}
+                        {pacingCoords.length > 0 && (
                             <path
-                                d={pathData}
+                                d={pacingPathData}
                                 fill="none"
-                                stroke={color}
-                                strokeWidth="3.5"
+                                stroke="#f59e0b"
+                                strokeWidth="3"
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                filter="url(#glow)"
+                                filter="url(#glow-pacing)"
+                            />
+                        )}
+                        {emotionCoords.length > 0 && (
+                            <path
+                                d={emotionPathData}
+                                fill="none"
+                                stroke="#10b981"
+                                strokeWidth="3"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                filter="url(#glow-emotion)"
                             />
                         )}
 
                         {/* Vertical guide line on hover */}
-                        {hoveredIdx !== null && pointCoords[hoveredIdx] && (
+                        {hoveredIdx !== null && pacingCoords[hoveredIdx] && (
                             <line 
-                                x1={pointCoords[hoveredIdx].x}
+                                x1={pacingCoords[hoveredIdx].x}
                                 y1={0}
-                                x2={pointCoords[hoveredIdx].x}
+                                x2={pacingCoords[hoveredIdx].x}
                                 y2={height}
-                                stroke={color}
-                                strokeWidth="1.2"
+                                stroke="rgba(255, 255, 255, 0.25)"
+                                strokeWidth="1"
                                 strokeDasharray="3 3"
-                                opacity="0.75"
+                                opacity="0.8"
                             />
                         )}
 
-                        {/* Interactive Points */}
-                        {pointCoords.map((p, i) => {
+                        {/* Pacing dots */}
+                        {pacingCoords.map((p, i) => {
                             const isSelected = selectedIndex === i;
                             const isHovered = hoveredIdx === i;
                             return (
-                                <circle 
-                                    key={i} 
-                                    cx={p.x} 
-                                    cy={p.y} 
-                                    r={isSelected ? "7" : isHovered ? "6.5" : "4"} 
-                                    fill={isSelected ? "#ffffff" : color} 
-                                    stroke={isSelected ? color : "var(--bg-app)"}
-                                    strokeWidth={isSelected ? "3" : "2"}
-                                    className="cursor-pointer transition-all duration-150"
-                                    style={{ filter: isSelected || isHovered ? 'url(#shadow)' : 'none' }}
-                                    onClick={() => onPointSelect?.(i)}
-                                    onMouseEnter={() => setHoveredIdx(i)}
-                                    onMouseLeave={() => setHoveredIdx(null)}
+                                <circle
+                                    key={`pacing-dot-${i}`}
+                                    cx={p.x}
+                                    cy={p.y}
+                                    r={isSelected ? "5.5" : isHovered ? "4.5" : "2.2"}
+                                    fill={isSelected ? "#ffffff" : "#f59e0b"}
+                                    stroke="#f59e0b"
+                                    strokeWidth={isSelected ? "2.5" : "1"}
+                                    pointerEvents="none"
+                                />
+                            );
+                        })}
+
+                        {/* Emotion dots */}
+                        {emotionCoords.map((p, i) => {
+                            const isSelected = selectedIndex === i;
+                            const isHovered = hoveredIdx === i;
+                            return (
+                                <circle
+                                    key={`emotion-dot-${i}`}
+                                    cx={p.x}
+                                    cy={p.y}
+                                    r={isSelected ? "5.5" : isHovered ? "4.5" : "2.2"}
+                                    fill={isSelected ? "#ffffff" : "#10b981"}
+                                    stroke="#10b981"
+                                    strokeWidth={isSelected ? "2.5" : "1"}
+                                    pointerEvents="none"
                                 />
                             );
                         })}
 
                         {/* X-axis labels */}
-                        {values.map((_, index) => {
-                            const pointSpacing = values.length === 1 ? width : width / (values.length - 1);
+                        {pacingValues.map((_, index) => {
+                            const pointSpacing = pacingValues.length === 1 ? width : width / (pacingValues.length - 1);
                             const labelStep = Math.max(1, Math.ceil(65 / pointSpacing));
-                            const shouldRenderLabel = index % labelStep === 0 || index === values.length - 1;
+                            const shouldRenderLabel = index % labelStep === 0 || index === pacingValues.length - 1;
 
                             if (!shouldRenderLabel) return null;
 
-                            const xVal = values.length === 1 ? width / 2 : (index / (values.length - 1)) * width;
+                            const xVal = pacingValues.length === 1 ? width / 2 : (index / (pacingValues.length - 1)) * width;
                             const isChapterLabel = labels && labels[index] && labels[index]!.startsWith("Chương");
                             const labelText = isChapterLabel ? labels[index] : `Đoạn ${index + 1}`;
 
@@ -212,30 +265,61 @@ function AreaChart({ values, color, labels, onPointSelect, selectedIndex }: {
                             );
                         })}
 
+                        {/* Transparent capture vertical bars for hover and click */}
+                        {pacingCoords.map((p, i) => {
+                            const rectWidth = width / Math.max(1, pacingValues.length - 1);
+                            const xStart = pacingValues.length === 1 ? 0 : p.x - rectWidth / 2;
+                            return (
+                                <rect
+                                    key={`capture-${i}`}
+                                    x={xStart}
+                                    y={-25}
+                                    width={pacingValues.length === 1 ? width : rectWidth}
+                                    height={height + 50}
+                                    fill="transparent"
+                                    className="cursor-pointer"
+                                    onMouseEnter={() => setHoveredIdx(i)}
+                                    onMouseLeave={() => setHoveredIdx(null)}
+                                    onClick={() => onPointSelect?.(i)}
+                                />
+                            );
+                        })}
+
                         {/* Dynamic SVG Tooltip on Hover */}
-                        {hoveredIdx !== null && pointCoords[hoveredIdx] && (
+                        {hoveredIdx !== null && pacingCoords[hoveredIdx] && (
                             <g className="pointer-events-none" style={{ filter: 'url(#shadow)' }}>
                                 <rect 
-                                    x={Math.max(5, Math.min(width - 115, pointCoords[hoveredIdx].x - 55))} 
-                                    y="-24" 
-                                    width="110" 
-                                    height="18" 
+                                    x={Math.max(5, Math.min(width - 125, pacingCoords[hoveredIdx].x - 60))} 
+                                    y="-36" 
+                                    width="120" 
+                                    height="30" 
                                     rx="5" 
                                     fill="rgba(15, 23, 42, 0.95)" 
-                                    stroke={color}
+                                    stroke="rgba(255, 255, 255, 0.15)"
                                     strokeWidth="1"
                                 />
                                 <text
-                                    x={Math.max(60, Math.min(width - 60, pointCoords[hoveredIdx].x))}
-                                    y="-12"
+                                    x={Math.max(65, Math.min(width - 65, pacingCoords[hoveredIdx].x))}
+                                    y="-24"
                                     textAnchor="middle"
                                     fill="white"
                                     fontSize="9"
                                     fontWeight="700"
                                 >
                                     {labels && labels[hoveredIdx] && !labels[hoveredIdx]!.includes(':')
-                                        ? `${labels[hoveredIdx]}: ${values[hoveredIdx].toFixed(1)}` 
-                                        : `Đoạn ${hoveredIdx + 1}: ${values[hoveredIdx].toFixed(1)}`}
+                                        ? labels[hoveredIdx]
+                                        : `Đoạn ${hoveredIdx + 1}`}
+                                </text>
+                                <text
+                                    x={Math.max(65, Math.min(width - 65, pacingCoords[hoveredIdx].x))}
+                                    y="-12"
+                                    textAnchor="middle"
+                                    fontSize="8.5"
+                                    fontWeight="600"
+                                >
+                                    <tspan fill="#f59e0b">⚡ Pacing: {pacingValues[hoveredIdx].toFixed(0)}</tspan>
+                                    <tspan fill="rgba(255,255,255,0.3)"> | </tspan>
+                                    <tspan fill="#10b981">🎭 Emotion: {emotionValues[hoveredIdx].toFixed(0)}</tspan>
                                 </text>
                             </g>
                         )}
@@ -250,7 +334,7 @@ function AreaChart({ values, color, labels, onPointSelect, selectedIndex }: {
                                     height="16" 
                                     rx="5" 
                                     fill="rgba(20,20,20,0.88)" 
-                                    stroke={color}
+                                    stroke="#f59e0b"
                                     strokeWidth="1"
                                     style={{ filter: 'url(#shadow)' }}
                                 />
@@ -264,7 +348,7 @@ function AreaChart({ values, color, labels, onPointSelect, selectedIndex }: {
                                 >
                                     {p.label}
                                 </text>
-                                <path d={`M ${p.x} ${p.y-14} L ${p.x} ${p.y-6}`} stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+                                <path d={`M ${p.x} ${p.y-14} L ${p.x} ${p.y-6}`} stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" />
                             </g>
                         ))}
                     </svg>
@@ -282,6 +366,95 @@ interface ParsedInsight {
     bgGradient: string;
     borderColor: string;
     content: string;
+}
+
+function getSegmentExplanation(pacing: number, valence: number, dominant: string) {
+    // pacing is 0-100
+    // valence is -1 to 1
+    const pTag = pacing > 65 ? 'High' : pacing < 35 ? 'Low' : 'Med';
+    const vTag = valence > 0.3 ? 'Pos' : valence < -0.3 ? 'Neg' : 'Neu';
+    const key = `${pTag}_${vTag}`;
+
+    const config: Record<string, { tag: string; desc: string; color: string; bgColor: string; borderColor: string; icon: string }> = {
+        High_Pos: {
+            tag: 'Kịch tính & Hào hứng',
+            desc: 'Nhịp truyện dồn dập kết hợp cảm xúc thăng hoa. Đây là phân đoạn đỉnh điểm của niềm vui, chiến thắng vang dội, hoặc những cảnh hành động giải cứu thành công đầy phấn khích.',
+            color: '#10b981', // green for positive
+            bgColor: 'rgba(16, 185, 129, 0.08)',
+            borderColor: 'rgba(16, 185, 129, 0.25)',
+            icon: '🎉'
+        },
+        High_Neg: {
+            tag: 'Kịch tính & Nguy hiểm',
+            desc: 'Nhịp truyện đẩy lên cực độ đi kèm cảm xúc căng thẳng, bất an. Thường là những cuộc đụng độ sinh tử, mâu thuẫn bùng nổ dữ dội hoặc khoảnh khắc nhân vật đối mặt với hiểm nguy tột cùng.',
+            color: '#ef4444', // red for negative action
+            bgColor: 'rgba(239, 68, 68, 0.08)',
+            borderColor: 'rgba(239, 68, 68, 0.25)',
+            icon: '⚠️'
+        },
+        High_Neu: {
+            tag: 'Nhịp nhanh & Khẩn trương',
+            desc: 'Diễn biến hành động nhanh chóng nhưng cảm xúc nhân vật ở trạng thái tập trung cao độ, khách quan. Thường xuất hiện trong các cảnh rượt đuổi, điều tra nhanh hoặc giải quyết tình huống khẩn cấp.',
+            color: '#fbbf24', // yellow
+            bgColor: 'rgba(251, 191, 36, 0.08)',
+            borderColor: 'rgba(251, 191, 36, 0.25)',
+            icon: '⚡'
+        },
+        Med_Pos: {
+            tag: 'Tiến triển & Ấm áp',
+            desc: 'Nhịp truyện vừa phải đan xen cảm xúc ấm áp. Thường biểu thị các mối quan hệ có bước tiến tốt đẹp, cuộc trò chuyện thấu hiểu sâu sắc hoặc nhân vật tìm thấy hy vọng mới trên hành trình.',
+            color: '#34d399',
+            bgColor: 'rgba(52, 211, 153, 0.08)',
+            borderColor: 'rgba(52, 211, 153, 0.25)',
+            icon: '🤝'
+        },
+        Med_Neg: {
+            tag: 'Trầm buồn & Bất ổn',
+            desc: 'Nhịp độ kể chuyện trung bình nhưng dòng cảm xúc có xu hướng u uất. Thể hiện sự lo âu, lo ngại ngầm hoặc những trăn trở, nuối tiếc đang dần nhen nhóm trong nội tâm nhân vật.',
+            color: '#60a5fa', // blue
+            bgColor: 'rgba(96, 165, 250, 0.08)',
+            borderColor: 'rgba(96, 165, 250, 0.25)',
+            icon: '🌧️'
+        },
+        Med_Neu: {
+            tag: 'Dòng chảy Tự nhiên',
+            desc: 'Sự cân bằng ổn định giữa diễn biến câu chuyện và trạng thái tinh thần. Thường là các phân đoạn phát triển cốt truyện thông thường, truyền tải thông tin hoặc các cảnh chuyển tiếp mượt mà.',
+            color: '#9ca3af', // gray
+            bgColor: 'rgba(156, 163, 175, 0.08)',
+            borderColor: 'rgba(156, 163, 175, 0.25)',
+            icon: '📖'
+        },
+        Low_Pos: {
+            tag: 'Bình yên & Chữa lành',
+            desc: 'Nhịp độ chậm rãi, thư giãn cùng cảm xúc tích cực, nhẹ nhàng. Những khoảnh khắc ngọt ngào, tĩnh lặng để nhân vật chiêm nghiệm, hồi phục tinh thần hoặc tận hưởng niềm hạnh phúc giản đơn.',
+            color: '#818cf8', // indigo
+            bgColor: 'rgba(129, 140, 248, 0.08)',
+            borderColor: 'rgba(129, 140, 248, 0.25)',
+            icon: '🌸'
+        },
+        Low_Neg: {
+            tag: 'Đau xót & U sầu',
+            desc: 'Nhịp truyện chậm rãi trong bầu không khí buồn bã, tuyệt vọng. Thể hiện nỗi đau mất mát, sự cô độc tuyệt đối hoặc những suy tư dằn vặt thầm lặng vô hạn của nhân vật.',
+            color: '#f472b6', // pink/purple u sầu
+            bgColor: 'rgba(244, 114, 182, 0.08)',
+            borderColor: 'rgba(244, 114, 182, 0.25)',
+            icon: '🖤'
+        },
+        Low_Neu: {
+            tag: 'Chiêm nghiệm & Tả cảnh',
+            desc: 'Nhịp truyện chậm rãi và cảm xúc trung hòa. Thích hợp cho những đoạn tả cảnh thiên nhiên, độc thoại nội tâm sâu lắng hoặc chuẩn bị tâm lý cho các biến cố sắp diễn ra.',
+            color: '#a78bfa', // purple
+            bgColor: 'rgba(167, 139, 250, 0.08)',
+            borderColor: 'rgba(167, 139, 250, 0.25)',
+            icon: '🍃'
+        }
+    };
+
+    const exp = config[key] || config['Med_Neu'];
+    return {
+        ...exp,
+        dominantEmotionText: dominant ? `Cảm xúc chủ đạo: ${dominant}` : ''
+    };
 }
 
 export default function NarrativeChartsPanel({ data, loading }: Props) {
@@ -320,53 +493,70 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
 
     if (!data) return null;
 
-    const hasAnyData = data.pacing.length > 0 || data.emotions.length > 0;
+    const hasAnyData = data.pacing.length > 0;
     if (!hasAnyData) {
         return (
             <div className="rounded-2xl p-6 mt-5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
                 <p className="text-[var(--text-primary)] font-bold text-base">Phân tích chuyên biệt</p>
-                <p className="text-[var(--text-secondary)] text-xs mt-2">Chưa đủ dữ liệu để tạo biểu đồ nhịp độ & dòng cảm xúc.</p>
+                <p className="text-[var(--text-secondary)] text-xs mt-2">Chưa đủ dữ liệu để tạo biểu đồ nhịp độ kể chuyện.</p>
             </div>
         );
     }
 
-    // ── 1. COMPUTE OVERVIEW DATA (Grouped and Averaged by Chapter) ──
-    const overviewPacingValues = uniqueChapters.map(ch => {
-        const pts = data.pacing.filter(p => p.chapterNumber === ch);
-        return pts.reduce((sum, p) => sum + p.score, 0) / Math.max(1, pts.length);
-    });
-    const overviewPacingLabels = uniqueChapters.map(ch => `Chương ${ch}`);
+    const mapValenceToScore = (valence: number) => ((valence + 1) / 2) * 100;
 
-    const overviewEmotionValues = uniqueChapters.map(ch => {
-        const pts = data.emotions.filter(e => e.chapterNumber === ch);
-        const avgValence = pts.reduce((sum, e) => sum + e.valence, 0) / Math.max(1, pts.length);
-        return ((avgValence + 1) / 2) * 100;
-    });
-    const overviewEmotionLabels = uniqueChapters.map(ch => `Chương ${ch}`);
+    const detailPacingPoints = useMemo(() => {
+        return data.pacing
+            .filter(p => p.chapterNumber === activeChapter)
+            .sort((a, b) => a.segmentIndex - b.segmentIndex);
+    }, [data.pacing, activeChapter]);
+
+    const detailEmotionPoints = useMemo(() => {
+        return data.emotions
+            .filter(e => e.chapterNumber === activeChapter)
+            .sort((a, b) => a.segmentIndex - b.segmentIndex);
+    }, [data.emotions, activeChapter]);
+
+    // ── 1. COMPUTE OVERVIEW DATA (Grouped and Averaged by Chapter) ──
+    const overviewPacingValues = useMemo(() => {
+        return uniqueChapters.map(ch => {
+            const pts = data.pacing.filter(p => p.chapterNumber === ch);
+            return pts.reduce((sum, p) => sum + p.score, 0) / Math.max(1, pts.length);
+        });
+    }, [data.pacing, uniqueChapters]);
+
+    const overviewEmotionValues = useMemo(() => {
+        return uniqueChapters.map(ch => {
+            const pts = data.emotions.filter(e => e.chapterNumber === ch);
+            const scores = pts.map(e => mapValenceToScore(e.valence));
+            return scores.reduce((sum, s) => sum + s, 0) / Math.max(1, scores.length);
+        });
+    }, [data.emotions, uniqueChapters]);
+
+    const overviewLabels = useMemo(() => {
+        return uniqueChapters.map(ch => `Chương ${ch}`);
+    }, [uniqueChapters]);
 
     // ── 2. COMPUTE DETAIL DATA (Filtered by selected chapter) ──
-    const detailPacingValues = data.pacing
-        .filter(p => p.chapterNumber === activeChapter)
-        .map(p => p.score);
-    const detailPacingLabels = data.pacing
-        .filter(p => p.chapterNumber === activeChapter)
-        .map(p => p.label);
+    const detailPacingValues = useMemo(() => {
+        return detailPacingPoints.map(p => p.score);
+    }, [detailPacingPoints]);
 
-    const detailEmotionValues = data.emotions
-        .filter(e => e.chapterNumber === activeChapter)
-        .map(e => ((e.valence + 1) / 2) * 100);
-    const detailEmotionLabels = data.emotions
-        .filter(e => e.chapterNumber === activeChapter)
-        .map(e => e.label);
+    const detailEmotionValues = useMemo(() => {
+        return detailPacingPoints.map(p => {
+            const match = detailEmotionPoints.find(e => e.segmentIndex === p.segmentIndex);
+            return match ? mapValenceToScore(match.valence) : 50;
+        });
+    }, [detailPacingPoints, detailEmotionPoints]);
 
-    // Get original segment index in detail mode to preview text
-    const detailPacingPoints = data.pacing.filter(p => p.chapterNumber === activeChapter);
+    const detailLabels = useMemo(() => {
+        return detailPacingPoints.map(p => p.label);
+    }, [detailPacingPoints]);
 
     // Active chart series
     const activePacingValues = viewMode === 'overview' ? overviewPacingValues : detailPacingValues;
-    const activePacingLabels = viewMode === 'overview' ? overviewPacingLabels : detailPacingLabels;
     const activeEmotionValues = viewMode === 'overview' ? overviewEmotionValues : detailEmotionValues;
-    const activeEmotionLabels = viewMode === 'overview' ? overviewEmotionLabels : detailEmotionLabels;
+    const activeLabels = viewMode === 'overview' ? overviewLabels : detailLabels;
 
     const segmentTexts = data.segmentTexts ?? [];
 
@@ -380,7 +570,7 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
             // Detail mode clicks view the text segment preview
             const originalPt = detailPacingPoints[idx];
             if (originalPt) {
-                setSelectedIdx(originalPt.SegmentIndex);
+                setSelectedIdx(originalPt.segmentIndex);
             }
         }
     };
@@ -537,6 +727,9 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
         });
     };
 
+    const activePacingPoint = selectedIdx !== null ? data.pacing.find(p => p.segmentIndex === selectedIdx) : null;
+    const activeEmotionPoint = selectedIdx !== null ? data.emotions.find(e => e.segmentIndex === selectedIdx) : null;
+
     return (
         <div className="rounded-2xl p-6 mt-5 flex flex-col gap-6 animate-fade-in" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
             
@@ -549,7 +742,7 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
                     <p className="text-[var(--text-secondary)] text-sm mt-1 opacity-85">
                         {viewMode === 'overview' 
                             ? 'Báo cáo nhịp độ và cảm xúc trung bình theo từng chương của tác phẩm. Nhấp vào điểm để thu nhỏ chi tiết.' 
-                            : `Chi tiết nhịp điệu và dòng cảm xúc từng đoạn trong Chương ${activeChapter}. Nhấp điểm để xem văn bản mẫu.`}
+                            : `Chi tiết nhịp điệu kể chuyện từng đoạn trong Chương ${activeChapter}. Nhấp điểm để xem văn bản mẫu.`}
                     </p>
                 </div>
 
@@ -607,21 +800,21 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
                         </span>
                         <span className="text-xs transition-transform duration-200 group-open:rotate-180 opacity-70">▼</span>
                     </summary>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-3 pt-3 border-t border-[rgba(245,166,35,0.1)]">
+                    <div className="mt-3 pt-3 border-t border-[rgba(245,166,35,0.1)] grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <span className="font-bold text-[var(--text-primary)] text-sm">📈 Pacing (Nhịp độ kịch tính):</span>
-                            <p className="text-[var(--text-secondary)] mt-1">Được tính từ mật độ hành động, tỷ lệ đối thoại trực tiếp, độ dài trung bình câu và tần suất dấu câu kịch tính (! hoặc ?):</p>
+                            <span className="font-bold text-[var(--text-primary)] text-sm flex items-center gap-1">📈 <span className="text-amber-400">Pacing (Nhịp độ kịch tính):</span></span>
+                            <p className="text-[var(--text-secondary)] mt-1">Được tính toán tự động dựa trên tần suất hành động, tỷ lệ hội thoại, độ dài câu và dấu câu kịch tính:</p>
                             <ul className="list-disc list-inside mt-1.5 space-y-1 pl-1 text-[var(--text-secondary)]">
-                                <li><span className="text-[var(--text-primary)] font-medium">Nhịp độ cao (&gt; 65)</span>: Hồi hộp, các cảnh hành động, cao trào, nhịp kịch bản nhanh gấp.</li>
-                                <li><span className="text-[var(--text-primary)] font-medium">Nhịp độ thấp (&lt; 35)</span>: Trầm lặng, tả cảnh, suy tư nội tâm nhân vật, tạo quãng nghỉ cần thiết.</li>
+                                <li><span className="text-[var(--text-primary)] font-medium">Nhịp độ cao (&gt; 65)</span>: Hồi hộp, hành động gay cấn, mâu thuẫn đẩy lên cao trào.</li>
+                                <li><span className="text-[var(--text-primary)] font-medium">Nhịp độ thấp (&lt; 35)</span>: Tĩnh lặng, tả cảnh, suy ngẫm nội tâm hoặc chuẩn bị sự kiện mới.</li>
                             </ul>
                         </div>
                         <div>
-                            <span className="font-bold text-[var(--text-primary)] text-sm">🟢 Emotion (Dòng cảm xúc):</span>
-                            <p className="text-[var(--text-secondary)] mt-1">Đo lường sắc thái biểu cảm dựa trên từ điển tình thái cảm xúc văn học:</p>
+                            <span className="font-bold text-[var(--text-primary)] text-sm flex items-center gap-1">🎭 <span className="text-emerald-400">Emotion (Tích cực & Tiêu cực):</span></span>
+                            <p className="text-[var(--text-secondary)] mt-1">Quy đổi từ chỉ số Valence (-1 đến +1) phản ánh sắc thái tâm lý nhân vật và bầu không khí:</p>
                             <ul className="list-disc list-inside mt-1.5 space-y-1 pl-1 text-[var(--text-secondary)]">
-                                <li><span className="text-[var(--text-primary)] font-medium">Điểm cao (&gt; 50)</span>: Cảm xúc tích cực, tươi vui, hạnh phúc, ấm áp (Tương ứng với Joy/Hope).</li>
-                                <li><span className="text-[var(--text-primary)] font-medium">Điểm thấp (&lt; 50)</span>: U sầu, buồn bã, giận dữ hoặc căng thẳng tột độ (Tương ứng với Sadness/Fear/Anger).</li>
+                                <li><span className="text-[var(--text-primary)] font-medium">Cảm xúc tích cực (&gt; 65)</span>: Vui tươi, chiến thắng, ấm áp, lãng mạn hoặc chữa lành.</li>
+                                <li><span className="text-[var(--text-primary)] font-medium">Cảm xúc tiêu cực (&lt; 35)</span>: Bi thương, tuyệt vọng, giận dữ, u ám hoặc lo lắng hiểm họa.</li>
                             </ul>
                         </div>
                     </div>
@@ -631,27 +824,33 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
             {/* Charts Vertical Stack */}
             <div className="flex flex-col gap-6">
                 <div className="rounded-xl p-5" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
-                    <div className="flex justify-between items-center mb-3">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                         <p className="text-[var(--text-primary)] text-sm font-bold flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" /> Nhịp độ kể chuyện (Pacing Arc)
+                            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" /> Biểu đồ Nhịp độ & Cảm xúc tích hợp
                         </p>
-                        {viewMode === 'detail' && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-500/25 text-amber-400 bg-amber-500/5 font-semibold">Chương {activeChapter}</span>
-                        )}
+                        <div className="flex items-center gap-4 text-xs font-semibold">
+                            <div className="flex items-center gap-1.5 text-amber-400">
+                                <span className="w-3 h-1.5 rounded-full bg-amber-500" />
+                                <span>⚡ Nhịp độ (Pacing)</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-emerald-400">
+                                <span className="w-3 h-1.5 rounded bg-emerald-500" />
+                                <span>🎭 Cảm xúc (Emotion)</span>
+                            </div>
+                            {viewMode === 'detail' && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full border border-indigo-500/25 text-indigo-400 bg-indigo-500/5 font-semibold">
+                                    Chương {activeChapter}
+                                </span>
+                            )}
+                        </div>
                     </div>
-                    <AreaChart values={activePacingValues} color="#f59e0b" labels={activePacingLabels} onPointSelect={handlePointSelect} selectedIndex={viewMode === 'detail' ? (detailPacingPoints.findIndex(p => p.SegmentIndex === selectedIdx)) : null} />
-                </div>
-
-                <div className="rounded-xl p-5" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
-                    <div className="flex justify-between items-center mb-3">
-                        <p className="text-[var(--text-primary)] text-sm font-bold flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" /> Biến thiên cảm xúc (Emotion Progression)
-                        </p>
-                        {viewMode === 'detail' && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/25 text-emerald-400 bg-emerald-500/5 font-semibold">Chương {activeChapter}</span>
-                        )}
-                    </div>
-                    <AreaChart values={activeEmotionValues} color="#10b981" labels={activeEmotionLabels} onPointSelect={handlePointSelect} selectedIndex={viewMode === 'detail' ? (detailPacingPoints.findIndex(p => p.SegmentIndex === selectedIdx)) : null} />
+                    <DualAreaChart 
+                        pacingValues={activePacingValues} 
+                        emotionValues={activeEmotionValues} 
+                        labels={activeLabels} 
+                        onPointSelect={handlePointSelect} 
+                        selectedIndex={viewMode === 'detail' && selectedIdx !== null ? (detailPacingPoints.findIndex(p => p.segmentIndex === selectedIdx)) : null} 
+                    />
                 </div>
             </div>
 
@@ -662,10 +861,12 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
                     
                     <div className="flex justify-between items-center mb-3.5 pl-2">
                         <p className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
-                            <span>📖</span> Đối chứng nội dung chương {activeChapter} — Phân đoạn {detailPacingPoints.findIndex(p => p.SegmentIndex === selectedIdx) + 1}
+                            <span>📖</span> Đối chứng nội dung chương {activeChapter} — Phân đoạn {detailPacingPoints.findIndex(p => p.segmentIndex === selectedIdx) + 1}
                         </p>
                         <button 
-                            onClick={() => setSelectedIdx(null)}
+                            onClick={() => {
+                                setSelectedIdx(null);
+                            }}
                             className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-semibold px-2 py-1 rounded hover:bg-[var(--bg-hover)] transition-all"
                         >
                             Đóng xem trước
@@ -676,10 +877,50 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
                             "...{segmentTexts[selectedIdx]}..."
                         </p>
                     </div>
-                    <div className="mt-4 flex gap-4 text-xs opacity-75 font-semibold pl-2 pt-2 border-t border-[rgba(255,255,255,0.05)]">
-                        <span className="flex items-center gap-1.5 text-amber-400">⚡ Pacing: {data.pacing[selectedIdx]?.score.toFixed(1)}</span>
-                        <span className="flex items-center gap-1.5 text-emerald-400">🎭 Cảm xúc chủ đạo: {data.emotions[selectedIdx]?.dominantEmotion} (Valence: {data.emotions[selectedIdx]?.valence.toFixed(2)})</span>
-                    </div>
+                    
+                    {/* Explanation Card */}
+                    {(() => {
+                        const pacingScore = activePacingPoint ? activePacingPoint.score : 50;
+                        const valence = activeEmotionPoint ? activeEmotionPoint.valence : 0;
+                        const dominantEmotion = activeEmotionPoint ? activeEmotionPoint.dominantEmotion : 'Bình thường';
+                        const emotionScore = mapValenceToScore(valence);
+                        const explanation = getSegmentExplanation(pacingScore, valence, dominantEmotion);
+
+                        return (
+                            <div 
+                                className="mt-4 p-4 rounded-xl border flex flex-col gap-3 transition-all duration-300 pl-4"
+                                style={{ 
+                                    backgroundColor: explanation.bgColor,
+                                    borderColor: explanation.borderColor,
+                                }}
+                            >
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-lg select-none">{explanation.icon}</span>
+                                        <span className="font-extrabold text-sm" style={{ color: explanation.color }}>
+                                            Trạng thái: {explanation.tag}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-xs font-mono font-bold">
+                                        <span className="px-2 py-0.5 rounded text-amber-400 bg-amber-500/10 border border-amber-500/20">
+                                            ⚡ Nhịp độ: {pacingScore.toFixed(0)}/100
+                                        </span>
+                                        <span className="px-2 py-0.5 rounded text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
+                                            🎭 Cảm xúc: {emotionScore.toFixed(0)}/100
+                                        </span>
+                                    </div>
+                                </div>
+                                <p className="text-xs leading-relaxed text-[rgba(255,255,255,0.85)] font-medium">
+                                    {explanation.desc}
+                                </p>
+                                {activeEmotionPoint && (
+                                    <div className="text-[11px] font-semibold text-[rgba(255,255,255,0.5)] flex items-center gap-1.5">
+                                        <span>🎯</span> Cảm xúc cốt lõi: <span className="text-[rgba(255,255,255,0.85)] uppercase">{activeEmotionPoint.dominantEmotion}</span> (Cường độ: {(activeEmotionPoint.intensity * 100).toFixed(0)}%)
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
 

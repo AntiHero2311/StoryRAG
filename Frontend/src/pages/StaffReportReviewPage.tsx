@@ -500,7 +500,7 @@ export default function StaffReportReviewPage() {
                       }`}
                     >
                       <BarChart2 className="w-4 h-4" />
-                      Biểu đồ Cốt truyện
+                      Nhịp độ & Cảm xúc
                     </button>
                   </div>
 
@@ -526,8 +526,8 @@ export default function StaffReportReviewPage() {
                     <div className="rounded-3xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-6">
                       <div className="flex items-center justify-between mb-4">
                         <div>
-                          <h3 className="text-base font-black text-[var(--text-bright)]">Biểu đồ phân tích nhịp độ & nhân vật</h3>
-                          <p className="text-xs text-[var(--text-secondary)] mt-0.5">Phân tích dòng chảy cảm xúc, nhịp độ và tần suất xuất hiện của các nhân vật</p>
+                           <h3 className="text-base font-black text-[var(--text-bright)]">Phân tích chuyên biệt (Narrative Analytics)</h3>
+                           <p className="text-xs text-[var(--text-secondary)] mt-0.5">Báo cáo nhịp độ kể chuyện trung bình theo từng chương của tác phẩm.</p>
                         </div>
                       </div>
                       <NarrativeChartsPanel data={narrativeCharts} loading={loadingNarrativeCharts} />

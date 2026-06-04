@@ -105,6 +105,21 @@ public class RagComponentsTests
     }
 
     [Fact]
+    public void JsonSanitizer_repairs_truncated_json_correctly()
+    {
+        var truncated = "{\"worldSettings\": [ {\"title\": \"A\", \"description\": \"truncated here...";
+        var repaired = JsonSanitizer.RepairTruncatedJson(truncated);
+        
+        using var doc = JsonDocument.Parse(repaired);
+        var root = doc.RootElement;
+        
+        var worldList = root.GetProperty("worldSettings");
+        Assert.Equal(1, worldList.GetArrayLength());
+        Assert.Equal("A", worldList[0].GetProperty("title").GetString());
+        Assert.Equal("truncated here...", worldList[0].GetProperty("description").GetString());
+    }
+
+    [Fact]
     public void JsonSanitizer_strips_comments_and_ellipsis_and_trailing_commas()
     {
         var malformed = @"{
