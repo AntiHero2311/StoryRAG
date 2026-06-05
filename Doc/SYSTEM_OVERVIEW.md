@@ -174,6 +174,8 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | `SubscriptionPlans`    | Gói dịch vụ (Free/Basic/Pro/Enterprise) | Token & analysis limits                                                                    |
 | `UserSubscriptions`    | Đăng ký gói của user                    | `UsedTokens`, `UsedAnalysisCount`                                                          |
 | `UserSettings`         | Cài đặt editor                          | Font, font size                                                                            |
+| `Notifications`        | Thông báo hệ thống                      | `Type` ('success','error','info','warning'), `Title`, `Message`, `IsRead`, `CreatedByUserId` |
+| `SystemLogs`           | Nhật ký hoạt động hệ thống              | `Category` (Notification, RAGConfig, Payment...), `Action` (Create, Update...), `Message` |
 
 > **Lưu ý:** Các bảng `WorldbuildingEntries`, `CharacterEntries`, `StyleGuideEntries`, `ThemeEntries`, `PlotNoteEntries`, `TimelineEvents` và `character_relationships` đã bị xóa trong migration `RemoveManualStoryBibleTables` (tháng 5/2026). Dữ liệu Story Bible hiện được AI tự động trích xuất và lưu vào `ProjectAnalysisFacts` dưới dạng JSONB payload trong mỗi lần phân tích.
 
@@ -331,6 +333,15 @@ Users ──< Projects ──< Chapters ──< ChapterVersions ──< ChapterC
 | PATCH  | `/analyses/{reportId}/edit` | Staff chỉnh sửa report + release cho user |
 | GET    | `/analyses/jobs` | Danh sách analysis jobs (filter by status) |
 | POST   | `/analyses/jobs/{jobId}/rerun` | Chạy lại một analysis job |
+
+### 6.12 Notifications — `/api/notifications`
+
+| Method | Endpoint | Auth | Mô tả |
+| ------ | -------- | ---- | ----- |
+| GET    | `/` | Author/Staff/Admin | Lấy danh sách thông báo của người dùng hiện tại |
+| POST   | `/` | Staff/Admin | Đăng thông báo hệ thống mới (tạo thông báo toàn cục) |
+| POST   | `/{id}/mark-read` | Author/Staff/Admin | Đánh dấu thông báo cụ thể đã đọc |
+| POST   | `/mark-all-read` | Author/Staff/Admin | Đánh dấu toàn bộ thông báo đã đọc |
 
 ---
 

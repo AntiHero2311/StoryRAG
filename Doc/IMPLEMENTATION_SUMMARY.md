@@ -12,11 +12,11 @@
 ✅ **Complete Phases**:
 - Phase 1: Design System & UI Component Library (8/8 todos)
 - Phase 2: Core UX & Security (8/8 todos)
+- Phase 12: Notification Audit Logging & Staff UI Refinements (100% Complete)
 
 ✅ **Partial Phases**:
 - Phase 3: Workspace improvements (2/7 todos - Tab system, custom hooks)
 - Phase 8: Code cleanup (2/8 todos - file removal, hooks extraction)
-- Phase 11: AI Writing History (100% Complete)
 
 ### Key Deliverables
 
@@ -24,8 +24,7 @@
 2. **UI Library**: 12 production-ready components (Button, Input, TextArea, Card, Badge, Modal, Spinner, LoadingOverlay, EmptyState, Alert, ConfirmDialog, Tabs)
 3. **Security**: Route guards, role-based access control, error boundaries, End-to-End Encryption
 4. **Developer Tools**: Custom hooks (useAuth, useDebounce, useLocalStorage, useMediaQuery)
-5. **AI History**: Persistent, encrypted history for all AI writing actions with workspace integration
-6. **Documentation**: Detailed CHANGELOG and implementation guides
+5. **Documentation**: Detailed CHANGELOG and implementation guides
 
 ---
 
@@ -589,24 +588,19 @@ npm run build
 
 ---
 
-## 📜 Phase 11: AI Writing History (100% Complete)
+## 🔔 Phase 12: Notification Audit Logging & Staff UI Refinements (100% Complete)
 
-### Persistent AI History
+### Backend Updates
+- **Notification API Authorization**: Explicitly restricted announcement creation (`POST /api/notifications`) to `Staff` and `Admin` roles by applying `[Authorize(Roles = "Staff,Admin")]` to the controller endpoint. Normal authors are blocked from creating global announcements.
+- **Announcement Audit Logs**: Integrated `ISystemAuditLogService` inside the `NotificationService` to automatically write an audit log entry when a new manual announcement is created:
+  - **Category**: `Notification`
+  - **Action**: `Create`
+  - **Log Message**: `Đăng thông báo: [Tiêu đề] gửi đến nhóm vai trò: Author, Staff, Admin`
+  - **Actor**: The staff or admin who published the announcement.
 
-Implemented a robust system for tracking and retrieving AI-generated content across all writing features.
-
-**Database Layer**:
-- **RewriteHistories Extension**: Added `ActionType` column to distinguish between "New Chapter", "Continue Writing", and "Polish" actions.
-- **Supabase Sync**: Manually resolved migration drift and synchronized local EF Core history with the production Supabase instance.
-
-**Backend Services**:
-- **AiWritingService Integration**: Updated all generation methods to persist outputs as encrypted `RewriteHistory` entries.
-- **Security**: Maintained end-to-end encryption by encrypting historical records with the user's `DataEncryptionKey` before storage.
-
-**Frontend Workspace**:
-- **AiWriterHistoryPanel**: A new React component providing a scrollable, paginated view of historical AI outputs.
-- **Contextual Integration**: Automatically filters history by the current chapter when available.
-- **Restoration Workflow**: Users can "Insert into Editor" with one click, streamlining the iterative writing process.
+### Frontend Updates
+- **Staff Genres UI Truncation**: Resolved visual clutter when staff members are assigned many genres. The list of genres in UI views (`AdminUsersPage.tsx`, `StaffFeedbacksPage.tsx`, `FeedbackPage.tsx`, and `AnalysisPage.tsx`) now displays a maximum of 3 visible genres. Any additional genres are grouped under a hoverable badge showing the count (`+N`) which displays a tooltip with the complete list on hover.
+- **System Logs Dashboard Integration**: Added `'Notification'` to the categories list filter and mapped it to `'Thông báo'` in `CATEGORY_MAP` for user-friendly translation in Vietnamese inside the `AdminLogsPage.tsx` table rows.
 
 ---
 

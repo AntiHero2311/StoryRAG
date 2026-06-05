@@ -80,7 +80,8 @@ Users
   ├─< BugReports
   ├─< StaffFeedbacks
   ├─< faqs / writing_tips
-  └─< StaffAnalysisReviews
+  ├─< StaffAnalysisReviews
+  └─< SystemLogs           (nhật ký hệ thống)
 ```
 
 > ⚠️ Các bảng `WorldbuildingEntries`, `CharacterEntries`, `StyleGuideEntries`, `ThemeEntries`, `PlotNoteEntries`, `TimelineEvents` đã bị xóa. Dữ liệu Story Bible giờ do AI tự trích xuất và lưu vào `ProjectAnalysisFacts` (snapshot model).

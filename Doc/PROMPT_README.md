@@ -1,6 +1,6 @@
 # 📋 StoryRAG — Tổng hợp Prompt AI toàn hệ thống
 
-Tài liệu này tổng hợp đầy đủ **11 prompt AI/Flows** đang vận hành trong hệ thống StoryRAG (bao gồm RAG Pipeline mới, Fallback Evaluation, AI Chat, và các tính năng AI bổ trợ).
+Tài liệu này tổng hợp đầy đủ **9 prompt AI/Flows** đang vận hành trong hệ thống StoryRAG (bao gồm RAG Pipeline mới, Fallback Evaluation, AI Chat, và các tính năng AI bổ trợ).
 
 ---
 
@@ -16,9 +16,7 @@ Tài liệu này tổng hợp đầy đủ **11 prompt AI/Flows** đang vận h�
 | 6 | **RAG Overall & Warnings** | `ProjectReportService.RagAnalysis` | Gemini Analyze | Tổng hợp Overall feedback và rà soát 6 cảnh báo đặc biệt |
 | 7 | **Fallback Full Evaluation** | `ProjectReportService` | Gemini Analyze | Chấm điểm toàn diện 20 tiêu chí + warnings khi non-RAG |
 | 8 | **Relationship Extraction** | `CharacterRelationshipService` | Gemini Analyze | Phân loại mối quan hệ cụ thể giữa 2 nhân vật |
-| 9 | **Scene Breakdown** | `AiWritingService` | Gemini Chat | Phân rã văn bản chương thành các phân cảnh kịch bản |
-| 10| **Three-Act & Cliffhanger** | `AiWritingService` | Gemini Chat | Phân tích cấu trúc ba hồi và điểm nhấn cliffhanger |
-| 11| **Rich PDF Export (QuestPDF)** | `ReportExportService` | QuestPDF Flow | Xuất báo cáo PDF đầy đủ đa tab (Rubric, Story Bible, Pacing & Emotion) |
+| 9 | **Rich PDF Export (QuestPDF)** | `ReportExportService` | QuestPDF Flow | Xuất báo cáo PDF đầy đủ đa tab (Rubric, Story Bible, Pacing & Emotion) |
 
 ---
 
@@ -378,57 +376,7 @@ Chỉ trả về JSON thuần túy:
 
 ---
 
-## 9. Scene Breakdown (AI Writing)
-
-**File:** `Backend/Service/Implementations/AiWritingService.cs`  
-**Method:** `AnalyzeScenesAsync()`  
-**Kích hoạt khi:** Tác giả sử dụng công cụ Phân tích Cảnh quay (Scene Analysis) trong Workspace.
-
-### System Prompt
-```
-Bạn là biên tập viên văn học chuyên phân tích cấu trúc tác phẩm. Nhiệm vụ của bạn là đọc chương truyện được cung cấp và phân rã nó thành các phân cảnh chi tiết (Scenes/Beats).
-QUY TẮC ZERO HALLUCINATION: Chỉ dựa vào văn bản được cung cấp, không bịa thêm nhân vật hay sự kiện bên ngoài.
-
-Trả về JSON thuần túy theo định dạng sau:
-{
-  "chapterSummary": "Tóm tắt ngắn gọn toàn chương...",
-  "scenes": [
-    {
-      "title": "Tiêu đề phân cảnh",
-      "description": "Mô tả hành động diễn ra",
-      "exactQuote": "Trích dẫn nguyên văn câu mở đầu hoặc câu mấu chốt của cảnh",
-      "type": "Action|Dialogue|Introspection|Transition|Revelation"
-    }
-  ]
-}
-```
-
----
-
-## 10. Three-Act & Cliffhanger (AI Writing)
-
-**File:** `Backend/Service/Implementations/AiWritingService.cs`  
-**Method:** `AnalyzeCliffhangerAsync()`  
-**Kích hoạt khi:** Tác giả sử dụng tính năng Phân tích cấu trúc ba hồi & Cliffhanger trong Workspace.
-
-### System Prompt
-```
-Bạn là biên tập viên văn học chuyên sâu về cấu trúc kịch bản và nghệ thuật tạo kịch tính. Hãy phân tích cấu trúc ba hồi (Setup/Conflict/Climax) của chương truyện được cung cấp và xác định xem có sự xuất hiện của điểm "Hạ hồi phân giải" kịch tính (Cliffhanger) ở cuối chương hay không.
-QUY TẮC KHÔNG BỊA ĐẶT THÔNG TIN: Dựa hoàn toàn vào nội dung bản thảo.
-
-Trả về JSON thuần túy theo cấu trúc:
-{
-  "hasCliffhanger": true/false,
-  "cliffhangerDescription": "Mô tả điểm Cliffhanger nếu có...",
-  "cliffhangerQuote": "Trích dẫn chính xác dòng văn tạo nên kịch tính treo...",
-  "actSetup": "Phân tích phần Mở đầu (Setup) thiết lập hoàn cảnh...",
-  "actConflict": "Phân tích phần Phát triển / Xung đột (Conflict)...",
-  "actClimax": "Phân tích phần Cao trào (Climax) của chương...",
-  "structureFeedback": "Lời khuyên tổng thể về cấu trúc và nhịp điệu của chương..."
-}
-```
-
----
+## 9. Rich PDF Report Export (QuestPDF Engine)
 
 ## 🔄 Vòng đời của Prompt trong RAG Pipeline
 
@@ -455,8 +403,6 @@ Trả về JSON thuần túy theo cấu trúc:
 ```
 
 ---
-
-## 11. Rich PDF Report Export (QuestPDF Engine)
 
 **File:** `Backend/Service/Implementations/ReportExportService.cs`  
 **Method:** `ExportReportPdfAsync()`  

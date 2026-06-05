@@ -102,6 +102,12 @@ GET    /stats           [Auth(Staff,Admin)]        # Thống kê bug reports
 PUT    /{id}            [Auth(Staff,Admin)]        # Cập nhật status + staff note
 DELETE /{id}            [Auth(Admin)]              # Xóa báo cáo
 
+### NotificationController  /api/notifications  [Auth]
+GET    /                                           # Danh sách thông báo của chính mình
+POST   /                [Auth(Staff,Admin)]        # Tạo thông báo mới (đăng thông báo hệ thống)
+POST   /{id}/mark-read                             # Đánh dấu thông báo đã đọc
+POST   /mark-all-read                              # Đánh dấu toàn bộ thông báo đã đọc
+
 ### StaffController  /api/staff  [Auth(Staff,Admin)]
 GET    /manuscripts/flagged           # Danh sách bản thảo bị cờ cảnh báo (ANTI_STATE, SEXUAL_CONTENT...)
 GET/POST /feedback                    # Danh sách / Tạo phản hồi của Staff cho tác giả
@@ -179,6 +185,7 @@ bugReportService.ts     # /api/bug-reports — CRUD, status update
 chapterService.ts       # /api/projects/{id}/chapters — CRUD, versions, chunk, pin, diff
 editorSettingsService.ts # /api/settings — font, font size
 genreService.ts         # /api/genre — list genres
+notificationService.ts  # /api/notifications — fetch, create notifications
 projectService.ts       # /api/projects — CRUD, stats, export
 reportService.ts        # /api/ai/{id}/reports — fetch analysis reports
 subscriptionService.ts  # /api/subscription — plans, subscribe, my plan

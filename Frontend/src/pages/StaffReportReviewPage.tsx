@@ -28,6 +28,7 @@ import GroupCard from '../components/analysis/GroupCard';
 import NarrativeChartsPanel from '../components/analysis/NarrativeChartsPanel';
 import EvidenceChunksPanel from '../components/analysis/EvidenceChunksPanel';
 import StoryBiblePanel from '../components/analysis/StoryBiblePanel';
+import { useToast } from '../components/Toast';
 
 type EditableCriterion = {
   key: string;
@@ -155,6 +156,7 @@ function parseWarnings(detail: StaffReportDetail): EditableWarning[] {
 export default function StaffReportReviewPage() {
   const navigate = useNavigate();
   const { reportId } = useParams<{ reportId: string }>();
+  const toast = useToast();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -212,9 +214,9 @@ export default function StaffReportReviewPage() {
       if (reportId) {
         await load(reportId);
       }
-      alert('Đã ghi nhận vi phạm và gửi cảnh cáo thành công.');
+      toast.success('Đã ghi nhận vi phạm và gửi cảnh cáo thành công.');
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'Không thể gửi cảnh cáo.');
+      toast.error(err?.response?.data?.message || 'Không thể gửi cảnh cáo.');
     } finally {
       setWarnLoading(false);
     }
@@ -234,9 +236,9 @@ export default function StaffReportReviewPage() {
       if (reportId) {
         await load(reportId);
       }
-      alert('Đã gửi đề xuất khóa tài khoản lên Admin.');
+      toast.success('Đã gửi đề xuất khóa tài khoản lên Admin.');
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'Không thể đề xuất khóa tài khoản.');
+      toast.error(err?.response?.data?.message || 'Không thể đề xuất khóa tài khoản.');
     } finally {
       setBanRequestLoading(false);
     }

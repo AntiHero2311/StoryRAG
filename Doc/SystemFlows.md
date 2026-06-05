@@ -286,7 +286,14 @@ sequenceDiagram
 3.  **Hành động của Staff (`POST /api/staff/analyses/{reportId}/review`):**
     *   **Adjust (Điều chỉnh):** Staff trực tiếp chỉnh sửa điểm số tiêu chí hoặc nội dung nhận xét của AI qua API `/analyses/{reportId}/edit` trước khi gửi tới tác giả để đảm bảo tính chuyên nghiệp.
     *   **RerunRequested (Yêu cầu chạy lại):** Nếu phát hiện lỗi phân tích hoặc lỗi dữ liệu bản thảo, Staff có thể yêu cầu worker chạy lại job phân tích AI hoàn toàn mới.
-    *   **Staff Feedback Loop (Phản hồi chuyên môn):** Staff có thể gửi phản hồi trực tiếp cho tác giả. Tác giả nhận được thông báo thời gian thực trên thanh tiêu đề, có thể bấm Thích/Không thích (Like/Dislike) và Phản hồi (Reply) trực tiếp để trao đổi sâu hơn với nhân viên biên tập chuyên nghiệp.
+    *   **Staff Feedback Loop (Phản hồi chuyên môn & Multi-Feedback):** Staff có thể gửi phản hồi trực tiếp cho tác giả. Hệ thống cho phép nhiều Staff khác nhau cùng gửi phản hồi cho tác giả trên cùng một dự án/báo cáo phân tích mà không bị giới hạn. Tác giả nhận được thông báo thời gian thực trên thanh tiêu đề, có thể bấm Thích/Không thích (Like/Dislike) và Phản hồi (Reply) trực tiếp để trao đổi sâu hơn với nhân viên biên tập chuyên nghiệp.
+4.  **Giới hạn hiển thị Thể loại (Genre Truncation in UI):**
+    - Khi Staff được phân công nhiều thể loại chuyên môn (genres), để tránh vỡ giao diện (layout wrapping/clutter), hệ thống áp dụng giới hạn hiển thị tối đa **3 thể loại** trên các màn hình quản trị (`AdminUsersPage.tsx`, `StaffFeedbacksPage.tsx`, `FeedbackPage.tsx`, `AnalysisPage.tsx`).
+    - Các thể loại thừa còn lại được gom gọn vào một huy hiệu chỉ số `+N` (hoverable badge). Khi người dùng hover chuột vào badge này, một tooltip sẽ xuất hiện hiển thị đầy đủ danh sách các thể loại của Staff đó.
+5.  **Đăng thông báo Hệ thống & Nhật ký Hậu kiểm (Announcements & Notification Audit Logs):**
+    - Chức năng đăng thông báo hệ thống toàn cục (`POST /api/notifications`) được cấu hình phân quyền nghiêm ngặt bằng thuộc tính `[Authorize(Roles = "Staff,Admin")]`. Người dùng có vai trò `Author` thông thường hoàn toàn bị chặn truy cập.
+    - Mỗi khi Staff hoặc Admin đăng một thông báo hệ thống mới, `NotificationService` tự động kích hoạt ghi nhật ký hệ thống (`ISystemAuditLogService`) với danh mục (Category) là `Notification` và hành động (Action) là `Create`, lưu trữ nội dung thông báo và các nhóm vai trò đích.
+    - Danh mục `Notification` này cũng được tích hợp vào bộ lọc tìm kiếm tại màn hình nhật ký Admin (`AdminLogsPage.tsx`) dưới tên gọi thân thiện bằng tiếng Việt là "Thông báo".
 
 ---
 

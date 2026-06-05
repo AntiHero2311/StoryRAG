@@ -25,21 +25,69 @@ function formatDate(iso: string) {
   });
 }
 
-function getWarningBadge(code: string) {
-  switch (code.toUpperCase()) {
-    case 'ANTI_STATE':
-      return { label: 'Chống phá', className: 'bg-rose-500/10 text-rose-400 border border-rose-500/20' };
-    case 'SEXUAL_CONTENT':
-      return { label: 'Nhạy cảm', className: 'bg-pink-500/10 text-pink-400 border border-pink-500/20' };
-    case 'PLAGIARISM_RISK':
-      return { label: 'Đạo nhái', className: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' };
-    case 'INCONSISTENCY':
-      return { label: 'Mâu thuẫn', className: 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' };
-    case 'INCOMPLETE':
-      return { label: 'Chưa hoàn thành', className: 'bg-blue-500/10 text-blue-400 border border-blue-500/20' };
-    default:
-      return { label: code, className: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' };
-  }
+// ─── Severity mapping ────────────────────────────────────────────────────────
+// CRITICAL: vi phạm nghiêm trọng, cần xem xét ngay
+const CRITICAL_CODES = new Set(['ANTI_STATE', 'SEXUAL_CONTENT', 'PLAGIARISM_RISK']);
+
+type WarningMeta = {
+  code: string;
+  severity: 'critical' | 'warning';
+  label: string;
+  icon: string;
+  badgeCls: string;
+};
+
+function getWarningMeta(code: string): WarningMeta {
+  const upper = code.toUpperCase();
+  const isCritical = CRITICAL_CODES.has(upper);
+
+  const MAP: Record<string, { label: string; icon: string; badgeCls: string }> = {
+    ANTI_STATE: {
+      label: 'Chống phá / Phản động',
+      icon: '🚫',
+      badgeCls: 'bg-red-500/15 text-red-400 border border-red-500/30',
+    },
+    SEXUAL_CONTENT: {
+      label: 'Nhạy cảm / 18+',
+      icon: '⚠️',
+      badgeCls: 'bg-rose-500/15 text-rose-400 border border-rose-500/25',
+    },
+    PLAGIARISM_RISK: {
+      label: 'Nghi vấn đạo nhái',
+      icon: '🚩',
+      badgeCls: 'bg-orange-500/15 text-orange-400 border border-orange-500/25',
+    },
+    INCONSISTENCY: {
+      label: 'Mâu thuẫn logic',
+      icon: '⚡',
+      badgeCls: 'bg-yellow-500/12 text-yellow-400 border border-yellow-500/25',
+    },
+    INCOMPLETE: {
+      label: 'Chưa hoàn thành',
+      icon: '💤',
+      badgeCls: 'bg-sky-500/12 text-sky-400 border border-sky-500/25',
+    },
+    REPETITION: {
+      label: 'Lặp từ / Lặp cảnh',
+      icon: '🔄',
+      badgeCls: 'bg-violet-500/12 text-violet-400 border border-violet-500/25',
+    },
+  };
+
+  const meta = MAP[upper] ?? {
+    label: upper,
+    icon: '•',
+    badgeCls: 'bg-zinc-500/12 text-zinc-400 border border-zinc-500/20',
+  };
+
+  return { code: upper, severity: isCritical ? 'critical' : 'warning', ...meta };
+}
+
+/** Trả về mức độ nguy hiểm cao nhất của một row (để sort) */
+function rowSeverityRank(r: StaffPendingReportItem): number {
+  if (!r.warnings?.length) return 0;
+  if (r.warnings.some((c) => CRITICAL_CODES.has(c.toUpperCase()))) return 2;
+  return 1;
 }
 
 export default function StaffReportsPage() {
@@ -83,16 +131,25 @@ export default function StaffReportsPage() {
     void load();
   }, [load, navigate]);
 
-  // Client-side search filtering as helper
+  // Client-side search + sort: critical luôn lên đầu
   const filteredRows = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter(
-      (r) =>
-        r.project_title.toLowerCase().includes(term) ||
-        r.author_name.toLowerCase().includes(term)
-    );
+    const filtered = term
+      ? rows.filter(
+          (r) =>
+            r.project_title.toLowerCase().includes(term) ||
+            r.author_name.toLowerCase().includes(term)
+        )
+      : rows;
+
+    // Sort: critical rows trước, sau đó warning rows, rồi clean rows
+    return [...filtered].sort((a, b) => rowSeverityRank(b) - rowSeverityRank(a));
   }, [rows, searchTerm]);
+
+  const criticalCount = useMemo(
+    () => filteredRows.filter((r) => rowSeverityRank(r) === 2).length,
+    [filteredRows]
+  );
 
   return (
     <MainLayout pageTitle="Danh sách phân tích AI">
@@ -123,6 +180,22 @@ export default function StaffReportsPage() {
               Làm mới
             </button>
           </div>
+
+          {/* Critical alert banner */}
+          {!loading && criticalCount > 0 && (
+            <div
+              className="flex items-center gap-3 px-4 py-3 rounded-xl border"
+              style={{
+                background: 'rgba(239,68,68,0.07)',
+                borderColor: 'rgba(239,68,68,0.25)',
+              }}
+            >
+              <span className="text-base shrink-0">🚨</span>
+              <p className="text-xs font-bold text-red-400">
+                {criticalCount} tác phẩm có <span className="uppercase">vi phạm nghiêm trọng</span> — cần xem xét ưu tiên!
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center justify-end gap-4">
             {/* Search Input */}
@@ -174,20 +247,63 @@ export default function StaffReportsPage() {
                   </thead>
                   <tbody>
                     {filteredRows.map((r) => {
+                      const severityRank = rowSeverityRank(r);
+                      const isCriticalRow = severityRank === 2;
+                      const isWarningRow = severityRank === 1;
+
+                      // Sort warnings: critical first within each row
+                      const sortedWarnings = [...(r.warnings ?? [])].sort((a, b) => {
+                        const aC = CRITICAL_CODES.has(a.toUpperCase()) ? 1 : 0;
+                        const bC = CRITICAL_CODES.has(b.toUpperCase()) ? 1 : 0;
+                        return bC - aC;
+                      });
+
                       return (
                         <tr
                           key={r.report_id}
-                          className="border-b border-[var(--border-color)]/60 hover:bg-[var(--bg-hover)]/40 transition-colors"
+                          className="border-b border-[var(--border-color)]/60 transition-colors"
+                          style={{
+                            background: isCriticalRow
+                              ? 'rgba(239,68,68,0.04)'
+                              : isWarningRow
+                              ? 'rgba(245,158,11,0.03)'
+                              : undefined,
+                          }}
                         >
-                          <td className="px-5 py-4 text-[var(--text-primary)] font-semibold max-w-[280px]">
-                            <div className="truncate mb-1">{r.project_title}</div>
-                            {r.warnings && r.warnings.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {r.warnings.map((code) => {
-                                  const badge = getWarningBadge(code);
+                          <td className="px-5 py-4 max-w-[280px]">
+                            <div className="flex items-center gap-2 mb-1">
+                              {/* Priority indicator dot */}
+                              {isCriticalRow && (
+                                <span
+                                  className="w-2 h-2 rounded-full bg-red-500 shrink-0 animate-pulse"
+                                  title="Vi phạm nghiêm trọng"
+                                />
+                              )}
+                              {isWarningRow && !isCriticalRow && (
+                                <span
+                                  className="w-2 h-2 rounded-full bg-amber-400 shrink-0"
+                                  title="Có cảnh báo"
+                                />
+                              )}
+                              <span
+                                className="truncate font-semibold"
+                                style={{ color: isCriticalRow ? 'rgba(252,165,165,0.95)' : 'var(--text-primary)' }}
+                              >
+                                {r.project_title}
+                              </span>
+                            </div>
+
+                            {sortedWarnings.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {sortedWarnings.map((code) => {
+                                  const meta = getWarningMeta(code);
                                   return (
-                                    <span key={code} className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${badge.className}`}>
-                                      {badge.label}
+                                    <span
+                                      key={code}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${meta.badgeCls}`}
+                                    >
+                                      <span>{meta.icon}</span>
+                                      {meta.label}
                                     </span>
                                   );
                                 })}
@@ -198,7 +314,16 @@ export default function StaffReportsPage() {
                             {r.author_name}
                           </td>
                           <td className="px-5 py-4 text-center">
-                            <span className="font-bold text-base text-indigo-400 font-mono">
+                            <span
+                              className="font-bold text-base font-mono"
+                              style={{
+                                color: isCriticalRow
+                                  ? '#f87171'
+                                  : isWarningRow
+                                  ? '#fbbf24'
+                                  : 'var(--color-indigo-400, #818cf8)',
+                              }}
+                            >
                               {r.total_score != null ? Math.round(r.total_score) : '—'}
                             </span>
                           </td>
@@ -208,7 +333,11 @@ export default function StaffReportsPage() {
                           <td className="px-5 py-4 text-right space-x-2 whitespace-nowrap">
                             <Link
                               to={`/staff/analysis-reports/${r.report_id}`}
-                              className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-semibold text-xs border border-indigo-500/20 bg-indigo-500/5 px-3 py-1.5 rounded-lg hover:bg-indigo-500/10 transition-colors"
+                              className={`inline-flex items-center gap-1 font-semibold text-xs px-3 py-1.5 rounded-lg transition-colors ${
+                                isCriticalRow
+                                  ? 'text-red-400 hover:text-red-300 border border-red-500/25 bg-red-500/8 hover:bg-red-500/15'
+                                  : 'text-indigo-400 hover:text-indigo-300 border border-indigo-500/20 bg-indigo-500/5 hover:bg-indigo-500/10'
+                              }`}
                             >
                               Xem chi tiết
                               <Eye className="w-3.5 h-3.5" />

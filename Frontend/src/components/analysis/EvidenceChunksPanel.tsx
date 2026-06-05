@@ -2,6 +2,28 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Loader2, X, FileText } from 'lucide-react';
 import { reportService, type EvidenceChunkItemDto } from '../../services/reportService';
 
+/**
+ * Chuyển HTML từ editor (TipTap/Quill) sang plain text có ngắt đoạn tự nhiên.
+ * Thay </p> và <br> bằng \n, sau đó strip tất cả tag còn lại.
+ */
+function stripHtml(html: string): string {
+    if (!html) return html;
+    // Nếu không có tag HTML nào thì trả về nguyên
+    if (!/<[a-z][\s\S]*>/i.test(html)) return html;
+    return html
+        .replace(/<\/p>\s*/gi, '\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/\n{3,}/g, '\n\n') // Gộp quá nhiều dòng trắng
+        .trim();
+}
+
 function renderHighlightedContent(text: string, highlight: string): ReactNode {
     if (!highlight || highlight.trim().length < 5) return text;
 
@@ -271,7 +293,7 @@ export default function EvidenceChunksPanel({
                                         borderColor: 'rgba(255, 255, 255, 0.04)',
                                         boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.5)'
                                     }}>
-                                    {renderHighlightedContent(ch.content, evidenceHighlight)}
+                                    {renderHighlightedContent(stripHtml(ch.content), evidenceHighlight)}
                                 </pre>
                             </div>
                             
