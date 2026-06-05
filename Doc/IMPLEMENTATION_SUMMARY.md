@@ -604,6 +604,22 @@ npm run build
 
 ---
 
+## 🔔 Phase 13: Warning Priority System, Genre-Based Report Filtering & Security Registrations (100% Complete)
+
+### Backend Updates
+- **Genre-Based Report Filtering**: Updated `IStaffService.cs` and `StaffService.cs`'s `GetPendingReportsAsync` method to accept `staffId` and `isAdmin`. If the actor is not an admin, we filter pending reports to only show those associated with projects that have no genres OR have genres that overlap with the staff member's assigned genres (`StaffGenres`).
+- **Staff Controller Integration**: Updated `StaffController.cs` to pass `staffId` and `isAdmin` to `GetPendingReportsAsync`.
+- **Registration Security Blocking**: Updated `AuthService.cs` (`SendRegisterOtpAsync` and `RegisterAsync`) to prevent users with deactivated or suspended accounts (who have already completed registration in the past, meaning they have a password hash in the database) from registering again with the same email. They are instructed to contact the administrator.
+
+### Frontend Updates
+- **Warning Priority & Highlight System**: Redesigned `StaffReportsPage.tsx` with a warning priority system:
+  - Critical warnings (`ANTI_STATE`, `SEXUAL_CONTENT`, `PLAGIARISM_RISK`) are highlighted in RED and sorted to the top.
+  - Standard warnings (`INCONSISTENCY`, `INCOMPLETE`, `REPETITION`) are highlighted in YELLOW.
+  - Dynamic score badges, visual warning banners, and micro-animations have been added to improve UX.
+- **Evidence Chunks Panel**: Added a HTML stripping function to clean HTML tags from rendering inside `EvidenceChunksPanel.tsx`.
+
+---
+
 ## 🎉 Conclusion
 
 This implementation establishes a **solid foundation** for StoryRAG's UI:

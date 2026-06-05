@@ -42,9 +42,16 @@ namespace Service.Implementations
             }
 
             var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
-            if (existingUser != null && existingUser.IsActive)
+            if (existingUser != null)
             {
-                throw new Exception("Email đã được sử dụng.");
+                if (existingUser.IsActive)
+                {
+                    throw new Exception("Email đã được sử dụng.");
+                }
+                if (!string.IsNullOrEmpty(existingUser.PasswordHash))
+                {
+                    throw new Exception("Tài khoản của bạn đã bị vô hiệu hóa hoặc khóa. Vui lòng liên hệ quản trị viên.");
+                }
             }
 
             var otp = Random.Shared.Next(100000, 999999).ToString();
@@ -98,9 +105,9 @@ namespace Service.Implementations
             }
 
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
-            if (user == null || user.IsActive)
+            if (user == null || user.IsActive || !string.IsNullOrEmpty(user.PasswordHash))
             {
-                throw new Exception("Yêu cầu đăng ký không hợp lệ hoặc đã được kích hoạt.");
+                throw new Exception("Yêu cầu đăng ký không hợp lệ hoặc đã bị khóa.");
             }
 
             if (user.EmailVerificationOtp != request.Otp || user.EmailVerificationOtpExpiry < DateTime.UtcNow)
