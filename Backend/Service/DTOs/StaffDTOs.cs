@@ -281,6 +281,7 @@ namespace Service.DTOs
         public bool AuthorIsBanned { get; set; }
         public bool AuthorIsBanRequested { get; set; }
         public string? AuthorBanRequestReason { get; set; }
+        public string? AuthorWarningMessage { get; set; }
     }
 
     public class StaffStoryChapterItem

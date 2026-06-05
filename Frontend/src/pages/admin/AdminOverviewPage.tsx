@@ -80,15 +80,11 @@ export default function AdminOverviewPage() {
                                 <StatCard icon={Sparkles} label="AI tokens" value={fmtTokens(ov.totalAiTokens)} color="border-purple-500/20 text-purple-300" iconColor="bg-purple-500/10" />
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <Section title="Người dùng" icon={Users}>
                                     <MiniBar label="Tác giả" value={ov.totalAuthors} total={ov.totalUsers} color="bg-indigo-500" />
                                     <MiniBar label="Staff" value={ov.totalStaff} total={ov.totalUsers} color="bg-amber-500" />
                                     <MiniBar label="Admin" value={ov.totalAdmins} total={ov.totalUsers} color="bg-rose-500" />
-                                </Section>
-                                <Section title="Nội dung" icon={Globe}>
-                                    <p className="text-sm flex justify-between"><span className="text-[var(--text-secondary)]">Nhân vật</span><span>{fmtNum(ov.totalCharacters)}</span></p>
-                                    <p className="text-sm flex justify-between"><span className="text-[var(--text-secondary)]">AI Chat</span><span>{fmtNum(ov.totalAiChatMessages)}</span></p>
                                 </Section>
                                 <Section title="Gói đăng ký" icon={CreditCard}>
                                     <p className="text-2xl font-bold text-emerald-400">{fmtNum(ov.activeSubscriptions)} <span className="text-sm font-normal text-[var(--text-secondary)]">active</span></p>

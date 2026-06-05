@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, MessageSquare, ChevronLeft, ChevronRight, CheckCircle2, Mail, Trash2, Edit3 } from 'lucide-react';
+import { Loader2, MessageSquare, ChevronLeft, ChevronRight, CheckCircle2, Mail } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { getUserInfo } from '../utils/jwtHelper';
 import { staffService } from '../services/staffService';
@@ -155,7 +155,7 @@ export default function StaffFeedbacksPage() {
                                         : 'border-[var(--border-color)] text-[var(--text-secondary)]'
                                 }`}
                             >
-                                {s === 'all' ? 'Tất cả' : s}
+                                {s === 'all' ? 'Tất cả' : s === 'Open' ? 'Đang chờ' : 'Hoàn thành'}
                             </button>
                         ))}
                     </div>
@@ -211,7 +211,7 @@ export default function StaffFeedbacksPage() {
                                             </div>
                                             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                                                 item.status === 'Open' ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400'
-                                            }`}>{item.status}</span>
+                                            }`}>{item.status === 'Open' ? 'Đang chờ' : 'Hoàn thành'}</span>
                                         </div>
                                         <p className="text-sm text-[var(--text-secondary)] mt-2 line-clamp-2 select-text">{item.content}</p>
                                         
@@ -253,24 +253,6 @@ export default function StaffFeedbacksPage() {
                                                         Đánh dấu đã xử lý
                                                     </button>
                                                 )}
-                                                <button
-                                                    onClick={() => {
-                                                        setEditingFeedback(item);
-                                                        setEditContent(item.content);
-                                                        setEditNote(item.staffNote ?? '');
-                                                    }}
-                                                    className="text-xs font-semibold text-sky-400 hover:text-sky-300 flex items-center gap-1 transition-colors"
-                                                >
-                                                    <Edit3 className="w-3.5 h-3.5" />
-                                                    Sửa
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(item)}
-                                                    className="text-xs font-semibold text-rose-400 hover:text-rose-300 flex items-center gap-1 transition-colors"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                    Xóa
-                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -296,7 +278,7 @@ export default function StaffFeedbacksPage() {
                     {selected && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}>
                             <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 space-y-4">
-                                <h3 className="font-bold text-[var(--text-primary)]">Đánh dấu Resolved</h3>
+                                <h3 className="font-bold text-[var(--text-primary)]">Đánh dấu hoàn thành</h3>
                                 <textarea
                                     value={note}
                                     onChange={e => setNote(e.target.value)}
@@ -318,41 +300,7 @@ export default function StaffFeedbacksPage() {
                         </div>
                     )}
 
-                    {editingFeedback && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) setEditingFeedback(null); }}>
-                            <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
-                                <h3 className="font-bold text-[var(--text-primary)]">Chỉnh sửa phản hồi</h3>
-                                <div className="space-y-3">
-                                    <div>
-                                        <label className="block text-xs text-[var(--text-secondary)] mb-1 font-semibold">Nội dung phản hồi của tác giả</label>
-                                        <div className="w-full max-h-32 overflow-y-auto rounded-xl border border-[var(--border-color)] bg-[var(--bg-hover)]/30 p-3 text-sm text-[var(--text-secondary)] select-text">
-                                            {editContent}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs text-[var(--text-secondary)] mb-1 font-semibold">Phản hồi / Ghi chú của Staff</label>
-                                        <textarea
-                                            value={editNote}
-                                            onChange={e => setEditNote(e.target.value)}
-                                            placeholder="Phản hồi hoặc ghi chú của staff (tuỳ chọn)"
-                                            className="w-full h-32 rounded-xl border border-[var(--border-color)] bg-[var(--input-bg)] p-3 text-sm resize-none text-[var(--text-primary)] focus:outline-none focus:border-indigo-500"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="flex gap-2 pt-2">
-                                    <button onClick={() => setEditingFeedback(null)} className="flex-1 py-2 rounded-xl border border-[var(--border-color)] text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors">Hủy</button>
-                                    <button
-                                        onClick={() => void handleEditSave()}
-                                        disabled={saving}
-                                        className="flex-1 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-indigo-700 transition-colors"
-                                    >
-                                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                                        Lưu thay đổi
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+
                 </div>
             )}
         </MainLayout>

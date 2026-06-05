@@ -54,6 +54,7 @@ export type StaffReportDetail = {
   authorIsBanned?: boolean;
   authorIsBanRequested?: boolean;
   authorBanRequestReason?: string | null;
+  authorWarningMessage?: string | null;
 };
 
 export type StaffStoryChapterItem = {

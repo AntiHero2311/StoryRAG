@@ -73,8 +73,7 @@ export default function StaffOverviewPage() {
                     {error && <p className="text-rose-400 text-sm">{error}</p>}
 
                     {stats && (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            <StatCard icon={BarChart2} label="Chưa phát hành" value={stats.pendingReports} color="border-indigo-500/25 text-indigo-300" iconColor="bg-indigo-500/10" />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <StatCard icon={Activity} label="Job lỗi/treo" value={stats.failedJobs} color="border-violet-500/25 text-violet-300" iconColor="bg-violet-500/10" />
                             <StatCard icon={MessageSquare} label="Feedback mở" value={stats.openFeedbacks} color="border-sky-500/25 text-sky-300" iconColor="bg-sky-500/10" />
                         </div>

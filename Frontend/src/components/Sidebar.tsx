@@ -154,8 +154,8 @@ export default function Sidebar({ role, onNavigate, userId }: SidebarProps) {
                         {nav.map(item => {
                             const Icon = item.icon;
                             const active =
-                                item.path === '/staff'
-                                    ? location.pathname === '/staff'
+                                item.path === '/staff' || item.path === '/admin'
+                                    ? location.pathname === item.path
                                     : location.pathname === item.path ||
                                       (item.path !== '/home' && location.pathname.startsWith(`${item.path}/`));
 
@@ -164,25 +164,11 @@ export default function Sidebar({ role, onNavigate, userId }: SidebarProps) {
                                     key={item.key}
                                     onClick={() => onNavigate(item.path)}
                                     title={collapsed ? item.label : undefined}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative group"
-                                    style={active ? {
-                                        background: 'var(--bg-active)',
-                                        color: 'var(--accent-text)',
-                                    } : {
-                                        color: 'var(--text-secondary)',
-                                    }}
-                                    onMouseEnter={e => {
-                                        if (!active) {
-                                            (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
-                                            (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)';
-                                        }
-                                    }}
-                                    onMouseLeave={e => {
-                                        if (!active) {
-                                            (e.currentTarget as HTMLElement).style.background = '';
-                                            (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)';
-                                        }
-                                    }}
+                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative group ${
+                                        active
+                                            ? 'bg-[var(--bg-active)] text-[var(--accent-text)]'
+                                            : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
+                                    }`}
                                 >
                                     {/* Active indicator bar */}
                                     {active && (
