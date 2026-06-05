@@ -76,14 +76,15 @@ function AnalysisContent() {
 
     const effectiveNarrativeCharts = useMemo<NarrativeChartsResponse | null>(() => {
         if (report?.emotionPacing) {
+            const hasCharacters = report.emotionPacing.characterFrequencies && report.emotionPacing.characterFrequencies.length > 0;
             return {
                 pacing: report.emotionPacing.pacingPoints || [],
                 emotions: report.emotionPacing.emotionPoints || [],
-                characterFrequencies: report.emotionPacing.characterFrequencies || [],
-                characterPresence: report.emotionPacing.characterPresence || [],
-                characterRelationships: report.emotionPacing.characterRelationships || [],
+                characterFrequencies: hasCharacters ? report.emotionPacing.characterFrequencies : (narrativeCharts?.characterFrequencies || []),
+                characterPresence: hasCharacters ? report.emotionPacing.characterPresence : (narrativeCharts?.characterPresence || []),
+                characterRelationships: hasCharacters ? report.emotionPacing.characterRelationships : (narrativeCharts?.characterRelationships || []),
                 insights: report.emotionPacing.insights || [],
-                segmentTexts: [],
+                segmentTexts: narrativeCharts?.segmentTexts || [],
             };
         }
         return narrativeCharts;

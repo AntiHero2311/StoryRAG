@@ -353,6 +353,8 @@ namespace Service.Implementations
                     cancellationToken);
 
                 var emotionTask = AnalyzeEmotionPacingAsync(
+                    projectId,
+                    rawDek,
                     projectTitle,
                     decryptedChunksWithMeta,
                     progressCallback,

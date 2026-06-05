@@ -246,13 +246,19 @@ export default function SnapshotViewerPanel({ projectId, reportId }: SnapshotVie
                                         }`}>
                                             CH {s.chapterNumber.toString().padStart(2, '0')}
                                         </span>
-                                        {!isVersionTitle(s.title) && (
-                                            <span className={`truncate font-semibold tracking-wide transition-colors ${
-                                                isActive ? 'text-indigo-200 font-bold' : 'text-[var(--text-secondary)] group-hover:text-zinc-200'
-                                            }`}>
-                                                {s.title}
-                                            </span>
-                                        )}
+                                        {isVersionTitle(s.title) ? (
+                                             <span className={`truncate text-[10px] opacity-65 tracking-wide transition-colors ${
+                                                 isActive ? 'text-indigo-300 font-medium' : 'text-zinc-500 group-hover:text-zinc-400'
+                                             }`}>
+                                                 {s.title}
+                                             </span>
+                                         ) : (
+                                             <span className={`truncate font-semibold tracking-wide transition-colors ${
+                                                 isActive ? 'text-indigo-200 font-bold' : 'text-[var(--text-secondary)] group-hover:text-zinc-200'
+                                             }`}>
+                                                 {s.title}
+                                             </span>
+                                         )}
                                     </div>
                                     
                                     <span className={`text-[9px] font-semibold transition-all px-2 py-0.5 rounded ${

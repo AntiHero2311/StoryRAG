@@ -939,37 +939,82 @@ export default function WorkspacePage() {
         const parser = new DOMParser();
         const doc = parser.parseFromString(rawHtml, 'text/html');
 
-        doc.body.querySelectorAll('script,style,link,meta').forEach(node => node.remove());
+        // Remove script, style, link, meta, etc.
+        doc.body.querySelectorAll('script,style,link,meta,iframe,object,embed').forEach(node => node.remove());
 
-        doc.body.querySelectorAll('font').forEach(fontEl => {
-            const parent = fontEl.parentNode;
-            if (!parent) return;
-            while (fontEl.firstChild) parent.insertBefore(fontEl.firstChild, fontEl);
-            parent.removeChild(fontEl);
-        });
-
-        doc.body.querySelectorAll<HTMLElement>('*').forEach(el => {
-            el.removeAttribute('color');
-            el.removeAttribute('face');
-            el.removeAttribute('size');
-
-            if (el.hasAttribute('style')) {
-                const style = el.style;
-                style.removeProperty('color');
-                style.removeProperty('background');
-                style.removeProperty('background-color');
-                style.removeProperty('font');
-                style.removeProperty('font-family');
-                style.removeProperty('font-size');
-                style.removeProperty('line-height');
-                style.removeProperty('text-shadow');
-                style.removeProperty('caret-color');
-                style.removeProperty('-webkit-text-fill-color');
-                if (!style.cssText.trim()) el.removeAttribute('style');
+        // Remove all HTML comment nodes (e.g. <!--StartFragment-->)
+        const removeComments = (node: Node) => {
+            let child = node.firstChild;
+            while (child) {
+                const next = child.nextSibling;
+                if (child.nodeType === Node.COMMENT_NODE) {
+                    node.removeChild(child);
+                } else if (child.nodeType === Node.ELEMENT_NODE) {
+                    removeComments(child);
+                }
+                child = next;
             }
-        });
+        };
+        removeComments(doc.body);
 
-        return doc.body.innerHTML;
+        // Allowed tags: p, br, b, strong, i, em, u
+        const allowedTags = new Set(['P', 'BR', 'B', 'STRONG', 'I', 'EM', 'U']);
+        
+        const cleanNode = (node: Node) => {
+            let child = node.firstChild;
+            while (child) {
+                const next = child.nextSibling;
+                if (child.nodeType === Node.ELEMENT_NODE) {
+                    const el = child as HTMLElement;
+                    cleanNode(el); // Depth-first cleaning
+                    
+                    const tagName = el.tagName.toUpperCase();
+                    if (allowedTags.has(tagName)) {
+                        // Remove all attributes (style, class, id, etc.)
+                        while (el.attributes.length > 0) {
+                            el.removeAttribute(el.attributes[0].name);
+                        }
+                    } else {
+                        // Unwrap unsupported tag: move children to parent, then remove
+                        const parent = el.parentNode;
+                        if (parent) {
+                            while (el.firstChild) {
+                                parent.insertBefore(el.firstChild, el);
+                            }
+                            parent.removeChild(el);
+                        }
+                    }
+                }
+                child = next;
+            }
+        };
+        cleanNode(doc.body);
+
+        let html = doc.body.innerHTML;
+
+        // Replace non-breaking spaces (unicode and HTML entities) with regular space
+        html = html.replace(/\u00A0/g, ' ');
+        html = html.replace(/&nbsp;/g, ' ');
+
+        // Replace multiple consecutive spaces with a single space
+        html = html.replace(/ {2,}/g, ' ');
+
+        // Normalize empty paragraphs (e.g. <p></p> or <p><br></p>)
+        html = html.replace(/<p>\s*(?:<br\s*\/?>)?\s*<\/p>/gi, '<p><br></p>');
+
+        // Limit consecutive empty paragraphs/newlines to maximum 1 empty line
+        html = html.replace(/(?:<p><br><\/p>\s*){2,}/gi, '<p><br></p>');
+        html = html.replace(/(?:<br\s*\/?>\s*){2,}/gi, '<br>');
+
+        return html.trim();
+    };
+
+    const cleanPlainText = (text: string): string => {
+        if (!text) return '';
+        let cleaned = text.replace(/\u00A0/g, ' ');
+        cleaned = cleaned.replace(/ {2,}/g, ' ');
+        cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+        return cleaned;
     };
 
     const handleEditorPaste = (e: ClipboardEvent<HTMLDivElement>) => {
@@ -982,7 +1027,8 @@ export default function WorkspacePage() {
             const sanitizedHtml = normalizePastedHtml(html);
             document.execCommand('insertHTML', false, sanitizedHtml);
         } else {
-            document.execCommand('insertText', false, plain);
+            const cleanedPlain = cleanPlainText(plain);
+            document.execCommand('insertText', false, cleanedPlain);
         }
 
         markEditorDirty();
@@ -1375,7 +1421,22 @@ export default function WorkspacePage() {
                                     </button>
                                 </div>
                                 <div className="flex-1" />
-                                <span className="text-[var(--text-secondary)] text-xs mr-2">{wordCount} từ</span>
+                                <div className="relative group inline-flex items-center">
+                                    {wordCount >= 2000 && (
+                                        <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-52 p-2 bg-slate-900 text-slate-100 text-[10px] font-medium leading-normal rounded-lg shadow-lg border border-slate-700/50 backdrop-blur-md z-[1600] text-center pointer-events-none">
+                                            Một chương nên có khoảng 2000 chữ, bạn nên chia chương ra.
+                                            <div className="absolute top-full right-4 border-4 border-transparent border-t-slate-900" />
+                                        </div>
+                                    )}
+                                    <span className={`text-xs mr-2 inline-flex items-center gap-1 transition-all ${
+                                        wordCount >= 2000 
+                                            ? 'text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 hover:bg-amber-500/20 cursor-help font-semibold animate-pulse' 
+                                            : 'text-[var(--text-secondary)]'
+                                    }`}>
+                                        {wordCount >= 2000 && <AlertCircle className="w-3 h-3 text-amber-400" />}
+                                        {wordCount} từ
+                                    </span>
+                                </div>
                                 {projectId && (
                                     <>
                                         <span className="hidden xl:inline text-[10px] text-[var(--text-secondary)]">
@@ -1475,10 +1536,26 @@ export default function WorkspacePage() {
                                                     {(activeChapter.versions ?? []).length} phiên bản
                                                 </button>
                                                 <span className="text-[11px] text-[var(--text-secondary)] opacity-50">•</span>
-                                                <span className="text-[11px] font-medium text-[var(--text-secondary)] inline-flex items-center gap-1">
-                                                    <AlignLeft className="w-3 h-3" />
-                                                    {wordCount} từ
-                                                </span>
+                                                <div className="relative group inline-flex items-center">
+                                                    {wordCount >= 2000 && (
+                                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-52 p-2 bg-slate-900 text-slate-100 text-[10px] font-medium leading-normal rounded-lg shadow-lg border border-slate-700/50 backdrop-blur-md z-[1600] text-center pointer-events-none">
+                                                            Một chương nên có khoảng 2000 chữ, bạn nên chia chương ra.
+                                                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
+                                                        </div>
+                                                    )}
+                                                    <span className={`text-[11px] font-medium inline-flex items-center gap-1 transition-all ${
+                                                        wordCount >= 2000 
+                                                            ? 'text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 hover:bg-amber-500/20 cursor-help font-semibold animate-pulse' 
+                                                            : 'text-[var(--text-secondary)]'
+                                                    }`}>
+                                                        {wordCount >= 2000 ? (
+                                                            <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                                                        ) : (
+                                                            <AlignLeft className="w-3 h-3" />
+                                                        )}
+                                                        {wordCount} từ
+                                                    </span>
+                                                </div>
 
                                                 <div className="flex-1" />
 

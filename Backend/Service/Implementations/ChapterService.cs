@@ -77,7 +77,8 @@ namespace Service.Implementations
                 throw new Exception($"Chương số {request.ChapterNumber} đã tồn tại trong dự án này.");
 
             var rawDek = await GetRawDekAsync(userId);
-            int wordCount = CountWords(request.Content);
+            var cleanedContent = HtmlContentCleaner.Clean(request.Content);
+            int wordCount = CountWords(cleanedContent);
 
             var chapter = new Chapter
             {
@@ -95,9 +96,9 @@ namespace Service.Implementations
                 ChapterId = chapter.Id,
                 VersionNumber = 1,
                 Title = request.Title != null ? $"Phiên bản 1" : null,
-                Content = EncryptionHelper.EncryptWithMasterKey(request.Content, rawDek),
+                Content = EncryptionHelper.EncryptWithMasterKey(cleanedContent, rawDek),
                 WordCount = wordCount,
-                TokenCount = _chunkingService.EstimateTokenCount(request.Content),
+                TokenCount = _chunkingService.EstimateTokenCount(cleanedContent),
                 CreatedBy = userId,
             };
             _context.ChapterVersions.Add(version);
@@ -108,9 +109,9 @@ namespace Service.Implementations
             await _context.SaveChangesAsync();
 
             // Auto-chunk the content immediately
-            await PerformChunkingInternalAsync(version, request.Content, rawDek, chapter.ProjectId);
+            await PerformChunkingInternalAsync(version, cleanedContent, rawDek, chapter.ProjectId);
 
-            var detail = MapToDetailResponse(chapter, request.Content);
+            var detail = MapToDetailResponse(chapter, cleanedContent);
             detail.Versions = new List<ChapterVersionSummary> { MapToVersionSummary(version, rawDek) };
             return detail;
         }
@@ -128,12 +129,13 @@ namespace Service.Implementations
                 .FirstOrDefaultAsync(v => v.Id == chapter.CurrentVersionId.Value)
                 ?? throw new Exception("Không tìm thấy version đang active.");
 
-            int wordCount = CountWords(request.Content);
+            var cleanedContent = HtmlContentCleaner.Clean(request.Content);
+            int wordCount = CountWords(cleanedContent);
 
             // Update version content in-place
-            version.Content = EncryptionHelper.EncryptWithMasterKey(request.Content, rawDek);
+            version.Content = EncryptionHelper.EncryptWithMasterKey(cleanedContent, rawDek);
             version.WordCount = wordCount;
-            version.TokenCount = _chunkingService.EstimateTokenCount(request.Content);
+            version.TokenCount = _chunkingService.EstimateTokenCount(cleanedContent);
             version.UpdatedAt = DateTime.UtcNow;
             // Reset chunking flags since content changed
             version.IsChunked = false;
@@ -147,7 +149,7 @@ namespace Service.Implementations
             await _context.SaveChangesAsync();
 
             // Auto-chunk the content immediately
-            await PerformChunkingInternalAsync(version, request.Content, rawDek, chapter.ProjectId);
+            await PerformChunkingInternalAsync(version, cleanedContent, rawDek, chapter.ProjectId);
 
             // Reload versions for response
             var versions = await _context.ChapterVersions
@@ -156,7 +158,7 @@ namespace Service.Implementations
                 .OrderBy(v => v.VersionNumber)
                 .ToListAsync();
 
-            var detail = MapToDetailResponse(chapter, request.Content);
+            var detail = MapToDetailResponse(chapter, cleanedContent);
             detail.Versions = versions.Select(v => MapToVersionSummary(v, rawDek)).ToList();
             return detail;
         }

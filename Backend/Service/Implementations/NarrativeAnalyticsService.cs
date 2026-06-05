@@ -100,11 +100,11 @@ namespace Service.Implementations
             if (segments.Count == 0)
                 return new NarrativeChartsResponse();
 
-            var pacing = BuildPacingSeries(segments);
-            var emotions = BuildEmotionSeries(segments);
+            var pacing = NarrativeAnalyticsHelper.BuildPacingSeries(segments);
+            var emotions = NarrativeAnalyticsHelper.BuildEmotionSeries(segments);
 
-            var characterNames = await LoadCharacterNamesAsync(projectId, rawDek);
-            var characterPresenceMap = BuildCharacterPresenceMap(segments, characterNames);
+            var characterNames = await NarrativeAnalyticsHelper.LoadCharacterNamesAsync(_context, projectId, rawDek);
+            var characterPresenceMap = NarrativeAnalyticsHelper.BuildCharacterPresenceMap(segments, characterNames);
 
             var frequencies = characterPresenceMap
                 .Select(kvp => new CharacterFrequency
@@ -131,7 +131,7 @@ namespace Service.Implementations
                 })
                 .ToList();
 
-            var relationships = BuildCharacterRelationships(characterPresenceMap, segments)
+            var relationships = NarrativeAnalyticsHelper.BuildCharacterRelationships(characterPresenceMap, segments)
                 .OrderByDescending(x => x.Weight)
                 .Take(60)
                 .ToList();
@@ -143,13 +143,13 @@ namespace Service.Implementations
             try 
             {
                 var bibleContext = await GetBibleContextAsync(projectId, rawDek);
-                var discoveredCharacters = await DiscoverCharactersAsync(segments);
+                var discoveredCharacters = await NarrativeAnalyticsHelper.DiscoverCharactersAsync(_geminiChatExecutor, segments, default);
                 
                 // Merge discovered characters into our tracking list
                 var allCharacterNames = characterNames.Union(discoveredCharacters, StringComparer.OrdinalIgnoreCase).ToList();
                 
                 // Re-build map with merged names for better charts
-                var fullPresenceMap = BuildCharacterPresenceMap(segments, allCharacterNames);
+                var fullPresenceMap = NarrativeAnalyticsHelper.BuildCharacterPresenceMap(segments, allCharacterNames);
                 var fullFrequencies = fullPresenceMap
                     .Select(kvp => new CharacterFrequency
                     {
@@ -179,7 +179,7 @@ namespace Service.Implementations
                         })
                         .ToList();
                     
-                    relationships = BuildCharacterRelationships(fullPresenceMap, segments)
+                    relationships = NarrativeAnalyticsHelper.BuildCharacterRelationships(fullPresenceMap, segments)
                         .OrderByDescending(x => x.Weight)
                         .Take(60)
                         .ToList();
@@ -203,9 +203,9 @@ namespace Service.Implementations
                 insights.Add("⚠️ Phân tích chuyên sâu tạm thời không khả dụng.");
             }
 
-            AnnotatePacingPoints(pacing, insights);
-            AnnotateEmotionPoints(emotions, insights);
-            GenerateCharacterInsights(frequencies, relationships, insights);
+            NarrativeAnalyticsHelper.AnnotatePacingPoints(pacing, insights);
+            NarrativeAnalyticsHelper.AnnotateEmotionPoints(emotions, insights);
+            NarrativeAnalyticsHelper.GenerateCharacterInsights(frequencies, relationships, insights);
 
             return new NarrativeChartsResponse
             {
@@ -409,7 +409,7 @@ QUY TẮC BẮT BUỘC:
 
                 foreach (var segmentText in SplitTextIntoSegments(plainText, 220))
                 {
-                    var wordCount = CountWords(segmentText);
+                    var wordCount = NarrativeAnalyticsHelper.CountWords(segmentText);
                     if (wordCount <= 0) continue;
 
                     segments.Add(new TextSegment
@@ -419,7 +419,7 @@ QUY TẮC BẮT BUỘC:
                         ChapterNumber = chapter.ChapterNumber,
                         Text = segmentText,
                         WordCount = wordCount,
-                        Tokens = Tokenize(segmentText),
+                        Tokens = NarrativeAnalyticsHelper.Tokenize(segmentText),
                     });
                 }
             }
@@ -446,7 +446,7 @@ QUY TẮC BẮT BUỘC:
 
             foreach (var paragraph in paragraphs)
             {
-                var paragraphWords = CountWords(paragraph);
+                var paragraphWords = NarrativeAnalyticsHelper.CountWords(paragraph);
                 if (builder.Length > 0)
                     builder.Append("\n\n");
                 builder.Append(paragraph);
@@ -463,291 +463,11 @@ QUY TẮC BẮT BUỘC:
                 yield return builder.ToString().Trim();
         }
 
-        private static List<PacingPoint> BuildPacingSeries(List<TextSegment> segments)
-        {
-            return segments.Select(segment => new PacingPoint
-            {
-                SegmentIndex = segment.SegmentIndex,
-                ChapterNumber = segment.ChapterNumber,
-                Score = Math.Round(CalculatePacingScore(segment), 2),
-            }).ToList();
-        }
-
-        private static double CalculatePacingScore(TextSegment segment)
-        {
-            var words = Math.Max(1, segment.WordCount);
-            var actionHits = segment.Tokens.Count(token => ActionLexicon.Contains(token));
-            var actionDensity = actionHits * 100.0 / words;
-
-            var strongPunctuation = Regex.Matches(segment.Text, @"[!?]").Count;
-            var punctuationDensity = strongPunctuation * 100.0 / words;
-
-            var sentenceCount = Math.Max(1, Regex.Matches(segment.Text, @"[.!?]").Count);
-            var avgSentenceLength = words / (double)sentenceCount;
-
-            var dialogueMarkers = Regex.Matches(segment.Text, "[\"“”«»]").Count;
-            var dialogueRatio = dialogueMarkers / (double)Math.Max(1, segment.Text.Length);
-
-            var score = 35
-                        + actionDensity * 4.5
-                        + punctuationDensity * 2.8
-                        + dialogueRatio * 120
-                        - avgSentenceLength * 0.9;
-
-            return Math.Clamp(score, 0, 100);
-        }
-
-        private static List<EmotionPoint> BuildEmotionSeries(List<TextSegment> segments)
-        {
-            var emotionPoints = new List<EmotionPoint>(segments.Count);
-
-            foreach (var segment in segments)
-            {
-                var positive = 0;
-                var negative = 0;
-                var emotionBuckets = EmotionLexicon.Keys.ToDictionary(key => key, _ => 0, StringComparer.OrdinalIgnoreCase);
-
-                foreach (var token in segment.Tokens)
-                {
-                    if (PositiveLexicon.Contains(token)) positive++;
-                    if (NegativeLexicon.Contains(token)) negative++;
-
-                    foreach (var (emotion, lexicon) in EmotionLexicon)
-                    {
-                        if (lexicon.Contains(token))
-                            emotionBuckets[emotion]++;
-                    }
-                }
-
-                var sentimentMass = positive + negative;
-                var valence = sentimentMass == 0
-                    ? 0
-                    : (positive - negative) / (double)sentimentMass;
-                valence = Math.Clamp(valence, -1, 1);
-
-                var intensity = sentimentMass * 100.0 / Math.Max(1, segment.WordCount) * 10.0;
-                intensity = Math.Clamp(intensity, 0, 100);
-
-                var dominant = emotionBuckets
-                    .OrderByDescending(x => x.Value)
-                    .FirstOrDefault();
-
-                emotionPoints.Add(new EmotionPoint
-                {
-                    SegmentIndex = segment.SegmentIndex,
-                    ChapterNumber = segment.ChapterNumber,
-                    Valence = Math.Round(valence, 3),
-                    Intensity = Math.Round(intensity, 2),
-                    DominantEmotion = dominant.Value > 0 ? dominant.Key : "Neutral",
-                });
-            }
-
-            return emotionPoints;
-        }
-
-        private static Dictionary<string, int[]> BuildCharacterPresenceMap(List<TextSegment> segments, List<string> characterNames)
-        {
-            var result = new Dictionary<string, int[]>(StringComparer.OrdinalIgnoreCase);
-            if (characterNames.Count == 0) return result;
-
-            var dedupedNames = characterNames
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            var matchers = dedupedNames.Select(name => new
-            {
-                Name = name,
-                Pattern = new Regex(
-                    $@"(?<![\p{{L}}\p{{N}}]){Regex.Escape(name)}(?![\p{{L}}\p{{N}}])",
-                    RegexOptions.IgnoreCase | RegexOptions.Compiled),
-            }).ToList();
-
-            foreach (var matcher in matchers)
-                result[matcher.Name] = new int[segments.Count];
-
-            for (var segmentIndex = 0; segmentIndex < segments.Count; segmentIndex++)
-            {
-                var segmentText = segments[segmentIndex].Text;
-
-                foreach (var matcher in matchers)
-                {
-                    var mentions = matcher.Pattern.Matches(segmentText).Count;
-                    if (mentions <= 0) continue;
-                    result[matcher.Name][segmentIndex] = mentions;
-                }
-            }
-
-            return result;
-        }
-
-        private static List<CharacterRelationshipEdge> BuildCharacterRelationships(
-            IReadOnlyDictionary<string, int[]> presenceMap,
-            List<TextSegment> segments)
-        {
-            var edges = new Dictionary<(string A, string B), int>();
-            if (presenceMap.Count < 2 || segments.Count == 0) return new List<CharacterRelationshipEdge>();
-
-            var names = presenceMap.Keys.ToList();
-
-            for (var segmentIndex = 0; segmentIndex < segments.Count; segmentIndex++)
-            {
-                var activeCharacters = names
-                    .Where(name => presenceMap[name][segmentIndex] > 0)
-                    .ToList();
-
-                if (activeCharacters.Count < 2) continue;
-
-                for (var i = 0; i < activeCharacters.Count; i++)
-                {
-                    for (var j = i + 1; j < activeCharacters.Count; j++)
-                    {
-                        var left = activeCharacters[i];
-                        var right = activeCharacters[j];
-
-                        var pair = string.Compare(left, right, StringComparison.OrdinalIgnoreCase) <= 0
-                            ? (left, right)
-                            : (right, left);
-
-                        var coOccurWeight = Math.Min(presenceMap[left][segmentIndex], presenceMap[right][segmentIndex]);
-                        if (coOccurWeight <= 0) coOccurWeight = 1;
-
-                        edges[pair] = edges.TryGetValue(pair, out var weight)
-                            ? weight + coOccurWeight
-                            : coOccurWeight;
-                    }
-                }
-            }
-
-            return edges.Select(x => new CharacterRelationshipEdge
-            {
-                SourceCharacter = x.Key.A,
-                TargetCharacter = x.Key.B,
-                Weight = x.Value,
-            }).ToList();
-        }
-
-        private static List<string> Tokenize(string text)
-        {
-            return Regex.Matches(text.ToLowerInvariant(), @"[\p{L}\p{N}']+")
-                .Select(match => NormalizeToken(match.Value))
-                .Where(token => !string.IsNullOrWhiteSpace(token))
-                .ToList();
-        }
-
-        private static string NormalizeToken(string token)
-        {
-            var decomposed = token.Normalize(NormalizationForm.FormD);
-            var builder = new StringBuilder(decomposed.Length);
-
-            foreach (var character in decomposed)
-            {
-                var category = CharUnicodeInfo.GetUnicodeCategory(character);
-                if (category == UnicodeCategory.NonSpacingMark) continue;
-                if (char.IsLetterOrDigit(character) || character == '\'')
-                    builder.Append(char.ToLowerInvariant(character));
-            }
-
-            return builder.ToString().Normalize(NormalizationForm.FormC);
-        }
-
-        private static int CountWords(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text)) return 0;
-            return text.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
-        }
-
-        private static void AnnotatePacingPoints(List<PacingPoint> points, List<string> insights)
-        {
-            if (points.Count < 3) return;
-
-            var maxPoint = points.OrderByDescending(p => p.Score).First();
-            var minPoint = points.OrderBy(p => p.Score).First();
-
-            maxPoint.Label = $"Cao nhất: {maxPoint.Score:F0}";
-            minPoint.Label = $"Thấp nhất: {minPoint.Score:F0}";
-
-            var avgScore = points.Average(p => p.Score);
-            insights.Add($"Nhịp độ: Nhịp độ trung bình {avgScore:F1}/100. Đỉnh cao nhất tại chương {maxPoint.ChapterNumber} (segment {maxPoint.SegmentIndex}, score {maxPoint.Score:F0}), thấp nhất tại chương {minPoint.ChapterNumber} (segment {minPoint.SegmentIndex}, score {minPoint.Score:F0}).");
-
-            var highCount = points.Count(p => p.Score > 65);
-            var lowCount = points.Count(p => p.Score < 35);
-            if (highCount > lowCount * 2)
-                insights.Add("Nhịp độ nghiêng về nhanh/action liên tục — có thể cần thêm đoạn nghỉ để người đọc 'thở'.");
-            else if (lowCount > highCount * 2)
-                insights.Add("Nhịp độ nghiêng về chậm/nội tâm — có thể cần thêm cảnh hành động để tăng kịch tính.");
-        }
-
-        private static void AnnotateEmotionPoints(List<EmotionPoint> points, List<string> insights)
-        {
-            if (points.Count < 3) return;
-
-            var mostPositive = points.OrderByDescending(p => p.Valence).FirstOrDefault();
-            var mostNegative = points.OrderBy(p => p.Valence).FirstOrDefault();
-
-            if (mostPositive != null && mostPositive.Valence > 0.1)
-                mostPositive.Label = mostPositive.DominantEmotion == "Joy" ? "Cao trào tươi sáng" : "Cảm xúc tích cực";
-            
-            if (mostNegative != null && mostNegative.Valence < -0.1 && mostNegative != mostPositive)
-                mostNegative.Label = mostNegative.DominantEmotion == "Fear" || mostNegative.DominantEmotion == "Sadness" 
-                    ? "Căng thẳng/U buồn nhất" 
-                    : "Cảm xúc tiêu cực";
-
-            var emotionCounts = points
-                .Where(p => p.DominantEmotion != "Neutral")
-                .GroupBy(p => p.DominantEmotion)
-                .OrderByDescending(g => g.Count())
-                .Take(3)
-                .Select(g => $"{g.Key} ({g.Count()} đoạn)")
-                .ToList();
-
-            if (emotionCounts.Count > 0)
-                insights.Add($"Cảm xúc chủ đạo: {string.Join(", ", emotionCounts)}.");
-
-            var avgValence = points.Average(p => p.Valence);
-            var tone = avgValence > 0.2 ? "tích cực" : avgValence < -0.2 ? "tiêu cực" : "trung tính";
-            insights.Add($"Tone cảm xúc tổng thể: {tone} (valence trung bình: {avgValence:F2}).");
-        }
-
-        private static void GenerateCharacterInsights(
-            List<CharacterFrequency> frequencies,
-            List<CharacterRelationshipEdge> relationships,
-            List<string> insights)
-        {
-            if (frequencies.Count == 0) return;
-
-            var topN = Math.Min(frequencies.Count, 5);
-            var topList = frequencies.Take(topN).Select(f => $"{f.CharacterName} ({f.TotalMentions} lần)").ToList();
-            insights.Add($"Nhân vật xuất hiện nhiều nhất: {string.Join(", ", topList)}.");
-
-            if (frequencies.Count >= 2)
-            {
-                var ratio = (double)frequencies[0].TotalMentions / Math.Max(1, frequencies[1].TotalMentions);
-                if (ratio > 3)
-                    insights.Add($"Nhân vật {frequencies[0].CharacterName} áp đảo về lượng xuất hiện (gấp {ratio:F1}x nhân vật thứ 2). Các nhân vật phụ có thể cần phát triển thêm.");
-            }
-
-            if (relationships.Count > 0)
-            {
-                var topRel = relationships[0];
-                insights.Add($"Mối quan hệ mạnh nhất: {topRel.SourceCharacter} ↔ {topRel.TargetCharacter} (đồng xuất hiện {topRel.Weight} lần).");
-            }
-        }
-
         private sealed class ChapterSnapshot
         {
             public Guid Id { get; init; }
             public int ChapterNumber { get; init; }
             public Guid CurrentVersionId { get; init; }
-        }
-
-        private sealed class TextSegment
-        {
-            public int SegmentIndex { get; init; }
-            public Guid ChapterId { get; init; }
-            public int ChapterNumber { get; init; }
-            public string Text { get; init; } = string.Empty;
-            public int WordCount { get; init; }
-            public List<string> Tokens { get; init; } = new();
         }
     }
 }

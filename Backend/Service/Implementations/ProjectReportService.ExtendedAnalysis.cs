@@ -189,6 +189,8 @@ QUY TẮC QUAN TRỌNG:
         }
 
         private async Task<(EmotionPacingResult Pacing, int TokensUsed)> AnalyzeEmotionPacingAsync(
+            Guid projectId,
+            string rawDek,
             string projectTitle,
             List<(string Content, int ChapterNumber, string? ChapterTitle)> decryptedChunks,
             Func<int, string?, CancellationToken, Task>? progressCallback,
@@ -204,8 +206,8 @@ QUY TẮC QUAN TRỌNG:
                 return (new EmotionPacingResult(), 0);
             }
 
-            // 1. Local segment splitting (similar to NarrativeAnalyticsService)
-            var segments = new List<TextSegmentLocal>();
+            // 1. Local segment splitting (using TextSegment shared DTO)
+            var segments = new List<TextSegment>();
             var segmentIndex = 0;
 
             foreach (var item in decryptedChunks)
@@ -216,21 +218,16 @@ QUY TẮC QUAN TRỌNG:
 
                 foreach (var segmentText in SplitTextIntoSegmentsLocal(chunk, 220))
                 {
-                    var words = segmentText.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-                    var wordCount = words.Length;
+                    var wordCount = NarrativeAnalyticsHelper.CountWords(segmentText);
                     if (wordCount <= 0) continue;
 
-                    var tokens = words.Select(w => NormalizeTokenLocal(w))
-                                      .Where(t => !string.IsNullOrWhiteSpace(t))
-                                      .ToList();
-
-                    segments.Add(new TextSegmentLocal
+                    segments.Add(new TextSegment
                     {
                         SegmentIndex = segmentIndex++,
                         ChapterNumber = chNumber,
                         Text = segmentText,
                         WordCount = wordCount,
-                        Tokens = tokens
+                        Tokens = NarrativeAnalyticsHelper.Tokenize(segmentText)
                     });
                 }
             }
@@ -240,90 +237,61 @@ QUY TẮC QUAN TRỌNG:
                 return (new EmotionPacingResult(), 0);
             }
 
-            // 2. Programmatic score calculation
-            var pacingPoints = new List<PacingPoint>();
-            var emotionPoints = new List<EmotionPoint>();
+            // 2. Programmatic score calculation using NarrativeAnalyticsHelper
+            var pacingPoints = NarrativeAnalyticsHelper.BuildPacingSeries(segments);
+            var emotionPoints = NarrativeAnalyticsHelper.BuildEmotionSeries(segments);
 
-            foreach (var segment in segments)
-            {
-                // Pacing Calculation
-                var words = Math.Max(1, segment.WordCount);
-                var actionHits = segment.Tokens.Count(token => ActionLexicon.Contains(token));
-                var actionDensity = actionHits * 100.0 / words;
+            // Load character analytics and presence
+            var characterNames = await NarrativeAnalyticsHelper.LoadCharacterNamesAsync(_context, projectId, rawDek);
+            var characterPresenceMap = NarrativeAnalyticsHelper.BuildCharacterPresenceMap(segments, characterNames);
 
-                var strongPunctuation = Regex.Matches(segment.Text, @"[!?]").Count;
-                var punctuationDensity = strongPunctuation * 100.0 / words;
-
-                var sentenceCount = Math.Max(1, Regex.Matches(segment.Text, @"[.!?]").Count);
-                var avgSentenceLength = words / (double)sentenceCount;
-
-                var dialogueMarkers = Regex.Matches(segment.Text, "[\"“”«»]").Count;
-                var dialogueRatio = dialogueMarkers / (double)Math.Max(1, segment.Text.Length);
-
-                var pacingScore = 35
-                            + actionDensity * 4.5
-                            + punctuationDensity * 2.8
-                            + dialogueRatio * 120
-                            - avgSentenceLength * 0.9;
-
-                pacingScore = Math.Clamp(pacingScore, 0, 100);
-
-                pacingPoints.Add(new PacingPoint
+            var frequencies = characterPresenceMap
+                .Select(kvp => new CharacterFrequency
                 {
-                    SegmentIndex = segment.SegmentIndex,
-                    ChapterNumber = segment.ChapterNumber,
-                    Score = Math.Round(pacingScore, 2)
-                });
+                    CharacterName = kvp.Key,
+                    TotalMentions = kvp.Value.Sum(),
+                })
+                .Where(x => x.TotalMentions > 0)
+                .OrderByDescending(x => x.TotalMentions)
+                .Take(24)
+                .ToList();
 
-                // Sentiment/Emotion Calculation
-                var positive = 0;
-                var negative = 0;
-                var emotionBuckets = EmotionLexicon.Keys.ToDictionary(key => key, _ => 0, StringComparer.OrdinalIgnoreCase);
-
-                foreach (var token in segment.Tokens)
+            var trackedCharacters = frequencies.Select(f => f.CharacterName).Take(15).ToList();
+            var presenceSeries = trackedCharacters
+                .Select(name => new CharacterPresenceSeries
                 {
-                    if (PositiveLexicon.Contains(token)) positive++;
-                    if (NegativeLexicon.Contains(token)) negative++;
-
-                    foreach (var (emotion, lexicon) in EmotionLexicon)
+                    CharacterName = name,
+                    Points = segments.Select(segment => new CharacterPresencePoint
                     {
-                        if (lexicon.Contains(token))
-                            emotionBuckets[emotion]++;
-                    }
-                }
+                        SegmentIndex = segment.SegmentIndex,
+                        ChapterNumber = segment.ChapterNumber,
+                        Mentions = characterPresenceMap.TryGetValue(name, out var values) ? values[segment.SegmentIndex] : 0,
+                    }).ToList()
+                })
+                .ToList();
 
-                var sentimentMass = positive + negative;
-                var valence = sentimentMass == 0 ? 0 : (positive - negative) / (double)sentimentMass;
-                valence = Math.Clamp(valence, -1, 1);
-
-                var intensity = sentimentMass * 100.0 / words * 10.0;
-                intensity = Math.Clamp(intensity, 0, 100);
-
-                var dominant = emotionBuckets
-                    .OrderByDescending(x => x.Value)
-                    .FirstOrDefault();
-
-                emotionPoints.Add(new EmotionPoint
-                {
-                    SegmentIndex = segment.SegmentIndex,
-                    ChapterNumber = segment.ChapterNumber,
-                    Valence = Math.Round(valence, 3),
-                    Intensity = Math.Round(intensity, 2),
-                    DominantEmotion = dominant.Value > 0 ? dominant.Key : "Neutral"
-                });
-            }
+            var relationships = NarrativeAnalyticsHelper.BuildCharacterRelationships(characterPresenceMap, segments)
+                .OrderByDescending(x => x.Weight)
+                .Take(60)
+                .ToList();
 
             // Set Peak and Trough labels for Pacing
-            var maxPacing = pacingPoints.OrderByDescending(p => p.Score).First();
-            var minPacing = pacingPoints.OrderBy(p => p.Score).First();
-            maxPacing.Label = "Cao nhất";
-            minPacing.Label = "Thấp nhất";
+            if (pacingPoints.Count > 0)
+            {
+                var maxPacing = pacingPoints.OrderByDescending(p => p.Score).First();
+                var minPacing = pacingPoints.OrderBy(p => p.Score).First();
+                maxPacing.Label = "Cao nhất";
+                minPacing.Label = "Thấp nhất";
+            }
 
             // Set peak/trough labels for Emotion
-            var maxEmotion = emotionPoints.OrderByDescending(e => e.Valence).First();
-            var minEmotion = emotionPoints.OrderBy(e => e.Valence).First();
-            if (maxEmotion.Valence > 0.1) maxEmotion.Label = "Tích cực nhất";
-            if (minEmotion.Valence < -0.1 && minEmotion != maxEmotion) minEmotion.Label = "Căng thẳng/U buồn nhất";
+            if (emotionPoints.Count > 0)
+            {
+                var maxEmotion = emotionPoints.OrderByDescending(e => e.Valence).First();
+                var minEmotion = emotionPoints.OrderBy(e => e.Valence).First();
+                if (maxEmotion.Valence > 0.1) maxEmotion.Label = "Tích cực nhất";
+                if (minEmotion.Valence < -0.1 && minEmotion != maxEmotion) minEmotion.Label = "Căng thẳng/U buồn nhất";
+            }
 
             // 3. Generate literary insights via Gemini (sampling 25 segments)
             var insights = new List<string>();
@@ -481,9 +449,11 @@ NỘI DUNG TÁC PHẨM (MẪU ĐẠI DIỆN):
                 if (insights.Count == 0)
                 {
                     // Fallback 2: Line splitting with heavy syntax cleaning
+                    // Fix: Changed from .Trim('"', '\'', ',', '[', ']', '{', '}') to .Trim('"', '\'', ',', '{', '}')
+                    // to prevent stripping the leading bracket '[' of tags.
                     insights = rawInsights.Split('\n', StringSplitOptions.RemoveEmptyEntries)
                                           .Select(l => l.Trim().TrimStart('-', '*', ' ', '•'))
-                                          .Select(l => l.Trim('"', '\'', ',', '[', ']', '{', '}'))
+                                          .Select(l => l.Trim('"', '\'', ',', '{', '}'))
                                           .Select(l => l.Trim())
                                           .Where(l => !string.IsNullOrWhiteSpace(l) 
                                                       && l.Length > 10
@@ -508,10 +478,18 @@ NỘI DUNG TÁC PHẨM (MẪU ĐẠI DIỆN):
                 insights.Add("Các bước ngoặt tâm lý nhân vật phát triển tương đối hợp lý nhưng cần tăng thêm tính bất ngờ.");
             }
 
+            // Append programmatic annotations to insights
+            NarrativeAnalyticsHelper.AnnotatePacingPoints(pacingPoints, insights);
+            NarrativeAnalyticsHelper.AnnotateEmotionPoints(emotionPoints, insights);
+            NarrativeAnalyticsHelper.GenerateCharacterInsights(frequencies, relationships, insights);
+
             var result = new EmotionPacingResult
             {
                 PacingPoints = pacingPoints,
                 EmotionPoints = emotionPoints,
+                CharacterFrequencies = frequencies,
+                CharacterPresence = presenceSeries,
+                CharacterRelationships = relationships,
                 Insights = insights,
                 OverallPacingProfile = pacingPoints.Average(p => p.Score) > 55 ? "Nhịp độ nhanh" : "Nhịp độ cân bằng",
                 DominantEmotionProfile = emotionPoints.GroupBy(e => e.DominantEmotion).OrderByDescending(g => g.Count()).First().Key
@@ -557,31 +535,6 @@ NỘI DUNG TÁC PHẨM (MẪU ĐẠI DIỆN):
                 result.Add(builder.ToString().Trim());
 
             return result;
-        }
-
-        private static string NormalizeTokenLocal(string token)
-        {
-            var decomposed = token.Normalize(NormalizationForm.FormD);
-            var builder = new StringBuilder(decomposed.Length);
-
-            foreach (var character in decomposed)
-            {
-                var category = CharUnicodeInfo.GetUnicodeCategory(character);
-                if (category == UnicodeCategory.NonSpacingMark) continue;
-                if (char.IsLetterOrDigit(character) || character == '\'')
-                    builder.Append(char.ToLowerInvariant(character));
-            }
-
-            return builder.ToString().Normalize(NormalizationForm.FormC);
-        }
-
-        private sealed class TextSegmentLocal
-        {
-            public int SegmentIndex { get; init; }
-            public int ChapterNumber { get; init; }
-            public string Text { get; init; } = string.Empty;
-            public int WordCount { get; init; }
-            public List<string> Tokens { get; init; } = new();
         }
 
         private sealed class PacingInsightsRaw

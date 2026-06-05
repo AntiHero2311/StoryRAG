@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import type { NarrativeChartsResponse } from '../../services/reportService';
 
 interface Props {
@@ -464,48 +464,9 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
         return Array.from(new Set(data.pacing.map(p => p.chapterNumber))).sort((a, b) => a - b);
     }, [data]);
 
-    if (loading) {
-        return (
-            <div className="rounded-2xl p-6 mt-5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-                <div className="h-6 w-56 mb-4 rounded animate-pulse" style={{ background: 'var(--bg-hover)' }} />
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                    <div className="h-56 rounded-xl animate-pulse" style={{ background: 'var(--bg-hover)' }} />
-                    <div className="h-56 rounded-xl animate-pulse" style={{ background: 'var(--bg-hover)' }} />
-                </div>
-            </div>
-        );
-    }
-
-    if (!data) return null;
-
-    const hasAnyData = data.pacing.length > 0;
-    if (!hasAnyData) {
-        return (
-            <div className="rounded-2xl p-6 mt-5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-                <p className="text-[var(--text-primary)] font-bold text-base">Phân tích chuyên biệt</p>
-                <p className="text-[var(--text-secondary)] text-xs mt-2">Chưa đủ dữ liệu để tạo biểu đồ nhịp độ kể chuyện.</p>
-            </div>
-        );
-    }
-
-    const mapValenceToScore = (valence: number) => ((valence + 1) / 2) * 100;
-
-    // ── COMPUTE OVERVIEW DATA (Grouped and Averaged by Chapter) ──
-    const overviewPacingValues = uniqueChapters.map(ch => {
-        const pts = data.pacing.filter(p => p.chapterNumber === ch);
-        return pts.reduce((sum, p) => sum + p.score, 0) / Math.max(1, pts.length);
-    });
-
-    const overviewEmotionValues = uniqueChapters.map(ch => {
-        const pts = data.emotions.filter(e => e.chapterNumber === ch);
-        const scores = pts.map(e => mapValenceToScore(e.valence));
-        return scores.reduce((sum, s) => sum + s, 0) / Math.max(1, scores.length);
-    });
-
-    const overviewLabels = uniqueChapters.map(ch => `Chương ${ch}`);
-
     // Parse deep AI structured insights
     const parsedInsights = useMemo((): ParsedInsight[] => {
+        if (!data) return [];
         const raw = data.insights ?? [];
         const result: ParsedInsight[] = [];
         
@@ -547,10 +508,25 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
             if (insight.includes('PHÂN TÍCH CHUYÊN SÂU')) return;
 
             let matched = false;
-            // 1. Try exact bracket tag matching
+            // 1. Try exact bracket tag matching (including common bracket-stripped variations)
             for (const config of categoriesConfig) {
+                const malformedTag1 = config.tag.replace('[', ''); // "Nhịp độ & Tiết tấu]"
+                const malformedTag2 = config.tag.replace(']', ''); // "[Nhịp độ & Tiết tấu"
+                const malformedTag3 = config.tag.replace(/[\[\]]/g, ''); // "Nhịp độ & Tiết tấu"
+                
+                let foundTag = '';
                 if (insight.includes(config.tag)) {
-                    let cleanContent = insight.replace(config.tag, '').trim();
+                    foundTag = config.tag;
+                } else if (insight.includes(malformedTag1)) {
+                    foundTag = malformedTag1;
+                } else if (insight.includes(malformedTag2)) {
+                    foundTag = malformedTag2;
+                } else if (insight.includes(malformedTag3)) {
+                    foundTag = malformedTag3;
+                }
+
+                if (foundTag) {
+                    let cleanContent = insight.replace(foundTag, '').trim();
                     cleanContent = cleanContent.replace(/^["'\s,\[\]\{\}“”«»]+|["'\s,\[\]\{\}“”«»]+$/g, '').trim();
                     if (cleanContent) {
                         result.push({
@@ -587,6 +563,10 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
                     let cleanContent = insight;
                     categoriesConfig.forEach(c => {
                         cleanContent = cleanContent.replace(c.tag, '');
+                        const tagWithoutBrackets = c.tag.replace(/[\[\]]/g, '');
+                        cleanContent = cleanContent.replace(tagWithoutBrackets + ']', '');
+                        cleanContent = cleanContent.replace('[' + tagWithoutBrackets, '');
+                        cleanContent = cleanContent.replace(tagWithoutBrackets, '');
                     });
                     cleanContent = cleanContent.replace(/^["'\s,\[\]\{\}“”«»]+|["'\s,\[\]\{\}“”«»]+$/g, '').trim();
 
@@ -637,7 +617,47 @@ export default function NarrativeChartsPanel({ data, loading }: Props) {
             }
             return insight;
         });
-    }, [data.insights]);
+    }, [data?.insights]);
+
+    if (loading) {
+        return (
+            <div className="rounded-2xl p-6 mt-5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                <div className="h-6 w-56 mb-4 rounded animate-pulse" style={{ background: 'var(--bg-hover)' }} />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    <div className="h-56 rounded-xl animate-pulse" style={{ background: 'var(--bg-hover)' }} />
+                    <div className="h-56 rounded-xl animate-pulse" style={{ background: 'var(--bg-hover)' }} />
+                </div>
+            </div>
+        );
+    }
+
+    if (!data) return null;
+
+    const hasAnyData = data.pacing.length > 0;
+    if (!hasAnyData) {
+        return (
+            <div className="rounded-2xl p-6 mt-5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                <p className="text-[var(--text-primary)] font-bold text-base">Phân tích chuyên biệt</p>
+                <p className="text-[var(--text-secondary)] text-xs mt-2">Chưa đủ dữ liệu để tạo biểu đồ nhịp độ kể chuyện.</p>
+            </div>
+        );
+    }
+
+    const mapValenceToScore = (valence: number) => ((valence + 1) / 2) * 100;
+
+    // ── COMPUTE OVERVIEW DATA (Grouped and Averaged by Chapter) ──
+    const overviewPacingValues = uniqueChapters.map(ch => {
+        const pts = data.pacing.filter(p => p.chapterNumber === ch);
+        return pts.reduce((sum, p) => sum + p.score, 0) / Math.max(1, pts.length);
+    });
+
+    const overviewEmotionValues = uniqueChapters.map(ch => {
+        const pts = data.emotions.filter(e => e.chapterNumber === ch);
+        const scores = pts.map(e => mapValenceToScore(e.valence));
+        return scores.reduce((sum, s) => sum + s, 0) / Math.max(1, scores.length);
+    });
+
+    const overviewLabels = uniqueChapters.map(ch => `Chương ${ch}`);
 
     const formatInsightContent = (content: string, color: string) => {
         const lines = content.split('\n').filter(l => l.trim().length > 0);
