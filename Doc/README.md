@@ -58,8 +58,11 @@ npm run dev
   - Moi user chi co 1 job active.
   - Worker uu tien job theo goi subscription (plan cao duoc xu ly truoc).
   - Sau khi AI cham xong, report duoc phat hanh truc tiep (`Released`) giup tac gia xem duoc ngay lap tuc.
+  - **Phân phối báo cáo chuyên môn cho Staff**: Danh sách báo cáo chờ xử lý tự động lọc theo thể loại chuyên môn được gán cho Staff (`StaffGenres`). Truyện không có thể loại sẽ hiển thị cho toàn bộ Staff. Admin xem được tất cả báo cáo.
 - **Thu tu API key embedding**: uu tien `Gemini:EmbeddingApiKey`; neu khong co thi dung `Gemini:ChatApiKey` roi moi fallback `Gemini:AnalyzeApiKey`.
-- **Bao mat route frontend** da duoc ap dung bang `RouteGuard`, `RoleGuard`, va `ErrorBoundary`.
+- **Bao mat va phan quyen**:
+  - Bảo mật route frontend bằng `RouteGuard`, `RoleGuard`, và `ErrorBoundary`.
+  - Chặn đăng ký lại bằng email của tài khoản đang bị khóa hoặc vô hiệu hóa bởi Admin để bảo vệ tính bảo mật hệ thống.
 
 ---
 

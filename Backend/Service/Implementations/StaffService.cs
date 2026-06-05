@@ -320,7 +320,7 @@ namespace Service.Implementations
         }
 
 
-        public async Task<StaffPagedResponse<StaffPendingReportItem>> GetPendingReportsAsync(int page, int pageSize, string? status = null)
+        public async Task<StaffPagedResponse<StaffPendingReportItem>> GetPendingReportsAsync(int page, int pageSize, string? status = null, Guid? staffId = null, bool isAdmin = false)
         {
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 1, 100);
@@ -330,6 +330,18 @@ namespace Service.Implementations
                 .Include(r => r.Project)
                     .ThenInclude(p => p.Author)
                 .AsQueryable();
+
+            if (!isAdmin && staffId.HasValue)
+            {
+                var staffGenreIds = await _db.StaffGenres
+                    .Where(sg => sg.StaffId == staffId.Value)
+                    .Select(sg => sg.GenreId)
+                    .ToListAsync();
+
+                query = query.Where(r =>
+                    !r.Project.ProjectGenres.Any() ||
+                    r.Project.ProjectGenres.Any(pg => staffGenreIds.Contains(pg.GenreId)));
+            }
 
             if (!string.IsNullOrWhiteSpace(status) && status.Equals("all", StringComparison.OrdinalIgnoreCase))
             {
