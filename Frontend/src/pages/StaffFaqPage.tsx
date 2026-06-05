@@ -365,7 +365,7 @@ export default function StaffFaqPage({ embedded = false }: { embedded?: boolean 
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-[var(--border-color)]">
-                      {['Question', 'Category', 'Order', 'Trạng thái', 'Updated', ''].map(h => (
+                      {['Question', 'Category', 'Trạng thái', 'Updated', ''].map(h => (
                         <th key={h} className="text-left px-4 py-3 text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider">
                           {h}
                         </th>
@@ -394,11 +394,7 @@ export default function StaffFaqPage({ embedded = false }: { embedded?: boolean 
                                 {chip.label}
                               </span>
                             </td>
-                            <td className="px-4 py-3">
-                              <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                                {faq.order}
-                              </span>
-                            </td>
+
                             <td className="px-4 py-3">
                               <PublishToggle value={faq.published} onChange={() => void handleTogglePublish(faq)} />
                             </td>
@@ -435,30 +431,19 @@ export default function StaffFaqPage({ embedded = false }: { embedded?: boolean 
           {modalOpen && (
             <Modal title={editing ? 'Sửa FAQ' : 'Tạo FAQ'} onClose={() => setModalOpen(false)}>
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">Category</label>
-                    <div className="relative">
-                      <select
-                        value={form.category}
-                        onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                        className="appearance-none w-full pl-4 pr-9 py-2.5 bg-[var(--input-bg)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] text-sm outline-none focus:ring-2 focus:ring-indigo-500/30"
-                      >
-                        {categoryOptions.map(c => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] pointer-events-none" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">Order</label>
-                    <input
-                      type="number"
-                      value={form.order}
-                      onChange={e => setForm(f => ({ ...f, order: Number(e.target.value) }))}
-                      className="w-full px-4 py-2.5 bg-[var(--input-bg)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] text-sm outline-none focus:ring-2 focus:ring-indigo-500/30"
-                    />
+                <div>
+                  <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">Category</label>
+                  <div className="relative">
+                    <select
+                      value={form.category}
+                      onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                      className="appearance-none w-full pl-4 pr-9 py-2.5 bg-[var(--input-bg)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] text-sm outline-none focus:ring-2 focus:ring-indigo-500/30"
+                    >
+                      {categoryOptions.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] pointer-events-none" />
                   </div>
                 </div>
 

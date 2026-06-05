@@ -149,8 +149,8 @@ function DetailModal({
                     {/* Status picker */}
                     <div>
                         <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-2">Trạng thái</label>
-                        <div className="grid grid-cols-2 gap-2">
-                            {(['Open', 'InProgress', 'Resolved', 'Closed'] as BugStatus[]).map(s => {
+                        <div className="grid grid-cols-3 gap-2">
+                            {(['Open', 'InProgress', 'Resolved'] as BugStatus[]).map(s => {
                                 const c = statusConfig(s);
                                 const Icon = c.icon;
                                 return (
@@ -264,7 +264,6 @@ export default function StaffDashboardPage() {
         { label: 'Chờ xử lý',   value: stats.open,        color: 'text-sky-400',     icon: Clock },
         { label: 'Đang xử lý',  value: stats.inProgress,  color: 'text-amber-400',   icon: RefreshCw },
         { label: 'Đã giải quyết', value: stats.resolved,  color: 'text-emerald-400', icon: CheckCircle },
-        { label: 'Đã đóng',     value: stats.closed,      color: 'text-zinc-400',    icon: XCircle },
     ];
 
     return (
@@ -272,14 +271,14 @@ export default function StaffDashboardPage() {
             {(userInfo) => (
             <div className="p-6 max-w-6xl mx-auto w-full space-y-6">
                 {/* Stats */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {statCards.map(c => (
                         <div key={c.label}
                             className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl px-4 py-3 flex items-center gap-3 cursor-pointer hover:border-[var(--text-secondary)]/30 transition-colors"
                             onClick={() => {
                                 const map: Record<string, BugStatus | 'all'> = {
                                     'Tổng cộng': 'all', 'Chờ xử lý': 'Open', 'Đang xử lý': 'InProgress',
-                                    'Đã giải quyết': 'Resolved', 'Đã đóng': 'Closed',
+                                    'Đã giải quyết': 'Resolved',
                                 };
                                 setFilterStatus(map[c.label] ?? 'all');
                             }}>
@@ -304,7 +303,6 @@ export default function StaffDashboardPage() {
                             <option value="Open">Chờ xử lý</option>
                             <option value="InProgress">Đang xử lý</option>
                             <option value="Resolved">Đã giải quyết</option>
-                            <option value="Closed">Đã đóng</option>
                         </select>
                         <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] pointer-events-none" />
                     </div>

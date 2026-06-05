@@ -662,23 +662,17 @@ export default function StaffReportReviewPage() {
                         </div>
 
                         <div className="text-right">
-                          <p className="text-[10px] uppercase font-bold text-[var(--text-secondary)] text-left">Số lần cảnh cáo</p>
-                          <div className="flex items-center gap-1.5 mt-1 justify-start">
-                            {[1, 2, 3].map((num) => (
-                              <div
-                                key={num}
-                                className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                                  (detail.authorStrikeCount || 0) >= num
-                                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                                    : 'bg-zinc-800 text-zinc-500 border border-zinc-700/50'
-                                }`}
-                              >
-                                {num}
-                              </div>
-                            ))}
-                            <span className="text-xs font-mono text-[var(--text-primary)] font-bold ml-1">
-                              {detail.authorStrikeCount || 0}
-                            </span>
+                          <p className="text-[10px] uppercase font-bold text-[var(--text-secondary)] text-left">Trạng thái cảnh cáo</p>
+                          <div className="mt-1">
+                            {(detail.authorStrikeCount || 0) >= 1 ? (
+                              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                                Đã cảnh cáo
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/50">
+                                Chưa cảnh cáo
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -690,44 +684,58 @@ export default function StaffReportReviewPage() {
                         </div>
                       )}
 
-                      {/* Warning Form */}
+                      {(detail.authorStrikeCount || 0) >= 1 && (
+                        <div className="text-xs border border-amber-500/20 bg-amber-500/5 p-3 rounded-xl text-amber-300">
+                          <p className="font-bold">Nội dung đã cảnh cáo:</p>
+                          <p className="mt-1 italic">
+                            {detail.authorWarningMessage || "Tài khoản đã bị ghi nhận vi phạm tiêu chuẩn cộng đồng."}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Warning & Ban Actions */}
                       {!detail.authorIsBanned && (
                         <div className="border-t border-[var(--border-color)]/60 pt-3.5 space-y-3">
-                          <button
-                            onClick={() => {
-                              setShowWarnForm(!showWarnForm);
-                              setShowBanRequestForm(false);
-                            }}
-                            className="w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-between bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]/80 transition-colors"
-                          >
-                            <span>Cảnh cáo & Ghi nhận vi phạm</span>
-                            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showWarnForm ? 'rotate-180 text-amber-400' : ''}`} />
-                          </button>
-
-                          {showWarnForm && (
-                            <form onSubmit={handleWarnSubmit} className="space-y-3 bg-[var(--bg-hover)]/20 p-3 rounded-xl border border-[var(--border-color)]/40 animate-slide-down">
-                              <div>
-                                <label className="block text-[10px] font-bold text-[var(--text-secondary)] mb-1">
-                                  Lý do cảnh cáo (gửi thông báo cho tác giả)
-                                </label>
-                                <textarea
-                                  value={warnMessage}
-                                  onChange={(e) => setWarnMessage(e.target.value)}
-                                  placeholder="Nhập lý do chi tiết vi phạm tiêu chuẩn cộng đồng..."
-                                  className="w-full min-h-[70px] p-2.5 rounded-lg text-xs bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/50 resize-y"
-                                  required
-                                />
-                              </div>
+                          {/* Warning form - only available if not warned yet */}
+                          {(detail.authorStrikeCount || 0) === 0 ? (
+                            <>
                               <button
-                                type="submit"
-                                disabled={warnLoading || !warnMessage.trim()}
-                                className="w-full py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-black text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
+                                onClick={() => {
+                                  setShowWarnForm(!showWarnForm);
+                                  setShowBanRequestForm(false);
+                                }}
+                                className="w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-between bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]/80 transition-colors"
                               >
-                                {warnLoading && <Loader2 className="w-3 h-3 animate-spin" />}
-                                Gửi Cảnh cáo (Strike)
+                                <span>Cảnh cáo & Ghi nhận vi phạm</span>
+                                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showWarnForm ? 'rotate-180 text-amber-400' : ''}`} />
                               </button>
-                            </form>
-                          )}
+
+                              {showWarnForm && (
+                                <form onSubmit={handleWarnSubmit} className="space-y-3 bg-[var(--bg-hover)]/20 p-3 rounded-xl border border-[var(--border-color)]/40 animate-slide-down">
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-[var(--text-secondary)] mb-1">
+                                      Lý do cảnh cáo (gửi thông báo cho tác giả)
+                                    </label>
+                                    <textarea
+                                      value={warnMessage}
+                                      onChange={(e) => setWarnMessage(e.target.value)}
+                                      placeholder="Nhập lý do chi tiết vi phạm tiêu chuẩn cộng đồng..."
+                                      className="w-full min-h-[70px] p-2.5 rounded-lg text-xs bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/50 resize-y"
+                                      required
+                                    />
+                                  </div>
+                                  <button
+                                    type="submit"
+                                    disabled={warnLoading || !warnMessage.trim()}
+                                    className="w-full py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-black text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
+                                  >
+                                    {warnLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                                    Gửi Cảnh cáo (Strike)
+                                  </button>
+                                </form>
+                              )}
+                            </>
+                          ) : null}
 
                           {/* Ban Request Form */}
                           <button
@@ -735,9 +743,9 @@ export default function StaffReportReviewPage() {
                               setShowBanRequestForm(!showBanRequestForm);
                               setShowWarnForm(false);
                             }}
-                            disabled={detail.authorIsBanRequested || (detail.authorStrikeCount || 0) < 3}
+                            disabled={detail.authorIsBanRequested || (detail.authorStrikeCount || 0) < 1}
                             className="w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-between bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/15 transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
-                            title={(detail.authorStrikeCount || 0) < 3 ? 'Cần tối thiểu 3 lần cảnh cáo để đề xuất khóa' : undefined}
+                            title={(detail.authorStrikeCount || 0) < 1 ? 'Cần tối thiểu 1 lần cảnh cáo để đề xuất khóa' : undefined}
                           >
                             <span>Đề xuất Admin khóa tài khoản (Ban)</span>
                             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showBanRequestForm ? 'rotate-180 text-red-400' : ''}`} />

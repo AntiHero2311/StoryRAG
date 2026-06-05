@@ -613,12 +613,21 @@ namespace Service.Implementations
                     try { contentRes = System.Text.Json.JsonSerializer.Deserialize<ContentAnalysisResult>(decData, jsonOpts); } catch { }
                 }
             }
-            else if (report.Project != null)
+            string? authorWarningMessage = null;
+            if (report.Project?.AuthorId != null)
             {
-                projectTitle = report.Project.Title;
+                var warningNotif = await _db.Notifications
+                    .AsNoTracking()
+                    .Where(n => n.UserId == report.Project.AuthorId && n.Type == "warning" && n.Tag == "moderation")
+                    .OrderByDescending(n => n.CreatedAt)
+                    .FirstOrDefaultAsync();
+                if (warningNotif != null)
+                {
+                    authorWarningMessage = warningNotif.Message;
+                }
             }
 
-            return MapReportDetail(report, projectTitle, contentRes);
+            return MapReportDetail(report, projectTitle, contentRes, authorWarningMessage);
         }
 
         public async Task<StaffReportStoryResponse> GetReportStoryAsync(Guid reportId)
@@ -851,12 +860,21 @@ namespace Service.Implementations
                     try { contentRes = System.Text.Json.JsonSerializer.Deserialize<ContentAnalysisResult>(decData, jsonOpts); } catch { }
                 }
             }
-            else if (report.Project != null)
+            string? authorWarningMessage = null;
+            if (report.Project?.AuthorId != null)
             {
-                projectTitle = report.Project.Title;
+                var warningNotif = await _db.Notifications
+                    .AsNoTracking()
+                    .Where(n => n.UserId == report.Project.AuthorId && n.Type == "warning" && n.Tag == "moderation")
+                    .OrderByDescending(n => n.CreatedAt)
+                    .FirstOrDefaultAsync();
+                if (warningNotif != null)
+                {
+                    authorWarningMessage = warningNotif.Message;
+                }
             }
 
-            return MapReportDetail(report, projectTitle, contentRes);
+            return MapReportDetail(report, projectTitle, contentRes, authorWarningMessage);
         }
 
         private static HashSet<string> ParseStatuses(string? status)
@@ -933,7 +951,7 @@ namespace Service.Implementations
             };
         }
 
-        private static StaffReportDetailResponse MapReportDetail(ProjectReport report, string projectTitle, ContentAnalysisResult? contentAnalysis = null)
+        private static StaffReportDetailResponse MapReportDetail(ProjectReport report, string projectTitle, ContentAnalysisResult? contentAnalysis = null, string? authorWarningMessage = null)
         {
             // Phân loại điểm số
             var classification = report.TotalScore >= 85 ? "Xuất sắc"
@@ -986,6 +1004,7 @@ namespace Service.Implementations
                 AuthorIsBanned = report.Project?.Author?.IsBanned ?? false,
                 AuthorIsBanRequested = report.Project?.Author?.IsBanRequested ?? false,
                 AuthorBanRequestReason = report.Project?.Author?.BanRequestReason,
+                AuthorWarningMessage = authorWarningMessage,
             };
         }
 
