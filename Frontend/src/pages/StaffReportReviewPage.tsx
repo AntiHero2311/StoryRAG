@@ -988,44 +988,20 @@ export default function StaffReportReviewPage() {
                     }}
                   >
                     <div className="flex items-center gap-4">
-                      {/* Font family selector */}
-                      <div className="flex items-center gap-1 bg-black/10 rounded-lg p-0.5">
-                        <button
-                          onClick={() => setReaderFontFamily('serif')}
-                          className={`px-3 py-1 rounded-md text-xs font-serif font-bold transition-all ${
-                            readerFontFamily === 'serif'
-                              ? 'bg-amber-500 text-white shadow-sm'
-                              : 'opacity-70 hover:opacity-100'
-                          }`}
-                        >
-                          Serif
-                        </button>
-                        <button
-                          onClick={() => setReaderFontFamily('sans')}
-                          className={`px-3 py-1 rounded-md text-xs font-sans font-bold transition-all ${
-                            readerFontFamily === 'sans'
-                              ? 'bg-amber-500 text-white shadow-sm'
-                              : 'opacity-70 hover:opacity-100'
-                          }`}
-                        >
-                          Sans
-                        </button>
-                      </div>
-
                       {/* Font size adjuster */}
                       <div className="flex items-center gap-1.5 bg-black/10 rounded-lg p-0.5">
                         <button
                           onClick={() => setReaderFontSize(prev => Math.max(12, prev - 1))}
-                          className="w-7 h-7 flex items-center justify-center text-xs font-bold rounded-md hover:bg-black/10 transition-colors"
+                          className="w-7 h-7 flex items-center justify-center text-sm font-bold rounded-md hover:bg-black/10 transition-colors"
                         >
-                          A-
+                          -
                         </button>
                         <span className="text-xs font-bold px-1.5 shrink-0">{readerFontSize}px</span>
                         <button
                           onClick={() => setReaderFontSize(prev => Math.min(26, prev + 1))}
-                          className="w-7 h-7 flex items-center justify-center text-xs font-bold rounded-md hover:bg-black/10 transition-colors"
+                          className="w-7 h-7 flex items-center justify-center text-sm font-bold rounded-md hover:bg-black/10 transition-colors"
                         >
-                          A+
+                          +
                         </button>
                       </div>
 
@@ -1073,22 +1049,20 @@ export default function StaffReportReviewPage() {
                         <>
                           <div className="text-center border-b pb-6 mb-8" style={{ borderColor: readerTheme === 'cream' ? 'rgba(45, 37, 30, 0.1)' : 'rgba(255, 255, 255, 0.1)' }}>
                             <h2
-                              className="text-xl font-bold font-serif mb-2"
+                              className="text-xl font-bold font-sans mb-2"
                               style={{
                                 color: readerTheme === 'cream' ? '#1c1510' : '#ffffff',
                               }}
                             >
                               Chương {activeModalChapter.chapter_number}: {activeModalChapter.title}
                             </h2>
-                            <p className="text-[10px] opacity-75 font-serif">
+                            <p className="text-[10px] opacity-75 font-sans">
                               ~{activeModalChapter.word_count?.toLocaleString() || 0} từ • Bản thảo gốc (Chỉ đọc)
                             </p>
                           </div>
 
                           <div
-                            className={`flex-1 selection:bg-amber-500/30 whitespace-pre-wrap leading-loose ${
-                              readerFontFamily === 'serif' ? 'font-serif' : 'font-sans'
-                            }`}
+                            className="flex-1 selection:bg-amber-500/30 whitespace-pre-wrap leading-loose font-sans"
                             style={{
                               fontSize: `${readerFontSize}px`,
                               lineHeight: '1.9',
@@ -1101,14 +1075,14 @@ export default function StaffReportReviewPage() {
                                 </p>
                               ))
                             ) : (
-                              <p className="italic opacity-60 text-center py-20 font-serif">
+                              <p className="italic opacity-60 text-center py-20 font-sans">
                                 Không có nội dung bản thảo
                               </p>
                             )}
                           </div>
                         </>
                       ) : (
-                        <p className="text-center italic opacity-60 py-20 font-serif">
+                        <p className="text-center italic opacity-60 py-20 font-sans">
                           Chọn một chương để đọc bản thảo
                         </p>
                       )}

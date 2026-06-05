@@ -492,19 +492,6 @@ export default function Topbar({ fullName, role, userId, avatarUrl, pageTitle, o
                                     Xem hồ sơ
                                 </button>
 
-                                {(role === 'Staff' || role === 'Admin') && (
-                                    <button
-                                        onClick={() => { setUserOpen(false); navigate('/staff'); }}
-                                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors duration-150"
-                                        style={{ color: 'var(--accent-text)' }}
-                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-active)'; }}
-                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; }}
-                                    >
-                                        <Briefcase className="w-4 h-4 shrink-0" />
-                                        Quản lý báo cáo
-                                    </button>
-                                )}
-
                                 <div className="mx-3 my-1" style={{ height: '1px', background: 'var(--border-color)' }} />
 
                                 <button
