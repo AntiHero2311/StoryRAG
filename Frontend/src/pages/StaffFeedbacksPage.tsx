@@ -184,7 +184,7 @@ export default function StaffFeedbacksPage() {
                                                     <p className="text-xs text-[var(--text-tertiary)]">{fmtDate(item.createdAt)} · Phụ trách: {item.staffName}</p>
                                                     {item.staffGenres && item.staffGenres.length > 0 && (
                                                         <div className="flex flex-wrap gap-1">
-                                                            {item.staffGenres.map(g => (
+                                                            {item.staffGenres.slice(0, 3).map(g => (
                                                                 <span
                                                                     key={g.id}
                                                                     className="px-1.5 py-0.5 rounded text-[9px] font-bold animate-fade-in"
@@ -197,6 +197,14 @@ export default function StaffFeedbacksPage() {
                                                                     {g.name}
                                                                 </span>
                                                             ))}
+                                                            {item.staffGenres.length > 3 && (
+                                                                <span
+                                                                    className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-help"
+                                                                    title={item.staffGenres.slice(3).map(g => g.name).join(', ')}
+                                                                >
+                                                                    +{item.staffGenres.length - 3}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>

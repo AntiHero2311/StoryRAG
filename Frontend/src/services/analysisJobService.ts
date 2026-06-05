@@ -23,6 +23,7 @@ export type StaffPendingReportItem = {
   review_status: string;
   created_at: string;
   updated_at?: string | null;
+  warnings?: string[];
 };
 
 export type StaffPagedResponse<T> = {
@@ -47,6 +48,12 @@ export type StaffReportDetail = {
   createdAt: string;
   updatedAt: string | null;
   contentAnalysis?: ContentAnalysisResult;
+  authorId?: string;
+  authorName?: string;
+  authorStrikeCount?: number;
+  authorIsBanned?: boolean;
+  authorIsBanRequested?: boolean;
+  authorBanRequestReason?: string | null;
 };
 
 export type StaffStoryChapterItem = {

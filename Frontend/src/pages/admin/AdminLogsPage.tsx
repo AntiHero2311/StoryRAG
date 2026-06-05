@@ -5,14 +5,15 @@ import MainLayout from '../../layouts/MainLayout';
 import { adminService, type SystemLogsPage, type SystemLogItem } from '../../services/adminService';
 import { AdminPageShell } from '../../components/admin/AdminShared';
 
-const CATEGORIES = ['', 'User', 'Config', 'Payment', 'Auth'];
+const CATEGORIES = ['', 'User', 'Config', 'Payment', 'Auth', 'Notification'];
 const LEVELS = ['', 'Info', 'Warning', 'Error'];
 
 const CATEGORY_MAP: Record<string, string> = {
     'User': 'Người dùng',
     'Config': 'Cấu hình',
     'Payment': 'Thanh toán',
-    'Auth': 'Xác thực'
+    'Auth': 'Xác thực',
+    'Notification': 'Thông báo'
 };
 
 const LEVEL_MAP: Record<string, string> = {

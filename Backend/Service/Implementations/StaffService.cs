@@ -386,6 +386,7 @@ namespace Service.Implementations
                         : report.ReviewStatus!,
                     CreatedAt = report.CreatedAt,
                     UpdatedAt = report.UpdatedAt,
+                    Warnings = ExtractWarningCodes(report.CriteriaJson, report.StaffEditedCriteriaJson),
                 };
             }).ToList();
 
@@ -979,6 +980,12 @@ namespace Service.Implementations
                 CreatedAt = report.CreatedAt,
                 UpdatedAt = report.UpdatedAt,
                 ContentAnalysis = contentAnalysis,
+                AuthorId = report.Project?.AuthorId ?? Guid.Empty,
+                AuthorName = report.Project?.Author?.FullName ?? string.Empty,
+                AuthorStrikeCount = report.Project?.Author?.StrikeCount ?? 0,
+                AuthorIsBanned = report.Project?.Author?.IsBanned ?? false,
+                AuthorIsBanRequested = report.Project?.Author?.IsBanRequested ?? false,
+                AuthorBanRequestReason = report.Project?.Author?.BanRequestReason,
             };
         }
 
@@ -1024,6 +1031,41 @@ namespace Service.Implementations
             }
 
             return null;
+        }
+
+        private static List<string> ExtractWarningCodes(string? criteriaJson, string? staffEditedCriteriaJson)
+        {
+            var codes = new List<string>();
+            var source = staffEditedCriteriaJson ?? criteriaJson;
+            if (string.IsNullOrWhiteSpace(source)) return codes;
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(source);
+                if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    if (doc.RootElement.TryGetProperty("Warnings", out var warningsProp) ||
+                        doc.RootElement.TryGetProperty("warnings", out warningsProp))
+                    {
+                        if (warningsProp.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            foreach (var item in warningsProp.EnumerateArray())
+                            {
+                                if (item.TryGetProperty("Code", out var codeProp) ||
+                                    item.TryGetProperty("code", out codeProp))
+                                {
+                                    var code = codeProp.GetString();
+                                    if (!string.IsNullOrEmpty(code))
+                                    {
+                                        codes.Add(code);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            return codes;
         }
     }
 }

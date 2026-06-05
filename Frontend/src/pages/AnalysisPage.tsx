@@ -1292,7 +1292,7 @@ function AnalysisContent() {
                                                                                 </span>
                                                                                 {fb.staffGenres && fb.staffGenres.length > 0 && (
                                                                                     <div className="flex flex-wrap gap-1">
-                                                                                        {fb.staffGenres.map(g => (
+                                                                                        {fb.staffGenres.slice(0, 3).map(g => (
                                                                                             <span
                                                                                                 key={g.id}
                                                                                                 className="px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wide uppercase"
@@ -1305,6 +1305,14 @@ function AnalysisContent() {
                                                                                                 {g.name}
                                                                                             </span>
                                                                                         ))}
+                                                                                        {fb.staffGenres.length > 3 && (
+                                                                                            <span
+                                                                                                className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-help"
+                                                                                                title={fb.staffGenres.slice(3).map(g => g.name).join(', ')}
+                                                                                            >
+                                                                                                +{fb.staffGenres.length - 3}
+                                                                                            </span>
+                                                                                        )}
                                                                                     </div>
                                                                                 )}
                                                                             </div>

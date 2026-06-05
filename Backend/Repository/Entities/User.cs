@@ -21,5 +21,11 @@ namespace Repository.Entities
         public DateTime? PasswordResetTokenExpiryTime { get; set; }
         public string? EmailVerificationOtp { get; set; }
         public DateTime? EmailVerificationOtpExpiry { get; set; }
+        public int StrikeCount { get; set; } = 0;
+        public bool IsBanned { get; set; } = false;
+        public string? BanReason { get; set; }
+        public bool IsBanRequested { get; set; } = false;
+        public string? BanRequestReason { get; set; }
+        public Guid? BanRequestedBy { get; set; }
     }
 }

@@ -24,5 +24,8 @@ namespace Service.Interfaces
         Task<UserSummaryDto> GetStaffGenresAsync(Guid staffId);
         /// <summary>Gán (thay thế toàn bộ) genres chuyên môn cho một Staff.</summary>
         Task<UserSummaryDto> AssignStaffGenresAsync(Guid staffId, StaffGenreAssignRequest request, Guid adminId);
+
+        // ── Moderation & Ban ──────────────────────────────────────────────────────
+        Task<UserSummaryDto> BanUserAsync(Guid id, bool isBanned, string? reason, Guid actingAdminId);
     }
 }

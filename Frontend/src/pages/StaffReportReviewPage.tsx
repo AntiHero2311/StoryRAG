@@ -20,6 +20,7 @@ import {
   type StaffReportDetail,
   type StaffReportStoryResponse,
 } from '../services/analysisJobService';
+import { staffService } from '../services/staffService';
 import { reportService, type NarrativeChartsResponse } from '../services/reportService';
 import DonutChart from '../components/analysis/DonutChart';
 import RadarChart from '../components/analysis/RadarChart';
@@ -186,6 +187,60 @@ export default function StaffReportReviewPage() {
   // Tab & Collapsibles States
   const [activeTab, setActiveTab] = useState<'rubric' | 'narrative' | 'storyBible'>('rubric');
   const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({ 0: true });
+
+  // Moderation state
+  const [showWarnForm, setShowWarnForm] = useState(false);
+  const [warnMessage, setWarnMessage] = useState('');
+  const [warnLoading, setWarnLoading] = useState(false);
+
+  const [showBanRequestForm, setShowBanRequestForm] = useState(false);
+  const [banRequestReason, setBanRequestReason] = useState('');
+  const [banRequestLoading, setBanRequestLoading] = useState(false);
+
+  const handleWarnSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!detail || !warnMessage.trim()) return;
+    setWarnLoading(true);
+    try {
+      await staffService.warnAuthor({
+        userId: detail.authorId || '',
+        projectId: detail.projectId,
+        message: warnMessage.trim(),
+      });
+      setWarnMessage('');
+      setShowWarnForm(false);
+      if (reportId) {
+        await load(reportId);
+      }
+      alert('Đã ghi nhận vi phạm và gửi cảnh cáo thành công.');
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Không thể gửi cảnh cáo.');
+    } finally {
+      setWarnLoading(false);
+    }
+  };
+
+  const handleBanRequestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!detail || !banRequestReason.trim()) return;
+    setBanRequestLoading(true);
+    try {
+      await staffService.recommendBan({
+        userId: detail.authorId || '',
+        reason: banRequestReason.trim(),
+      });
+      setBanRequestReason('');
+      setShowBanRequestForm(false);
+      if (reportId) {
+        await load(reportId);
+      }
+      alert('Đã gửi đề xuất khóa tài khoản lên Admin.');
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Không thể đề xuất khóa tài khoản.');
+    } finally {
+      setBanRequestLoading(false);
+    }
+  };
 
   const warnings = useMemo(() => {
     if (!detail) return [];
@@ -567,6 +622,154 @@ export default function StaffReportReviewPage() {
 
                 {/* Right Column (Col 3): Actions and Manuscript widget */}
                 <div className="space-y-4">
+                  {/* Moderation & Strike Control Panel */}
+                  <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 space-y-4 shadow-sm">
+                    <div className="flex items-center gap-2 border-b border-[var(--border-color)] pb-3">
+                      <ShieldAlert className="w-4 h-4 text-amber-500" />
+                      <h3 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">
+                        Điều phối & Kỷ luật
+                      </h3>
+                    </div>
+
+                    <div className="space-y-3.5">
+                      {/* Author Info */}
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-[var(--text-secondary)]">Tác giả</p>
+                        <p className="text-sm font-bold text-[var(--text-bright)] mt-0.5">{detail.authorName}</p>
+                      </div>
+
+                      {/* Status & Strike counts */}
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                          <p className="text-[10px] uppercase font-bold text-[var(--text-secondary)]">Trạng thái</p>
+                          <div className="mt-1">
+                            {detail.authorIsBanned ? (
+                              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30">
+                                Đã bị khóa (Ban)
+                              </span>
+                            ) : detail.authorIsBanRequested ? (
+                              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse">
+                                Đề xuất khóa
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                Hoạt động
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="text-[10px] uppercase font-bold text-[var(--text-secondary)] text-left">Số lần cảnh cáo</p>
+                          <div className="flex items-center gap-1.5 mt-1 justify-start">
+                            {[1, 2, 3].map((num) => (
+                              <div
+                                key={num}
+                                className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                  (detail.authorStrikeCount || 0) >= num
+                                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                    : 'bg-zinc-800 text-zinc-500 border border-zinc-700/50'
+                                }`}
+                              >
+                                {num}
+                              </div>
+                            ))}
+                            <span className="text-xs font-mono text-[var(--text-primary)] font-bold ml-1">
+                              {detail.authorStrikeCount || 0}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {detail.authorBanRequestReason && (
+                        <div className="text-xs border border-amber-500/20 bg-amber-500/5 p-3 rounded-xl text-amber-300">
+                          <p className="font-bold">Lý do đề xuất khóa:</p>
+                          <p className="mt-1 italic">{detail.authorBanRequestReason}</p>
+                        </div>
+                      )}
+
+                      {/* Warning Form */}
+                      {!detail.authorIsBanned && (
+                        <div className="border-t border-[var(--border-color)]/60 pt-3.5 space-y-3">
+                          <button
+                            onClick={() => {
+                              setShowWarnForm(!showWarnForm);
+                              setShowBanRequestForm(false);
+                            }}
+                            className="w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-between bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]/80 transition-colors"
+                          >
+                            <span>Cảnh cáo & Ghi nhận vi phạm</span>
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showWarnForm ? 'rotate-180 text-amber-400' : ''}`} />
+                          </button>
+
+                          {showWarnForm && (
+                            <form onSubmit={handleWarnSubmit} className="space-y-3 bg-[var(--bg-hover)]/20 p-3 rounded-xl border border-[var(--border-color)]/40 animate-slide-down">
+                              <div>
+                                <label className="block text-[10px] font-bold text-[var(--text-secondary)] mb-1">
+                                  Lý do cảnh cáo (gửi thông báo cho tác giả)
+                                </label>
+                                <textarea
+                                  value={warnMessage}
+                                  onChange={(e) => setWarnMessage(e.target.value)}
+                                  placeholder="Nhập lý do chi tiết vi phạm tiêu chuẩn cộng đồng..."
+                                  className="w-full min-h-[70px] p-2.5 rounded-lg text-xs bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500/50 resize-y"
+                                  required
+                                />
+                              </div>
+                              <button
+                                type="submit"
+                                disabled={warnLoading || !warnMessage.trim()}
+                                className="w-full py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-black text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
+                              >
+                                {warnLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                                Gửi Cảnh cáo (Strike)
+                              </button>
+                            </form>
+                          )}
+
+                          {/* Ban Request Form */}
+                          <button
+                            onClick={() => {
+                              setShowBanRequestForm(!showBanRequestForm);
+                              setShowWarnForm(false);
+                            }}
+                            disabled={detail.authorIsBanRequested || (detail.authorStrikeCount || 0) < 3}
+                            className="w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-between bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/15 transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+                            title={(detail.authorStrikeCount || 0) < 3 ? 'Cần tối thiểu 3 lần cảnh cáo để đề xuất khóa' : undefined}
+                          >
+                            <span>Đề xuất Admin khóa tài khoản (Ban)</span>
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showBanRequestForm ? 'rotate-180 text-red-400' : ''}`} />
+                          </button>
+
+                          {showBanRequestForm && (
+                            <form onSubmit={handleBanRequestSubmit} className="space-y-3 bg-red-500/5 p-3 rounded-xl border border-red-500/10 animate-slide-down">
+                              <div>
+                                <label className="block text-[10px] font-bold text-red-300 mb-1">
+                                  Lý do đề xuất khóa tài khoản
+                                </label>
+                                <textarea
+                                  value={banRequestReason}
+                                  onChange={(e) => setBanRequestReason(e.target.value)}
+                                  placeholder="Nêu rõ hành vi vi phạm..."
+                                  className="w-full min-h-[70px] p-2.5 rounded-lg text-xs bg-[var(--bg-hover)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-red-500/50 resize-y"
+                                  required
+                                />
+                              </div>
+                              <button
+                                type="submit"
+                                disabled={banRequestLoading || !banRequestReason.trim()}
+                                className="w-full py-2 bg-red-500 hover:bg-red-600 disabled:opacity-40 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
+                              >
+                                {banRequestLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                                Gửi Đề xuất Khóa (Ban)
+                              </button>
+                            </form>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Manuscript widget panel */}
                   <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 space-y-4 shadow-sm">
                     <div className="flex items-center justify-between gap-3 border-b border-[var(--border-color)] pb-3">

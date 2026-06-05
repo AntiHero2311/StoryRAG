@@ -16,6 +16,12 @@ export interface UserSummary {
     isActive: boolean;
     createdAt: string;
     genres: GenreInfo[];
+    strikeCount: number;
+    isBanned: boolean;
+    banReason: string | null;
+    isBanRequested: boolean;
+    banRequestReason: string | null;
+    banRequestedBy: string | null;
 }
 
 export interface UserStatsResponse {
@@ -121,6 +127,10 @@ export const adminService = {
     },
     setUserActive: async (id: string, isActive: boolean): Promise<UserSummary> => {
         const response = await api.patch<UserSummary>(`/admin/users/${id}/active`, { isActive });
+        return response.data;
+    },
+    banUser: async (id: string, isBanned: boolean, banReason?: string): Promise<UserSummary> => {
+        const response = await api.patch<UserSummary>(`/admin/users/${id}/ban`, { isBanned, banReason });
         return response.data;
     },
 

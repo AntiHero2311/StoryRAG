@@ -714,6 +714,40 @@ namespace Service.Implementations
             };
         }
 
+        public async Task<UserSummaryDto> BanUserAsync(Guid id, bool isBanned, string? reason, Guid actingAdminId)
+        {
+            if (id == actingAdminId)
+                throw new InvalidOperationException("Bạn không thể tự khóa/mở khóa tài khoản của chính mình.");
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id)
+                ?? throw new KeyNotFoundException("Không tìm thấy người dùng.");
+
+            if (isBanned && user.Role == "Admin")
+                await EnsureAnotherAdminExistsAsync(id);
+
+            user.IsBanned = isBanned;
+            user.BanReason = isBanned ? reason : null;
+            user.IsActive = !isBanned; // Automatically deactivate if banned, activate if unbanned
+
+            // Clear request flags
+            user.IsBanRequested = false;
+            user.BanRequestReason = null;
+            user.BanRequestedBy = null;
+
+            if (isBanned)
+            {
+                user.RefreshToken = null;
+                user.RefreshTokenExpiryTime = null;
+            }
+
+            await _context.SaveChangesAsync();
+
+            var logMsg = $"{(isBanned ? "Khóa" : "Mở khóa")} tài khoản user {user.Email}. Lý do: {reason ?? "Không có"}";
+            await _auditLog.LogAsync("User", isBanned ? "Ban" : "Unban", logMsg, actingAdminId);
+
+            return MapSummary(user);
+        }
+
         private static UserSummaryDto MapSummary(User u) => new()
         {
             Id = u.Id,
@@ -722,6 +756,12 @@ namespace Service.Implementations
             Role = u.Role,
             IsActive = u.IsActive,
             CreatedAt = u.CreatedAt,
+            StrikeCount = u.StrikeCount,
+            IsBanned = u.IsBanned,
+            BanReason = u.BanReason,
+            IsBanRequested = u.IsBanRequested,
+            BanRequestReason = u.BanRequestReason,
+            BanRequestedBy = u.BanRequestedBy,
         };
     }
 }

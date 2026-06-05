@@ -82,8 +82,15 @@ CREATE TABLE "Users" (
     "RefreshTokenExpiryTime"       timestamp with time zone,
     "PasswordResetToken"           text,
     "PasswordResetTokenExpiryTime" timestamp with time zone,
+    "StrikeCount"                  integer                  NOT NULL DEFAULT 0,
+    "IsBanned"                     boolean                  NOT NULL DEFAULT FALSE,
+    "BanReason"                    text,
+    "IsBanRequested"               boolean                  NOT NULL DEFAULT FALSE,
+    "BanRequestReason"             text,
+    "BanRequestedBy"               uuid,
     CONSTRAINT "PK_Users" PRIMARY KEY ("Id"),
-    CONSTRAINT "CK_Users_Role" CHECK ("Role" IN ('Admin','Author','Staff'))
+    CONSTRAINT "CK_Users_Role" CHECK ("Role" IN ('Admin','Author','Staff')),
+    CONSTRAINT "FK_Users_BanRequestedBy" FOREIGN KEY ("BanRequestedBy") REFERENCES "Users"("Id") ON DELETE SET NULL
 );
 
 CREATE UNIQUE INDEX "IX_Users_Email" ON "Users" ("Email");

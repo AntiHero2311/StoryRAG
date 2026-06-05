@@ -161,6 +161,9 @@ namespace Service.DTOs
 
         [JsonPropertyName("updated_at")]
         public DateTime? UpdatedAt { get; set; }
+
+        [JsonPropertyName("warnings")]
+        public List<string> Warnings { get; set; } = new();
     }
 
     public class StaffPagedResponse<T>
@@ -271,6 +274,13 @@ namespace Service.DTOs
 
         /// <summary>Nội dung phân tích Story Bible do AI trích xuất</summary>
         public ContentAnalysisResult? ContentAnalysis { get; set; }
+
+        public Guid AuthorId { get; set; }
+        public string AuthorName { get; set; } = string.Empty;
+        public int AuthorStrikeCount { get; set; }
+        public bool AuthorIsBanned { get; set; }
+        public bool AuthorIsBanRequested { get; set; }
+        public string? AuthorBanRequestReason { get; set; }
     }
 
     public class StaffStoryChapterItem

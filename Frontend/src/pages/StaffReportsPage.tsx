@@ -25,6 +25,23 @@ function formatDate(iso: string) {
   });
 }
 
+function getWarningBadge(code: string) {
+  switch (code.toUpperCase()) {
+    case 'ANTI_STATE':
+      return { label: 'Chống phá', className: 'bg-rose-500/10 text-rose-400 border border-rose-500/20' };
+    case 'SEXUAL_CONTENT':
+      return { label: 'Nhạy cảm', className: 'bg-pink-500/10 text-pink-400 border border-pink-500/20' };
+    case 'PLAGIARISM_RISK':
+      return { label: 'Đạo nhái', className: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' };
+    case 'INCONSISTENCY':
+      return { label: 'Mâu thuẫn', className: 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' };
+    case 'INCOMPLETE':
+      return { label: 'Chưa hoàn thành', className: 'bg-blue-500/10 text-blue-400 border border-blue-500/20' };
+    default:
+      return { label: code, className: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' };
+  }
+}
+
 export default function StaffReportsPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
@@ -162,8 +179,20 @@ export default function StaffReportsPage() {
                           key={r.report_id}
                           className="border-b border-[var(--border-color)]/60 hover:bg-[var(--bg-hover)]/40 transition-colors"
                         >
-                          <td className="px-5 py-4 text-[var(--text-primary)] font-semibold max-w-[280px] truncate">
-                            {r.project_title}
+                          <td className="px-5 py-4 text-[var(--text-primary)] font-semibold max-w-[280px]">
+                            <div className="truncate mb-1">{r.project_title}</div>
+                            {r.warnings && r.warnings.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {r.warnings.map((code) => {
+                                  const badge = getWarningBadge(code);
+                                  return (
+                                    <span key={code} className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${badge.className}`}>
+                                      {badge.label}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </td>
                           <td className="px-5 py-4 text-[var(--text-primary)] font-medium whitespace-nowrap max-w-[180px] truncate">
                             {r.author_name}

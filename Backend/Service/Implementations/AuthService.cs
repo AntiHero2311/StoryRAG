@@ -165,6 +165,11 @@ namespace Service.Implementations
                 throw new Exception("Email hoặc mật khẩu không chính xác.");
             }
 
+            if (user.IsBanned)
+            {
+                throw new Exception("Tài khoản của bạn đã bị khóa do vi phạm tiêu chuẩn cộng đồng.");
+            }
+
             if (!user.IsActive)
             {
                 throw new Exception("User is inactive.");
@@ -254,6 +259,11 @@ namespace Service.Implementations
                 isNewUser = true;
             }
 
+            if (user.IsBanned)
+            {
+                throw new Exception("Tài khoản của bạn đã bị khóa do vi phạm tiêu chuẩn cộng đồng.");
+            }
+
             if (!user.IsActive)
             {
                 throw new Exception("User is inactive.");
@@ -302,6 +312,11 @@ namespace Service.Implementations
             if (user == null)
             {
                 throw new Exception("Refresh token không hợp lệ hoặc đã hết hạn.");
+            }
+
+            if (user.IsBanned)
+            {
+                throw new Exception("Tài khoản của bạn đã bị khóa do vi phạm tiêu chuẩn cộng đồng.");
             }
 
             if (!user.IsActive)

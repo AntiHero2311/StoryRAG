@@ -121,7 +121,7 @@ export default function FeedbackPage() {
                             </p>
                             {fb.staffGenres && fb.staffGenres.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-1">
-                                {fb.staffGenres.map(g => (
+                                {fb.staffGenres.slice(0, 3).map(g => (
                                   <span
                                     key={g.id}
                                     className="px-2 py-0.5 rounded text-[10px] font-bold"
@@ -134,6 +134,14 @@ export default function FeedbackPage() {
                                     {g.name}
                                   </span>
                                 ))}
+                                {fb.staffGenres.length > 3 && (
+                                  <span
+                                    className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-help"
+                                    title={fb.staffGenres.slice(3).map(g => g.name).join(', ')}
+                                  >
+                                    +{fb.staffGenres.length - 3}
+                                  </span>
+                                )}
                               </div>
                             )}
                           </div>

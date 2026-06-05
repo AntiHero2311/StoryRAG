@@ -244,6 +244,31 @@ namespace Api.Controllers
             }
         }
 
+        [HttpPatch("users/{id:guid}/ban")]
+        public async Task<IActionResult> BanUser(Guid id, [FromBody] BanUserRequest request)
+        {
+            var adminId = GetUserId();
+            if (adminId == null) return Unauthorized();
+
+            try
+            {
+                var user = await _adminService.BanUserAsync(id, request.IsBanned, request.BanReason, adminId.Value);
+                return Ok(user);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
         // ── Staff Genre Specialization ─────────────────────────────────────────────
 
         /// <summary>Lấy danh sách tất cả Staff kèm thể loại chuyên môn.</summary>
