@@ -1,3 +1,7 @@
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
+using Service.Helpers;
+
 namespace Service.DTOs
 {
     // ─── Criterion detail ────────────────────────────────────────────────────────
@@ -62,13 +66,124 @@ namespace Service.DTOs
         /// "ANTI_STATE"       — nội dung chính trị nhạy cảm, xuyên tạc, chống phá
         /// "OTHER"            — vấn đề đặc biệt khác
         /// </summary>
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Code { get; set; } = string.Empty;
         /// <summary>Mức độ: "INFO" | "WARNING" | "CRITICAL"</summary>
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Severity { get; set; } = string.Empty;
         /// <summary>Tiêu đề ngắn gọn của cảnh báo</summary>
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Title { get; set; } = string.Empty;
         /// <summary>Mô tả chi tiết, có thể trích dẫn đoạn văn bản cụ thể</summary>
+        [JsonConverter(typeof(SafeStringConverter))]
         public string Detail { get; set; } = string.Empty;
+    }
+
+    // ─── Content Analysis (Story Bible Extracted) ────────────────────────────────
+    public class WorldSettingItem {
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Title { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Category { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Description { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Importance { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeIntListConverter))]
+        public List<int> SourceChapters { get; set; } = new();
+    }
+    public class CharacterRelationshipItem {
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string TargetName { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Type { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Description { get; set; } = string.Empty;
+    }
+    public class CharacterItem {
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Name { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Role { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Description { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Background { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringListConverter))]
+        public List<string> Traits { get; set; } = new();
+        
+        [JsonConverter(typeof(SafeListObjectConverter<CharacterRelationshipItem>))]
+        public List<CharacterRelationshipItem> Relationships { get; set; } = new();
+        
+        [JsonConverter(typeof(SafeIntConverter))]
+        public int FirstAppearance { get; set; }
+    }
+    public class TimelineEventItem {
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Title { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Category { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string TimeLabel { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Description { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Importance { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeIntConverter))]
+        public int SortOrder { get; set; }
+    }
+    public class ThemeItem {
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Title { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Description { get; set; } = string.Empty;
+        
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string Evidence { get; set; } = string.Empty;
+    }
+    public class ContentAnalysisResult {
+        [JsonConverter(typeof(SafeListObjectConverter<WorldSettingItem>))]
+        public List<WorldSettingItem> WorldSettings { get; set; } = new();
+        
+        [JsonConverter(typeof(SafeListObjectConverter<CharacterItem>))]
+        public List<CharacterItem> Characters { get; set; } = new();
+        
+        [JsonConverter(typeof(SafeListObjectConverter<TimelineEventItem>))]
+        public List<TimelineEventItem> TimelineEvents { get; set; } = new();
+        
+        [JsonConverter(typeof(SafeListObjectConverter<ThemeItem>))]
+        public List<ThemeItem> Themes { get; set; } = new();
+        
+        [JsonConverter(typeof(SafeStringConverter))]
+        public string AnalysisNote { get; set; } = string.Empty;
+    }
+
+    // ─── Emotion & Pacing ────────────────────────────────────────────────────────
+    public class EmotionPacingResult {
+        public List<PacingPoint> PacingPoints { get; set; } = new();
+        public List<EmotionPoint> EmotionPoints { get; set; } = new();
+        public List<CharacterFrequency> CharacterFrequencies { get; set; } = new();
+        public List<CharacterPresenceSeries> CharacterPresence { get; set; } = new();
+        public List<CharacterRelationshipEdge> CharacterRelationships { get; set; } = new();
+        public List<string> Insights { get; set; } = new();
+        public string OverallPacingProfile { get; set; } = string.Empty;
+        public string DominantEmotionProfile { get; set; } = string.Empty;
     }
 
     // ─── Full report response ────────────────────────────────────────────────────
@@ -97,6 +212,13 @@ namespace Service.DTOs
         /// Không ảnh hưởng TotalScore nhưng hiển thị riêng cho người dùng.
         /// </summary>
         public List<StoryWarning> Warnings { get; set; } = new();
+
+        /// <summary>Nội dung phân tích Story Bible do AI trích xuất</summary>
+        public ContentAnalysisResult? ContentAnalysis { get; set; }
+
+        /// <summary>Biểu đồ phân tích Cảm xúc và Nhịp độ</summary>
+        public EmotionPacingResult? EmotionPacing { get; set; }
+
         public DateTime CreatedAt { get; set; }
     }
 
@@ -127,5 +249,16 @@ namespace Service.DTOs
         public DateTime CreatedAt { get; set; }
         public DateTime? StartedAt { get; set; }
         public DateTime? CompletedAt { get; set; }
+    }
+
+    // ─── Snapshot Item ───────────────────────────────────────────────────────────
+    public class ProjectReportSnapshotItem
+    {
+        public Guid Id { get; set; }
+        public Guid ProjectReportId { get; set; }
+        public int ChapterNumber { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty; // Đã giải mã
+        public int WordCount { get; set; }
     }
 }

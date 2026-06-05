@@ -8,8 +8,9 @@ namespace Api.Workers
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<AutoEmbeddingWorker> _logger;
-        private readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(15);
-        private readonly TimeSpan _embedDelay = TimeSpan.FromSeconds(45);
+        private readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(5);   // Tăng từ 15s → 5s
+        private readonly TimeSpan _embedDelay = TimeSpan.FromSeconds(5);     // Nhúng ngay sau 5s
+        private const int MaxConcurrentEmbeds = 3;                           // Xử lý song song tối đa 3 chapter
 
         public AutoEmbeddingWorker(IServiceScopeFactory scopeFactory, ILogger<AutoEmbeddingWorker> logger)
         {
@@ -42,8 +43,6 @@ namespace Api.Workers
         {
             using var scope = _scopeFactory.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var embeddingService = scope.ServiceProvider.GetRequiredService<IEmbeddingService>();
-            var chapterService = scope.ServiceProvider.GetRequiredService<IChapterService>();
 
             var thresholdTime = DateTime.UtcNow.Subtract(_embedDelay);
 
@@ -58,35 +57,54 @@ namespace Api.Workers
 
             if (pendingVersionIds.Count == 0) return;
 
-            // UpdatedAt null: bản ghi cũ / version mới trước khi gán timestamp — vẫn phải được worker xử lý (tránh vòng lặp query vô ích + không embed).
-            // Có UpdatedAt: chờ _embedDelay sau lần sửa để tránh đua với lưu tay / embed từ API.
+            // UpdatedAt null: bản ghi cũ / version mới trước khi gán timestamp — vẫn phải được worker xử lý.
             var versionsToEmbed = await context.ChapterVersions
                 .Where(v => pendingVersionIds.Contains(v.Id) && !v.IsEmbedded &&
                     (v.UpdatedAt == null || v.UpdatedAt <= thresholdTime))
                 .ToListAsync(stoppingToken);
 
-            foreach (var version in versionsToEmbed)
-            {
-                if (stoppingToken.IsCancellationRequested) break;
+            if (versionsToEmbed.Count == 0) return;
 
-                var chapterInfo = pendingChapters.First(c => c.CurrentVersionId == version.Id);
-                
+            // Xử lý song song tối đa MaxConcurrentEmbeds chapter cùng lúc
+            var semaphore = new SemaphoreSlim(MaxConcurrentEmbeds);
+            var tasks = versionsToEmbed.Select(async version =>
+            {
+                if (stoppingToken.IsCancellationRequested) return;
+
+                var chapterInfo = pendingChapters.FirstOrDefault(c => c.CurrentVersionId == version.Id);
+                if (chapterInfo == null) return;
+
+                await semaphore.WaitAsync(stoppingToken);
                 try
                 {
-                    if (!version.IsChunked)
-                    {
-                        _logger.LogInformation("AutoEmbeddingWorker: Chunking trước khi nhúng cho Chapter {ChapterId}", chapterInfo.Id);
-                        await chapterService.ChunkVersionAsync(chapterInfo.Id, chapterInfo.AuthorId);
-                    }
+                    // Mỗi task dùng scope riêng để tránh xung đột DbContext
+                    using var taskScope = _scopeFactory.CreateScope();
+                    var embeddingService = taskScope.ServiceProvider.GetRequiredService<IEmbeddingService>();
+                    var chapterService = taskScope.ServiceProvider.GetRequiredService<IChapterService>();
 
-                    _logger.LogInformation("AutoEmbeddingWorker: Bắt đầu nhúng dữ liệu cho Chapter {ChapterId}", chapterInfo.Id);
-                    await embeddingService.EmbedChapterAsync(chapterInfo.Id, chapterInfo.AuthorId);
+                    try
+                    {
+                        if (!version.IsChunked)
+                        {
+                            _logger.LogInformation("AutoEmbeddingWorker: Chunking trước khi nhúng cho Chapter {ChapterId}", chapterInfo.Id);
+                            await chapterService.ChunkVersionAsync(chapterInfo.Id, chapterInfo.AuthorId);
+                        }
+
+                        _logger.LogInformation("AutoEmbeddingWorker: Bắt đầu nhúng dữ liệu cho Chapter {ChapterId}", chapterInfo.Id);
+                        await embeddingService.EmbedChapterAsync(chapterInfo.Id, chapterInfo.AuthorId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "AutoEmbeddingWorker: Lỗi khi nhúng Chapter {ChapterId}", chapterInfo.Id);
+                    }
                 }
-                catch (Exception ex)
+                finally
                 {
-                    _logger.LogError(ex, "AutoEmbeddingWorker: Lỗi khi nhúng Chapter {ChapterId}", chapterInfo.Id);
+                    semaphore.Release();
                 }
-            }
+            });
+
+            await Task.WhenAll(tasks);
         }
     }
 }

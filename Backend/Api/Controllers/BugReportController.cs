@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Service.DTOs;
 using Service.Interfaces;
 using System;
+using System.IO;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -33,6 +36,50 @@ namespace Api.Controllers
             {
                 var result = await _service.CreateAsync(userId.Value, request);
                 return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
+        /// <summary>Tải lên ảnh lỗi (mọi user đã đăng nhập, tối đa 5MB).</summary>
+        [HttpPost("upload")]
+        public async Task<IActionResult> UploadImage(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { Message = "File tải lên không hợp lệ." });
+
+            // 5MB limit
+            if (file.Length > 5 * 1024 * 1024)
+                return BadRequest(new { Message = "Dung lượng ảnh tối đa là 5MB." });
+
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!allowedExtensions.Contains(extension))
+                return BadRequest(new { Message = "Chỉ chấp nhận các định dạng ảnh: .jpg, .jpeg, .png, .gif, .webp." });
+
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "bug-reports");
+                if (!Directory.Exists(uploadsFolder))
+                {
+                    Directory.CreateDirectory(uploadsFolder);
+                }
+
+                var uniqueFileName = $"{Guid.NewGuid()}{extension}";
+                var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                var imageUrl = $"/uploads/bug-reports/{uniqueFileName}";
+                return Ok(new { ImageUrl = imageUrl });
             }
             catch (Exception ex)
             {

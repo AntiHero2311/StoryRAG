@@ -66,12 +66,24 @@ namespace Service.Implementations
             return MapPlan(plan);
         }
 
-        public async Task DeletePlanAsync(int id)
+        public async Task<bool> DeletePlanAsync(int id)
         {
             var plan = await _db.SubscriptionPlans.FindAsync(id)
                 ?? throw new KeyNotFoundException($"Không tìm thấy plan ID={id}.");
-            plan.IsActive = false;
+
+            var hasSubscriptions = await _db.UserSubscriptions.AnyAsync(s => s.PlanId == id);
+            var hasPayments = await _db.Payments.AnyAsync(p => p.PlanId == id);
+
+            if (hasSubscriptions || hasPayments)
+            {
+                plan.IsActive = false;
+                await _db.SaveChangesAsync();
+                return false; // Soft-deleted (Deactivated)
+            }
+
+            _db.SubscriptionPlans.Remove(plan);
             await _db.SaveChangesAsync();
+            return true; // Hard-deleted
         }
 
         // ── User Subscription ─────────────────────────────────────────────────
@@ -267,7 +279,7 @@ namespace Service.Implementations
                             userId,
                             "warning",
                             "Hạ cấp gói đã được lên lịch",
-                            $"Yêu cầu hạ cấp xuống gói \"{plan.PlanName}\" đã được ghi nhận. Gói mới sẽ có hiệu lực sau khi gói \"{current.Plan.PlanName}\" hiện tại hết hạn vào {current.EndDate:dd/MM/yyyy}.",
+                            $"Yêu cầu hạ cấp xuống gói \"{plan.PlanName}\" đã được ghi nhận. Gói mới sẽ có hiệu lực sau khi gói \"{current.Plan.PlanName}\" hiện tại hết hạn vào {current.EndDate:dd/MM/yyyy}. Hệ thống không hoàn lại tiền chênh lệch cho chu kỳ hiện tại.",
                             tag: $"subscription-downgrade-scheduled-{current.Id}");
                     }
                     catch { /* Không để lỗi notification chặn luồng chính */ }

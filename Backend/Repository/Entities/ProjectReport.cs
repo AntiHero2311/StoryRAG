@@ -19,6 +19,13 @@ namespace Repository.Entities
         /// <summary>JSONB: array of criterion results do AI tạo ra (không thay đổi sau khi AI ghi)</summary>
         public string CriteriaJson { get; set; } = "[]";
 
+        /// <summary>JSONB: Kết quả Story Bible (WorldSetting, Character, Timeline, Theme)</summary>
+        public string? ContentAnalysisJson { get; set; }
+
+        /// <summary>JSONB: Kết quả biểu đồ Cảm xúc và Nhịp độ</summary>
+        public string? EmotionPacingJson { get; set; }
+
+
         /// <summary>
         /// JSONB: Staff có thể override nội dung criteria này.
         /// Khi null → frontend dùng CriteriaJson gốc của AI.
@@ -45,5 +52,10 @@ namespace Repository.Entities
         public Project Project { get; set; } = null!;
         public User User { get; set; } = null!;
         public ICollection<ReportItem> ReportItems { get; set; } = new List<ReportItem>();
+        public ICollection<ProjectReportSnapshot> Snapshots { get; set; } = new List<ProjectReportSnapshot>();
+        public ICollection<ReportCharacterEntry> CharacterEntries { get; set; } = new List<ReportCharacterEntry>();
+        public ICollection<ReportWorldbuildingEntry> WorldbuildingEntries { get; set; } = new List<ReportWorldbuildingEntry>();
+        public ICollection<ReportThemeEntry> ThemeEntries { get; set; } = new List<ReportThemeEntry>();
+        public ICollection<ReportTimelineEvent> TimelineEvents { get; set; } = new List<ReportTimelineEvent>();
     }
 }

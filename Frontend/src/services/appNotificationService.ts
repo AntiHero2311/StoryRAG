@@ -1,3 +1,5 @@
+import { getUserInfo } from '../utils/jwtHelper';
+
 export type AppNotificationType = 'success' | 'error' | 'info' | 'warning';
 
 export interface AppNotificationItem {
@@ -12,16 +14,29 @@ export interface AppNotificationItem {
 
 type NewAppNotification = Omit<AppNotificationItem, 'id' | 'createdAt' | 'isRead'>;
 
-const STORAGE_KEY = 'storyrag:notifications';
+const STORAGE_KEY_PREFIX = 'storyrag:notifications';
 const UPDATED_EVENT = 'storyrag:notifications-updated';
 const MAX_ITEMS = 50;
 
 const canUseWindow = () => typeof window !== 'undefined';
 
+const getStorageKey = (): string => {
+    if (!canUseWindow()) return STORAGE_KEY_PREFIX;
+    const token = localStorage.getItem('token');
+    if (!token) return `${STORAGE_KEY_PREFIX}:anonymous`;
+    try {
+        const user = getUserInfo(token);
+        return user.userId ? `${STORAGE_KEY_PREFIX}:${user.userId}` : `${STORAGE_KEY_PREFIX}:anonymous`;
+    } catch {
+        return `${STORAGE_KEY_PREFIX}:anonymous`;
+    }
+};
+
 const parseStored = (): AppNotificationItem[] => {
     if (!canUseWindow()) return [];
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const key = getStorageKey();
+        const raw = localStorage.getItem(key);
         if (!raw) return [];
         const parsed = JSON.parse(raw) as AppNotificationItem[];
         if (!Array.isArray(parsed)) return [];
@@ -37,7 +52,8 @@ const parseStored = (): AppNotificationItem[] => {
 
 const persist = (items: AppNotificationItem[]) => {
     if (!canUseWindow()) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, MAX_ITEMS)));
+    const key = getStorageKey();
+    localStorage.setItem(key, JSON.stringify(items.slice(0, MAX_ITEMS)));
     window.dispatchEvent(new CustomEvent(UPDATED_EVENT));
 };
 

@@ -17,18 +17,16 @@ const NAV_AUTHOR: NavItem[] = [
     { key: 'subscription', label: 'Gói dịch vụ',icon: CreditCard,      path: '/subscription' },
     { key: 'help',         label: 'Trợ giúp',   icon: CircleHelp,      path: '/help' },
     { key: 'profile',      label: 'Hồ sơ',      icon: User,            path: '/profile' },
-    { key: 'settings',     label: 'Cài đặt',    icon: Settings,        path: '/settings' },
 ];
 
 const NAV_STAFF: NavItem[] = [
     { key: 'staff-hub', label: 'Tổng quan', icon: LayoutDashboard, path: '/staff' },
-    { key: 'staff-flagged', label: 'Bản thảo bị cờ', icon: AlertTriangle, path: '/staff/flagged' },
-    { key: 'staff-analysis', label: 'Phân tích lỗi', icon: Activity, path: '/staff/analysis-jobs' },
+    { key: 'staff-reports', label: 'Kết quả phân tích', icon: BarChart2, path: '/staff/analyses' },
+    { key: 'staff-analysis', label: 'Phân tích AI', icon: Activity, path: '/staff/analysis-jobs' },
     { key: 'staff-feedbacks', label: 'Phản hồi tác giả', icon: MessageSquare, path: '/staff/feedbacks' },
     { key: 'staff-content', label: 'Nội dung trợ giúp', icon: CircleHelp, path: '/staff/content' },
     { key: 'staff-bugs', label: 'Báo cáo lỗi app', icon: Bug, path: '/staff/bugs' },
     { key: 'profile', label: 'Hồ sơ', icon: User, path: '/profile' },
-    { key: 'settings', label: 'Cài đặt', icon: Settings, path: '/settings' },
 ];
 
 const NAV_ADMIN: NavItem[] = [
@@ -38,6 +36,7 @@ const NAV_ADMIN: NavItem[] = [
     { key: 'sub-admin',      label: 'Gói dịch vụ', icon: CreditCard,      path: '/admin/subscription' },
     { key: 'admin-system',   label: 'Hệ thống',    icon: Settings,        path: '/admin/system' },
     { key: 'admin-logs',     label: 'Nhật ký',     icon: Activity,        path: '/admin/logs' },
+    { key: 'admin-feedbacks',label: 'Phản hồi',    icon: MessageSquare,   path: '/staff/feedbacks' },
     { key: 'staff-ops',      label: 'Vận hành',    icon: Headphones,      path: '/staff' },
     { key: 'profile',        label: 'Hồ sơ',       icon: User,            path: '/profile' },
 ];
@@ -51,9 +50,10 @@ function getNav(role: string) {
 interface SidebarProps {
     role: string;
     onNavigate: (path: string) => void;
+    userId?: string;
 }
 
-export default function Sidebar({ role, onNavigate }: SidebarProps) {
+export default function Sidebar({ role, onNavigate, userId }: SidebarProps) {
     const nav = getNav(role);
     const location = useLocation();
     const [collapsed, setCollapsed] = useState(false);
@@ -87,7 +87,7 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
             disposed = true;
             window.clearInterval(id);
         };
-    }, [role]);
+    }, [role, userId]);
 
     return (
         <aside
@@ -152,8 +152,8 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
                         {nav.map(item => {
                             const Icon = item.icon;
                             const active =
-                                item.path === '/staff'
-                                    ? location.pathname === '/staff'
+                                item.path === '/staff' || item.path === '/admin'
+                                    ? location.pathname === item.path
                                     : location.pathname === item.path ||
                                       (item.path !== '/home' && location.pathname.startsWith(`${item.path}/`));
 
@@ -162,25 +162,11 @@ export default function Sidebar({ role, onNavigate }: SidebarProps) {
                                     key={item.key}
                                     onClick={() => onNavigate(item.path)}
                                     title={collapsed ? item.label : undefined}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative group"
-                                    style={active ? {
-                                        background: 'var(--bg-active)',
-                                        color: 'var(--accent-text)',
-                                    } : {
-                                        color: 'var(--text-secondary)',
-                                    }}
-                                    onMouseEnter={e => {
-                                        if (!active) {
-                                            (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
-                                            (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)';
-                                        }
-                                    }}
-                                    onMouseLeave={e => {
-                                        if (!active) {
-                                            (e.currentTarget as HTMLElement).style.background = '';
-                                            (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)';
-                                        }
-                                    }}
+                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative group ${
+                                        active
+                                            ? 'bg-[var(--bg-active)] text-[var(--accent-text)]'
+                                            : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
+                                    }`}
                                 >
                                     {/* Active indicator bar */}
                                     {active && (

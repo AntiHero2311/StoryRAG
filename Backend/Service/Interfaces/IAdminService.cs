@@ -16,5 +16,16 @@ namespace Service.Interfaces
         Task<AdminRevenueDashboardResponse> GetRevenueDashboardAsync(int year, int month, int? planId);
         Task<SystemLimitsResponse> GetSystemLimitsAsync();
         Task<SystemLimitsResponse> UpdateSystemLimitsAsync(SystemLimitsRequest request, Guid adminId);
+
+        // ── Staff Genre Specialization ────────────────────────────────────────────
+        /// <summary>Lấy danh sách tất cả Staff kèm genres chuyên môn.</summary>
+        Task<List<UserSummaryDto>> GetAllStaffWithGenresAsync();
+        /// <summary>Lấy genres chuyên môn của một Staff.</summary>
+        Task<UserSummaryDto> GetStaffGenresAsync(Guid staffId);
+        /// <summary>Gán (thay thế toàn bộ) genres chuyên môn cho một Staff.</summary>
+        Task<UserSummaryDto> AssignStaffGenresAsync(Guid staffId, StaffGenreAssignRequest request, Guid adminId);
+
+        // ── Moderation & Ban ──────────────────────────────────────────────────────
+        Task<UserSummaryDto> BanUserAsync(Guid id, bool isBanned, string? reason, Guid actingAdminId);
     }
 }

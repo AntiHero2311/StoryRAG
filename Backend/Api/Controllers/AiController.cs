@@ -273,6 +273,22 @@ namespace Api.Controllers
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
 
+        /// <summary>Lấy danh sách snapshot văn bản (Read-only) của report.</summary>
+        [HttpGet("{projectId:guid}/reports/{reportId:guid}/snapshots")]
+        public async Task<IActionResult> GetReportSnapshots(Guid projectId, Guid reportId)
+        {
+            try
+            {
+                var userId = GetUserId();
+                if (userId == null) return Unauthorized(new { Message = "Không thể xác thực người dùng." });
+
+                var result = await _reportService.GetReportSnapshotsAsync(reportId, projectId, userId.Value);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+        }
+
         [HttpGet("{projectId:guid}/narrative/charts")]
         public async Task<IActionResult> GetNarrativeCharts(Guid projectId, [FromQuery] Guid? chapterId)
         {
@@ -381,7 +397,7 @@ namespace Api.Controllers
     {
         [Required]
         [MinLength(1)]
-        [MaxLength(2000)]
+        [MaxLength(50000)]
         public string Question { get; set; } = string.Empty;
     }
 

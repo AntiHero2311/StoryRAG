@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, ChevronUp, ChevronDown, RefreshCw, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, ChevronUp, ChevronDown, RefreshCw, Loader2, BookOpen, Gavel } from 'lucide-react';
 import MainLayout from '../../layouts/MainLayout';
-import { adminService, type UserSummary, type UserStatsResponse } from '../../services/adminService';
+import { adminService, type UserSummary, type UserStatsResponse, type GenreInfo } from '../../services/adminService';
+import { genreService } from '../../services/genreService';
+import type { GenreResponse } from '../../services/projectService';
 import { AdminPageShell, roleStyle, roleLabel } from '../../components/admin/AdminShared';
 import UserFormModal, { type UserFormState } from '../../components/admin/UserFormModal';
+import StaffGenreModal from '../../components/admin/StaffGenreModal';
 
 type SortKey = 'fullName' | 'email' | 'role' | 'createdAt';
 type SortDir = 'asc' | 'desc';
@@ -23,10 +26,41 @@ export default function AdminUsersPage() {
     const [userFormError, setUserFormError] = useState('');
     const [togglingId, setTogglingId] = useState<string | null>(null);
 
+    // Ban/Unban moderation states
+    const [banningUser, setBanningUser] = useState<UserSummary | null>(null);
+    const [banReasonInput, setBanReasonInput] = useState('');
+    const [banSubmitting, setBanSubmitting] = useState(false);
+
+    const handleConfirmBan = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!banningUser) return;
+        setBanSubmitting(true);
+        try {
+            const isBannedNext = !banningUser.isBanned;
+            await adminService.banUser(banningUser.id, isBannedNext, isBannedNext ? banReasonInput : undefined);
+            setBanningUser(null);
+            setBanReasonInput('');
+            await load();
+        } catch (err) {
+            alert(apiMessage(err));
+        } finally {
+            setBanSubmitting(false);
+        }
+    };
+
+    // Genre specialization
+    const [genreModalStaff, setGenreModalStaff] = useState<UserSummary | null>(null);
+    const [allGenres, setAllGenres] = useState<GenreResponse[]>([]);
+
     const load = async () => {
         setLoading(true);
         try {
-            setStats(await adminService.getUserStats());
+            const [statsData, genreData] = await Promise.all([
+                adminService.getUserStats(),
+                genreService.getGenres(),
+            ]);
+            setStats(statsData);
+            setAllGenres(genreData);
         } finally {
             setLoading(false);
         }
@@ -101,6 +135,18 @@ export default function AdminUsersPage() {
         }
     };
 
+    // Update local state when genre saved (avoid full reload)
+    const handleGenreSaved = (updated: UserSummary) => {
+        setStats(prev => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                users: prev.users.map(u => u.id === updated.id ? { ...u, genres: updated.genres } : u),
+            };
+        });
+        setGenreModalStaff(null);
+    };
+
     const SortIcon = ({ col }: { col: SortKey }) =>
         sortKey === col
             ? (sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 inline ml-1" /> : <ChevronDown className="w-3.5 h-3.5 inline ml-1" />)
@@ -130,6 +176,65 @@ export default function AdminUsersPage() {
                             onClose={() => { setUserModal(null); setEditingUser(null); }}
                             onSave={form => void handleSaveUser(form)}
                         />
+                    )}
+
+                    {/* Genre Modal */}
+                    {genreModalStaff && (
+                        <StaffGenreModal
+                            staff={genreModalStaff}
+                            allGenres={allGenres}
+                            onClose={() => setGenreModalStaff(null)}
+                            onSaved={handleGenreSaved}
+                        />
+                    )}
+
+                    {/* Ban Confirmation Modal */}
+                    {banningUser && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                            <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 shadow-2xl space-y-4">
+                                <div className="flex items-center gap-2 text-rose-400">
+                                    <Gavel className="w-5 h-5 animate-pulse" />
+                                    <h3 className="text-base font-bold">Khóa tài khoản (Ban User)</h3>
+                                </div>
+                                <p className="text-xs text-[var(--text-secondary)]">
+                                    Bạn đang thực hiện khóa tài khoản của <strong>{banningUser.fullName}</strong> ({banningUser.email}). Người dùng này sẽ bị đăng xuất lập tức và không thể truy cập lại hệ thống.
+                                </p>
+                                {banningUser.isBanRequested && banningUser.banRequestReason && (
+                                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-xl text-xs">
+                                        <p className="font-bold">Đề xuất bởi Staff:</p>
+                                        <p className="mt-0.5 italic">{banningUser.banRequestReason}</p>
+                                    </div>
+                                )}
+                                <form onSubmit={handleConfirmBan} className="space-y-3">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-[var(--text-secondary)] mb-1 uppercase">Lý lý do khóa tài khoản</label>
+                                        <textarea
+                                            value={banReasonInput}
+                                            onChange={e => setBanReasonInput(e.target.value)}
+                                            placeholder="Nêu lý do chi tiết (ví dụ: vi phạm nghiêm trọng, spam...)"
+                                            className="w-full min-h-[80px] p-3 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-red-500/40 resize-y"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="flex justify-end gap-2 pt-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => { setBanningUser(null); setBanReasonInput(''); }}
+                                            className="px-4 py-2 rounded-xl text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-[var(--text-secondary)]"
+                                        >
+                                            Hủy
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={banSubmitting || !banReasonInput.trim()}
+                                            className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-650 hover:bg-rose-700 text-white disabled:opacity-40"
+                                        >
+                                            {banSubmitting ? 'Đang thực hiện...' : 'Khóa tài khoản'}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
                     )}
 
                     <div className="flex flex-wrap gap-2">
@@ -167,7 +272,43 @@ export default function AdminUsersPage() {
                                 <tbody className="divide-y divide-[var(--border-color)]">
                                     {filtered.map(user => (
                                         <tr key={user.id} className="hover:bg-[var(--text-primary)]/5">
-                                            <td className="px-4 py-3 font-medium">{user.fullName}</td>
+                                            <td className="px-4 py-3">
+                                                <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{user.fullName}</div>
+                                                <div className="flex flex-wrap gap-1.5 mt-1 items-center">
+                                                    {user.strikeCount > 0 && (
+                                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/20">
+                                                            Cảnh cáo: {user.strikeCount}
+                                                        </span>
+                                                    )}
+                                                    {user.isBanRequested && (
+                                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/20 animate-pulse" title={user.banRequestReason || ''}>
+                                                            🚩 Đề xuất Ban
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {/* Genre tags for Staff */}
+                                                {user.role === 'Staff' && (user.genres ?? []).length > 0 && (
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {(user.genres as GenreInfo[]).slice(0, 3).map(g => (
+                                                            <span
+                                                                key={g.id}
+                                                                className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold"
+                                                                style={{ background: `${g.color}22`, color: g.color }}
+                                                            >
+                                                                {g.name}
+                                                            </span>
+                                                        ))}
+                                                        {user.genres.length > 3 && (
+                                                            <span
+                                                                className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-help"
+                                                                title={(user.genres as GenreInfo[]).slice(3).map(g => g.name).join(', ')}
+                                                            >
+                                                                +{user.genres.length - 3}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-3 text-[var(--text-secondary)]">{user.email}</td>
                                             <td className="px-4 py-3">
                                                 <span className={`px-2 py-0.5 rounded-full text-xs border ${roleStyle(user.role)}`}>{roleLabel(user.role)}</span>
@@ -176,14 +317,60 @@ export default function AdminUsersPage() {
                                                 {new Date(user.createdAt).toLocaleDateString('vi-VN')}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <button type="button" disabled={togglingId === user.id}
-                                                    onClick={() => void toggleActive(user)}
-                                                    className={`text-xs font-semibold px-2 py-1 rounded-lg ${user.isActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-500/15 text-slate-400'}`}>
-                                                    {togglingId === user.id ? '…' : user.isActive ? 'Hoạt động' : 'Đã khoá'}
-                                                </button>
+                                                {user.isBanned ? (
+                                                    <span className="text-xs font-extrabold uppercase px-2 py-1 rounded bg-red-500/20 text-red-400 border border-red-500/30">
+                                                        Đã Ban
+                                                    </span>
+                                                ) : (
+                                                    <button type="button" disabled={togglingId === user.id}
+                                                        onClick={() => void toggleActive(user)}
+                                                        className={`text-xs font-semibold px-2 py-1 rounded-lg ${user.isActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-500/15 text-slate-400'}`}>
+                                                        {togglingId === user.id ? '…' : user.isActive ? 'Hoạt động' : 'Đã khoá'}
+                                                    </button>
+                                                )}
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex justify-end gap-1">
+                                                    {/* Genre assignment button — only for Staff */}
+                                                    {user.role === 'Staff' && (
+                                                        <button
+                                                            type="button"
+                                                            title="Quản lý thể loại chuyên môn"
+                                                            onClick={() => setGenreModalStaff(user)}
+                                                            className="p-2 rounded-lg hover:bg-amber-500/20 text-amber-400 transition-colors"
+                                                        >
+                                                            <BookOpen className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    {user.role !== 'Admin' && (
+                                                        <button
+                                                            type="button"
+                                                            title={user.isBanned ? 'Mở khóa tài khoản (Unban)' : 'Khóa tài khoản (Ban)'}
+                                                            onClick={async () => {
+                                                                if (user.isBanned) {
+                                                                    if (window.confirm(`Bạn có chắc chắn muốn mở khóa (unban) cho ${user.fullName}?`)) {
+                                                                        try {
+                                                                            await adminService.banUser(user.id, false);
+                                                                            await load();
+                                                                        } catch (e) {
+                                                                            alert(apiMessage(e));
+                                                                        }
+                                                                    }
+                                                                } else {
+                                                                    setBanningUser(user);
+                                                                }
+                                                            }}
+                                                            className={`p-2 rounded-lg transition-colors ${
+                                                                user.isBanned
+                                                                    ? 'hover:bg-emerald-500/20 text-emerald-400'
+                                                                    : user.isBanRequested
+                                                                    ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 animate-pulse'
+                                                                    : 'hover:bg-rose-500/20 text-rose-400'
+                                                            }`}
+                                                        >
+                                                            <Gavel className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                     <button type="button" onClick={() => { setEditingUser(user); setUserModal('edit'); }} className="p-2 rounded-lg hover:bg-indigo-500/20 text-indigo-400"><Pencil className="w-4 h-4" /></button>
                                                     <button type="button" onClick={async () => {
                                                         if (!window.confirm(`Xoá/khoá ${user.fullName}?`)) return;

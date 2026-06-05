@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using Repository.Data;
 using Repository.Entities;
 using Service.DTOs;
@@ -39,6 +40,8 @@ namespace Service.Implementations
         private readonly INotificationService _notificationService;
         private readonly IEmbeddingService _embeddingService;
         private readonly ILogger<ProjectAnalysisJobService> _logger;
+        private readonly IConfiguration _config;
+        private readonly SemaphoreSlim _progressLock = new(1, 1);
 
         public ProjectAnalysisJobService(
             AppDbContext context,
@@ -47,7 +50,8 @@ namespace Service.Implementations
             IAnalysisJobCancellationRegistry analysisJobCancellationRegistry,
             INotificationService notificationService,
             IEmbeddingService embeddingService,
-            ILogger<ProjectAnalysisJobService> logger)
+            ILogger<ProjectAnalysisJobService> logger,
+            IConfiguration config)
         {
             _context = context;
             _projectReportService = projectReportService;
@@ -56,6 +60,7 @@ namespace Service.Implementations
             _notificationService = notificationService;
             _embeddingService = embeddingService;
             _logger = logger;
+            _config = config;
         }
 
         public async Task<ProjectAnalysisJobResponse> EnqueueAsync(
@@ -66,25 +71,34 @@ namespace Service.Implementations
             await VerifyOwnershipAsync(projectId, userId, cancellationToken);
             var subscription = await EnsureCanAnalyzeAsync(userId, cancellationToken);
             await EnsureProjectHasEmbeddedContentAsync(projectId, cancellationToken);
+
+            var totalWords = await _context.Chapters
+                .Where(c => c.ProjectId == projectId && !c.IsDeleted)
+                .SumAsync(c => c.WordCount, cancellationToken);
+
+            if (totalWords < 1000)
+            {
+                throw new InvalidOperationException($"Tác phẩm cần đạt tối thiểu 1.000 chữ để có thể phân tích (hiện tại có {totalWords:N0} chữ). Hãy sáng tác thêm để AI có đủ dữ liệu đánh giá nhé!");
+            }
+
             var priority = AnalysisJobPriorityHelper.CalculatePriority(subscription);
 
             var currentSnapshot = await BuildProjectSnapshotAsync(projectId, cancellationToken);
             var currentProjectVersionHash = currentSnapshot.ProjectVersionHash;
 
-            // Chặn enqueue mới nếu đang có report chờ Staff duyệt cho cùng project
-            var pendingStaffReport = await _context.ProjectReports
+            // Chặn enqueue mới nếu báo cáo mới nhất đang được staff biên tập nháp
+            var latestReportForBlock = await _context.ProjectReports
                 .AsNoTracking()
-                .AnyAsync(r =>
-                    r.ProjectId == projectId &&
-                    r.UserId == userId &&
-                    (r.ReviewStatus == "PendingStaffReview" || r.ReviewStatus == "StaffReviewing"),
-                    cancellationToken);
+                .Where(r => r.ProjectId == projectId && r.UserId == userId)
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
 
-            if (pendingStaffReport)
+            if (latestReportForBlock != null && 
+                (latestReportForBlock.ReviewStatus == "PendingStaffReview" || latestReportForBlock.ReviewStatus == "StaffReviewing"))
             {
                 throw new InvalidOperationException(
-                    "Báo cáo phân tích đang được đội ngũ Staff kiểm duyệt. " +
-                    "Vui lòng chờ Staff hoàn tất duyệt trước khi yêu cầu phân tích mới.");
+                    "Báo cáo phân tích mới nhất đang được đội ngũ Staff xử lý. " +
+                    "Vui lòng chờ Staff hoàn tất trước khi yêu cầu phân tích mới.");
             }
 
             var activeJob = await _context.ProjectAnalysisJobs
@@ -377,33 +391,42 @@ namespace Service.Implementations
                     job.UserId,
                     async (progress, message, token) =>
                     {
-                        await ThrowIfJobCancelledAsync(jobId, token);
-
-                        var safeProgress = Math.Clamp(progress, 20, 85);
-                        if (job.Progress == safeProgress)
-                            return;
-
-                        job.Stage = NormalizeStage(message);
-                        job.Progress = safeProgress;
-                        job.UpdatedAt = DateTime.UtcNow;
-                        
+                        await _progressLock.WaitAsync(token);
                         try
                         {
-                            await _context.SaveChangesAsync(token);
-                        }
-                        catch (DbUpdateConcurrencyException)
-                        {
-                            // Reload job and retry if concurrency issue
-                            await _context.Entry(job).ReloadAsync(token);
-                            job.Stage = NormalizeStage(message);
+                            await ThrowIfJobCancelledAsync(jobId, token);
+
+                            var safeProgress = Math.Clamp(progress, 20, 85);
+                            var normalizedStage = NormalizeStage(message);
+                            if (job.Progress == safeProgress && job.Stage == normalizedStage)
+                                return;
+
+                            job.Stage = normalizedStage;
                             job.Progress = safeProgress;
                             job.UpdatedAt = DateTime.UtcNow;
-                            await _context.SaveChangesAsync(token);
+                            
+                            try
+                            {
+                                await _context.SaveChangesAsync(token);
+                            }
+                            catch (DbUpdateConcurrencyException)
+                            {
+                                // Reload job and retry if concurrency issue
+                                await _context.Entry(job).ReloadAsync(token);
+                                job.Stage = normalizedStage;
+                                job.Progress = safeProgress;
+                                job.UpdatedAt = DateTime.UtcNow;
+                                await _context.SaveChangesAsync(token);
+                            }
+                            catch (DbUpdateException ex)
+                            {
+                                // Log but don't throw - progress updates are not critical
+                                _logger.LogWarning(ex, "Failed to update progress for job {JobId}. Continuing anyway.", jobId);
+                            }
                         }
-                        catch (DbUpdateException ex)
+                        finally
                         {
-                            // Log but don't throw - progress updates are not critical
-                            _logger.LogWarning(ex, "Failed to update progress for job {JobId}. Continuing anyway.", jobId);
+                            _progressLock.Release();
                         }
                     },
                     processingToken,
@@ -492,13 +515,25 @@ namespace Service.Implementations
                 await _context.SaveChangesAsync(CancellationToken.None);
 
                 var projectTitle = await GetProjectTitleAsync(job.ProjectId, CancellationToken.None);
-                var failureMessage = $"Job phân tích cho dự án \"{projectTitle}\" thất bại. Mã job: {job.Id}. Lý do: {Truncate(ex.Message, 300)}";
-                await _notificationService.CreateForRolesAsync(
-                    ["Author", "Staff", "Admin"],
+                
+                // Gửi thông báo chung chung, không chứa mã lỗi hoặc chi tiết exception cho Tác giả (Author)
+                var failureMessageAuthor = $"Job phân tích cho dự án \"{projectTitle}\" thất bại. Vui lòng thử lại.";
+                await _notificationService.CreateForUserAsync(
+                    job.UserId,
                     "error",
                     "Phân tích AI gặp lỗi",
-                    failureMessage,
+                    failureMessageAuthor,
                     tag: $"analysis-failed:{job.Id}",
+                    cancellationToken: CancellationToken.None);
+
+                // Gửi thông báo chi tiết đầy đủ exception cho Ban kiểm duyệt (Staff, Admin) để phục vụ debug và kiểm duyệt
+                var failureMessageStaff = $"Job phân tích cho dự án \"{projectTitle}\" thất bại. Mã job: {job.Id}. Lý do: {Truncate(ex.Message, 300)}";
+                await _notificationService.CreateForRolesAsync(
+                    ["Staff", "Admin"],
+                    "error",
+                    "Phân tích AI gặp lỗi (Kỹ thuật)",
+                    failureMessageStaff,
+                    tag: $"analysis-failed-tech:{job.Id}",
                     cancellationToken: CancellationToken.None);
             }
             finally
@@ -585,57 +620,12 @@ namespace Service.Implementations
                 .ToListAsync(cancellationToken);
 
             if (activeVersionIds.Count == 0)
-                throw new InvalidOperationException(MissingEmbeddedContentMessage);
-
-            // Find chapters that are not fully embedded (have chunks without embeddings)
-            var chaptersWithMissingEmbeddings = await _context.Chapters
-                .Where(c => c.ProjectId == projectId && !c.IsDeleted && c.CurrentVersionId.HasValue)
-                .Select(c => new { c.Id, c.CurrentVersionId })
-                .ToListAsync(cancellationToken);
-
-            var chaptersToEmbed = new List<Guid>();
-            foreach (var chapter in chaptersWithMissingEmbeddings)
             {
-                if (!chapter.CurrentVersionId.HasValue)
-                    continue;
-
-                var hasAllChunksEmbedded = await _context.ChapterChunks
-                    .Where(cc => cc.VersionId == chapter.CurrentVersionId.Value && cc.ProjectId == projectId)
-                    .AllAsync(cc => cc.Embedding != null, cancellationToken);
-
-                if (!hasAllChunksEmbedded)
-                {
-                    chaptersToEmbed.Add(chapter.Id);
-                }
+                throw new InvalidOperationException("Dự án chưa có chương nào được soạn thảo hoặc lưu nháp. Vui lòng tạo chương trước khi phân tích.");
             }
 
-            // Auto-embed missing chapters
-            if (chaptersToEmbed.Any())
-            {
-                _logger.LogInformation(
-                    "Auto-embedding {ChapterCount} chapters for project {ProjectId} before analysis.",
-                    chaptersToEmbed.Count, projectId);
-
-                foreach (var chapterId in chaptersToEmbed)
-                {
-                    try
-                    {
-                        await _embeddingService.EmbedChapterAsync(chapterId, project.AuthorId);
-                        _logger.LogInformation("Successfully embedded chapter {ChapterId}.", chapterId);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to auto-embed chapter {ChapterId}. Continuing anyway.", chapterId);
-                    }
-                }
-            }
-
-            // Final check: ensure at least some embedded content exists
-            var hasEmbeddedChunks = await _context.ChapterChunks
-                .AnyAsync(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId), cancellationToken);
-
-            if (!hasEmbeddedChunks)
-                throw new InvalidOperationException(MissingEmbeddedContentMessage);
+            // Bỏ việc chặn hoặc tự động nhúng đồng bộ trên luồng HTTP để tránh timeout / lỗi mạng (network error).
+            // Tiến trình chạy ngầm ProjectAnalysisJobWorker sẽ tự động thực hiện tách chunk và nhúng các chương còn thiếu khi chạy job.
         }
 
         private async Task<ProjectAnalysisSnapshotState> BuildProjectSnapshotAsync(Guid projectId, CancellationToken cancellationToken)
@@ -715,6 +705,13 @@ namespace Service.Implementations
 
         private static ProjectAnalysisJobResponse ToResponse(ProjectAnalysisJob job, bool isExistingJob = false)
         {
+            // Bảo vệ an toàn thông tin: Chỉ trả về thông báo thất bại chung cho người dùng, ẩn các chi tiết kỹ thuật/exception.
+            var displayErrorMessage = job.ErrorMessage;
+            if (job.Status == StatusFailed && !string.IsNullOrWhiteSpace(displayErrorMessage))
+            {
+                displayErrorMessage = "Phân tích thất bại. Vui lòng thử lại.";
+            }
+
             return new ProjectAnalysisJobResponse
             {
                 JobId = job.Id,
@@ -723,7 +720,7 @@ namespace Service.Implementations
                 Stage = job.Stage,
                 Progress = job.Progress,
                 ReportId = job.ReportId,
-                ErrorMessage = job.ErrorMessage,
+                ErrorMessage = displayErrorMessage,
                 IsExistingJob = isExistingJob,
                 ProjectVersionHash = job.ProjectVersionHash,
                 CreatedAt = job.CreatedAt,
@@ -734,13 +731,34 @@ namespace Service.Implementations
 
         private async Task<string> GetProjectTitleAsync(Guid projectId, CancellationToken cancellationToken)
         {
-            var title = await _context.Projects
+            var project = await _context.Projects
                 .AsNoTracking()
+                .Include(p => p.Author)
                 .Where(p => p.Id == projectId)
-                .Select(p => p.Title)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            return string.IsNullOrWhiteSpace(title) ? projectId.ToString() : title;
+            if (project == null || string.IsNullOrWhiteSpace(project.Title))
+                return projectId.ToString();
+
+            try
+            {
+                var masterKey = _config["Security:MasterKey"];
+                if (!string.IsNullOrWhiteSpace(masterKey) && !string.IsNullOrWhiteSpace(project.Author?.DataEncryptionKey))
+                {
+                    var authorDek = EncryptionHelper.DecryptWithMasterKey(project.Author.DataEncryptionKey, masterKey);
+                    var plainTitle = EncryptionHelper.DecryptWithMasterKey(project.Title, authorDek);
+                    if (!string.IsNullOrWhiteSpace(plainTitle))
+                    {
+                        return plainTitle;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to decrypt project title for project {ProjectId}.", projectId);
+            }
+
+            return project.Title;
         }
 
         private static string? Truncate(string? value, int maxLen)

@@ -42,14 +42,31 @@ namespace Service.Implementations
                 .OrderByDescending(u => u.CreatedAt)
                 .ToListAsync();
 
-            var summaries = users.Select(u => new UserSummaryDto
+            // Load genres for all Staff users in one query
+            var staffIds = users.Where(u => u.Role == "Staff").Select(u => u.Id).ToList();
+            var staffGenreMap = staffIds.Count > 0
+                ? await _context.StaffGenres
+                    .Where(sg => staffIds.Contains(sg.StaffId))
+                    .Include(sg => sg.Genre)
+                    .GroupBy(sg => sg.StaffId)
+                    .ToDictionaryAsync(
+                        g => g.Key,
+                        g => g.Select(sg => new GenreResponse
+                        {
+                            Id = sg.Genre.Id,
+                            Name = sg.Genre.Name,
+                            Slug = sg.Genre.Slug,
+                            Color = sg.Genre.Color,
+                            Description = sg.Genre.Description
+                        }).ToList())
+                : new Dictionary<Guid, List<GenreResponse>>();
+
+            var summaries = users.Select(u =>
             {
-                Id = u.Id,
-                FullName = u.FullName,
-                Email = u.Email,
-                Role = u.Role,
-                IsActive = u.IsActive,
-                CreatedAt = u.CreatedAt
+                var dto = MapSummary(u);
+                if (u.Role == "Staff" && staffGenreMap.TryGetValue(u.Id, out var genres))
+                    dto.Genres = genres;
+                return dto;
             }).ToList();
 
             return new UserStatsResponse
@@ -81,8 +98,8 @@ namespace Service.Implementations
             var totalProjects = await _context.Projects.CountAsync(p => !p.IsDeleted);
             var totalChapters = await _context.Chapters.CountAsync(c => !c.IsDeleted);
             var totalWordCount = await _context.Chapters.Where(c => !c.IsDeleted).SumAsync(c => (long)c.WordCount);
-            var totalCharacters = await _context.CharacterEntries.CountAsync();
-            var totalWorldbuildingEntries = await _context.WorldbuildingEntries.CountAsync();
+            var totalCharacters = await _context.ReportCharacterEntries.CountAsync();
+            var totalWorldbuildingEntries = await _context.ReportWorldbuildingEntries.CountAsync();
 
             var totalAiTokens = await _context.ChatMessages.SumAsync(m => (long)m.TotalTokens);
             var totalAiChatMessages = await _context.ChatMessages.CountAsync();
@@ -206,14 +223,20 @@ namespace Service.Implementations
             if (!request.IsActive && user.Role == "Admin")
                 await EnsureAnotherAdminExistsAsync(id);
 
+            var oldFullName = user.FullName;
+            var oldEmail = user.Email;
+            var oldRole = user.Role;
+            var oldIsActive = user.IsActive;
+            var isPasswordChanged = !string.IsNullOrWhiteSpace(request.NewPassword);
+
             user.FullName = request.FullName.Trim();
             user.Email = email;
             user.Role = request.Role;
             user.IsActive = request.IsActive;
 
-            if (!string.IsNullOrWhiteSpace(request.NewPassword))
+            if (isPasswordChanged)
             {
-                PasswordHasher.CreateHash(request.NewPassword, out var passwordHash, out var passwordSalt);
+                PasswordHasher.CreateHash(request.NewPassword!, out var passwordHash, out var passwordSalt);
                 user.PasswordHash = passwordHash;
                 user.PasswordSalt = passwordSalt;
                 user.PasswordFormatVersion = PasswordHasher.Pbkdf2PasswordFormatVersion;
@@ -222,7 +245,37 @@ namespace Service.Implementations
             }
 
             await _context.SaveChangesAsync();
-            await _auditLog.LogAsync("User", "Update", $"Cập nhật user {user.Email}", actingAdminId);
+
+            var diffs = new System.Collections.Generic.List<string>();
+            if (oldFullName != user.FullName) diffs.Add($"Họ tên: '{oldFullName}' -> '{user.FullName}'");
+            if (oldEmail != user.Email) diffs.Add($"Email: '{oldEmail}' -> '{user.Email}'");
+            if (oldRole != user.Role) diffs.Add($"Vai trò: '{oldRole}' -> '{user.Role}'");
+            if (oldIsActive != user.IsActive) diffs.Add($"Hoạt động: {oldIsActive} -> {user.IsActive}");
+            if (isPasswordChanged) diffs.Add("Mật khẩu: Đã thay đổi");
+
+            var logMsg = $"Cập nhật user {user.Email}";
+            if (diffs.Count > 0)
+            {
+                logMsg += $": [{string.Join(", ", diffs)}]";
+            }
+
+            var oldUser = new System.Collections.Generic.Dictionary<string, object>
+            {
+                ["FullName"] = oldFullName,
+                ["Email"] = oldEmail,
+                ["Role"] = oldRole,
+                ["IsActive"] = oldIsActive
+            };
+            var newUser = new System.Collections.Generic.Dictionary<string, object>
+            {
+                ["FullName"] = user.FullName,
+                ["Email"] = user.Email,
+                ["Role"] = user.Role,
+                ["IsActive"] = user.IsActive
+            };
+            var metadataJson = System.Text.Json.JsonSerializer.Serialize(new { old = oldUser, @new = newUser });
+
+            await _auditLog.LogAsync("User", "Update", logMsg, actingAdminId, "Info", metadataJson);
             return MapSummary(user);
         }
 
@@ -287,6 +340,19 @@ namespace Service.Implementations
             var totalChapters = await _context.Chapters.LongCountAsync(c => !c.IsDeleted);
             var totalWords = await _context.Chapters.Where(c => !c.IsDeleted).SumAsync(c => (long)c.WordCount);
 
+            var smtpHost = await _sysConfig.GetAsync("smtp.host", _config["Email:SmtpHost"] ?? "smtp.gmail.com");
+            var smtpPortRaw = await _sysConfig.GetAsync("smtp.port", _config["Email:SmtpPort"] ?? "587");
+            var smtpPort = int.TryParse(smtpPortRaw.ToString(), out var sp) ? sp : 587;
+            var smtpUsername = await _sysConfig.GetAsync("smtp.username", _config["Email:Username"] ?? "");
+            var smtpPassword = await _sysConfig.GetAsync("smtp.password", _config["Email:Password"] ?? "");
+            var smtpFromName = await _sysConfig.GetAsync("smtp.from_name", _config["Email:FromName"] ?? "StoryNest");
+            var smtpFromAddress = await _sysConfig.GetAsync("smtp.from_address", _config["Email:FromAddress"] ?? smtpUsername);
+
+            var vnPayPaymentUrl = await _sysConfig.GetAsync("vnpay.payment_url", _config["VnPay:PaymentUrl"] ?? "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html");
+            var vnPayTmnCode = await _sysConfig.GetAsync("vnpay.tmn_code", _config["VnPay:TmnCode"] ?? "");
+            var vnPayHashSecret = await _sysConfig.GetAsync("vnpay.hash_secret", _config["VnPay:HashSecret"] ?? "");
+            var vnPayReturnUrl = await _sysConfig.GetAsync("vnpay.return_url", _config["VnPay:ReturnUrl"] ?? "");
+
             return new SystemLimitsResponse
             {
                 MaxUploadMb = maxUpload,
@@ -295,6 +361,18 @@ namespace Service.Implementations
                 TotalProjects = totalProjects,
                 TotalChapters = totalChapters,
                 TotalWordCount = totalWords,
+
+                SmtpHost = smtpHost,
+                SmtpPort = smtpPort,
+                SmtpUsername = smtpUsername,
+                SmtpPassword = smtpPassword,
+                SmtpFromName = smtpFromName,
+                SmtpFromAddress = smtpFromAddress,
+
+                VnPayPaymentUrl = vnPayPaymentUrl,
+                VnPayTmnCode = vnPayTmnCode,
+                VnPayHashSecret = vnPayHashSecret,
+                VnPayReturnUrl = vnPayReturnUrl
             };
         }
 
@@ -305,10 +383,97 @@ namespace Service.Implementations
             if (request.MaxProjectsPerAuthor < 1 || request.MaxProjectsPerAuthor > 500)
                 throw new ArgumentException("max_projects_per_author phải từ 1–500.");
 
+            var oldMaxUpload = await _sysConfig.GetAsync(KeyMaxUploadMb, 10);
+            var oldMaxProjects = await _sysConfig.GetAsync(KeyMaxProjectsPerAuthor, 50);
+            var oldMaintenance = await _sysConfig.GetAsync(KeyMaintenanceMode, false);
+
+            var oldSmtpHost = await _sysConfig.GetAsync("smtp.host", _config["Email:SmtpHost"] ?? "smtp.gmail.com");
+            var oldSmtpPortRaw = await _sysConfig.GetAsync("smtp.port", _config["Email:SmtpPort"] ?? "587");
+            var oldSmtpPort = int.TryParse(oldSmtpPortRaw.ToString(), out var sp) ? sp : 587;
+            var oldSmtpUsername = await _sysConfig.GetAsync("smtp.username", _config["Email:Username"] ?? "");
+            var oldSmtpPassword = await _sysConfig.GetAsync("smtp.password", _config["Email:Password"] ?? "");
+            var oldSmtpFromName = await _sysConfig.GetAsync("smtp.from_name", _config["Email:FromName"] ?? "StoryNest");
+            var oldSmtpFromAddress = await _sysConfig.GetAsync("smtp.from_address", _config["Email:FromAddress"] ?? oldSmtpUsername);
+
+            var oldVnPayPaymentUrl = await _sysConfig.GetAsync("vnpay.payment_url", _config["VnPay:PaymentUrl"] ?? "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html");
+            var oldVnPayTmnCode = await _sysConfig.GetAsync("vnpay.tmn_code", _config["VnPay:TmnCode"] ?? "");
+            var oldVnPayHashSecret = await _sysConfig.GetAsync("vnpay.hash_secret", _config["VnPay:HashSecret"] ?? "");
+            var oldVnPayReturnUrl = await _sysConfig.GetAsync("vnpay.return_url", _config["VnPay:ReturnUrl"] ?? "");
+
             await _sysConfig.SetAsync(KeyMaxUploadMb, request.MaxUploadMb, adminId);
             await _sysConfig.SetAsync(KeyMaxProjectsPerAuthor, request.MaxProjectsPerAuthor, adminId);
             await _sysConfig.SetAsync(KeyMaintenanceMode, request.MaintenanceMode, adminId);
-            await _auditLog.LogAsync("Config", "Limits", "Cập nhật giới hạn hệ thống", adminId);
+
+            await _sysConfig.SetAsync("smtp.host", request.SmtpHost ?? "", adminId);
+            await _sysConfig.SetAsync("smtp.port", request.SmtpPort.ToString(), adminId);
+            await _sysConfig.SetAsync("smtp.username", request.SmtpUsername ?? "", adminId);
+            await _sysConfig.SetAsync("smtp.password", request.SmtpPassword ?? "", adminId);
+            await _sysConfig.SetAsync("smtp.from_name", request.SmtpFromName ?? "", adminId);
+            await _sysConfig.SetAsync("smtp.from_address", request.SmtpFromAddress ?? "", adminId);
+
+            await _sysConfig.SetAsync("vnpay.payment_url", request.VnPayPaymentUrl ?? "", adminId);
+            await _sysConfig.SetAsync("vnpay.tmn_code", request.VnPayTmnCode ?? "", adminId);
+            await _sysConfig.SetAsync("vnpay.hash_secret", request.VnPayHashSecret ?? "", adminId);
+            await _sysConfig.SetAsync("vnpay.return_url", request.VnPayReturnUrl ?? "", adminId);
+
+            var diffs = new System.Collections.Generic.List<string>();
+            if (oldMaxUpload != request.MaxUploadMb) diffs.Add($"Dung lượng tải lên tối đa: {oldMaxUpload}MB -> {request.MaxUploadMb}MB");
+            if (oldMaxProjects != request.MaxProjectsPerAuthor) diffs.Add($"Số dự án tối đa/tác giả: {oldMaxProjects} -> {request.MaxProjectsPerAuthor}");
+            if (oldMaintenance != request.MaintenanceMode) diffs.Add($"Bảo trì: {oldMaintenance} -> {request.MaintenanceMode}");
+
+            if (oldSmtpHost != request.SmtpHost) diffs.Add($"SMTP Host: '{oldSmtpHost}' -> '{request.SmtpHost}'");
+            if (oldSmtpPort != request.SmtpPort) diffs.Add($"SMTP Port: {oldSmtpPort} -> {request.SmtpPort}");
+            if (oldSmtpUsername != request.SmtpUsername) diffs.Add($"SMTP Username: '{oldSmtpUsername}' -> '{request.SmtpUsername}'");
+            if (oldSmtpPassword != request.SmtpPassword) diffs.Add($"SMTP Password: '***' -> '***'");
+            if (oldSmtpFromName != request.SmtpFromName) diffs.Add($"SMTP From Name: '{oldSmtpFromName}' -> '{request.SmtpFromName}'");
+            if (oldSmtpFromAddress != request.SmtpFromAddress) diffs.Add($"SMTP From Address: '{oldSmtpFromAddress}' -> '{request.SmtpFromAddress}'");
+
+            if (oldVnPayPaymentUrl != request.VnPayPaymentUrl) diffs.Add($"VNPay Url: '{oldVnPayPaymentUrl}' -> '{request.VnPayPaymentUrl}'");
+            if (oldVnPayTmnCode != request.VnPayTmnCode) diffs.Add($"VNPay TmnCode: '{oldVnPayTmnCode}' -> '{request.VnPayTmnCode}'");
+            if (oldVnPayHashSecret != request.VnPayHashSecret) diffs.Add($"VNPay HashSecret: '***' -> '***'");
+            if (oldVnPayReturnUrl != request.VnPayReturnUrl) diffs.Add($"VNPay ReturnUrl: '{oldVnPayReturnUrl}' -> '{request.VnPayReturnUrl}'");
+
+            var logMsg = "Cập nhật cấu hình hệ thống";
+            if (diffs.Count > 0)
+            {
+                logMsg += $": [{string.Join(", ", diffs)}]";
+            }
+            else
+            {
+                logMsg += " (không thay đổi dữ liệu)";
+            }
+
+            var oldLimits = new System.Collections.Generic.Dictionary<string, object>
+            {
+                ["MaxUploadMb"] = oldMaxUpload,
+                ["MaxProjectsPerAuthor"] = oldMaxProjects,
+                ["MaintenanceMode"] = oldMaintenance,
+                ["SmtpHost"] = oldSmtpHost,
+                ["SmtpPort"] = oldSmtpPort,
+                ["SmtpUsername"] = oldSmtpUsername,
+                ["SmtpFromName"] = oldSmtpFromName,
+                ["SmtpFromAddress"] = oldSmtpFromAddress,
+                ["VnPayPaymentUrl"] = oldVnPayPaymentUrl,
+                ["VnPayTmnCode"] = oldVnPayTmnCode,
+                ["VnPayReturnUrl"] = oldVnPayReturnUrl
+            };
+            var newLimits = new System.Collections.Generic.Dictionary<string, object>
+            {
+                ["MaxUploadMb"] = request.MaxUploadMb,
+                ["MaxProjectsPerAuthor"] = request.MaxProjectsPerAuthor,
+                ["MaintenanceMode"] = request.MaintenanceMode,
+                ["SmtpHost"] = request.SmtpHost ?? "",
+                ["SmtpPort"] = request.SmtpPort,
+                ["SmtpUsername"] = request.SmtpUsername ?? "",
+                ["SmtpFromName"] = request.SmtpFromName ?? "",
+                ["SmtpFromAddress"] = request.SmtpFromAddress ?? "",
+                ["VnPayPaymentUrl"] = request.VnPayPaymentUrl ?? "",
+                ["VnPayTmnCode"] = request.VnPayTmnCode ?? "",
+                ["VnPayReturnUrl"] = request.VnPayReturnUrl ?? ""
+            };
+            var metadataJson = System.Text.Json.JsonSerializer.Serialize(new { old = oldLimits, @new = newLimits });
+
+            await _auditLog.LogAsync("Config", "Limits", logMsg, adminId, "Info", metadataJson);
 
             return await GetSystemLimitsAsync();
         }
@@ -324,6 +489,107 @@ namespace Service.Implementations
         {
             if (!AllowedRoles.Contains(role))
                 throw new ArgumentException("Role không hợp lệ. Chọn Author, Staff hoặc Admin.");
+        }
+
+        // ── Staff Genre Specialization ────────────────────────────────────────────
+
+        public async Task<List<UserSummaryDto>> GetAllStaffWithGenresAsync()
+        {
+            var staffUsers = await _context.Users
+                .AsNoTracking()
+                .Where(u => u.Role == "Staff")
+                .OrderBy(u => u.FullName)
+                .ToListAsync();
+
+            var staffIds = staffUsers.Select(u => u.Id).ToList();
+            var genreMap = await BuildGenreMapAsync(staffIds);
+
+            return staffUsers.Select(u =>
+            {
+                var dto = MapSummary(u);
+                if (genreMap.TryGetValue(u.Id, out var genres))
+                    dto.Genres = genres;
+                return dto;
+            }).ToList();
+        }
+
+        public async Task<UserSummaryDto> GetStaffGenresAsync(Guid staffId)
+        {
+            var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == staffId)
+                ?? throw new KeyNotFoundException("Không tìm thấy người dùng.");
+            if (user.Role != "Staff")
+                throw new InvalidOperationException("Chỉ Staff mới có thể loại chuyên môn.");
+
+            var dto = MapSummary(user);
+            var genreMap = await BuildGenreMapAsync(new List<Guid> { staffId });
+            if (genreMap.TryGetValue(staffId, out var genres))
+                dto.Genres = genres;
+            return dto;
+        }
+
+        public async Task<UserSummaryDto> AssignStaffGenresAsync(Guid staffId, StaffGenreAssignRequest request, Guid adminId)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == staffId)
+                ?? throw new KeyNotFoundException("Không tìm thấy người dùng.");
+            if (user.Role != "Staff")
+                throw new InvalidOperationException("Chỉ có thể gán thể loại cho Staff.");
+
+            // Validate genres exist
+            if (request.GenreIds.Count > 0)
+            {
+                var validIds = await _context.Genres
+                    .Where(g => request.GenreIds.Contains(g.Id))
+                    .Select(g => g.Id)
+                    .ToListAsync();
+                var invalid = request.GenreIds.Except(validIds).ToList();
+                if (invalid.Count > 0)
+                    throw new ArgumentException($"Genre không hợp lệ: {string.Join(", ", invalid)}");
+            }
+
+            // Replace all — remove old, add new
+            var existing = await _context.StaffGenres.Where(sg => sg.StaffId == staffId).ToListAsync();
+            _context.StaffGenres.RemoveRange(existing);
+
+            var now = DateTime.UtcNow;
+            foreach (var genreId in request.GenreIds.Distinct())
+            {
+                _context.StaffGenres.Add(new Repository.Entities.StaffGenre
+                {
+                    StaffId = staffId,
+                    GenreId = genreId,
+                    AssignedAt = now,
+                    AssignedBy = adminId
+                });
+            }
+
+            await _context.SaveChangesAsync();
+            await _auditLog.LogAsync("Staff", "AssignGenres",
+                $"Gán {request.GenreIds.Count} thể loại cho staff {user.Email}", adminId);
+
+            return await GetStaffGenresAsync(staffId);
+        }
+
+        private async Task<Dictionary<Guid, List<GenreResponse>>> BuildGenreMapAsync(List<Guid> staffIds)
+        {
+            if (staffIds.Count == 0)
+                return new Dictionary<Guid, List<GenreResponse>>();
+
+            return await _context.StaffGenres
+                .AsNoTracking()
+                .Where(sg => staffIds.Contains(sg.StaffId))
+                .Include(sg => sg.Genre)
+                .GroupBy(sg => sg.StaffId)
+                .ToDictionaryAsync(
+                    g => g.Key,
+                    g => g.OrderBy(sg => sg.Genre.Name)
+                          .Select(sg => new GenreResponse
+                          {
+                              Id = sg.Genre.Id,
+                              Name = sg.Genre.Name,
+                              Slug = sg.Genre.Slug,
+                              Color = sg.Genre.Color,
+                              Description = sg.Genre.Description
+                          }).ToList());
         }
 
         public async Task<AdminRevenueDashboardResponse> GetRevenueDashboardAsync(int year, int month, int? planId)
@@ -448,6 +714,40 @@ namespace Service.Implementations
             };
         }
 
+        public async Task<UserSummaryDto> BanUserAsync(Guid id, bool isBanned, string? reason, Guid actingAdminId)
+        {
+            if (id == actingAdminId)
+                throw new InvalidOperationException("Bạn không thể tự khóa/mở khóa tài khoản của chính mình.");
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id)
+                ?? throw new KeyNotFoundException("Không tìm thấy người dùng.");
+
+            if (isBanned && user.Role == "Admin")
+                await EnsureAnotherAdminExistsAsync(id);
+
+            user.IsBanned = isBanned;
+            user.BanReason = isBanned ? reason : null;
+            user.IsActive = !isBanned; // Automatically deactivate if banned, activate if unbanned
+
+            // Clear request flags
+            user.IsBanRequested = false;
+            user.BanRequestReason = null;
+            user.BanRequestedBy = null;
+
+            if (isBanned)
+            {
+                user.RefreshToken = null;
+                user.RefreshTokenExpiryTime = null;
+            }
+
+            await _context.SaveChangesAsync();
+
+            var logMsg = $"{(isBanned ? "Khóa" : "Mở khóa")} tài khoản user {user.Email}. Lý do: {reason ?? "Không có"}";
+            await _auditLog.LogAsync("User", isBanned ? "Ban" : "Unban", logMsg, actingAdminId);
+
+            return MapSummary(user);
+        }
+
         private static UserSummaryDto MapSummary(User u) => new()
         {
             Id = u.Id,
@@ -456,6 +756,12 @@ namespace Service.Implementations
             Role = u.Role,
             IsActive = u.IsActive,
             CreatedAt = u.CreatedAt,
+            StrikeCount = u.StrikeCount,
+            IsBanned = u.IsBanned,
+            BanReason = u.BanReason,
+            IsBanRequested = u.IsBanRequested,
+            BanRequestReason = u.BanRequestReason,
+            BanRequestedBy = u.BanRequestedBy,
         };
     }
 }

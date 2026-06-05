@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Topbar from '../components/Topbar';
 import { getUserInfo, UserInfo } from '../utils/jwtHelper';
+import { userService } from '../services/userService';
 
 interface MainLayoutProps {
     children: React.ReactNode | ((userInfo: UserInfo) => React.ReactNode);
@@ -16,17 +17,53 @@ export default function MainLayout({ children, pageTitle, onSettings }: MainLayo
         fullName: 'Người dùng',
         role: 'Author',
         email: '',
-        userId: ''
+        userId: '',
+        avatarUrl: ''
     });
 
     useEffect(() => {
         const token = localStorage.getItem('token');
         if (!token) { navigate('/login'); return; }
-        setUserInfo(getUserInfo(token));
+
+        const baseInfo = getUserInfo(token);
+        setUserInfo(baseInfo);
+
+        let disposed = false;
+        userService.getProfile()
+            .then(profile => {
+                if (disposed) return;
+                setUserInfo(prev => ({
+                    ...prev,
+                    fullName: profile.fullName || prev.fullName,
+                    role: profile.role || prev.role,
+                    email: profile.email || prev.email,
+                    avatarUrl: profile.avatarURL ?? prev.avatarUrl,
+                }));
+            })
+            .catch(() => {
+                // Profile fetch failure should not block layout.
+            });
+
+        const handleProfileUpdated = (event: Event) => {
+            const detail = (event as CustomEvent<{ fullName?: string; avatarUrl?: string }>).detail;
+            if (!detail) return;
+            setUserInfo(prev => ({
+                ...prev,
+                fullName: detail.fullName ?? prev.fullName,
+                avatarUrl: detail.avatarUrl ?? prev.avatarUrl,
+            }));
+        };
+
+        window.addEventListener('profile-updated', handleProfileUpdated as EventListener);
+        return () => {
+            disposed = true;
+            window.removeEventListener('profile-updated', handleProfileUpdated as EventListener);
+        };
     }, [navigate]);
 
     const handleLogout = () => {
         localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
         navigate('/login');
     };
 
@@ -47,17 +84,19 @@ export default function MainLayout({ children, pageTitle, onSettings }: MainLayo
                 />
             </div>
 
-            <Sidebar role={userInfo.role} onNavigate={navigate} />
+            <Sidebar role={userInfo.role} onNavigate={navigate} userId={userInfo.userId} />
 
             <div className="relative flex flex-col flex-1 min-w-0 z-10">
                 <Topbar
                     fullName={userInfo.fullName}
                     role={userInfo.role}
+                    userId={userInfo.userId}
+                    avatarUrl={userInfo.avatarUrl}
                     pageTitle={pageTitle}
                     onLogout={handleLogout}
                     onSettings={onSettings}
                 />
-                <main className="flex-1 overflow-y-auto scrollbar-thin select-text">
+                <main className="relative z-0 flex-1 overflow-y-auto scrollbar-thin select-text">
                     {typeof children === 'function' ? children(userInfo) : children}
                 </main>
             </div>

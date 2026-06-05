@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
     Settings, Bell, ChevronDown, LogOut, User, Sparkles, X,
-    Bug, Briefcase, AlertTriangle, Loader2, CheckCircle, Plus
+    Bug, Briefcase, AlertTriangle, Loader2, CheckCircle
 } from 'lucide-react';
 import { getInitials } from '../utils/jwtHelper';
 import {
@@ -19,6 +20,8 @@ import Modal from './ui/Modal';
 interface TopbarProps {
     fullName: string;
     role: string;
+    userId: string;
+    avatarUrl?: string;
     pageTitle?: string;
     onLogout: () => void;
     onSettings?: () => void;
@@ -84,11 +87,10 @@ function formatNotificationDateTime(iso: string) {
     });
 }
 
-const BUG_FEEDBACK_SEEN_KEY = 'storyrag:bug-feedback-seen-v1';
-
-function getSeenBugFeedbackMap(): Record<string, string> {
+function getSeenBugFeedbackMap(userId: string): Record<string, string> {
     try {
-        const raw = localStorage.getItem(BUG_FEEDBACK_SEEN_KEY);
+        const key = `storyrag:bug-feedback-seen-v1:${userId}`;
+        const raw = localStorage.getItem(key);
         if (!raw) return {};
         const parsed = JSON.parse(raw) as Record<string, string>;
         if (!parsed || typeof parsed !== 'object') return {};
@@ -98,8 +100,9 @@ function getSeenBugFeedbackMap(): Record<string, string> {
     }
 }
 
-function saveSeenBugFeedbackMap(data: Record<string, string>) {
-    localStorage.setItem(BUG_FEEDBACK_SEEN_KEY, JSON.stringify(data));
+function saveSeenBugFeedbackMap(userId: string, data: Record<string, string>) {
+    const key = `storyrag:bug-feedback-seen-v1:${userId}`;
+    localStorage.setItem(key, JSON.stringify(data));
 }
 
 function getBugStatusLabel(status: BugReportResponse['status']) {
@@ -115,7 +118,7 @@ function getBugStatusLabel(status: BugReportResponse['status']) {
 
 
 // ── Component ──────────────────────────────────────────────────────────────────
-export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings }: TopbarProps) {
+export default function Topbar({ fullName, role, userId, avatarUrl, pageTitle, onLogout, onSettings }: TopbarProps) {
     const navigate = useNavigate();
     const bellRef = useRef<HTMLButtonElement>(null);
     const [userOpen, setUserOpen] = useState(false);
@@ -124,15 +127,18 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
     const [detailNotification, setDetailNotification] = useState<AppNotificationItem | null>(null);
     const [notifications, setNotifications] = useState<AppNotificationItem[]>(() => appNotificationService.getAll());
     const [serverNotifications, setServerNotifications] = useState<AppNotificationItem[]>([]);
-    const [notifCreateOpen, setNotifCreateOpen] = useState(false);
-    const [notifTitle, setNotifTitle] = useState('');
-    const [notifMessage, setNotifMessage] = useState('');
-    const [notifType, setNotifType] = useState<NotificationType>('info');
-    const [notifCreateLoading, setNotifCreateLoading] = useState(false);
-    const [notifCreateError, setNotifCreateError] = useState<string | null>(null);
+
     const [showWelcome, setShowWelcome] = useState(false);
     const [bugModalOpen, setBugModalOpen] = useState(false);
     const badge = getRoleBadge(role);
+    const getFullUrl = (url?: string) => {
+        if (!url) return '';
+        if (url.startsWith('http') || url.startsWith('data:')) return url;
+        const base = import.meta.env.VITE_API_BASE_URL ?? 'https://localhost:7259/api';
+        const cleanBase = base.endsWith('/api') ? base.slice(0, -4) : base;
+        return `${cleanBase}${url.startsWith('/') ? '' : '/'}${url}`;
+    };
+    const avatarSrc = getFullUrl(avatarUrl);
     const mergedNotifications = [...serverNotifications, ...notifications]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const unreadCount = mergedNotifications.filter(n => !n.isRead).length;
@@ -153,11 +159,15 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
         const sync = () => setNotifications(appNotificationService.getAll());
         sync();
         return appNotificationService.subscribe(sync);
-    }, []);
+    }, [userId]);
 
     useEffect(() => {
         let disposed = false;
         const syncServerNotifications = async () => {
+            if (!userId) {
+                setServerNotifications([]);
+                return;
+            }
             try {
                 const items = await notificationService.getMy(60);
                 if (disposed) return;
@@ -176,15 +186,15 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
         };
 
         void syncServerNotifications();
-        const intervalId = window.setInterval(() => { void syncServerNotifications(); }, 30000);
+        const intervalId = window.setInterval(() => { void syncServerNotifications(); }, 10000);
         return () => {
             disposed = true;
             window.clearInterval(intervalId);
         };
-    }, []);
+    }, [userId]);
 
     useEffect(() => {
-        if (role !== 'Author') return;
+        if (role !== 'Author' || !userId) return;
 
         let disposed = false;
 
@@ -193,7 +203,7 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                 const reports = await bugReportService.getMy();
                 if (disposed) return;
 
-                const seenMap = getSeenBugFeedbackMap();
+                const seenMap = getSeenBugFeedbackMap(userId);
                 let hasSeenUpdates = false;
                 const existingTags = new Set(appNotificationService.getAll().map(n => n.tag).filter(Boolean));
 
@@ -225,7 +235,7 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                 }
 
                 if (hasSeenUpdates) {
-                    saveSeenBugFeedbackMap(seenMap);
+                    saveSeenBugFeedbackMap(userId, seenMap);
                 }
             } catch {
                 // Không làm gián đoạn Topbar khi không tải được phản hồi.
@@ -239,7 +249,7 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
             disposed = true;
             window.clearInterval(intervalId);
         };
-    }, [role]);
+    }, [role, userId]);
 
     const updateNotifPanelPosition = useCallback(() => {
         const bell = bellRef.current;
@@ -278,48 +288,7 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
         }
     };
 
-    const handleCreateNotification = async () => {
-        const title = notifTitle.trim();
-        const message = notifMessage.trim();
-        if (!title || !message) {
-            setNotifCreateError('Vui lòng nhập tiêu đề và nội dung thông báo.');
-            return;
-        }
 
-        setNotifCreateLoading(true);
-        setNotifCreateError(null);
-        try {
-            await notificationService.create({
-                title,
-                message,
-                type: notifType,
-                targetRoles: ['Author', 'Staff', 'Admin'],
-            });
-
-            const items = await notificationService.getMy(60);
-            setServerNotifications(items.map(item => ({
-                id: `server:${item.id}`,
-                type: item.type,
-                title: item.title,
-                message: item.message,
-                createdAt: item.createdAt,
-                isRead: item.isRead,
-                tag: item.tag,
-            })));
-
-            setNotifTitle('');
-            setNotifMessage('');
-            setNotifType('info');
-            setNotifCreateOpen(false);
-        } catch (error: any) {
-            const apiMessage = error?.response?.data?.Message;
-            setNotifCreateError(typeof apiMessage === 'string' && apiMessage.trim()
-                ? apiMessage
-                : 'Không thể tạo thông báo lúc này.');
-        } finally {
-            setNotifCreateLoading(false);
-        }
-    };
 
     return (
         <>
@@ -391,8 +360,6 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                                     appNotificationService.markAllRead();
                                     setServerNotifications(prev => prev.map(item => item.isRead ? item : { ...item, isRead: true }));
                                     void notificationService.markAllRead();
-                                } else {
-                                    setNotifCreateOpen(false);
                                 }
                             }}
                             className="relative w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150"
@@ -410,11 +377,11 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                             )}
                         </button>
 
-                        {notifOpen && (
+                        {notifOpen && createPortal(
                             <>
-                                <div className="fixed inset-0 z-[190]" onClick={() => setNotifOpen(false)} />
+                                <div className="fixed inset-0 z-[1200]" onClick={() => setNotifOpen(false)} />
                                 <div
-                                    className="fixed w-80 max-w-[calc(100vw-24px)] z-[200] overflow-hidden animate-slide-in-right"
+                                    className="fixed w-80 max-w-[calc(100vw-24px)] z-[1201] overflow-hidden animate-slide-in-right"
                                     style={{
                                         top: notifPanelPos.top,
                                         right: notifPanelPos.right,
@@ -432,16 +399,7 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                                             <span className="text-[var(--text-primary)] text-sm font-semibold">Thông báo</span>
                                         </div>
                                         <div className="flex items-center gap-1">
-                                            <button
-                                                onClick={() => {
-                                                    setNotifCreateOpen(v => !v);
-                                                    setNotifCreateError(null);
-                                                }}
-                                                className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[var(--text-primary)]/5 text-[var(--text-secondary)] transition-colors"
-                                                title="Tạo thông báo mới cho tất cả vai trò"
-                                            >
-                                                <Plus className="w-3.5 h-3.5" />
-                                            </button>
+
                                             <button onClick={() => setNotifOpen(false)}
                                                 className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[var(--text-primary)]/5 text-[var(--text-secondary)] transition-colors">
                                                 <X className="w-3.5 h-3.5" />
@@ -449,69 +407,7 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                                         </div>
                                     </div>
 
-                                    {notifCreateOpen && (
-                                        <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border-color)' }}>
-                                            <div className="space-y-2">
-                                                <input
-                                                    value={notifTitle}
-                                                    onChange={e => setNotifTitle(e.target.value)}
-                                                    placeholder="Tiêu đề thông báo"
-                                                    className="w-full rounded-lg px-2.5 py-2 text-xs"
-                                                    style={{
-                                                        background: 'var(--input-bg)',
-                                                        border: '1px solid var(--border-color)',
-                                                        color: 'var(--text-primary)',
-                                                    }}
-                                                />
-                                                <textarea
-                                                    value={notifMessage}
-                                                    onChange={e => setNotifMessage(e.target.value)}
-                                                    placeholder="Nội dung thông báo"
-                                                    rows={3}
-                                                    className="w-full rounded-lg px-2.5 py-2 text-xs resize-none"
-                                                    style={{
-                                                        background: 'var(--input-bg)',
-                                                        border: '1px solid var(--border-color)',
-                                                        color: 'var(--text-primary)',
-                                                    }}
-                                                />
-                                                <div className="flex items-center gap-2">
-                                                    <select
-                                                        value={notifType}
-                                                        onChange={e => setNotifType(e.target.value as NotificationType)}
-                                                        className="flex-1 rounded-lg px-2.5 py-2 text-xs"
-                                                        style={{
-                                                            background: 'var(--input-bg)',
-                                                            border: '1px solid var(--border-color)',
-                                                            color: 'var(--text-primary)',
-                                                        }}
-                                                    >
-                                                        <option value="info">Thông tin</option>
-                                                        <option value="success">Thành công</option>
-                                                        <option value="warning">Cảnh báo</option>
-                                                        <option value="error">Lỗi</option>
-                                                    </select>
-                                                    <button
-                                                        onClick={() => { void handleCreateNotification(); }}
-                                                        disabled={notifCreateLoading}
-                                                        className="px-3 py-2 rounded-lg text-xs font-medium"
-                                                        style={{
-                                                            background: 'var(--gradient-brand)',
-                                                            color: '#fff',
-                                                            opacity: notifCreateLoading ? 0.7 : 1,
-                                                        }}
-                                                    >
-                                                        {notifCreateLoading ? 'Đang gửi...' : 'Gửi'}
-                                                    </button>
-                                                </div>
-                                                {notifCreateError && (
-                                                    <p className="text-xs" style={{ color: 'var(--error)' }}>
-                                                        {notifCreateError}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
+
 
                                     {mergedNotifications.length === 0 ? (
                                         <div className="flex flex-col items-center justify-center py-10 px-4 gap-3 text-center">
@@ -555,7 +451,8 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                                         </div>
                                     )}
                                 </div>
-                            </>
+                            </>,
+                            document.body,
                         )}
                     </div>
 
@@ -583,12 +480,21 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-active)'; }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
                     >
-                        <div
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-lg"
-                            style={{ background: 'var(--gradient-brand)', boxShadow: '0 0 12px rgba(99,102,241,0.35)' }}
-                        >
-                            {getInitials(fullName)}
-                        </div>
+                        {avatarSrc ? (
+                            <img
+                                src={avatarSrc}
+                                alt="Avatar"
+                                className="w-7 h-7 rounded-full object-cover"
+                                style={{ boxShadow: '0 0 12px rgba(99,102,241,0.35)' }}
+                            />
+                        ) : (
+                            <div
+                                className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-lg"
+                                style={{ background: 'var(--gradient-brand)', boxShadow: '0 0 12px rgba(99,102,241,0.35)' }}
+                            >
+                                {getInitials(fullName)}
+                            </div>
+                        )}
                         <span className="text-sm font-medium max-w-[120px] truncate hidden sm:block" style={{ color: 'var(--text-primary)' }}>
                             {fullName}
                         </span>
@@ -610,12 +516,21 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                             >
                                 <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border-color)' }}>
                                     <div className="flex items-center gap-3">
-                                        <div
-                                            className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
-                                            style={{ background: 'var(--gradient-brand)', boxShadow: '0 0 16px rgba(99,102,241,0.3)' }}
-                                        >
-                                            {getInitials(fullName)}
-                                        </div>
+                                        {avatarSrc ? (
+                                            <img
+                                                src={avatarSrc}
+                                                alt="Avatar"
+                                                className="w-9 h-9 rounded-full object-cover shrink-0"
+                                                style={{ boxShadow: '0 0 16px rgba(99,102,241,0.3)' }}
+                                            />
+                                        ) : (
+                                            <div
+                                                className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
+                                                style={{ background: 'var(--gradient-brand)', boxShadow: '0 0 16px rgba(99,102,241,0.3)' }}
+                                            >
+                                                {getInitials(fullName)}
+                                            </div>
+                                        )}
                                         <div className="min-w-0">
                                             <p className="text-[var(--text-primary)] text-sm font-semibold truncate">{fullName}</p>
                                             <span className={`inline-block mt-0.5 text-[10px] px-2 py-0.5 rounded-full border font-medium ${badge.bg} ${badge.text} ${badge.border}`}>

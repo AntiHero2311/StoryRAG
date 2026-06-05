@@ -1,9 +1,12 @@
 import { api } from './api';
+import type { ContentAnalysisResult } from './reportService';
 
 export type StaffAnalysisJobItem = {
   id: string;
   project_id: string;
+  project_title: string;
   requested_by: string;
+  requested_by_name: string;
   status: string;
   error_message?: string | null;
   started_at?: string | null;
@@ -20,6 +23,7 @@ export type StaffPendingReportItem = {
   review_status: string;
   created_at: string;
   updated_at?: string | null;
+  warnings?: string[];
 };
 
 export type StaffPagedResponse<T> = {
@@ -43,6 +47,14 @@ export type StaffReportDetail = {
   staffEditedCriteriaJson: string | null;
   createdAt: string;
   updatedAt: string | null;
+  contentAnalysis?: ContentAnalysisResult;
+  authorId?: string;
+  authorName?: string;
+  authorStrikeCount?: number;
+  authorIsBanned?: boolean;
+  authorIsBanRequested?: boolean;
+  authorBanRequestReason?: string | null;
+  authorWarningMessage?: string | null;
 };
 
 export type StaffStoryChapterItem = {
@@ -77,15 +89,15 @@ export type StaffEditReportRequest = {
 };
 
 export const analysisJobService = {
-  getFailedOrStale: (status?: string) =>
+  getAnalysisJobs: (status?: string) =>
     api.get<StaffAnalysisJobItem[]>('/staff/analysis-jobs', { params: status ? { status } : {} }).then(r => r.data),
 
   rerun: (jobId: string) =>
     api.post<StaffAnalysisJobItem>(`/staff/analysis-jobs/${jobId}/rerun`).then(r => r.data),
 
-  getPendingReports: (page = 1, pageSize = 20) =>
+  getPendingReports: (page = 1, pageSize = 20, status?: string) =>
     api
-      .get<StaffPagedResponse<StaffPendingReportItem>>('/staff/analyses/pending', { params: { page, pageSize } })
+      .get<StaffPagedResponse<StaffPendingReportItem>>('/staff/analyses/pending', { params: { page, pageSize, status } })
       .then(r => r.data),
 
   getReportDetail: (reportId: string) =>

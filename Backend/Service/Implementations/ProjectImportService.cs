@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenAI.Chat;
 using Repository.Data;
@@ -22,6 +23,7 @@ namespace Service.Implementations
         private readonly IEmbeddingService _embeddingService;
         private readonly INotificationService _notificationService;
         private readonly GeminiChatFailoverExecutor _gemini;
+        private readonly IServiceScopeFactory _scopeFactory;
 
         // Giới hạn số chương AI đọc để tránh tốn quá nhiều token
         private const int MaxChaptersForAiScan = 20;
@@ -34,7 +36,8 @@ namespace Service.Implementations
             ILogger<ProjectImportService> logger,
             IChunkingService chunkingService,
             IEmbeddingService embeddingService,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            IServiceScopeFactory scopeFactory)
         {
             _context = context;
             _config = config;
@@ -42,6 +45,7 @@ namespace Service.Implementations
             _chunkingService = chunkingService;
             _embeddingService = embeddingService;
             _notificationService = notificationService;
+            _scopeFactory = scopeFactory;
             // Dùng ImportModels (gemini flash, RPM cao) thay vì ChatModels (gemma, 15 RPM)
             _gemini = new GeminiChatFailoverExecutor(
                 config,
@@ -148,69 +152,12 @@ namespace Service.Implementations
             }
             await _context.SaveChangesAsync();
 
-            // ── Bước 5: Trích xuất metadata nhanh bằng heuristic (không gọi AI) ─
+            // ── Bước 5: Trích xuất nhanh bằng heuristic (Bỏ qua theo yêu cầu: không trích xuất nội dung khác ngoài chương truyện) ─
+            int genresLinked = 0;
             int timelineEventsExtracted = 0;
             string? extractedSummary = null;
 
-            // Summary heuristic: ưu tiên tóm tắt/lời mở đầu của tác giả trước Chương 1
-            var heuristicSummary = ExtractHeuristicSummary(plainText, chapterParts);
-            if (!string.IsNullOrWhiteSpace(heuristicSummary))
-            {
-                extractedSummary = heuristicSummary;
-                project.Summary = EncryptionHelper.EncryptWithMasterKey(heuristicSummary, rawDek);
-            }
 
-            // Genre heuristic: parse "Thể loại: X, Y" rồi match với DB
-            int genresLinked = 0;
-            var genreNames = ExtractGenreNames(plainText);
-            if (genreNames.Count > 0)
-            {
-                var allGenres = await _context.Genres.ToListAsync();
-                foreach (var rawName in genreNames)
-                {
-                    var normalized = NormalizeForMatch(rawName);
-                    var match = allGenres.FirstOrDefault(g =>
-                        NormalizeForMatch(g.Name).Contains(normalized) ||
-                        normalized.Contains(NormalizeForMatch(g.Name)) ||
-                        NormalizeForMatch(g.Slug).Contains(normalized) ||
-                        normalized.Contains(NormalizeForMatch(g.Slug)));
-
-                    if (match == null) continue;
-
-                    // Không thêm trùng
-                    var alreadyAdded = _context.ProjectGenres.Local
-                        .Any(pg => pg.ProjectId == project.Id && pg.GenreId == match.Id);
-                    if (alreadyAdded) continue;
-
-                    _context.ProjectGenres.Add(new ProjectGenre
-                    {
-                        ProjectId = project.Id,
-                        GenreId = match.Id,
-                    });
-                    genresLinked++;
-                }
-                if (genresLinked > 0)
-                    await _context.SaveChangesAsync();
-            }
-
-            // Timeline heuristic: tên chương làm sự kiện
-            int sortOrder = 0;
-            foreach (var part in chapterParts)
-            {
-                var chapterTitle = part.Title ?? $"Chương {sortOrder + 1}";
-                _context.TimelineEvents.Add(new TimelineEvent
-                {
-                    ProjectId = project.Id,
-                    Title = EncryptionHelper.EncryptWithMasterKey(chapterTitle, rawDek),
-                    Description = EncryptionHelper.EncryptWithMasterKey(string.Empty, rawDek),
-                    SortOrder = sortOrder++,
-                    Category = "Story",
-                    Importance = "Normal",
-                    CreatedAt = DateTime.UtcNow,
-                });
-                timelineEventsExtracted++;
-            }
-            await _context.SaveChangesAsync();
 
             // ── Bước 6: Chunk tất cả chương ─────────────────────────────────────
             _logger.LogInformation("Import {ProjectId}: bắt đầu chunk {Count} chương.", project.Id, versionsToInsert.Count);
@@ -239,28 +186,50 @@ namespace Service.Implementations
                 _context.ChapterChunks.AddRange(chunksToInsert);
             await _context.SaveChangesAsync();
 
-            // ── Bước 7: Embed tất cả chương ─────────────────────────────────────
-            _logger.LogInformation("Import {ProjectId}: bắt đầu embed {Count} chương.", project.Id, chaptersToInsert.Count);
-            int embeddedChapters = 0;
-            foreach (var chapter in chaptersToInsert)
+            // ── Bước 7: Nhúng tất cả chương trong nền song song (không chặn response HTTP) ──
+            _logger.LogInformation("Import {ProjectId}: Khởi chạy tiến trình nhúng dữ liệu song song trong nền ({Count} chương).", project.Id, chaptersToInsert.Count);
+            _ = Task.Run(async () =>
             {
                 try
                 {
-                    await _embeddingService.EmbedChapterAsync(chapter.Id, userId);
-                    embeddedChapters++;
+                    // Chạy song song tối đa 5 chương cùng lúc để tránh làm nghẽn DbConnection pool hoặc rate limit
+                    using var semaphore = new SemaphoreSlim(5);
+                    var embeddingTasks = chaptersToInsert.Select(async chapter =>
+                    {
+                        await semaphore.WaitAsync();
+                        try
+                        {
+                            using var scope = _scopeFactory.CreateScope();
+                            var scopedEmbeddingService = scope.ServiceProvider.GetRequiredService<IEmbeddingService>();
+                            await scopedEmbeddingService.EmbedChapterAsync(chapter.Id, userId);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Import {ProjectId} trong nền: embed chương {ChapterId} thất bại, worker sẽ tự động retry sau.", project.Id, chapter.Id);
+                        }
+                        finally
+                        {
+                            semaphore.Release();
+                        }
+                    });
+
+                    await Task.WhenAll(embeddingTasks);
+                    _logger.LogInformation("Import {ProjectId}: Đã hoàn thành nhúng dữ liệu trong nền thành công.", project.Id);
                 }
                 catch (Exception ex)
                 {
-                    // Embed thất bại không fatal: AutoEmbeddingWorker sẽ retry sau
-                    _logger.LogWarning(ex, "Import {ProjectId}: embed chương {ChapterId} thất bại, worker sẽ retry.", project.Id, chapter.Id);
+                    _logger.LogError(ex, "Import {ProjectId}: Lỗi nghiêm trọng khi nhúng dữ liệu trong nền.", project.Id);
                 }
-            }
-            _logger.LogInformation("Import {ProjectId}: đã embed {Done}/{Total} chương.", project.Id, embeddedChapters, chaptersToInsert.Count);
+            });
 
-            // ── Bước 8: Không chạy AI khi import ────────────────────────────────
-            // Chỉ giữ logic import/chia chương/chunk/embed + heuristic metadata cơ bản.
+            // ── Bước 8: Chạy AI trích xuất thông tin bằng AI (Bỏ qua theo yêu cầu: không chạy AI khi import) ──
             int charactersExtracted = 0;
             int settingsExtracted = 0;
+            bool aiExtractionFailed = false;
+            string? aiExtractionError = null;
+
+            _logger.LogInformation("Import {ProjectId}: Bỏ qua chạy AI trích xuất thông tin theo yêu cầu (chỉ lấy nội dung truyện, chunk và nhúng).", project.Id);
+
 
             var result = new ProjectImportResult
             {
@@ -272,8 +241,8 @@ namespace Service.Implementations
                 TimelineEventsExtracted = timelineEventsExtracted,
                 GenresLinked = genresLinked,
                 Summary = extractedSummary,
-                AiExtractionFailed = false,
-                AiExtractionError = null,
+                AiExtractionFailed = aiExtractionFailed,
+                AiExtractionError = aiExtractionError,
             };
 
             // ── Bước 9: Gửi notification ─────────────────────────────────────────
@@ -389,7 +358,9 @@ namespace Service.Implementations
             bool isReExtract)
         {
             string? extractedSummary = null;
-            int charactersExtracted = 0, settingsExtracted = 0, timelineEventsExtracted = 0;
+            int charactersExtracted = 0;
+            int settingsExtracted = 0;
+            int timelineEventsExtracted = 0;
 
             if (!string.IsNullOrWhiteSpace(aiExtracted.Summary))
             {
@@ -402,124 +373,63 @@ namespace Service.Implementations
                 }
             }
 
-            // isReExtract: chỉ thêm nhân vật nếu chưa có nhân vật nào
-            bool hasExistingCharacters = isReExtract && await _context.CharacterEntries.AnyAsync(c => c.ProjectId == project.Id);
-            if (!hasExistingCharacters)
-            {
-                foreach (var character in aiExtracted.Characters ?? new())
-                {
-                    if (string.IsNullOrWhiteSpace(character.Name)) continue;
-                    _context.CharacterEntries.Add(new CharacterEntry
-                    {
-                        Id = Guid.NewGuid(),
-                        ProjectId = project.Id,
-                        Name = EncryptionHelper.EncryptWithMasterKey(character.Name, rawDek),
-                        Role = "Supporting",
-                        Description = EncryptionHelper.EncryptWithMasterKey(character.Description ?? string.Empty, rawDek),
-                        CreatedAt = DateTime.UtcNow,
-                    });
-                    charactersExtracted++;
-                }
-            }
-
-            // isReExtract: chỉ thêm bối cảnh nếu chưa có
-            bool hasExistingSettings = isReExtract && await _context.WorldbuildingEntries.AnyAsync(w => w.ProjectId == project.Id);
-            if (!hasExistingSettings)
-            {
-                foreach (var setting in aiExtracted.Settings ?? new())
-                {
-                    if (string.IsNullOrWhiteSpace(setting.Name)) continue;
-                    _context.WorldbuildingEntries.Add(new WorldbuildingEntry
-                    {
-                        Id = Guid.NewGuid(),
-                        ProjectId = project.Id,
-                        Title = EncryptionHelper.EncryptWithMasterKey(setting.Name, rawDek),
-                        Content = EncryptionHelper.EncryptWithMasterKey(setting.Description ?? string.Empty, rawDek),
-                        Category = "World",
-                        CreatedAt = DateTime.UtcNow,
-                    });
-                    settingsExtracted++;
-                }
-            }
-
-            // isReExtract: chỉ thêm timeline nếu chưa có
-            bool hasExistingTimeline = isReExtract && await _context.TimelineEvents.AnyAsync(t => t.ProjectId == project.Id);
-            if (!hasExistingTimeline)
-            {
-                int sortOrder = isReExtract
-                    ? (await _context.TimelineEvents.Where(t => t.ProjectId == project.Id).MaxAsync(t => (int?)t.SortOrder) ?? -1) + 1
-                    : 0;
-
-                foreach (var evt in aiExtracted.Timeline ?? new())
-                {
-                    if (string.IsNullOrWhiteSpace(evt.Title)) continue;
-                    _context.TimelineEvents.Add(new TimelineEvent
-                    {
-                        ProjectId = project.Id,
-                        Title = EncryptionHelper.EncryptWithMasterKey(evt.Title, rawDek),
-                        Description = EncryptionHelper.EncryptWithMasterKey(evt.Description ?? string.Empty, rawDek),
-                        SortOrder = sortOrder++,
-                        Category = "Story",
-                        Importance = "Normal",
-                        CreatedAt = DateTime.UtcNow,
-                    });
-                    timelineEventsExtracted++;
-                }
-            }
-
             await _context.SaveChangesAsync();
             return (extractedSummary, charactersExtracted, settingsExtracted, timelineEventsExtracted);
         }
 
         private async Task<AiExtractionResponse?> ExtractProjectInfoWithAiAsync(string combinedContent, string projectTitle)
         {
-            var jsonSchema = """
-                {
-                  "summary": "Tóm tắt cốt truyện tổng thể trong 3-5 câu",
-                  "characters": [{"name": "Tên nhân vật", "description": "Mô tả nhân vật"}],
-                  "settings": [{"name": "Tên bối cảnh/địa điểm", "description": "Mô tả bối cảnh"}],
-                  "timeline": [{"title": "Tên sự kiện", "description": "Mô tả sự kiện"}]
-                }
-                """;
+            var sysPrompt = "OUTPUT RULE (ABSOLUTE): Respond with ONE valid JSON object only. Start with '{', end with '}'. NO markdown, NO comments, NO text outside JSON.\n" +
+                            "Bạn là trợ lý phân tích bản thảo văn học.\n" +
+                            "Nhiệm vụ: đọc nội dung tác phẩm và trích xuất tóm tắt cốt truyện tổng thể.\n" +
+                            "JSON SCHEMA:\n" +
+                            "{\n  \"summary\": \"Tóm tắt cốt truyện tổng thể trong 3-5 câu\"\n}";
 
-            var prompt = "Bạn là trợ lý phân tích bản thảo văn học. Dưới đây là nội dung (hoặc một phần) của tác phẩm \"" + projectTitle + "\".\n\n" +
-                "Hãy đọc và trả về dữ liệu dưới dạng JSON theo đúng cấu trúc sau (KHÔNG có markdown, KHÔNG có giải thích thêm):\n\n" +
-                jsonSchema + "\n\n" +
-                "Giới hạn:\n" +
-                "- Tối đa 10 nhân vật quan trọng nhất\n" +
-                "- Tối đa 5 bối cảnh/địa điểm chính\n" +
-                "- Tối đa 8 sự kiện chính theo thứ tự thời gian trong truyện\n\n" +
-                "NỘI DUNG BẢN THẢO:\n" + combinedContent;
+            var userMsg = $"Tác phẩm: \"{projectTitle}\".\n\nNỘI DUNG BẢN THẢO:\n{combinedContent}";
 
             var messages = new List<ChatMessage>
             {
-                new UserChatMessage(prompt)
+                ChatMessage.CreateSystemMessage(sysPrompt),
+                ChatMessage.CreateUserMessage(userMsg)
             };
 
-            var completion = await _gemini.CompleteAsync(messages);
-            var rawJson = completion.Content[0].Text?.Trim() ?? string.Empty;
-
-            // Strip markdown code fences nếu AI vẫn bọc JSON trong ```json ... ```
-            if (rawJson.StartsWith("```"))
+            var options = new ChatCompletionOptions
             {
-                var firstNewline = rawJson.IndexOf('\n');
-                var lastFence = rawJson.LastIndexOf("```");
-                if (firstNewline > 0 && lastFence > firstNewline)
-                    rawJson = rawJson[(firstNewline + 1)..lastFence].Trim();
-            }
+                MaxOutputTokenCount = 2000,
+                Temperature = 0.2f,
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+            };
 
             try
             {
-                return JsonSerializer.Deserialize<AiExtractionResponse>(rawJson, new JsonSerializerOptions
+                var completion = await _gemini.CompleteAsync(messages, options);
+                var rawJson = completion.Content[0].Text?.Trim() ?? string.Empty;
+                var jsonText = ExtractJsonPayload(rawJson);
+
+                return JsonSerializer.Deserialize<AiExtractionResponse>(jsonText, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true,
                 });
             }
-            catch (JsonException ex)
+            catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to parse AI extraction JSON. Raw: {Raw}", rawJson[..Math.Min(500, rawJson.Length)]);
+                _logger.LogWarning(ex, "Failed to parse AI extraction JSON during import.");
                 return null;
             }
+        }
+
+        private static string ExtractJsonPayload(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return text;
+
+            var objStart = text.IndexOf('{');
+            var objEnd = text.LastIndexOf('}');
+            if (objStart >= 0 && objEnd > objStart)
+            {
+                return text[objStart..(objEnd + 1)];
+            }
+            return text;
         }
 
         // Từ khóa nhận diện trường tóm tắt/nội dung của tác giả (dùng cả dạng "Key:" và dạng heading)

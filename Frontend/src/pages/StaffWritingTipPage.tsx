@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Sparkles,
   Tag,
+  Pencil,
 } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { getUserInfo } from '../utils/jwtHelper';
@@ -345,7 +346,7 @@ export default function StaffWritingTipPage({ embedded = false }: { embedded?: b
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-[var(--border-color)]">
-                      {['Title', 'Tags', 'Publish', 'Updated', ''].map(h => (
+                      {['Title', 'Tags', 'Trạng thái', 'Updated', ''].map(h => (
                         <th key={h} className="text-left px-4 py-3 text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider">
                           {h}
                         </th>
@@ -391,13 +392,22 @@ export default function StaffWritingTipPage({ embedded = false }: { embedded?: b
                             {fmtDate(tip.updatedAt)}
                           </td>
                           <td className="px-4 py-3">
-                            <button
-                              onClick={() => void handleDelete(tip)}
-                              className="w-8 h-8 flex items-center justify-center rounded-xl text-[var(--text-secondary)] hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                              title="Xoá"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => openEdit(tip)}
+                                className="w-8 h-8 flex items-center justify-center rounded-xl text-[var(--text-secondary)] hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+                                title="Sửa"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => void handleDelete(tip)}
+                                className="w-8 h-8 flex items-center justify-center rounded-xl text-[var(--text-secondary)] hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                                title="Xoá"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -443,7 +453,7 @@ export default function StaffWritingTipPage({ embedded = false }: { embedded?: b
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Publish</span>
+                    <span className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Trạng thái</span>
                     <PublishToggle value={form.published} onChange={v => setForm(f => ({ ...f, published: v }))} />
                   </div>
                   <div className="flex gap-2">

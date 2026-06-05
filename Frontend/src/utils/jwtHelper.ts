@@ -24,6 +24,7 @@ export interface UserInfo {
     role: string;
     email: string;
     userId: string;
+    avatarUrl?: string;
 }
 
 export function getUserInfo(token: string | null): UserInfo {
@@ -31,7 +32,8 @@ export function getUserInfo(token: string | null): UserInfo {
         fullName: 'Người dùng',
         role: 'Author',
         email: '',
-        userId: ''
+        userId: '',
+        avatarUrl: ''
     };
 
     if (!token) return defaultInfo;
@@ -57,7 +59,8 @@ export function getUserInfo(token: string | null): UserInfo {
         userId:
             payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ||
             payload['sub'] ||
-            ''
+            '',
+        avatarUrl: ''
     };
 }
 

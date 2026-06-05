@@ -1,6 +1,6 @@
 Project StoryRAG {
   database_type: "PostgreSQL"
-  Note: "Generated from Backend/supabase_full_reset.sql"
+  Note: "Generated from Backend/supabase_full_reset.sql — Story Bible manual tables removed (v1.5)"
 }
 
 Table __EFMigrationsHistory {
@@ -157,74 +157,13 @@ Table ProjectAnalysisJobs {
   UpdatedAt timestamptz
 }
 
-Table WorldbuildingEntries {
-  Id uuid [pk]
-  ProjectId uuid
-  Title text
-  Content text
-  Category varchar(50)
-  Embedding vector(768)
-  CreatedAt timestamptz
-  UpdatedAt timestamptz
-}
-
-Table CharacterEntries {
-  Id uuid [pk]
-  ProjectId uuid
-  Name text
-  Role varchar(50)
-  Description text
-  Background text
-  Notes text
-  Embedding vector(768)
-  CreatedAt timestamptz
-  UpdatedAt timestamptz
-}
-
-Table StyleGuideEntries {
-  Id uuid [pk]
-  ProjectId uuid
-  Aspect varchar(50)
-  Content text
-  Embedding vector(768)
-  CreatedAt timestamptz
-  UpdatedAt timestamptz
-}
-
-Table ThemeEntries {
-  Id uuid [pk]
-  ProjectId uuid
-  Title text
-  Description text
-  Notes text
-  Embedding vector(768)
-  CreatedAt timestamptz
-  UpdatedAt timestamptz
-}
-
-Table PlotNoteEntries {
-  Id uuid [pk]
-  ProjectId uuid
-  Type varchar(50)
-  Title text
-  Content text
-  Embedding vector(768)
-  CreatedAt timestamptz
-  UpdatedAt timestamptz
-}
-
-Table TimelineEvents {
-  Id uuid [pk]
-  ProjectId uuid
-  Category varchar(50)
-  Title text
-  Description text
-  TimeLabel varchar(100)
-  SortOrder int
-  Importance varchar(20)
-  CreatedAt timestamptz
-  UpdatedAt timestamptz
-}
+// [REMOVED] Story Bible manual-entry tables have been deleted:
+// WorldbuildingEntries, CharacterEntries, StyleGuideEntries,
+// ThemeEntries, PlotNoteEntries, TimelineEvents
+//
+// Story Bible data is now auto-extracted by AI during analysis
+// and stored as snapshots in ProjectReports / ProjectAnalysisFacts.
+// Migration: 20260529000000_RemoveManualStoryBibleTables
 
 Table ChatMessages {
   Id uuid [pk]
@@ -234,18 +173,6 @@ Table ChatMessages {
   Answer text
   InputTokens int
   OutputTokens int
-  TotalTokens int
-  CreatedAt timestamptz
-}
-
-Table RewriteHistories {
-  Id uuid [pk]
-  ProjectId uuid
-  ChapterId uuid
-  UserId uuid
-  OriginalText text
-  RewrittenText text
-  Instruction text
   TotalTokens int
   CreatedAt timestamptz
 }
@@ -343,6 +270,145 @@ Table Payments {
   UpdatedAt timestamptz
 }
 
+Table Notifications {
+  Id uuid [pk]
+  UserId uuid
+  CreatedByUserId uuid
+  Type varchar(20)
+  Title varchar(200)
+  Message varchar(3000)
+  Tag varchar(120)
+  IsRead bool
+  CreatedAt timestamptz
+  ReadAt timestamptz
+}
+
+Table ProjectAbuseFlags {
+  Id uuid [pk]
+  ProjectId uuid
+  UserId uuid
+  FlagReason varchar(500)
+  Severity varchar(20)
+  FlaggedAt timestamptz
+}
+
+Table ReportItems {
+  Id uuid [pk]
+  ProjectReportId uuid
+  CriterionKey varchar(20)
+  EvidenceChunkIds jsonb
+
+  indexes {
+    (ProjectReportId, CriterionKey) [unique]
+  }
+}
+
+Table ProjectReportSnapshots {
+  Id uuid [pk]
+  ProjectReportId uuid
+  ChapterNumber int
+  Title varchar(255)
+  Content text
+  WordCount int
+}
+
+Table ProjectAnalysisFacts {
+  Id uuid [pk]
+  ProjectId uuid
+  RunId uuid
+  Payload jsonb
+  CreatedAt timestamptz
+}
+
+Table analysis_job_rerun_audits {
+  Id uuid [pk]
+  OldJobId uuid
+  NewJobId uuid
+  StaffId uuid
+  CreatedAt timestamptz
+
+  indexes {
+    OldJobId
+    NewJobId [unique]
+    StaffId
+    CreatedAt
+  }
+}
+
+Table system_config {
+  Key varchar(200) [pk]
+  Value jsonb
+  UpdatedBy uuid
+  UpdatedAt timestamptz
+}
+
+Table system_logs {
+  Id uuid [pk]
+  Level varchar(20)
+  Category varchar(50)
+  Action varchar(100)
+  Message varchar(1000)
+  ActorId uuid
+  MetadataJson jsonb
+  CreatedAt timestamptz
+}
+
+Table ReportCharacterEntries {
+  Id uuid [pk]
+  ProjectReportId uuid
+  Name text
+  Role varchar(50)
+  Description text
+  Background text
+  TraitsJson text
+  RelationshipsJson text
+  FirstAppearance int
+  CreatedAt timestamptz
+}
+
+Table ReportThemeEntries {
+  Id uuid [pk]
+  ProjectReportId uuid
+  Title text
+  Description text
+  Evidence text
+  CreatedAt timestamptz
+}
+
+Table ReportTimelineEvents {
+  Id uuid [pk]
+  ProjectReportId uuid
+  Category varchar(50)
+  Title text
+  Description text
+  TimeLabel varchar(100)
+  SortOrder int
+  Importance varchar(20)
+  CreatedAt timestamptz
+}
+
+Table ReportWorldbuildingEntries {
+  Id uuid [pk]
+  ProjectReportId uuid
+  Title text
+  Content text
+  Category varchar(50)
+  Importance text
+  SourceChaptersJson text
+  CreatedAt timestamptz
+}
+
+Table StaffGenres {
+  StaffId uuid
+  GenreId int
+  AssignedAt timestamptz
+  AssignedBy uuid
+
+  indexes {
+    (StaffId, GenreId) [pk]
+  }
+}
+
 Ref: Projects.AuthorId > Users.Id
 Ref: UserSubscriptions.UserId > Users.Id
 Ref: UserSubscriptions.PlanId > SubscriptionPlans.Id
@@ -360,17 +426,9 @@ Ref: ProjectReports.UserId > Users.Id
 Ref: ProjectAnalysisJobs.ProjectId > Projects.Id
 Ref: ProjectAnalysisJobs.UserId > Users.Id
 Ref: ProjectAnalysisJobs.ReportId > ProjectReports.Id
-Ref: WorldbuildingEntries.ProjectId > Projects.Id
-Ref: CharacterEntries.ProjectId > Projects.Id
-Ref: StyleGuideEntries.ProjectId > Projects.Id
-Ref: ThemeEntries.ProjectId > Projects.Id
-Ref: PlotNoteEntries.ProjectId > Projects.Id
-Ref: TimelineEvents.ProjectId > Projects.Id
+// Refs for removed Story Bible tables have been deleted.
 Ref: ChatMessages.ProjectId > Projects.Id
 Ref: ChatMessages.UserId > Users.Id
-Ref: RewriteHistories.ProjectId > Projects.Id
-Ref: RewriteHistories.ChapterId > Chapters.Id
-Ref: RewriteHistories.UserId > Users.Id
 Ref: AiAnalysisHistories.ProjectId > Projects.Id
 Ref: AiAnalysisHistories.ChapterId > Chapters.Id
 Ref: AiAnalysisHistories.UserId > Users.Id
@@ -389,3 +447,22 @@ Ref: StaffAnalysisReviews.RerunReportId > ProjectReports.Id
 Ref: Payments.UserId > Users.Id
 Ref: Payments.PlanId > SubscriptionPlans.Id
 Ref: Payments.SubscriptionId > UserSubscriptions.Id
+
+// Relationships for newly synchronized/added tables
+Ref: Notifications.UserId > Users.Id
+Ref: Notifications.CreatedByUserId > Users.Id
+Ref: ProjectAbuseFlags.ProjectId > Projects.Id
+Ref: ProjectAbuseFlags.UserId > Users.Id
+Ref: ReportItems.ProjectReportId > ProjectReports.Id
+Ref: ProjectReportSnapshots.ProjectReportId > ProjectReports.Id
+Ref: ProjectAnalysisFacts.ProjectId > Projects.Id
+Ref: ProjectAnalysisFacts.RunId > ProjectAnalysisJobs.Id
+Ref: system_config.UpdatedBy > Users.Id
+Ref: system_logs.ActorId > Users.Id
+Ref: ReportCharacterEntries.ProjectReportId > ProjectReports.Id
+Ref: ReportThemeEntries.ProjectReportId > ProjectReports.Id
+Ref: ReportTimelineEvents.ProjectReportId > ProjectReports.Id
+Ref: ReportWorldbuildingEntries.ProjectReportId > ProjectReports.Id
+Ref: StaffGenres.StaffId > Users.Id
+Ref: StaffGenres.GenreId > Genres.Id
+Ref: StaffGenres.AssignedBy > Users.Id

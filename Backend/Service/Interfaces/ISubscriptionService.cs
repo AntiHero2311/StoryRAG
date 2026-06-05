@@ -16,8 +16,8 @@ namespace Service.Interfaces
         /// <summary>Cập nhật plan — Admin only</summary>
         Task<SubscriptionPlanResponse> UpdatePlanAsync(int id, UpdatePlanRequest request);
 
-        /// <summary>Deactivate plan — Admin only</summary>
-        Task DeletePlanAsync(int id);
+        /// <summary>Deactivate hoặc xoá plan — Admin only. Trả về true nếu xoá hoàn toàn, false nếu chỉ deactivate.</summary>
+        Task<bool> DeletePlanAsync(int id);
 
         /// <summary>Lấy subscription hiện tại của user</summary>
         Task<UserSubscriptionResponse?> GetMySubscriptionAsync(Guid userId);

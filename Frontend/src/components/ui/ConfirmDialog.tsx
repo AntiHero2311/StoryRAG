@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, Info, Trash2, X } from 'lucide-react';
 
 export interface ConfirmDialogProps {
@@ -65,7 +66,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   const cfg = configs[variant];
   const { Icon } = cfg;
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ backdropFilter: 'blur(12px)', background: 'rgba(0,0,0,0.6)' }}
@@ -166,7 +167,8 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

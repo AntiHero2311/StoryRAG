@@ -187,6 +187,10 @@ namespace Repository.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("Priority")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -414,110 +418,6 @@ namespace Repository.Migrations
                         .IsUnique();
 
                     b.ToTable("ChapterVersions");
-                });
-
-            modelBuilder.Entity("Repository.Entities.CharacterEntry", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<string>("Background")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("");
-
-                    b.Property<Vector>("Embedding")
-                        .HasColumnType("vector(768)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("Supporting");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
-
-                    b.ToTable("CharacterEntries");
-                });
-
-            modelBuilder.Entity("Repository.Entities.CharacterRelationship", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<Guid>("CharAId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CharBId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<string>("EvidenceChunkIds")
-                        .HasColumnType("jsonb");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("RelationType")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("Other");
-
-                    b.Property<float>("StrengthScore")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("real")
-                        .HasDefaultValue(0f);
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CharAId");
-
-                    b.HasIndex("CharBId");
-
-                    b.HasIndex("ProjectId");
-
-                    b.HasIndex("ProjectId", "CharAId", "CharBId")
-                        .IsUnique();
-
-                    b.ToTable("character_relationships", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_CharacterRelationships_CharOrder", "\"CharAId\" < \"CharBId\"");
-                        });
                 });
 
             modelBuilder.Entity("Repository.Entities.Faq", b =>
@@ -863,51 +763,6 @@ namespace Repository.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Repository.Entities.PlotNoteEntry", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<Vector>("Embedding")
-                        .HasColumnType("vector(768)");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("Other");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
-
-                    b.ToTable("PlotNoteEntries");
-                });
-
             modelBuilder.Entity("Repository.Entities.Project", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1152,6 +1007,9 @@ namespace Repository.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
 
+                    b.Property<string>("ContentAnalysisJson")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -1162,6 +1020,9 @@ namespace Repository.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("jsonb")
                         .HasDefaultValue("[]");
+
+                    b.Property<string>("EmotionPacingJson")
+                        .HasColumnType("text");
 
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
@@ -1207,6 +1068,91 @@ namespace Repository.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Repository.Entities.ProjectReportSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<int>("ChapterNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProjectReportId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<int>("WordCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectReportId");
+
+                    b.ToTable("ProjectReportSnapshots");
+                });
+
+            modelBuilder.Entity("Repository.Entities.ReportCharacterEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<string>("Background")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("");
+
+                    b.Property<int?>("FirstAppearance")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProjectReportId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RelationshipsJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Supporting");
+
+                    b.Property<string>("TraitsJson")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectReportId");
+
+                    b.ToTable("ReportCharacterEntries");
+                });
+
             modelBuilder.Entity("Repository.Entities.ReportItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1231,6 +1177,140 @@ namespace Repository.Migrations
                         .IsUnique();
 
                     b.ToTable("ReportItems");
+                });
+
+            modelBuilder.Entity("Repository.Entities.ReportThemeEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("Evidence")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProjectReportId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectReportId");
+
+                    b.ToTable("ReportThemeEntries");
+                });
+
+            modelBuilder.Entity("Repository.Entities.ReportTimelineEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Story");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("Importance")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Normal");
+
+                    b.Property<Guid>("ProjectReportId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("TimeLabel")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectReportId");
+
+                    b.ToTable("ReportTimelineEvents");
+                });
+
+            modelBuilder.Entity("Repository.Entities.ReportWorldbuildingEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Other");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Importance")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProjectReportId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SourceChaptersJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectReportId");
+
+                    b.ToTable("ReportWorldbuildingEntries");
                 });
 
             modelBuilder.Entity("Repository.Entities.StaffAnalysisReview", b =>
@@ -1373,45 +1453,31 @@ namespace Repository.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Repository.Entities.StyleGuideEntry", b =>
+            modelBuilder.Entity("Repository.Entities.StaffGenre", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
+                    b.Property<Guid>("StaffId")
+                        .HasColumnType("uuid");
 
-                    b.Property<string>("Aspect")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("Other");
+                    b.Property<int>("GenreId")
+                        .HasColumnType("integer");
 
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("");
-
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<DateTime>("AssignedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("NOW()");
 
-                    b.Property<Vector>("Embedding")
-                        .HasColumnType("vector(768)");
-
-                    b.Property<Guid>("ProjectId")
+                    b.Property<Guid?>("AssignedBy")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                    b.HasKey("StaffId", "GenreId");
 
-                    b.HasKey("Id");
+                    b.HasIndex("AssignedBy");
 
-                    b.HasIndex("ProjectId");
+                    b.HasIndex("GenreId");
 
-                    b.ToTable("StyleGuideEntries");
+                    b.HasIndex("StaffId");
+
+                    b.ToTable("StaffGenres");
                 });
 
             modelBuilder.Entity("Repository.Entities.SubscriptionPlan", b =>
@@ -1573,105 +1639,6 @@ namespace Repository.Migrations
                     b.ToTable("system_logs", (string)null);
                 });
 
-            modelBuilder.Entity("Repository.Entities.ThemeEntry", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("");
-
-                    b.Property<Vector>("Embedding")
-                        .HasColumnType("vector(768)");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
-
-                    b.ToTable("ThemeEntries");
-                });
-
-            modelBuilder.Entity("Repository.Entities.TimelineEvent", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("Story");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("");
-
-                    b.Property<string>("Importance")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("Normal");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("SortOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.Property<string>("TimeLabel")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId", "SortOrder");
-
-                    b.ToTable("TimelineEvents");
-                });
-
             modelBuilder.Entity("Repository.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1695,6 +1662,12 @@ namespace Repository.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<string>("EmailVerificationOtp")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("EmailVerificationOtpExpiry")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("FullName")
                         .IsRequired()
@@ -1826,51 +1799,6 @@ namespace Repository.Migrations
                         {
                             t.HasCheckConstraint("CK_UserSub_Status", "\"Status\" IN ('Active','Expired','Cancelled')");
                         });
-                });
-
-            modelBuilder.Entity("Repository.Entities.WorldbuildingEntry", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("Other");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<Vector>("Embedding")
-                        .HasColumnType("vector(768)");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
-
-                    b.ToTable("WorldbuildingEntries");
                 });
 
             modelBuilder.Entity("Repository.Entities.WritingTip", b =>
@@ -2034,44 +1962,6 @@ namespace Repository.Migrations
                     b.Navigation("Creator");
                 });
 
-            modelBuilder.Entity("Repository.Entities.CharacterEntry", b =>
-                {
-                    b.HasOne("Repository.Entities.Project", "Project")
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-                });
-
-            modelBuilder.Entity("Repository.Entities.CharacterRelationship", b =>
-                {
-                    b.HasOne("Repository.Entities.CharacterEntry", "CharA")
-                        .WithMany()
-                        .HasForeignKey("CharAId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Repository.Entities.CharacterEntry", "CharB")
-                        .WithMany()
-                        .HasForeignKey("CharBId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Repository.Entities.Project", "Project")
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("CharA");
-
-                    b.Navigation("CharB");
-
-                    b.Navigation("Project");
-                });
-
             modelBuilder.Entity("Repository.Entities.Notification", b =>
                 {
                     b.HasOne("Repository.Entities.User", "CreatedByUser")
@@ -2114,17 +2004,6 @@ namespace Repository.Migrations
                     b.Navigation("Subscription");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Repository.Entities.PlotNoteEntry", b =>
-                {
-                    b.HasOne("Repository.Entities.Project", "Project")
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("Repository.Entities.Project", b =>
@@ -2240,10 +2119,65 @@ namespace Repository.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Repository.Entities.ProjectReportSnapshot", b =>
+                {
+                    b.HasOne("Repository.Entities.ProjectReport", "ProjectReport")
+                        .WithMany("Snapshots")
+                        .HasForeignKey("ProjectReportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProjectReport");
+                });
+
+            modelBuilder.Entity("Repository.Entities.ReportCharacterEntry", b =>
+                {
+                    b.HasOne("Repository.Entities.ProjectReport", "ProjectReport")
+                        .WithMany("CharacterEntries")
+                        .HasForeignKey("ProjectReportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProjectReport");
+                });
+
             modelBuilder.Entity("Repository.Entities.ReportItem", b =>
                 {
                     b.HasOne("Repository.Entities.ProjectReport", "ProjectReport")
                         .WithMany("ReportItems")
+                        .HasForeignKey("ProjectReportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProjectReport");
+                });
+
+            modelBuilder.Entity("Repository.Entities.ReportThemeEntry", b =>
+                {
+                    b.HasOne("Repository.Entities.ProjectReport", "ProjectReport")
+                        .WithMany("ThemeEntries")
+                        .HasForeignKey("ProjectReportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProjectReport");
+                });
+
+            modelBuilder.Entity("Repository.Entities.ReportTimelineEvent", b =>
+                {
+                    b.HasOne("Repository.Entities.ProjectReport", "ProjectReport")
+                        .WithMany("TimelineEvents")
+                        .HasForeignKey("ProjectReportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProjectReport");
+                });
+
+            modelBuilder.Entity("Repository.Entities.ReportWorldbuildingEntry", b =>
+                {
+                    b.HasOne("Repository.Entities.ProjectReport", "ProjectReport")
+                        .WithMany("WorldbuildingEntries")
                         .HasForeignKey("ProjectReportId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -2334,15 +2268,30 @@ namespace Repository.Migrations
                     b.Navigation("Staff");
                 });
 
-            modelBuilder.Entity("Repository.Entities.StyleGuideEntry", b =>
+            modelBuilder.Entity("Repository.Entities.StaffGenre", b =>
                 {
-                    b.HasOne("Repository.Entities.Project", "Project")
+                    b.HasOne("Repository.Entities.User", "AssignedByAdmin")
                         .WithMany()
-                        .HasForeignKey("ProjectId")
+                        .HasForeignKey("AssignedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Repository.Entities.Genre", "Genre")
+                        .WithMany()
+                        .HasForeignKey("GenreId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Project");
+                    b.HasOne("Repository.Entities.User", "Staff")
+                        .WithMany()
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AssignedByAdmin");
+
+                    b.Navigation("Genre");
+
+                    b.Navigation("Staff");
                 });
 
             modelBuilder.Entity("Repository.Entities.SystemConfig", b =>
@@ -2363,28 +2312,6 @@ namespace Repository.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Actor");
-                });
-
-            modelBuilder.Entity("Repository.Entities.ThemeEntry", b =>
-                {
-                    b.HasOne("Repository.Entities.Project", "Project")
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-                });
-
-            modelBuilder.Entity("Repository.Entities.TimelineEvent", b =>
-                {
-                    b.HasOne("Repository.Entities.Project", "Project")
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("Repository.Entities.UserSettings", b =>
@@ -2423,17 +2350,6 @@ namespace Repository.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Repository.Entities.WorldbuildingEntry", b =>
-                {
-                    b.HasOne("Repository.Entities.Project", "Project")
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-                });
-
             modelBuilder.Entity("Repository.Entities.Chapter", b =>
                 {
                     b.Navigation("Versions");
@@ -2456,7 +2372,17 @@ namespace Repository.Migrations
 
             modelBuilder.Entity("Repository.Entities.ProjectReport", b =>
                 {
+                    b.Navigation("CharacterEntries");
+
                     b.Navigation("ReportItems");
+
+                    b.Navigation("Snapshots");
+
+                    b.Navigation("ThemeEntries");
+
+                    b.Navigation("TimelineEvents");
+
+                    b.Navigation("WorldbuildingEntries");
                 });
 
             modelBuilder.Entity("Repository.Entities.SubscriptionPlan", b =>

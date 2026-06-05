@@ -19,10 +19,12 @@ namespace Service.Implementations
         };
 
         private readonly AppDbContext _db;
+        private readonly ISystemAuditLogService _auditLog;
 
-        public NotificationService(AppDbContext db)
+        public NotificationService(AppDbContext db, ISystemAuditLogService auditLog)
         {
             _db = db;
+            _auditLog = auditLog;
         }
 
         public async Task<List<NotificationResponse>> GetMyAsync(Guid userId, int limit = 50, CancellationToken cancellationToken = default)
@@ -121,6 +123,15 @@ namespace Service.Implementations
                 tag,
                 actorId,
                 cancellationToken);
+
+            // Log the notification publishing action
+            var targetRolesStr = string.Join(", ", targetRoles);
+            await _auditLog.LogAsync(
+                "Notification",
+                "Create",
+                $"Đăng thông báo: [{title}] gửi đến nhóm vai trò: {targetRolesStr}",
+                actorId
+            );
 
             return new NotificationCreateResult { CreatedCount = created };
         }

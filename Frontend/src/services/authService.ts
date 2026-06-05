@@ -4,6 +4,7 @@ export interface RegisterData {
     fullName: string;
     email: string;
     password: string;
+    otp: string;
 }
 
 export interface LoginData {
@@ -43,6 +44,11 @@ export interface AuthResponse {
 }
 
 export const authService = {
+    // Gửi mã OTP đăng ký
+    sendOtp: async (email: string): Promise<void> => {
+        await api.post('/Auth/register/send-otp', { email });
+    },
+
     // Gọi API Đăng Ký
     register: async (data: RegisterData): Promise<AuthResponse> => {
         const response = await api.post<AuthResponse>('/Auth/register', data);

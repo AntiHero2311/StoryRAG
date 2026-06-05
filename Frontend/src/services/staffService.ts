@@ -38,6 +38,10 @@ export const staffService = {
         return data;
     },
 
+    async deleteFeedback(feedbackId: string): Promise<void> {
+        await api.delete(`/staff/feedback/${feedbackId}`);
+    },
+
     async getPerformance(): Promise<StaffPerformanceResponse> {
         const { data } = await api.get<StaffPerformanceResponse>('/staff/performance');
         return data;

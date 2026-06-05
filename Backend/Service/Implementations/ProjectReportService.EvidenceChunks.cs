@@ -29,12 +29,12 @@ namespace Service.Implementations
                 })
                 .ToList();
         }
-
         public async Task<List<EvidenceChunkItemDto>> GetProjectEvidenceChunksAsync(
             Guid projectId,
             Guid userId,
             string? ids,
             string? ordinals,
+            string? highlight = null,
             CancellationToken cancellationToken = default)
         {
             await VerifyOwnershipAsync(projectId, userId);
@@ -42,10 +42,7 @@ namespace Service.Implementations
             var guidIds = ParseGuidCsv(ids);
             var ordinalInts = ParseIntCsv(ordinals);
 
-            if (guidIds.Count == 0 && ordinalInts.Count == 0)
-                throw new ArgumentException("Cần ít nhất một tham số ids hoặc ordinals hợp lệ.");
-
-            const int maxChunks = 10; // Giảm từ 20 để tránh quá tải xử lý
+            const int maxChunks = 15; // Tăng lên 15 để hiển thị thoải mái
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken)
                 ?? throw new KeyNotFoundException("Không tìm thấy người dùng.");
             var masterKey = _config["Security:MasterKey"]!;
@@ -68,7 +65,81 @@ namespace Service.Implementations
             if (ordered.Count == 0)
                 return new List<EvidenceChunkItemDto>();
 
+            // Giải mã toàn bộ plaintext của tất cả các chunk trong truyện để phục vụ tìm kiếm chính xác và mở rộng ngữ cảnh
+            var plains = new string[ordered.Count];
+            var offsetsByChunkId = new Dictionary<Guid, int>();
+            var cumByChapter = new Dictionary<int, int>();
+            for (var i = 0; i < ordered.Count; i++)
+            {
+                var (chunk, chNum, _) = ordered[i];
+                if (!cumByChapter.TryGetValue(chNum, out var off))
+                    off = 0;
+                offsetsByChunkId[chunk.Id] = off;
+                var plain = EncryptionHelper.DecryptWithMasterKey(chunk.Content, rawDek);
+                plains[i] = plain;
+                cumByChapter[chNum] = off + plain.Length;
+            }
+
             var pickOrdinal = new SortedSet<int>();
+            
+            // 1. Quét tìm kiếm chính xác (Literal Highlight Match) để khắc phục lỗi AI định vị sai chương/ordinal
+            var cleanHighlight = highlight?.Trim();
+            if (!string.IsNullOrEmpty(cleanHighlight) && cleanHighlight.Length >= 5)
+            {
+                var subHighlights = cleanHighlight
+                    .Split(new[] { "...", "..", "\n", "…" }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(q => q.Trim().Trim('"', '\'', '“', '”', '«', '»'))
+                    .Where(q => q.Length >= 5)
+                    .ToList();
+
+                if (subHighlights.Count > 0)
+                {
+                    for (var i = 0; i < ordered.Count; i++)
+                    {
+                        var normPlain = NormalizeForMatching(plains[i]);
+                        bool matchesAny = false;
+                        foreach (var sub in subHighlights)
+                        {
+                            var normSub = NormalizeForMatching(sub);
+                            if (normSub.Length >= 5 && normPlain.Contains(normSub))
+                            {
+                                matchesAny = true;
+                                break;
+                            }
+                        }
+
+                        if (matchesAny)
+                        {
+                            pickOrdinal.Add(i);
+                            continue;
+                        }
+
+                        // Kiểm tra xem trích dẫn có khớp do bị cắt ngang giữa 2 chunk liên tiếp trong cùng chương không
+                        if (i < ordered.Count - 1 && ordered[i].Chunk.VersionId == ordered[i + 1].Chunk.VersionId)
+                        {
+                            var combined = plains[i] + plains[i + 1];
+                            var normCombined = NormalizeForMatching(combined);
+                            bool matchesCombined = false;
+                            foreach (var sub in subHighlights)
+                            {
+                                var normSub = NormalizeForMatching(sub);
+                                if (normSub.Length >= 5 && normCombined.Contains(normSub))
+                                {
+                                    matchesCombined = true;
+                                    break;
+                                }
+                            }
+                            if (matchesCombined)
+                            {
+                                pickOrdinal.Add(i);
+                                pickOrdinal.Add(i + 1);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Thêm các ordinal được truyền từ API (do AI chấm ban đầu)
             foreach (var o in ordinalInts)
             {
                 if (o >= 0 && o < ordered.Count)
@@ -87,22 +158,9 @@ namespace Service.Implementations
                 }
             }
 
+            // Giới hạn tối đa số lượng hiển thị để bảo vệ performance
             while (pickOrdinal.Count > maxChunks)
                 pickOrdinal.Remove(pickOrdinal.Max);
-
-            var plains = new string[ordered.Count];
-            var offsetsByChunkId = new Dictionary<Guid, int>();
-            var cumByChapter = new Dictionary<int, int>();
-            for (var i = 0; i < ordered.Count; i++)
-            {
-                var (chunk, chNum, _) = ordered[i];
-                if (!cumByChapter.TryGetValue(chNum, out var off))
-                    off = 0;
-                offsetsByChunkId[chunk.Id] = off;
-                var plain = EncryptionHelper.DecryptWithMasterKey(chunk.Content, rawDek);
-                plains[i] = plain;
-                cumByChapter[chNum] = off + plain.Length;
-            }
 
             var result = new List<EvidenceChunkItemDto>(pickOrdinal.Count);
             foreach (var ord in pickOrdinal)
@@ -112,6 +170,20 @@ namespace Service.Implementations
                     ? $"Chương {chNum}"
                     : $"Chương {chNum}: {chTitle}";
 
+                // 3. Thực hiện Context Expansion: tự động ghép chunk liền trước và chunk liền sau (cùng chương & phiên bản)
+                var hasPrev = ord - 1 >= 0 && ordered[ord - 1].Chunk.VersionId == chunk.VersionId;
+                var hasNext = ord + 1 < ordered.Count && ordered[ord + 1].Chunk.VersionId == chunk.VersionId;
+
+                var prevText = hasPrev ? plains[ord - 1] : string.Empty;
+                var nextText = hasNext ? plains[ord + 1] : string.Empty;
+
+                var expandedContent = prevText + plains[ord] + nextText;
+                
+                // Tính toán chính xác vị trí ký tự bắt đầu của block ngữ cảnh mở rộng trong chương
+                var startOffset = hasPrev
+                    ? offsetsByChunkId.GetValueOrDefault(ordered[ord - 1].Chunk.Id, 0)
+                    : offsetsByChunkId.GetValueOrDefault(chunk.Id, 0);
+
                 result.Add(new EvidenceChunkItemDto
                 {
                     ChunkId = chunk.Id,
@@ -119,9 +191,9 @@ namespace Service.Implementations
                     ChapterNumber = chNum,
                     ChapterTitle = titleDisplay,
                     ChunkIndex = chunk.ChunkIndex,
-                    OffsetInChapterChars = offsetsByChunkId.GetValueOrDefault(chunk.Id, 0),
-                    Content = plains[ord],
-                    TokenCount = chunk.TokenCount,
+                    OffsetInChapterChars = startOffset,
+                    Content = expandedContent,
+                    TokenCount = chunk.TokenCount + (hasPrev ? ordered[ord - 1].Chunk.TokenCount : 0) + (hasNext ? ordered[ord + 1].Chunk.TokenCount : 0),
                 });
             }
 

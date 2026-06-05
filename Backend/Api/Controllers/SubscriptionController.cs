@@ -85,19 +85,30 @@ namespace Api.Controllers
             }
         }
 
-        /// <summary>Deactivate plan — chỉ Admin.</summary>
+        /// <summary>Deactivate hoặc Xoá plan — chỉ Admin.</summary>
         [HttpDelete("plans/{id:int}")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeletePlan(int id)
         {
             try
             {
-                await _subscriptionService.DeletePlanAsync(id);
-                return Ok(new { Message = "Plan đã được deactivate." });
+                var isHardDeleted = await _subscriptionService.DeletePlanAsync(id);
+                if (isHardDeleted)
+                {
+                    return Ok(new { Message = "Gói dịch vụ đã được xóa hoàn toàn khỏi hệ thống." });
+                }
+                else
+                {
+                    return Ok(new { Message = "Gói dịch vụ đã có người dùng đăng ký hoặc thanh toán nên hệ thống đã chuyển sang trạng thái ngưng hoạt động." });
+                }
             }
             catch (KeyNotFoundException ex)
             {
                 return NotFound(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
             }
         }
 

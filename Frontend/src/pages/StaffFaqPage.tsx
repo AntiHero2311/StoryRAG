@@ -11,10 +11,30 @@ import {
   Search,
   ChevronDown,
   BookOpen,
+  Pencil,
 } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { getUserInfo } from '../utils/jwtHelper';
 import { faqService, type Faq, type FaqUpsertRequest } from '../services/faqService';
+
+const FAQ_CATEGORIES = [
+  'Tổng quan',
+  'Bắt đầu',
+  'AI & RAG',
+  'Phân tích',
+  'Gói & thanh toán',
+  'Workspace',
+  'Bảo mật',
+  'Hỗ trợ',
+];
+
+function normalizeCategory(cat?: string) {
+  if (!cat) return 'Tổng quan';
+  const cleaned = cat.trim();
+  if (!cleaned) return 'Tổng quan';
+  if (cleaned.toLowerCase() === 'general') return 'Tổng quan';
+  return cleaned;
+}
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleString('vi-VN', {
@@ -27,7 +47,7 @@ function fmtDate(iso: string) {
 }
 
 function categoryChip(cat: string) {
-  const c = (cat || 'General').trim();
+  const c = normalizeCategory(cat);
   const hash = Array.from(c).reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
   const hue = hash % 360;
   return { label: c, bg: `hsla(${hue}, 90%, 60%, 0.12)`, border: `hsla(${hue}, 90%, 60%, 0.28)`, text: `hsla(${hue}, 80%, 70%, 1)` };
@@ -109,14 +129,14 @@ export default function StaffFaqPage({ embedded = false }: { embedded?: boolean 
   const [form, setForm] = useState<FaqUpsertRequest>({
     question: '',
     answer: '',
-    category: 'General',
+    category: 'Tổng quan',
     order: 0,
     published: false,
   });
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ question: '', answer: '', category: 'General', order: 0, published: false });
+    setForm({ question: '', answer: '', category: 'Tổng quan', order: 0, published: false });
     setModalOpen(true);
   };
 
@@ -125,7 +145,7 @@ export default function StaffFaqPage({ embedded = false }: { embedded?: boolean 
     setForm({
       question: faq.question,
       answer: faq.answer,
-      category: faq.category,
+      category: normalizeCategory(faq.category),
       order: faq.order,
       published: faq.published,
     });
@@ -140,10 +160,7 @@ export default function StaffFaqPage({ embedded = false }: { embedded?: boolean 
         publishedFilter === 'all'
           ? undefined
           : publishedFilter === 'published';
-      const category =
-        categoryFilter === 'all' ? undefined : categoryFilter;
-
-      const data = await faqService.getAll({ category, published });
+      const data = await faqService.getAll({ published });
       setItems(data);
     } catch (err: unknown) {
       const message =
@@ -171,20 +188,28 @@ export default function StaffFaqPage({ embedded = false }: { embedded?: boolean 
   }, [load, navigate]);
 
   const categories = useMemo(() => {
-    const set = new Set(items.map(x => (x.category || 'General').trim()).filter(Boolean));
+    const set = new Set(items.map(x => normalizeCategory(x.category)).filter(Boolean));
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [items]);
 
+  const categoryOptions = useMemo(() => {
+    const set = new Set([...FAQ_CATEGORIES, ...categories]);
+    return Array.from(set).filter(Boolean);
+  }, [categories]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const base = items;
+    let base = items;
+    if (categoryFilter !== 'all') {
+      base = base.filter(x => normalizeCategory(x.category) === categoryFilter);
+    }
     if (!q) return base;
     return base.filter(x =>
       x.question.toLowerCase().includes(q) ||
       x.answer.toLowerCase().includes(q) ||
-      x.category.toLowerCase().includes(q)
+      normalizeCategory(x.category).toLowerCase().includes(q)
     );
-  }, [items, search]);
+  }, [categoryFilter, items, search]);
 
   const handleSave = async () => {
     if (!form.question.trim() || !form.answer.trim()) {
@@ -198,7 +223,7 @@ export default function StaffFaqPage({ embedded = false }: { embedded?: boolean 
         ...form,
         question: form.question.trim(),
         answer: form.answer.trim(),
-        category: (form.category || 'General').trim(),
+        category: normalizeCategory(form.category),
         order: Number.isFinite(form.order) ? form.order : 0,
       };
 
@@ -340,7 +365,7 @@ export default function StaffFaqPage({ embedded = false }: { embedded?: boolean 
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-[var(--border-color)]">
-                      {['Question', 'Category', 'Order', 'Publish', 'Updated', ''].map(h => (
+                      {['Question', 'Category', 'Trạng thái', 'Updated', ''].map(h => (
                         <th key={h} className="text-left px-4 py-3 text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider">
                           {h}
                         </th>
@@ -369,11 +394,7 @@ export default function StaffFaqPage({ embedded = false }: { embedded?: boolean 
                                 {chip.label}
                               </span>
                             </td>
-                            <td className="px-4 py-3">
-                              <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                                {faq.order}
-                              </span>
-                            </td>
+
                             <td className="px-4 py-3">
                               <PublishToggle value={faq.published} onChange={() => void handleTogglePublish(faq)} />
                             </td>
@@ -381,13 +402,22 @@ export default function StaffFaqPage({ embedded = false }: { embedded?: boolean 
                               {fmtDate(faq.updatedAt)}
                             </td>
                             <td className="px-4 py-3">
-                              <button
-                                onClick={() => void handleDelete(faq)}
-                                className="w-8 h-8 flex items-center justify-center rounded-xl text-[var(--text-secondary)] hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                                title="Xoá"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => openEdit(faq)}
+                                  className="w-8 h-8 flex items-center justify-center rounded-xl text-[var(--text-secondary)] hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+                                  title="Sửa"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => void handleDelete(faq)}
+                                  className="w-8 h-8 flex items-center justify-center rounded-xl text-[var(--text-secondary)] hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                                  title="Xoá"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -401,24 +431,19 @@ export default function StaffFaqPage({ embedded = false }: { embedded?: boolean 
           {modalOpen && (
             <Modal title={editing ? 'Sửa FAQ' : 'Tạo FAQ'} onClose={() => setModalOpen(false)}>
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">Category</label>
-                    <input
+                <div>
+                  <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">Category</label>
+                  <div className="relative">
+                    <select
                       value={form.category}
                       onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                      className="w-full px-4 py-2.5 bg-[var(--input-bg)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] text-sm outline-none focus:ring-2 focus:ring-indigo-500/30"
-                      placeholder="General / Billing / AI / ..."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider mb-1.5">Order</label>
-                    <input
-                      type="number"
-                      value={form.order}
-                      onChange={e => setForm(f => ({ ...f, order: Number(e.target.value) }))}
-                      className="w-full px-4 py-2.5 bg-[var(--input-bg)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] text-sm outline-none focus:ring-2 focus:ring-indigo-500/30"
-                    />
+                      className="appearance-none w-full pl-4 pr-9 py-2.5 bg-[var(--input-bg)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] text-sm outline-none focus:ring-2 focus:ring-indigo-500/30"
+                    >
+                      {categoryOptions.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] pointer-events-none" />
                   </div>
                 </div>
 
@@ -445,7 +470,7 @@ export default function StaffFaqPage({ embedded = false }: { embedded?: boolean 
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Publish</span>
+                    <span className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Trạng thái</span>
                     <PublishToggle value={form.published} onChange={v => setForm(f => ({ ...f, published: v }))} />
                   </div>
 

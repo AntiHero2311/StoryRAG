@@ -16,7 +16,7 @@ namespace Service.Interfaces
         /// <summary>Lấy review theo ProjectReportId (khác với GetAnalysisReviewsAsync filter theo ProjectId).</summary>
         Task<StaffAnalysisReviewResponse?> GetAnalysisReviewByReportIdAsync(Guid reportId);
         Task<StaffAnalysisReviewResponse> ReviewAnalysisAsync(Guid reportId, Guid staffId, ReviewAnalysisRequest request);
-        Task<StaffPagedResponse<StaffPendingReportItem>> GetPendingReportsAsync(int page, int pageSize);
+        Task<StaffPagedResponse<StaffPendingReportItem>> GetPendingReportsAsync(int page, int pageSize, string? status = null, Guid? staffId = null, bool isAdmin = false);
 
         Task<IReadOnlyList<StaffAnalysisJobItem>> GetAnalysisJobsAsync(string? status);
         Task<StaffAnalysisJobItem> RerunAnalysisJobAsync(Guid jobId, Guid staffId);

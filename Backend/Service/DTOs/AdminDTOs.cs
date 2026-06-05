@@ -49,6 +49,21 @@ namespace Service.DTOs
         public string Role { get; set; } = string.Empty;
         public bool IsActive { get; set; }
         public DateTime CreatedAt { get; set; }
+        public int StrikeCount { get; set; }
+        public bool IsBanned { get; set; }
+        public string? BanReason { get; set; }
+        public bool IsBanRequested { get; set; }
+        public string? BanRequestReason { get; set; }
+        public Guid? BanRequestedBy { get; set; }
+
+        /// <summary>Chỉ có giá trị với Staff — danh sách thể loại chuyên môn.</summary>
+        public List<GenreResponse> Genres { get; set; } = new();
+    }
+
+    public class BanUserRequest
+    {
+        public bool IsBanned { get; set; }
+        public string? BanReason { get; set; }
     }
 
     public class UserStatsResponse
@@ -60,6 +75,13 @@ namespace Service.DTOs
         public int TotalStaff { get; set; }
         public int TotalAdmins { get; set; }
         public List<UserSummaryDto> Users { get; set; } = new();
+    }
+
+    /// <summary>Body để admin gán/thay thế toàn bộ genres cho một Staff.</summary>
+    public class StaffGenreAssignRequest
+    {
+        /// <summary>Danh sách GenreId muốn gán (rỗng = bỏ hết).</summary>
+        public List<int> GenreIds { get; set; } = new();
     }
 
     public class AdminOverviewStats

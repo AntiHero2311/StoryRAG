@@ -72,6 +72,7 @@ namespace Service.DTOs
     {
         public Guid Id { get; set; }
         public Guid ProjectId { get; set; }
+        public string ProjectTitle { get; set; } = string.Empty;
         public Guid? ProjectReportId { get; set; }
         public Guid? ChapterId { get; set; }
         public Guid AuthorId { get; set; }
@@ -87,6 +88,9 @@ namespace Service.DTOs
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public DateTime? ReadAt { get; set; }
+
+        /// <summary>Thể loại chuyên môn của staff gửi feedback này.</summary>
+        public List<GenreResponse> StaffGenres { get; set; } = new();
     }
 
     public class FeedbackResponseRequest : IValidatableObject
@@ -157,6 +161,9 @@ namespace Service.DTOs
 
         [JsonPropertyName("updated_at")]
         public DateTime? UpdatedAt { get; set; }
+
+        [JsonPropertyName("warnings")]
+        public List<string> Warnings { get; set; } = new();
     }
 
     public class StaffPagedResponse<T>
@@ -174,8 +181,14 @@ namespace Service.DTOs
         [JsonPropertyName("project_id")]
         public Guid ProjectId { get; set; }
 
+        [JsonPropertyName("project_title")]
+        public string ProjectTitle { get; set; } = string.Empty;
+
         [JsonPropertyName("requested_by")]
         public Guid RequestedBy { get; set; }
+
+        [JsonPropertyName("requested_by_name")]
+        public string RequestedByName { get; set; } = string.Empty;
 
         public string Status { get; set; } = string.Empty;
 
@@ -258,6 +271,17 @@ namespace Service.DTOs
 
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
+
+        /// <summary>Nội dung phân tích Story Bible do AI trích xuất</summary>
+        public ContentAnalysisResult? ContentAnalysis { get; set; }
+
+        public Guid AuthorId { get; set; }
+        public string AuthorName { get; set; } = string.Empty;
+        public int AuthorStrikeCount { get; set; }
+        public bool AuthorIsBanned { get; set; }
+        public bool AuthorIsBanRequested { get; set; }
+        public string? AuthorBanRequestReason { get; set; }
+        public string? AuthorWarningMessage { get; set; }
     }
 
     public class StaffStoryChapterItem
@@ -294,5 +318,24 @@ namespace Service.DTOs
 
         [JsonPropertyName("chapters")]
         public List<StaffStoryChapterItem> Chapters { get; set; } = [];
+    }
+
+    public class AuthorFeedbackCreateRequest : IValidatableObject
+    {
+        [Required]
+        public Guid ProjectId { get; set; }
+
+        public Guid? ProjectReportId { get; set; }
+
+        [Required]
+        [MinLength(5)]
+        [MaxLength(3000)]
+        public string Content { get; set; } = string.Empty;
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (string.IsNullOrWhiteSpace(Content))
+                yield return new ValidationResult("Nội dung phản hồi không được để trống.", new[] { nameof(Content) });
+        }
     }
 }

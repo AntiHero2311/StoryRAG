@@ -19,7 +19,7 @@ namespace Service.Implementations
             _logger = logger;
         }
 
-        public async Task LogAsync(string category, string action, string message, Guid? actorId = null, string level = "Info")
+        public async Task LogAsync(string category, string action, string message, Guid? actorId = null, string level = "Info", string? metadataJson = null)
         {
             try
             {
@@ -33,6 +33,7 @@ namespace Service.Implementations
                     Action = action,
                     Message = message.Length > 1000 ? message[..1000] : message,
                     ActorId = actorId,
+                    MetadataJson = metadataJson,
                     CreatedAt = DateTime.UtcNow,
                 });
                 await db.SaveChangesAsync();
@@ -76,6 +77,7 @@ namespace Service.Implementations
                         l.ActorId,
                         ActorName = u != null ? u.FullName : null,
                         l.CreatedAt,
+                        l.MetadataJson,
                     })
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)
@@ -97,6 +99,7 @@ namespace Service.Implementations
                         ActorId = r.ActorId,
                         ActorName = r.ActorName,
                         CreatedAt = r.CreatedAt,
+                        MetadataJson = r.MetadataJson,
                     }).ToList(),
                 };
             }

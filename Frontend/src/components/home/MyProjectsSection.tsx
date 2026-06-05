@@ -313,8 +313,8 @@ function ProjectInfoModal({ project, onClose }: { project: ProjectResponse; onCl
                 <div className="relative h-28 bg-gradient-to-br from-[var(--accent)]/20 to-[var(--bg-primary)] flex items-end px-6 pb-4">
                     {project.coverImageURL && <img src={project.coverImageURL} alt="cover" className="absolute inset-0 w-full h-full object-cover opacity-30" />}
                     <div className="relative z-10 flex items-end gap-4 w-full">
-                        <div className="w-14 h-20 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] overflow-hidden shadow-lg flex items-center justify-center shrink-0">
-                            {project.coverImageURL ? <img src={project.coverImageURL} alt="cover" className="w-full h-full object-cover" /> : <span className="text-2xl">📖</span>}
+                        <div className="w-14 h-20 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] overflow-hidden shadow-lg flex items-center justify-center shrink-0 bg-indigo-500/10">
+                            {project.coverImageURL ? <img src={project.coverImageURL} alt="cover" className="w-full h-full object-cover" /> : <img src="/logo.png" alt="StoryNest" className="w-10 h-10 object-contain drop-shadow-[0_2px_8px_rgba(99,102,241,0.3)]" />}
                         </div>
                         <div className="flex-1 min-w-0 mb-1">
                             <p className="text-[var(--text-primary)] font-bold text-base truncate">{project.title}</p>
@@ -558,6 +558,7 @@ export default function MyProjectsSection({ onNavigate, createRequestToken, onPr
     const [modalLoading, setModalLoading] = useState(false);
     const [importLoading, setImportLoading] = useState(false);
     const [importResult, setImportResult] = useState<ProjectImportResult | null>(null);
+    const [importModalOpen, setImportModalOpen] = useState(false);
     const importInputRef = useRef<HTMLInputElement>(null);
 
     const fetchProjects = async () => {
@@ -679,7 +680,7 @@ export default function MyProjectsSection({ onNavigate, createRequestToken, onPr
                             onChange={handleImportFile}
                         />
                         <button
-                            onClick={() => importInputRef.current?.click()}
+                            onClick={() => setImportModalOpen(true)}
                             className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all hover:scale-105 active:scale-95"
                             style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}
                             title="Import từ bản thảo (.txt, .docx, .pdf)"
@@ -825,6 +826,76 @@ export default function MyProjectsSection({ onNavigate, createRequestToken, onPr
                             </div>
                             <button onClick={() => setImportResult(null)} className="w-6 h-6 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-white hover:bg-white/10 transition-colors shrink-0">
                                 <X className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Hướng dẫn import bản thảo */}
+            {importModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#090514]/80 backdrop-blur-md"
+                    onClick={e => { if (e.target === e.currentTarget) setImportModalOpen(false); }}>
+                    <div className="w-full max-w-lg glass-card rounded-[2rem] p-8 shadow-[0_0_60px_-15px_rgba(0,0,0,0.8)] border border-white/10 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 blur-[50px] rounded-full pointer-events-none" />
+                        <div className="flex items-center justify-between mb-6 relative z-10">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0">
+                                    <Upload className="w-5 h-5 text-amber-400" />
+                                </div>
+                                <div>
+                                    <h2 className="text-white font-black text-xl drop-shadow-md">Nhập truyện từ bản thảo</h2>
+                                    <p className="text-zinc-400 text-xs mt-0.5">Hướng dẫn định dạng file để phân tách chương tốt nhất</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setImportModalOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4 relative z-10 text-sm text-zinc-300 leading-relaxed mb-6">
+                            <div className="bg-white/5 border border-white/5 rounded-2xl p-5 space-y-3">
+                                <div className="flex items-start gap-2.5">
+                                    <div className="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 text-xs font-bold shrink-0 mt-0.5">1</div>
+                                    <p>Bản thảo nên bắt đầu trực tiếp bằng <strong>Tên tác phẩm</strong> làm tiêu đề ở đầu file.</p>
+                                </div>
+                                <div className="flex items-start gap-2.5">
+                                    <div className="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 text-xs font-bold shrink-0 mt-0.5">2</div>
+                                    <p>Nội dung cần được chia chương rõ ràng bằng các tiêu đề chương như: <code>Chương 1: [Tên chương]</code>, <code>Chương 2</code>, <code>Chapter 1</code>...</p>
+                                </div>
+                                <div className="flex items-start gap-2.5">
+                                    <div className="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 text-xs font-bold shrink-0 mt-0.5">3</div>
+                                    <p>Sau mỗi tiêu đề chương sẽ là nội dung chi tiết của chương đó.</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-start gap-3">
+                                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                                <div>
+                                    <h4 className="text-amber-400 font-bold text-xs uppercase tracking-wider mb-1">Lưu ý quan trọng</h4>
+                                    <p className="text-zinc-300 text-xs">
+                                        <strong>Không chứa các nội dung ngoài lề khác</strong> (như phần tóm tắt do tác giả tự viết, danh sách nhân vật, thông tin thế giới...).
+                                    </p>
+                                    <p className="text-zinc-400 text-[11px] mt-1.5 leading-relaxed">
+                                        Hệ thống sẽ tự động phân tách các chương truyện, chia đoạn (chunk) và tạo vector nhúng (embedding) để phục vụ cho các tính năng tìm kiếm và phân tích.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-4 relative z-10">
+                            <button type="button" onClick={() => setImportModalOpen(false)}
+                                className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-all">
+                                Hủy
+                            </button>
+                            <button type="button" onClick={() => {
+                                setImportModalOpen(false);
+                                importInputRef.current?.click();
+                            }}
+                                className="flex-[2] py-3 rounded-xl text-sm font-bold text-white transition-all hover:brightness-110 flex items-center justify-center gap-2 shadow-lg"
+                                style={{ background: 'linear-gradient(135deg, #f5a623, #f97316)' }}>
+                                <Upload className="w-4 h-4" />
+                                Chọn file để tải lên
                             </button>
                         </div>
                     </div>

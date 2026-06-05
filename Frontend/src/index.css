@@ -59,6 +59,12 @@
   *::-webkit-scrollbar-thumb:hover {
     background: rgba(99, 102, 241, 0.4);
   }
+
+  /* Fix unreadable dropdown option elements on Windows/Chrome in dark mode */
+  select option {
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+  }
 }
 
 /* ── Utility Classes ─────────────────────────────────────────── */

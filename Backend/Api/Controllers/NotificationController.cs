@@ -29,6 +29,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Staff,Admin")]
         public async Task<IActionResult> Create([FromBody] NotificationCreateRequest request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);

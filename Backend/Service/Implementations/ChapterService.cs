@@ -77,7 +77,8 @@ namespace Service.Implementations
                 throw new Exception($"Chương số {request.ChapterNumber} đã tồn tại trong dự án này.");
 
             var rawDek = await GetRawDekAsync(userId);
-            int wordCount = CountWords(request.Content);
+            var cleanedContent = HtmlContentCleaner.Clean(request.Content);
+            int wordCount = CountWords(cleanedContent);
 
             var chapter = new Chapter
             {
@@ -95,9 +96,9 @@ namespace Service.Implementations
                 ChapterId = chapter.Id,
                 VersionNumber = 1,
                 Title = request.Title != null ? $"Phiên bản 1" : null,
-                Content = EncryptionHelper.EncryptWithMasterKey(request.Content, rawDek),
+                Content = EncryptionHelper.EncryptWithMasterKey(cleanedContent, rawDek),
                 WordCount = wordCount,
-                TokenCount = _chunkingService.EstimateTokenCount(request.Content),
+                TokenCount = _chunkingService.EstimateTokenCount(cleanedContent),
                 CreatedBy = userId,
             };
             _context.ChapterVersions.Add(version);
@@ -108,9 +109,9 @@ namespace Service.Implementations
             await _context.SaveChangesAsync();
 
             // Auto-chunk the content immediately
-            await PerformChunkingInternalAsync(version, request.Content, rawDek, chapter.ProjectId);
+            await PerformChunkingInternalAsync(version, cleanedContent, rawDek, chapter.ProjectId);
 
-            var detail = MapToDetailResponse(chapter, request.Content);
+            var detail = MapToDetailResponse(chapter, cleanedContent);
             detail.Versions = new List<ChapterVersionSummary> { MapToVersionSummary(version, rawDek) };
             return detail;
         }
@@ -128,12 +129,13 @@ namespace Service.Implementations
                 .FirstOrDefaultAsync(v => v.Id == chapter.CurrentVersionId.Value)
                 ?? throw new Exception("Không tìm thấy version đang active.");
 
-            int wordCount = CountWords(request.Content);
+            var cleanedContent = HtmlContentCleaner.Clean(request.Content);
+            int wordCount = CountWords(cleanedContent);
 
             // Update version content in-place
-            version.Content = EncryptionHelper.EncryptWithMasterKey(request.Content, rawDek);
+            version.Content = EncryptionHelper.EncryptWithMasterKey(cleanedContent, rawDek);
             version.WordCount = wordCount;
-            version.TokenCount = _chunkingService.EstimateTokenCount(request.Content);
+            version.TokenCount = _chunkingService.EstimateTokenCount(cleanedContent);
             version.UpdatedAt = DateTime.UtcNow;
             // Reset chunking flags since content changed
             version.IsChunked = false;
@@ -147,7 +149,7 @@ namespace Service.Implementations
             await _context.SaveChangesAsync();
 
             // Auto-chunk the content immediately
-            await PerformChunkingInternalAsync(version, request.Content, rawDek, chapter.ProjectId);
+            await PerformChunkingInternalAsync(version, cleanedContent, rawDek, chapter.ProjectId);
 
             // Reload versions for response
             var versions = await _context.ChapterVersions
@@ -156,7 +158,7 @@ namespace Service.Implementations
                 .OrderBy(v => v.VersionNumber)
                 .ToListAsync();
 
-            var detail = MapToDetailResponse(chapter, request.Content);
+            var detail = MapToDetailResponse(chapter, cleanedContent);
             detail.Versions = versions.Select(v => MapToVersionSummary(v, rawDek)).ToList();
             return detail;
         }
@@ -243,7 +245,7 @@ namespace Service.Implementations
 
             int newVersionNum = chapter.CurrentVersionNum + 1;
 
-            // Snapshot current content (copy from active version, not empty)
+            // Snapshot nội dung từ version đang active
             string snapshotContent = string.Empty;
             if (chapter.CurrentVersionId.HasValue)
             {
@@ -271,10 +273,10 @@ namespace Service.Implementations
             chapter.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
-            // Auto-prune: keep max 20 versions, delete oldest non-pinned first
-            await PruneVersionsAsync(chapterId, maxVersions: 20);
+            // Auto-prune: giữ tối đa 10 version, ưu tiên xóa version cũ nhất chưa pin.
+            await PruneVersionsAsync(chapterId, maxVersions: 10);
 
-            // Giống CreateChapter / UpdateChapter: version mới phải được chunk ngay (EmbedChapterAsync yêu cầu IsChunked).
+            // Chunk ngay sau khi tạo (EmbedChapterAsync yêu cầu IsChunked = true).
             await PerformChunkingInternalAsync(version, snapshotContent, rawDek, chapter.ProjectId);
 
             var versions = await _context.ChapterVersions
@@ -444,9 +446,16 @@ namespace Service.Implementations
 
         // ── Private Helpers ────────────────────────────────────────────────────
 
-        private async Task PruneVersionsAsync(Guid chapterId, int maxVersions = 20)
+        /// <summary>
+        /// Xóa bớt version cũ: giữ tối đa <paramref name="maxVersions"/> version.<br/>
+        /// Ưu tiên xóa version cũ nhất, chưa pin, không phải active.<br/>
+        /// Nếu không đủ ứng viên để xóa do quá nhiều version đã pin → báo lỗi rõ để user unpin bớt.
+        /// </summary>
+        private async Task PruneVersionsAsync(Guid chapterId, int maxVersions = 10)
         {
             var chapter = await _context.Chapters.FindAsync(chapterId);
+            if (chapter == null) return;
+
             var all = await _context.ChapterVersions
                 .Where(v => v.ChapterId == chapterId)
                 .OrderBy(v => v.VersionNumber)
@@ -454,21 +463,33 @@ namespace Service.Implementations
 
             if (all.Count <= maxVersions) return;
 
-            // Candidates: oldest, non-pinned, not the currently active version
-            var toDelete = all
-                .Where(v => !v.IsPinned && v.Id != chapter?.CurrentVersionId)
+            int toDeleteCount = all.Count - maxVersions;
+
+            // Ứng viên xóa: cũ nhất, chưa pin, không phải version đang active
+            var candidates = all
+                .Where(v => !v.IsPinned && v.Id != chapter.CurrentVersionId)
                 .OrderBy(v => v.VersionNumber)
-                .Take(all.Count - maxVersions)
                 .ToList();
 
-            if (toDelete.Count == 0) return;
+            if (candidates.Count < toDeleteCount)
+            {
+                // Không đủ ứng viên — quá nhiều version đã được pin
+                int pinnedCount = all.Count(v => v.IsPinned && v.Id != chapter.CurrentVersionId);
+                throw new InvalidOperationException(
+                    $"Không thể tạo phiên bản mới: chương đã có {all.Count} phiên bản (giới hạn {maxVersions}), " +
+                    $"trong đó {pinnedCount} phiên bản đang bị ghím (pin). " +
+                    "Vui lòng bỏ ghím bớ phiên bản để tiếp tục.");
+            }
 
-            // Remove chunks belonging to deleted versions
+            var toDelete = candidates.Take(toDeleteCount).ToList();
+
+            // Xóa chunks của các version bị xóa
             var deleteIds = toDelete.Select(v => v.Id).ToList();
             var chunks = await _context.ChapterChunks
                 .Where(c => deleteIds.Contains(c.VersionId))
                 .ToListAsync();
-            _context.ChapterChunks.RemoveRange(chunks);
+            if (chunks.Count > 0)
+                _context.ChapterChunks.RemoveRange(chunks);
 
             _context.ChapterVersions.RemoveRange(toDelete);
             await _context.SaveChangesAsync();

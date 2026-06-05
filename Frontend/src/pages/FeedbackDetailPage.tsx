@@ -129,7 +129,24 @@ export default function FeedbackDetailPage() {
                     <p className="text-sm font-bold truncate" style={{ color: 'var(--text-bright)' }}>
                       {item.staffName || 'Staff'} · {item.status}
                     </p>
-                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {item.staffGenres && item.staffGenres.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {item.staffGenres.map(g => (
+                          <span
+                            key={g.id}
+                            className="px-2 py-0.5 rounded text-[10px] font-bold"
+                            style={{
+                              backgroundColor: `${g.color}15`,
+                              color: g.color,
+                              border: `1px solid ${g.color}30`
+                            }}
+                          >
+                            {g.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-xs mt-1.5" style={{ color: 'var(--text-secondary)' }}>
                       {fmtDate(item.createdAt)}
                     </p>
                     {item.projectReportId && (

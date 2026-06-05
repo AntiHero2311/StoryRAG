@@ -24,7 +24,7 @@ namespace Service.Helpers
         /// Chỉ dùng các model flash có quota thực tế; KHÔNG dùng gemini-2.0-flash hoặc gemini-2.5-flash
         /// vì quota = 0 trên nhiều project key.
         /// </summary>
-        private const string DefaultChatModels = "gemini-3.1-flash-lite,gemini-3-flash-preview,gemini-2.5-flash-lite";
+        private const string DefaultChatModels = "gemini-3.5-flash";
         private static readonly Uri GeminiOpenAiEndpoint = new("https://generativelanguage.googleapis.com/v1beta/openai/");
         private static readonly HttpClient TraceHttpClient = new();
         private static readonly ConcurrentDictionary<string, DateTime> ApiKeyCooldownUntilUtc = new();
@@ -72,6 +72,17 @@ namespace Service.Helpers
                 chatModels = ReadValues(config["Gemini:ChatModels"]);
             if (chatModels.Count == 0)
                 chatModels = ReadValues(DefaultChatModels);
+
+            // Chủ động lọc bỏ các model Gemma, Genma và OpenRouter trong code theo yêu cầu hệ thống
+            chatModels = chatModels
+                .Where(m => !m.Contains("gemma", StringComparison.OrdinalIgnoreCase) 
+                         && !m.Contains("genma", StringComparison.OrdinalIgnoreCase) 
+                         && !m.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (chatModels.Count == 0)
+            {
+                chatModels = ReadValues(DefaultChatModels);
+            }
 
             // Nếu đang ở chế độ Analyze và AnalyzeModels được chỉ định, chỉ dùng Analyze key (không fallback sang Chat key)
             _preferAnalyzeOnly = primaryRole == GeminiPrimaryKeyRole.Analyze && !string.IsNullOrWhiteSpace(config["Gemini:AnalyzeModels"]);
@@ -152,7 +163,9 @@ namespace Service.Helpers
                     attemptedCandidates++;
                     try
                     {
-                        var geminiMessages = GeminiRetryHelper.FlattenSystemForGemma(sourceMessages);
+                        var geminiMessages = candidate.Model.Contains("gemma", StringComparison.OrdinalIgnoreCase)
+                            ? GeminiRetryHelper.FlattenSystemForGemma(sourceMessages)
+                            : sourceMessages.ToList();
 
                         ClientResult<ChatCompletion> result;
                         if (options == null)
@@ -298,9 +311,13 @@ namespace Service.Helpers
 
         private async Task TraceCandidateMatrixAsync(IEnumerable<ChatMessage> messages)
         {
-            var flat = GeminiRetryHelper.FlattenSystemForGemma(messages);
             foreach (var candidate in _candidates)
+            {
+                var flat = candidate.Model.Contains("gemma", StringComparison.OrdinalIgnoreCase)
+                    ? GeminiRetryHelper.FlattenSystemForGemma(messages)
+                    : messages.ToList();
                 await TraceRawHttpAsync(candidate, flat);
+            }
         }
 
         private static List<object> BuildTraceMessages(IEnumerable<ChatMessage> messages)

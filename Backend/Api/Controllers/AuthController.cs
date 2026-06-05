@@ -17,6 +17,26 @@ namespace Api.Controllers
             _authService = authService;
         }
 
+        [HttpPost("register/send-otp")]
+        [AllowAnonymous]
+        public async Task<IActionResult> SendOtp([FromBody] SendOtpRequest request)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            try
+            {
+                await _authService.SendRegisterOtpAsync(request);
+                return Ok(new { Message = "Mã OTP đã được gửi thành công qua Gmail." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
         [HttpPost("register")]
         [AllowAnonymous]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)

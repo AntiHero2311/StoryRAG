@@ -64,9 +64,8 @@ function getFeatures(plan: SubscriptionPlan) {
             ? `${(plan.maxTokenLimit / 1_000_000).toFixed(1)}M token AI/tháng`
             : `${(plan.maxTokenLimit / 1000).toFixed(0)}K token AI/tháng`,
         'Lịch sử phân tích',
-        ...(plan.planName !== 'Free' ? ['Xuất báo cáo PDF'] : []),
-        ...(plan.planName === 'Pro' || plan.planName === 'Enterprise' ? ['Hỗ trợ ưu tiên'] : []),
-        ...(plan.planName === 'Enterprise' ? ['API access', 'SLA 99.9%'] : []),
+        ...(plan.price > 0 ? ['Xuất báo cáo PDF'] : []),
+        ...(plan.price >= 200000 ? ['Hỗ trợ ưu tiên'] : []),
     ];
 }
 
@@ -163,8 +162,9 @@ function PlanCard({
 }
 
 // ── Modals ────────────────────────────────────────────────────────
-function FreeConfirmModal({ plan, onClose, onSuccess }: {
+function FreeConfirmModal({ plan, current, onClose, onSuccess }: {
     plan: SubscriptionPlan;
+    current: UserSubscription | null;
     onClose: () => void;
     onSuccess: (sub: UserSubscription) => void;
 }) {
@@ -228,6 +228,24 @@ function FreeConfirmModal({ plan, onClose, onSuccess }: {
                                 ))}
                             </div>
 
+                            {current && current.price > 0 && (
+                                <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-[13px] font-medium shadow-inner animate-pulse">
+                                    <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                                    <div className="space-y-1.5 text-left">
+                                        <p className="font-extrabold uppercase text-amber-400 tracking-wider text-[11px]">Cảnh báo hạ cấp gói</p>
+                                        <p className="leading-relaxed text-[12px]">
+                                            Bạn đang hạ cấp từ gói <span className="font-extrabold text-white">[{current.planName}]</span> xuống gói <span className="font-extrabold text-white">[Khởi đầu]</span>. 
+                                        </p>
+                                        <p className="leading-relaxed text-[12px] text-rose-300 font-extrabold">
+                                            * Gói Khởi đầu sẽ có hiệu lực ngay lập tức. Gói hiện tại của bạn sẽ bị hủy bỏ.
+                                        </p>
+                                        <p className="leading-relaxed text-[12px] text-rose-300 font-extrabold">
+                                            * Hệ thống KHÔNG HOÀN LẠI TIỀN cho số ngày sử dụng chưa hết.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                             {error && (
                                 <div className="flex items-center gap-3 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[13px] font-medium shadow-inner">
                                     <AlertCircle className="w-5 h-5 shrink-0" /> {error}
@@ -280,10 +298,12 @@ function FreeConfirmModal({ plan, onClose, onSuccess }: {
     );
 }
 
-function PaidPlanModal({ plan, onClose }: { plan: SubscriptionPlan; onClose: () => void }) {
+function PaidPlanModal({ plan, current, onClose }: { plan: SubscriptionPlan; current: UserSubscription | null; onClose: () => void }) {
     const cfg = getConfig(plan.planName);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const isDowngrade = current && current.price > plan.price;
 
     const handleCheckout = async () => {
         setLoading(true);
@@ -330,6 +350,23 @@ function PaidPlanModal({ plan, onClose }: { plan: SubscriptionPlan; onClose: () 
 
                 <div className="p-8 space-y-6 text-center relative overflow-hidden">
                     <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-[#101010] to-transparent pointer-events-none opacity-50" />
+                    {isDowngrade && (
+                        <div className="flex items-start text-left gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-[13px] font-medium shadow-inner relative z-10 animate-pulse">
+                            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                            <div className="space-y-1.5">
+                                <p className="font-extrabold uppercase text-amber-400 tracking-wider text-[11px]">Xác nhận hạ cấp gói dịch vụ</p>
+                                <p className="leading-relaxed text-[12px]">
+                                    Bạn đang hạ cấp từ gói <span className="font-extrabold text-white">[{current.planName}]</span> xuống gói <span className="font-extrabold text-white">[{plan.planName}]</span>.
+                                </p>
+                                <p className="leading-relaxed text-[12px]">
+                                    Gói mới sẽ tự động được xếp lịch và có hiệu lực từ ngày <span className="font-black text-amber-300">[{new Date(current.endDate).toLocaleDateString('vi-VN')}]</span> khi gói hiện tại hết hạn.
+                                </p>
+                                <p className="leading-relaxed text-[12px] text-rose-300 font-extrabold">
+                                    * Hệ thống KHÔNG HOÀN LẠI TIỀN chênh lệch cho chu kỳ hiện tại.
+                                </p>
+                            </div>
+                        </div>
+                    )}
                     <p className="text-zinc-300 text-[15px] leading-relaxed font-medium relative z-10 px-2">
                         Bạn sẽ được chuyển sang cổng VNPay để hoàn tất thanh toán.
                     </p>
@@ -338,20 +375,22 @@ function PaidPlanModal({ plan, onClose }: { plan: SubscriptionPlan; onClose: () 
                             <AlertCircle className="w-5 h-5 shrink-0" /> {error}
                         </div>
                     )}
-                    <button
-                        onClick={handleCheckout}
-                        disabled={loading}
-                        className={`w-full py-4 rounded-xl text-white text-[15px] font-bold transition-all bg-gradient-to-r ${cfg.gradient} hover:brightness-110 shadow-lg active:scale-95 relative z-10 disabled:opacity-60 flex items-center justify-center gap-2`}
-                    >
-                        {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Đang tạo link...</> : 'Thanh toán với VNPay'}
-                    </button>
-                    <button
-                        onClick={onClose}
-                        disabled={loading}
-                        className="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-200 text-sm font-semibold transition-all relative z-10 disabled:opacity-60"
-                    >
-                        Hủy
-                    </button>
+                    <div className="flex gap-3 pt-2 relative z-10">
+                        <button
+                            onClick={onClose}
+                            disabled={loading}
+                            className="flex-1 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 text-white text-[15px] font-bold transition-all duration-300 disabled:opacity-60"
+                        >
+                            Hủy
+                        </button>
+                        <button
+                            onClick={handleCheckout}
+                            disabled={loading}
+                            className={`flex-1 py-3.5 rounded-xl text-white text-[15px] font-bold transition-all bg-gradient-to-r ${cfg.gradient} hover:brightness-110 shadow-lg active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2`}
+                        >
+                            {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Đang tạo...</> : 'Thanh toán'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -442,6 +481,7 @@ function PlansContent() {
             {selected && selected.price === 0 && (
                 <FreeConfirmModal
                     plan={selected}
+                    current={current}
                     onClose={() => setSelected(null)}
                     onSuccess={handleSuccess}
                 />
@@ -449,6 +489,7 @@ function PlansContent() {
             {selected && selected.price > 0 && (
                 <PaidPlanModal
                     plan={selected}
+                    current={current}
                     onClose={() => setSelected(null)}
                 />
             )}

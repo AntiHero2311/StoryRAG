@@ -21,12 +21,28 @@ namespace Api.Controllers
         internal const string KeyTopKReport = "rag.top_k_report";
         internal const string KeySplitter = "rag.splitter";
 
+        internal const string KeyStage1BatchChunks = "rag.stage1_batch_chunks";
+        internal const string KeyStage1MaxChunkChars = "rag.stage1_max_chunk_chars";
+        internal const string KeyFactsJsonMaxChars = "rag.facts_json_max_chars";
+        internal const string KeyBibleMaxChars = "rag.bible_max_chars";
+        internal const string KeyEstimatedTokensPerQueryEmbed = "rag.estimated_tokens_per_query_embed";
+        internal const string KeyRubricBatchSize = "rag.rubric_batch_size";
+        internal const string KeyAnalyzeRpmLimit = "gemini.analyze_rpm_limit";
+
         // Defaults — mirrors those used in EmbeddingService / ProjectReportService
         private const int DefaultChunkSize = 800;
         private const int DefaultChunkOverlap = 100;
         private const int DefaultTopKChat = 5;
-        private const int DefaultTopKReport = 8;
+        private const int DefaultTopKReport = 15;
         private const string DefaultSplitter = "paragraph";
+
+        private const int DefaultStage1BatchChunks = 8;
+        private const int DefaultStage1MaxChunkChars = 900;
+        private const int DefaultFactsJsonMaxChars = 12000;
+        private const int DefaultBibleMaxChars = 4000;
+        private const int DefaultEstimatedTokensPerQueryEmbed = 200;
+        private const int DefaultRubricBatchSize = 5;
+        private const int DefaultAnalyzeRpmLimit = 120;
 
         public AdminConfigController(ISystemConfigService sysConfig, ISystemAuditLogService auditLog)
         {
@@ -44,6 +60,14 @@ namespace Api.Controllers
             var topKReport   = await _sysConfig.GetAsync(KeyTopKReport, DefaultTopKReport);
             var splitter     = await _sysConfig.GetAsync(KeySplitter, DefaultSplitter);
 
+            var stage1BatchChunks = await _sysConfig.GetAsync(KeyStage1BatchChunks, DefaultStage1BatchChunks);
+            var stage1MaxChunkChars = await _sysConfig.GetAsync(KeyStage1MaxChunkChars, DefaultStage1MaxChunkChars);
+            var factsJsonMaxChars = await _sysConfig.GetAsync(KeyFactsJsonMaxChars, DefaultFactsJsonMaxChars);
+            var bibleMaxChars = await _sysConfig.GetAsync(KeyBibleMaxChars, DefaultBibleMaxChars);
+            var estimatedTokensPerQueryEmbed = await _sysConfig.GetAsync(KeyEstimatedTokensPerQueryEmbed, DefaultEstimatedTokensPerQueryEmbed);
+            var rubricBatchSize = await _sysConfig.GetAsync(KeyRubricBatchSize, DefaultRubricBatchSize);
+            var analyzeRpmLimit = await _sysConfig.GetAsync(KeyAnalyzeRpmLimit, DefaultAnalyzeRpmLimit);
+
             return Ok(new RagConfigResponse
             {
                 ChunkSize    = chunkSize,
@@ -51,6 +75,14 @@ namespace Api.Controllers
                 TopKChat     = topKChat,
                 TopKReport   = topKReport,
                 Splitter     = splitter,
+
+                Stage1BatchChunks = stage1BatchChunks,
+                Stage1MaxChunkChars = stage1MaxChunkChars,
+                FactsJsonMaxChars = factsJsonMaxChars,
+                BibleMaxChars = bibleMaxChars,
+                EstimatedTokensPerQueryEmbed = estimatedTokensPerQueryEmbed,
+                RubricBatchSize = rubricBatchSize,
+                AnalyzeRpmLimit = analyzeRpmLimit
             });
         }
 
@@ -80,6 +112,28 @@ namespace Api.Controllers
             if (!validSplitters.Contains(req.Splitter?.ToLower()))
                 errors.Add($"splitter phải là một trong: {string.Join(", ", validSplitters)}.");
 
+            // Dynamic validations
+            if (req.Stage1BatchChunks < 1 || req.Stage1BatchChunks > 20)
+                errors.Add("stage1_batch_chunks phải trong khoảng 1–20.");
+
+            if (req.Stage1MaxChunkChars < 200 || req.Stage1MaxChunkChars > 4000)
+                errors.Add("stage1_max_chunk_chars phải trong khoảng 200–4000.");
+
+            if (req.FactsJsonMaxChars < 2000 || req.FactsJsonMaxChars > 50000)
+                errors.Add("facts_json_max_chars phải trong khoảng 2000–50000.");
+
+            if (req.BibleMaxChars < 500 || req.BibleMaxChars > 20000)
+                errors.Add("bible_max_chars phải trong khoảng 500–20000.");
+
+            if (req.EstimatedTokensPerQueryEmbed < 0 || req.EstimatedTokensPerQueryEmbed > 2000)
+                errors.Add("estimated_tokens_per_query_embed phải trong khoảng 0–2000.");
+
+            if (req.RubricBatchSize < 1 || req.RubricBatchSize > 20)
+                errors.Add("rubric_batch_size phải trong khoảng 1–20.");
+
+            if (req.AnalyzeRpmLimit < 1 || req.AnalyzeRpmLimit > 1200)
+                errors.Add("analyze_rpm_limit phải trong khoảng 1–1200.");
+
             if (errors.Count > 0)
                 return BadRequest(new { Message = "Validation thất bại.", Errors = errors });
 
@@ -87,12 +141,55 @@ namespace Api.Controllers
             var userId = GetUserId();
             if (userId == null) return Unauthorized(new { Message = "Không xác định được danh tính admin." });
 
+            // Get old config values for metadata logging
+            var oldConfig = new System.Collections.Generic.Dictionary<string, object>
+            {
+                [KeyChunkSize] = await _sysConfig.GetAsync(KeyChunkSize, DefaultChunkSize),
+                [KeyChunkOverlap] = await _sysConfig.GetAsync(KeyChunkOverlap, DefaultChunkOverlap),
+                [KeyTopKChat] = await _sysConfig.GetAsync(KeyTopKChat, DefaultTopKChat),
+                [KeyTopKReport] = await _sysConfig.GetAsync(KeyTopKReport, DefaultTopKReport),
+                [KeySplitter] = await _sysConfig.GetAsync(KeySplitter, DefaultSplitter),
+                [KeyStage1BatchChunks] = await _sysConfig.GetAsync(KeyStage1BatchChunks, DefaultStage1BatchChunks),
+                [KeyStage1MaxChunkChars] = await _sysConfig.GetAsync(KeyStage1MaxChunkChars, DefaultStage1MaxChunkChars),
+                [KeyFactsJsonMaxChars] = await _sysConfig.GetAsync(KeyFactsJsonMaxChars, DefaultFactsJsonMaxChars),
+                [KeyBibleMaxChars] = await _sysConfig.GetAsync(KeyBibleMaxChars, DefaultBibleMaxChars),
+                [KeyEstimatedTokensPerQueryEmbed] = await _sysConfig.GetAsync(KeyEstimatedTokensPerQueryEmbed, DefaultEstimatedTokensPerQueryEmbed),
+                [KeyRubricBatchSize] = await _sysConfig.GetAsync(KeyRubricBatchSize, DefaultRubricBatchSize),
+                [KeyAnalyzeRpmLimit] = await _sysConfig.GetAsync(KeyAnalyzeRpmLimit, DefaultAnalyzeRpmLimit)
+            };
+
             await _sysConfig.SetAsync(KeyChunkSize,    req.ChunkSize,    userId.Value);
             await _sysConfig.SetAsync(KeyChunkOverlap, req.ChunkOverlap, userId.Value);
             await _sysConfig.SetAsync(KeyTopKChat,     req.TopKChat,     userId.Value);
             await _sysConfig.SetAsync(KeyTopKReport,   req.TopKReport,   userId.Value);
             await _sysConfig.SetAsync(KeySplitter,     req.Splitter!.ToLower(), userId.Value);
-            await _auditLog.LogAsync("Config", "RAG", "Cập nhật cấu hình RAG", userId.Value);
+
+            await _sysConfig.SetAsync(KeyStage1BatchChunks, req.Stage1BatchChunks, userId.Value);
+            await _sysConfig.SetAsync(KeyStage1MaxChunkChars, req.Stage1MaxChunkChars, userId.Value);
+            await _sysConfig.SetAsync(KeyFactsJsonMaxChars, req.FactsJsonMaxChars, userId.Value);
+            await _sysConfig.SetAsync(KeyBibleMaxChars, req.BibleMaxChars, userId.Value);
+            await _sysConfig.SetAsync(KeyEstimatedTokensPerQueryEmbed, req.EstimatedTokensPerQueryEmbed, userId.Value);
+            await _sysConfig.SetAsync(KeyRubricBatchSize, req.RubricBatchSize, userId.Value);
+            await _sysConfig.SetAsync(KeyAnalyzeRpmLimit, req.AnalyzeRpmLimit, userId.Value);
+
+            var newConfig = new System.Collections.Generic.Dictionary<string, object>
+            {
+                [KeyChunkSize] = req.ChunkSize,
+                [KeyChunkOverlap] = req.ChunkOverlap,
+                [KeyTopKChat] = req.TopKChat,
+                [KeyTopKReport] = req.TopKReport,
+                [KeySplitter] = req.Splitter!.ToLower(),
+                [KeyStage1BatchChunks] = req.Stage1BatchChunks,
+                [KeyStage1MaxChunkChars] = req.Stage1MaxChunkChars,
+                [KeyFactsJsonMaxChars] = req.FactsJsonMaxChars,
+                [KeyBibleMaxChars] = req.BibleMaxChars,
+                [KeyEstimatedTokensPerQueryEmbed] = req.EstimatedTokensPerQueryEmbed,
+                [KeyRubricBatchSize] = req.RubricBatchSize,
+                [KeyAnalyzeRpmLimit] = req.AnalyzeRpmLimit
+            };
+
+            var metadataJson = System.Text.Json.JsonSerializer.Serialize(new { old = oldConfig, @new = newConfig });
+            await _auditLog.LogAsync("Config", "RAG", "Cập nhật cấu hình RAG và hiệu năng hệ thống nâng cao", userId.Value, "Info", metadataJson);
 
             return Ok(new { Message = "Cấu hình RAG đã được cập nhật thành công." });
         }
@@ -105,6 +202,14 @@ namespace Api.Controllers
         [JsonPropertyName("top_k_chat")]    public int TopKChat     { get; set; }
         [JsonPropertyName("top_k_report")]  public int TopKReport   { get; set; }
         [JsonPropertyName("splitter")]      public string Splitter  { get; set; } = "paragraph";
+
+        [JsonPropertyName("stage1_batch_chunks")] public int Stage1BatchChunks { get; set; }
+        [JsonPropertyName("stage1_max_chunk_chars")] public int Stage1MaxChunkChars { get; set; }
+        [JsonPropertyName("facts_json_max_chars")] public int FactsJsonMaxChars { get; set; }
+        [JsonPropertyName("bible_max_chars")] public int BibleMaxChars { get; set; }
+        [JsonPropertyName("estimated_tokens_per_query_embed")] public int EstimatedTokensPerQueryEmbed { get; set; }
+        [JsonPropertyName("rubric_batch_size")] public int RubricBatchSize { get; set; }
+        [JsonPropertyName("analyze_rpm_limit")] public int AnalyzeRpmLimit { get; set; }
     }
 
     public class RagConfigRequest
@@ -114,5 +219,13 @@ namespace Api.Controllers
         [JsonPropertyName("top_k_chat")]    public int TopKChat     { get; set; }
         [JsonPropertyName("top_k_report")]  public int TopKReport   { get; set; }
         [JsonPropertyName("splitter")]      public string? Splitter { get; set; }
+
+        [JsonPropertyName("stage1_batch_chunks")] public int Stage1BatchChunks { get; set; }
+        [JsonPropertyName("stage1_max_chunk_chars")] public int Stage1MaxChunkChars { get; set; }
+        [JsonPropertyName("facts_json_max_chars")] public int FactsJsonMaxChars { get; set; }
+        [JsonPropertyName("bible_max_chars")] public int BibleMaxChars { get; set; }
+        [JsonPropertyName("estimated_tokens_per_query_embed")] public int EstimatedTokensPerQueryEmbed { get; set; }
+        [JsonPropertyName("rubric_batch_size")] public int RubricBatchSize { get; set; }
+        [JsonPropertyName("analyze_rpm_limit")] public int AnalyzeRpmLimit { get; set; }
     }
 }

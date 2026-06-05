@@ -170,40 +170,40 @@ builder.Services.AddRateLimiter(options =>
     };
 
     // SlidingWindow tránh burst tại ranh giới window
-    // Chat: tối đa 20 requests / phút / user
+    // Chat: tối đa 100 requests / phút / user
     options.AddSlidingWindowLimiter("AiChat", opt =>
     {
-        opt.PermitLimit = 20;
+        opt.PermitLimit = 100;
         opt.Window = TimeSpan.FromMinutes(1);
         opt.SegmentsPerWindow = 4;
         opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         opt.QueueLimit = 0;
     });
 
-    // Rewrite: tối đa 15 requests / phút / user
+    // Rewrite: tối đa 100 requests / phút / user
     options.AddSlidingWindowLimiter("AiRewrite", opt =>
     {
-        opt.PermitLimit = 15;
+        opt.PermitLimit = 100;
         opt.Window = TimeSpan.FromMinutes(1);
         opt.SegmentsPerWindow = 4;
         opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         opt.QueueLimit = 0;
     });
 
-    // Analyze: tối đa 3 requests / 10 phút / user (operation nặng)
+    // Analyze: tối đa 100 requests / phút / user
     options.AddSlidingWindowLimiter("AiAnalyze", opt =>
     {
-        opt.PermitLimit = 3;
-        opt.Window = TimeSpan.FromMinutes(10);
-        opt.SegmentsPerWindow = 5;
+        opt.PermitLimit = 100;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.SegmentsPerWindow = 4;
         opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         opt.QueueLimit = 0;
     });
 
-    // Embed: tối đa 30 requests / phút / user
+    // Embed: tối đa 200 requests / phút / user (đã tăng để tránh lỗi khi lưu/đồng bộ nhiều chương)
     options.AddSlidingWindowLimiter("AiEmbed", opt =>
     {
-        opt.PermitLimit = 30;
+        opt.PermitLimit = 200;
         opt.Window = TimeSpan.FromMinutes(1);
         opt.SegmentsPerWindow = 4;
         opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
@@ -240,18 +240,11 @@ builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
 builder.Services.AddScoped<IAiChatService, AiChatService>();
 builder.Services.AddScoped<IProjectReportService, ProjectReportService>();
 builder.Services.AddScoped<IUserSettingsService, UserSettingsService>();
-builder.Services.AddScoped<IWorldbuildingService, WorldbuildingService>();
-builder.Services.AddScoped<ICharacterService, CharacterService>();
-builder.Services.AddScoped<ICharacterRelationshipService, CharacterRelationshipService>();
 builder.Services.AddScoped<IAiWritingService, AiWritingService>();
 builder.Services.AddScoped<IBugReportService, BugReportService>();
 builder.Services.AddScoped<IStaffService, StaffService>();
 builder.Services.AddScoped<IStaffModerationService, StaffModerationService>();
-builder.Services.AddScoped<IStyleGuideService, StyleGuideService>();
-builder.Services.AddScoped<IThemeService, ThemeService>();
-builder.Services.AddScoped<IPlotNoteService, PlotNoteService>();
 builder.Services.AddScoped<IAiAnalysisHistoryService, AiAnalysisHistoryService>();
-builder.Services.AddScoped<ITimelineEventService, TimelineEventService>();
 builder.Services.AddScoped<IExportService, ExportService>();
 builder.Services.AddScoped<INarrativeAnalyticsService, NarrativeAnalyticsService>();
 builder.Services.AddScoped<IReportExportService, ReportExportService>();
@@ -262,6 +255,7 @@ builder.Services.AddSingleton<IAnalysisJobQueue, AnalysisJobQueue>();
 builder.Services.AddSingleton<IAnalysisJobCancellationRegistry, AnalysisJobCancellationRegistry>();
 builder.Services.AddHostedService<ProjectAnalysisJobWorker>();
 builder.Services.AddHostedService<AutoEmbeddingWorker>();
+builder.Services.AddHostedService<PaymentCleanupWorker>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<ISystemConfigService, SystemConfigService>();
 builder.Services.AddScoped<ISystemAuditLogService, SystemAuditLogService>();
@@ -383,6 +377,8 @@ app.UseRateLimiter();
 
 app.UseCors("AllowFrontend");
 
+app.UseStaticFiles();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -403,7 +399,7 @@ app.Run();
 
 static string GetAuthLoginPartitionKey(HttpContext context)
 {
-    var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown-ip";
+    var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown-zip";
     var email = context.Items.TryGetValue("AuthLoginEmail", out var value)
         ? value?.ToString()
         : null;

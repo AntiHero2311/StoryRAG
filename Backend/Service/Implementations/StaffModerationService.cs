@@ -11,17 +11,20 @@ namespace Service.Implementations
         private readonly AppDbContext _db;
         private readonly IEmailService _emailService;
         private readonly ISystemAuditLogService _auditLog;
+        private readonly INotificationService _notificationService;
         private readonly ILogger<StaffModerationService> _logger;
 
         public StaffModerationService(
             AppDbContext db,
             IEmailService emailService,
             ISystemAuditLogService auditLog,
+            INotificationService notificationService,
             ILogger<StaffModerationService> logger)
         {
             _db = db;
             _emailService = emailService;
             _auditLog = auditLog;
+            _notificationService = notificationService;
             _logger = logger;
         }
 
@@ -64,19 +67,30 @@ namespace Service.Implementations
 
         public async Task WarnAuthorAsync(Guid staffId, ModerationWarnRequest request)
         {
-            var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.UserId)
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId)
                 ?? throw new KeyNotFoundException("Không tìm thấy người dùng.");
+
+            user.StrikeCount += 1;
+            await _db.SaveChangesAsync();
 
             await _emailService.SendModerationWarningEmailAsync(
                 user.Email,
                 user.FullName,
                 request.Message.Trim());
 
-            await _auditLog.LogAsync("Moderation", "Warn", $"Cảnh báo tác giả {user.Email}", staffId);
+            await _notificationService.CreateForUserAsync(
+                user.Id,
+                "warning",
+                "Cảnh báo vi phạm nội dung",
+                $"Tài khoản của bạn đã bị ghi nhận vi phạm tiêu chuẩn cộng đồng (Lần {user.StrikeCount}). Chi tiết: {request.Message.Trim()}",
+                tag: "moderation",
+                createdByUserId: staffId);
+
+            await _auditLog.LogAsync("Moderation", "Warn", $"Cảnh báo tác giả {user.Email} (Lần {user.StrikeCount})", staffId);
 
             _logger.LogInformation(
-                "Staff {StaffId} sent moderation warning to user {UserId}, project {ProjectId}",
-                staffId, request.UserId, request.ProjectId);
+                "Staff {StaffId} sent moderation warning to user {UserId}, project {ProjectId}. Strike count: {StrikeCount}",
+                staffId, request.UserId, request.ProjectId, user.StrikeCount);
         }
 
         public async Task SuspendProjectAsync(Guid staffId, ModerationSuspendProjectRequest request)
@@ -97,8 +111,13 @@ namespace Service.Implementations
 
         public async Task RecommendBanAsync(Guid staffId, ModerationRecommendBanRequest request)
         {
-            var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.UserId)
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId)
                 ?? throw new KeyNotFoundException("Không tìm thấy người dùng.");
+
+            user.IsBanRequested = true;
+            user.BanRequestReason = request.Reason.Trim();
+            user.BanRequestedBy = staffId;
+            await _db.SaveChangesAsync();
 
             await _auditLog.LogAsync(
                 "Moderation",

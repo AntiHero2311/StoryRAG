@@ -1,5 +1,13 @@
 import api from './api';
 
+export interface GenreInfo {
+    id: number;
+    name: string;
+    slug: string;
+    color: string;
+    description?: string;
+}
+
 export interface UserSummary {
     id: string;
     fullName: string;
@@ -7,6 +15,13 @@ export interface UserSummary {
     role: string;
     isActive: boolean;
     createdAt: string;
+    genres: GenreInfo[];
+    strikeCount: number;
+    isBanned: boolean;
+    banReason: string | null;
+    isBanRequested: boolean;
+    banRequestReason: string | null;
+    banRequestedBy: string | null;
 }
 
 export interface UserStatsResponse {
@@ -114,6 +129,24 @@ export const adminService = {
         const response = await api.patch<UserSummary>(`/admin/users/${id}/active`, { isActive });
         return response.data;
     },
+    banUser: async (id: string, isBanned: boolean, banReason?: string): Promise<UserSummary> => {
+        const response = await api.patch<UserSummary>(`/admin/users/${id}/ban`, { isBanned, banReason });
+        return response.data;
+    },
+
+    // ── Staff Genre Specialization ────────────────────────────────────────────
+    getAllStaffWithGenres: async (): Promise<UserSummary[]> => {
+        const response = await api.get<UserSummary[]>('/admin/staff/genres');
+        return response.data;
+    },
+    getStaffGenres: async (staffId: string): Promise<UserSummary> => {
+        const response = await api.get<UserSummary>(`/admin/staff/${staffId}/genres`);
+        return response.data;
+    },
+    assignStaffGenres: async (staffId: string, genreIds: number[]): Promise<UserSummary> => {
+        const response = await api.put<UserSummary>(`/admin/staff/${staffId}/genres`, { genreIds });
+        return response.data;
+    },
 };
 
 export interface SystemLogItem {
@@ -125,6 +158,7 @@ export interface SystemLogItem {
     actorId: string | null;
     actorName: string | null;
     createdAt: string;
+    metadataJson?: string | null;
 }
 
 export interface SystemLogsPage {
@@ -142,12 +176,36 @@ export interface SystemLimits {
     totalProjects: number;
     totalChapters: number;
     totalWordCount: number;
+
+    smtpHost: string;
+    smtpPort: number;
+    smtpUsername: string;
+    smtpPassword?: string;
+    smtpFromName: string;
+    smtpFromAddress: string;
+
+    vnPayPaymentUrl: string;
+    vnPayTmnCode: string;
+    vnPayHashSecret?: string;
+    vnPayReturnUrl: string;
 }
 
 export interface SystemLimitsRequest {
     maxUploadMb: number;
     maxProjectsPerAuthor: number;
     maintenanceMode: boolean;
+
+    smtpHost: string;
+    smtpPort: number;
+    smtpUsername: string;
+    smtpPassword?: string;
+    smtpFromName: string;
+    smtpFromAddress: string;
+
+    vnPayPaymentUrl: string;
+    vnPayTmnCode: string;
+    vnPayHashSecret?: string;
+    vnPayReturnUrl: string;
 }
 
 export interface PlanRevenueItem {

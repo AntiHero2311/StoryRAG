@@ -108,6 +108,7 @@ namespace Service.Implementations
                 .AsNoTracking()
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
+                .Include(x => x.Project)
                 .AsQueryable();
 
             if (projectId.HasValue)
@@ -121,7 +122,29 @@ namespace Service.Implementations
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
-            var items = entities.Select(MapFeedback).ToList();
+
+            // Load genres for all unique staff in this batch
+            var staffIds = entities.Select(e => e.StaffId).Distinct().ToList();
+            var genreMap = staffIds.Count > 0
+                ? await _db.StaffGenres
+                    .AsNoTracking()
+                    .Where(sg => staffIds.Contains(sg.StaffId))
+                    .Include(sg => sg.Genre)
+                    .GroupBy(sg => sg.StaffId)
+                    .ToDictionaryAsync(
+                        g => g.Key,
+                        g => g.OrderBy(sg => sg.Genre.Name)
+                              .Select(sg => new GenreResponse
+                              {
+                                  Id = sg.Genre.Id,
+                                  Name = sg.Genre.Name,
+                                  Slug = sg.Genre.Slug,
+                                  Color = sg.Genre.Color,
+                                  Description = sg.Genre.Description
+                              }).ToList())
+                : new Dictionary<Guid, List<GenreResponse>>();
+
+            var items = entities.Select(e => MapFeedback(e, genreMap)).ToList();
 
             return new StaffPagedResponse<StaffFeedbackResponse>
             {
@@ -166,6 +189,7 @@ namespace Service.Implementations
             feedback = await _db.StaffFeedbacks
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
+                .Include(x => x.Project)
                 .FirstAsync(x => x.Id == feedback.Id);
 
             return MapFeedback(feedback);
@@ -219,6 +243,7 @@ namespace Service.Implementations
             feedback = await _db.StaffFeedbacks
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
+                .Include(x => x.Project)
                 .FirstAsync(x => x.Id == feedback.Id);
 
             return MapFeedback(feedback);
@@ -229,6 +254,7 @@ namespace Service.Implementations
             var feedback = await _db.StaffFeedbacks
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
+                .Include(x => x.Project)
                 .FirstOrDefaultAsync(x => x.Id == feedbackId)
                 ?? throw new KeyNotFoundException("Không tìm thấy feedback.");
 
@@ -294,26 +320,50 @@ namespace Service.Implementations
         }
 
 
-        public async Task<StaffPagedResponse<StaffPendingReportItem>> GetPendingReportsAsync(int page, int pageSize)
+        public async Task<StaffPagedResponse<StaffPendingReportItem>> GetPendingReportsAsync(int page, int pageSize, string? status = null, Guid? staffId = null, bool isAdmin = false)
         {
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 1, 100);
-
-            var pendingStatuses = new[]
-            {
-                ProjectReportService.ReviewStatusPendingStaff,
-                ProjectReportService.ReviewStatusStaffReviewing
-            };
 
             var query = _db.ProjectReports
                 .AsNoTracking()
                 .Include(r => r.Project)
                     .ThenInclude(p => p.Author)
-                // Report cũ có thể chưa có ReviewStatus (null/empty) — xem như pending để staff vẫn review được.
-                .Where(r =>
+                .AsQueryable();
+
+            if (!isAdmin && staffId.HasValue)
+            {
+                var staffGenreIds = await _db.StaffGenres
+                    .Where(sg => sg.StaffId == staffId.Value)
+                    .Select(sg => sg.GenreId)
+                    .ToListAsync();
+
+                query = query.Where(r =>
+                    !r.Project.ProjectGenres.Any() ||
+                    r.Project.ProjectGenres.Any(pg => staffGenreIds.Contains(pg.GenreId)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(status) && status.Equals("all", StringComparison.OrdinalIgnoreCase))
+            {
+                // No filter, show all reports
+            }
+            else if (!string.IsNullOrWhiteSpace(status) && status.Equals("Released", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(r => r.ReviewStatus == ProjectReportService.ReviewStatusReleased);
+            }
+            else
+            {
+                var pendingStatuses = new[]
+                {
+                    ProjectReportService.ReviewStatusPendingStaff,
+                    ProjectReportService.ReviewStatusStaffReviewing
+                };
+                query = query.Where(r =>
                     string.IsNullOrWhiteSpace(r.ReviewStatus) ||
-                    pendingStatuses.Contains(r.ReviewStatus))
-                .OrderByDescending(r => r.UpdatedAt ?? r.CreatedAt);
+                    pendingStatuses.Contains(r.ReviewStatus));
+            }
+
+            query = query.OrderByDescending(r => r.UpdatedAt ?? r.CreatedAt);
 
             var total = await query.CountAsync();
             var reports = await query
@@ -348,6 +398,7 @@ namespace Service.Implementations
                         : report.ReviewStatus!,
                     CreatedAt = report.CreatedAt,
                     UpdatedAt = report.UpdatedAt,
+                    Warnings = ExtractWarningCodes(report.CriteriaJson, report.StaffEditedCriteriaJson),
                 };
             }).ToList();
 
@@ -430,7 +481,9 @@ namespace Service.Implementations
                 {
                     j.Id,
                     j.ProjectId,
+                    ProjectTitle = j.Project.Title,
                     RequestedBy = j.UserId,
+                    RequestedByName = !string.IsNullOrEmpty(j.User.FullName) ? j.User.FullName : j.User.Email,
                     j.Status,
                     j.ErrorMessage,
                     j.StartedAt,
@@ -439,28 +492,27 @@ namespace Service.Implementations
                 })
                 .AsQueryable();
 
-            if (statuses.Contains("failed"))
+            if (statuses.Contains("all"))
             {
-                // keep in query; additional filters below
-            }
-
-            var wantFailed = statuses.Contains("failed");
-            var wantStale = statuses.Contains("stale");
-
-            if (wantFailed && !wantStale)
-            {
-                query = query.Where(x => x.Status == "Failed");
-            }
-            else if (!wantFailed && wantStale)
-            {
-                query = query.Where(x => x.Status == "Processing" && (x.UpdatedAt ?? x.StartedAt ?? x.CreatedAt) < staleBefore);
+                // no filter
             }
             else
             {
-                // default or both
+                var wantFailed = statuses.Contains("failed");
+                var wantStale = statuses.Contains("stale");
+                var wantQueued = statuses.Contains("queued");
+                var wantProcessing = statuses.Contains("processing");
+                var wantCompleted = statuses.Contains("completed");
+                var wantCancelled = statuses.Contains("cancelled");
+
                 query = query.Where(x =>
-                    x.Status == "Failed" ||
-                    (x.Status == "Processing" && (x.UpdatedAt ?? x.StartedAt ?? x.CreatedAt) < staleBefore));
+                    (wantFailed && x.Status == "Failed") ||
+                    (wantQueued && x.Status == "Queued") ||
+                    (wantProcessing && x.Status == "Processing" && (x.UpdatedAt ?? x.StartedAt ?? x.CreatedAt) >= staleBefore) ||
+                    (wantStale && x.Status == "Processing" && (x.UpdatedAt ?? x.StartedAt ?? x.CreatedAt) < staleBefore) ||
+                    (wantCompleted && x.Status == "Completed") ||
+                    (wantCancelled && x.Status == "Cancelled")
+                );
             }
 
             var items = await query
@@ -472,7 +524,9 @@ namespace Service.Implementations
             {
                 Id = x.Id,
                 ProjectId = x.ProjectId,
+                ProjectTitle = x.ProjectTitle,
                 RequestedBy = x.RequestedBy,
+                RequestedByName = x.RequestedByName,
                 Status = x.Status,
                 ErrorMessage = x.ErrorMessage,
                 StartedAt = x.StartedAt,
@@ -484,6 +538,8 @@ namespace Service.Implementations
         {
             var oldJob = await _db.ProjectAnalysisJobs
                 .AsNoTracking()
+                .Include(j => j.Project)
+                .Include(j => j.User)
                 .FirstOrDefaultAsync(j => j.Id == jobId)
                 ?? throw new KeyNotFoundException("Không tìm thấy job phân tích.");
 
@@ -534,7 +590,9 @@ namespace Service.Implementations
             {
                 Id = newJob.Id,
                 ProjectId = newJob.ProjectId,
+                ProjectTitle = oldJob.Project?.Title ?? string.Empty,
                 RequestedBy = newJob.UserId,
+                RequestedByName = oldJob.User != null ? (!string.IsNullOrEmpty(oldJob.User.FullName) ? oldJob.User.FullName : oldJob.User.Email) : string.Empty,
                 Status = newJob.Status,
                 ErrorMessage = newJob.ErrorMessage,
                 StartedAt = newJob.StartedAt,
@@ -554,17 +612,34 @@ namespace Service.Implementations
             var masterKey = _config["Security:MasterKey"] ?? throw new InvalidOperationException("Thiếu cấu hình Security:MasterKey.");
 
             var projectTitle = "[Encrypted Title]";
+            ContentAnalysisResult? contentRes = null;
             if (!string.IsNullOrWhiteSpace(report.Project?.Author?.DataEncryptionKey))
             {
                 var authorDek = EncryptionHelper.DecryptWithMasterKey(report.Project.Author.DataEncryptionKey, masterKey);
                 projectTitle = EncryptionHelper.DecryptWithMasterKey(report.Project.Title, authorDek);
+
+                if (!string.IsNullOrWhiteSpace(report.ContentAnalysisJson))
+                {
+                    var decData = EncryptionHelper.DecryptWithMasterKey(report.ContentAnalysisJson, authorDek);
+                    var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    try { contentRes = System.Text.Json.JsonSerializer.Deserialize<ContentAnalysisResult>(decData, jsonOpts); } catch { }
+                }
             }
-            else if (report.Project != null)
+            string? authorWarningMessage = null;
+            if (report.Project?.AuthorId != null)
             {
-                projectTitle = report.Project.Title;
+                var warningNotif = await _db.Notifications
+                    .AsNoTracking()
+                    .Where(n => n.UserId == report.Project.AuthorId && n.Type == "warning" && n.Tag == "moderation")
+                    .OrderByDescending(n => n.CreatedAt)
+                    .FirstOrDefaultAsync();
+                if (warningNotif != null)
+                {
+                    authorWarningMessage = warningNotif.Message;
+                }
             }
 
-            return MapReportDetail(report, projectTitle);
+            return MapReportDetail(report, projectTitle, contentRes, authorWarningMessage);
         }
 
         public async Task<StaffReportStoryResponse> GetReportStoryAsync(Guid reportId)
@@ -784,17 +859,34 @@ namespace Service.Implementations
 
             var masterKey = _config["Security:MasterKey"] ?? throw new InvalidOperationException("Thiếu cấu hình Security:MasterKey.");
             var projectTitle = "[Encrypted Title]";
+            ContentAnalysisResult? contentRes = null;
             if (!string.IsNullOrWhiteSpace(report.Project?.Author?.DataEncryptionKey))
             {
                 var authorDek = EncryptionHelper.DecryptWithMasterKey(report.Project.Author.DataEncryptionKey, masterKey);
                 projectTitle = EncryptionHelper.DecryptWithMasterKey(report.Project.Title, authorDek);
+
+                if (!string.IsNullOrWhiteSpace(report.ContentAnalysisJson))
+                {
+                    var decData = EncryptionHelper.DecryptWithMasterKey(report.ContentAnalysisJson, authorDek);
+                    var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    try { contentRes = System.Text.Json.JsonSerializer.Deserialize<ContentAnalysisResult>(decData, jsonOpts); } catch { }
+                }
             }
-            else if (report.Project != null)
+            string? authorWarningMessage = null;
+            if (report.Project?.AuthorId != null)
             {
-                projectTitle = report.Project.Title;
+                var warningNotif = await _db.Notifications
+                    .AsNoTracking()
+                    .Where(n => n.UserId == report.Project.AuthorId && n.Type == "warning" && n.Tag == "moderation")
+                    .OrderByDescending(n => n.CreatedAt)
+                    .FirstOrDefaultAsync();
+                if (warningNotif != null)
+                {
+                    authorWarningMessage = warningNotif.Message;
+                }
             }
 
-            return MapReportDetail(report, projectTitle);
+            return MapReportDetail(report, projectTitle, contentRes, authorWarningMessage);
         }
 
         private static HashSet<string> ParseStatuses(string? status)
@@ -805,7 +897,7 @@ namespace Service.Implementations
             return status
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Select(s => s.Trim().ToLowerInvariant())
-                .Where(s => s is "failed" or "stale")
+                .Where(s => s is "failed" or "stale" or "queued" or "processing" or "completed" or "cancelled" or "all")
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
 
@@ -825,12 +917,16 @@ namespace Service.Implementations
             return text.Trim();
         }
 
-        private static StaffFeedbackResponse MapFeedback(StaffFeedback feedback)
+        private static StaffFeedbackResponse MapFeedback(
+            StaffFeedback feedback,
+            Dictionary<Guid, List<GenreResponse>>? genreMap = null)
         {
+            var genres = genreMap != null && genreMap.TryGetValue(feedback.StaffId, out var g) ? g : new List<GenreResponse>();
             return new StaffFeedbackResponse
             {
                 Id = feedback.Id,
                 ProjectId = feedback.ProjectId,
+                ProjectTitle = feedback.Project?.Title ?? string.Empty,
                 ProjectReportId = feedback.ProjectReportId,
                 ChapterId = feedback.ChapterId,
                 AuthorId = feedback.AuthorId,
@@ -846,6 +942,7 @@ namespace Service.Implementations
                 CreatedAt = feedback.CreatedAt,
                 UpdatedAt = feedback.UpdatedAt,
                 ReadAt = feedback.ReadAt,
+                StaffGenres = genres,
             };
         }
 
@@ -866,7 +963,7 @@ namespace Service.Implementations
             };
         }
 
-        private static StaffReportDetailResponse MapReportDetail(ProjectReport report, string projectTitle)
+        private static StaffReportDetailResponse MapReportDetail(ProjectReport report, string projectTitle, ContentAnalysisResult? contentAnalysis = null, string? authorWarningMessage = null)
         {
             // Phân loại điểm số
             var classification = report.TotalScore >= 85 ? "Xuất sắc"
@@ -912,6 +1009,14 @@ namespace Service.Implementations
                 StaffEditedCriteriaJson = report.StaffEditedCriteriaJson,
                 CreatedAt = report.CreatedAt,
                 UpdatedAt = report.UpdatedAt,
+                ContentAnalysis = contentAnalysis,
+                AuthorId = report.Project?.AuthorId ?? Guid.Empty,
+                AuthorName = report.Project?.Author?.FullName ?? string.Empty,
+                AuthorStrikeCount = report.Project?.Author?.StrikeCount ?? 0,
+                AuthorIsBanned = report.Project?.Author?.IsBanned ?? false,
+                AuthorIsBanRequested = report.Project?.Author?.IsBanRequested ?? false,
+                AuthorBanRequestReason = report.Project?.Author?.BanRequestReason,
+                AuthorWarningMessage = authorWarningMessage,
             };
         }
 
@@ -957,6 +1062,41 @@ namespace Service.Implementations
             }
 
             return null;
+        }
+
+        private static List<string> ExtractWarningCodes(string? criteriaJson, string? staffEditedCriteriaJson)
+        {
+            var codes = new List<string>();
+            var source = staffEditedCriteriaJson ?? criteriaJson;
+            if (string.IsNullOrWhiteSpace(source)) return codes;
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(source);
+                if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    if (doc.RootElement.TryGetProperty("Warnings", out var warningsProp) ||
+                        doc.RootElement.TryGetProperty("warnings", out warningsProp))
+                    {
+                        if (warningsProp.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            foreach (var item in warningsProp.EnumerateArray())
+                            {
+                                if (item.TryGetProperty("Code", out var codeProp) ||
+                                    item.TryGetProperty("code", out codeProp))
+                                {
+                                    var code = codeProp.GetString();
+                                    if (!string.IsNullOrEmpty(code))
+                                    {
+                                        codes.Add(code);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            return codes;
         }
     }
 }

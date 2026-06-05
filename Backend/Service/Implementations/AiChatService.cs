@@ -87,6 +87,21 @@ namespace Service.Implementations
             if (sub == null)
                 throw new InvalidOperationException("Bạn chưa có gói đăng ký hợp lệ. Vui lòng đăng ký gói để dùng AI Chat.");
 
+            // Pre-check token TRƯỚC khi gọi AI — tránh tốn chi phí API khi đã hết quota.
+            // Ước tính nhanh: ~4 ký tự = 1 token (phù hợp với tiếng Việt và tiếng Anh).
+            var remainingTokens = sub.Plan.MaxTokenLimit - sub.UsedTokens;
+            if (remainingTokens <= 0)
+                throw new InvalidOperationException(
+                    $"Bạn đã dùng hết {sub.Plan.MaxTokenLimit:N0} token trong kỳ này. " +
+                    "Vui lòng nâng cấp gói để tiếp tục sử dụng AI Chat.");
+
+            // Ước tính token đầu vào tối thiểu (chỉ câu hỏi, chưa tính context) để cảnh báo sớm.
+            var estimatedMinInputTokens = (question.Length + 200) / 4; // +200 cho system overhead
+            if (remainingTokens < estimatedMinInputTokens)
+                throw new InvalidOperationException(
+                    $"Không đủ token để xử lý yêu cầu này. Còn lại: {remainingTokens:N0} token. " +
+                    "Vui lòng nâng cấp gói hoặc đặt câu hỏi ngắn hơn.");
+
             // Chat chỉ kiểm tra token, không tiêu hao lượt phân tích
 
             // 3. Chunk/embed các chapter active nếu chưa sẵn sàng
@@ -105,22 +120,34 @@ namespace Service.Implementations
                 .ToListAsync();
 
             var topChunks = await _context.ChapterChunks
+                .Include(c => c.Version)
+                .ThenInclude(v => v.Chapter)
                 .Where(c => c.ProjectId == projectId && c.Embedding != null && activeVersionIds.Contains(c.VersionId))
                 .OrderBy(c => c.Embedding!.CosineDistance(queryVector))
                 .Take(contextProfile.ChunkTopK)
                 .ToListAsync();
 
-            var topWorldbuilding = await _context.WorldbuildingEntries
-                .Where(w => w.ProjectId == projectId && w.Embedding != null)
-                .OrderBy(w => w.Embedding!.CosineDistance(queryVector))
-                .Take(contextProfile.WorldbuildingTopK)
-                .ToListAsync();
+            // Find the latest completed report for this project to get the Story Bible snapshot
+            var latestReport = await _context.ProjectReports
+                .Where(r => r.ProjectId == projectId && r.Status == "Completed")
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync();
 
-            var topCharacters = await _context.CharacterEntries
-                .Where(c => c.ProjectId == projectId && c.Embedding != null)
-                .OrderBy(c => c.Embedding!.CosineDistance(queryVector))
-                .Take(contextProfile.CharacterTopK)
-                .ToListAsync();
+            List<ReportWorldbuildingEntry> topWorldbuilding = new();
+            List<ReportCharacterEntry> topCharacters = new();
+
+            if (latestReport != null)
+            {
+                topWorldbuilding = await _context.ReportWorldbuildingEntries
+                    .Where(w => w.ProjectReportId == latestReport.Id)
+                    .Take(contextProfile.WorldbuildingTopK)
+                    .ToListAsync();
+
+                topCharacters = await _context.ReportCharacterEntries
+                    .Where(c => c.ProjectReportId == latestReport.Id)
+                    .Take(contextProfile.CharacterTopK)
+                    .ToListAsync();
+            }
 
             if (topChunks.Count == 0 && topWorldbuilding.Count == 0 && topCharacters.Count == 0)
                 throw new InvalidOperationException("Chưa có nội dung đủ để chat trong dự án này.");
@@ -137,9 +164,19 @@ namespace Service.Implementations
                 : null;
 
             var contextTexts = topChunks
-                .Select(c => TruncateForContext(
-                    EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek),
-                    contextProfile.MaxChunkChars))
+                .Select(c => {
+                    var plain = TruncateForContext(
+                        EncryptionHelper.DecryptWithMasterKey(c.Content, rawDek),
+                        contextProfile.MaxChunkChars);
+                    
+                    var chNum = c.Version?.Chapter?.ChapterNumber;
+                    var chTitle = c.Version?.Chapter?.Title;
+                    var locationStr = chNum.HasValue
+                        ? (string.IsNullOrWhiteSpace(chTitle) ? $"Chương {chNum.Value}" : $"Chương {chNum.Value}: {chTitle}")
+                        : "Không rõ chương";
+
+                    return $"[Vị trí: {locationStr}]\n{plain}";
+                })
                 .ToList();
 
             var worldbuildingTexts = topWorldbuilding
@@ -182,11 +219,37 @@ namespace Service.Implementations
 
             var systemPrompt = BuildSystemPrompt(projectTitle, sanitizedSummary, sanitizedInstructions, sanitizedContextTexts, sanitizedWorldTexts, sanitizedCharTexts);
 
+            // Tải 5 lượt đối thoại gần nhất (tối đa 10 tin nhắn) để làm bộ nhớ ngữ cảnh hội thoại đa lượt
+            var recentMessages = await _context.ChatMessages
+                .Where(m => m.ProjectId == projectId && m.UserId == userId)
+                .OrderByDescending(m => m.CreatedAt)
+                .Take(5)
+                .ToListAsync();
+
+            // Đảo ngược để xếp theo trình tự thời gian tăng dần (từ cũ đến mới)
+            recentMessages.Reverse();
+
             var messages = new List<ChatMessage>
             {
-                ChatMessage.CreateSystemMessage(systemPrompt),
-                ChatMessage.CreateUserMessage(sanitizedQuestion),
+                ChatMessage.CreateSystemMessage(systemPrompt)
             };
+
+            foreach (var msg in recentMessages)
+            {
+                var pastQuestion = EncryptionHelper.DecryptWithMasterKey(msg.Question, rawDek);
+                var pastAnswer = EncryptionHelper.DecryptWithMasterKey(msg.Answer, rawDek);
+
+                if (!string.IsNullOrWhiteSpace(pastQuestion))
+                {
+                    messages.Add(ChatMessage.CreateUserMessage(PromptSanitizer.SanitizeUserContent(pastQuestion)));
+                }
+                if (!string.IsNullOrWhiteSpace(pastAnswer))
+                {
+                    messages.Add(ChatMessage.CreateAssistantMessage(pastAnswer));
+                }
+            }
+
+            messages.Add(ChatMessage.CreateUserMessage(sanitizedQuestion));
 
             var response = await CompleteChatWithGeminiAsync(messages);
             var completion = response;
@@ -377,6 +440,7 @@ namespace Service.Implementations
 
                 Hướng dẫn:
                 - Trả lời dựa trên nội dung được cung cấp trong <story_context>.
+                - Khi trích dẫn hoặc nhắc đến các tình tiết, nhân vật hay sự kiện, hãy chỉ rõ chương nào (dựa trên nhãn '[Vị trí: Chương X]' được cung cấp ở đầu mỗi đoạn truyện tương ứng) để tác giả dễ dàng tra cứu. Tuyệt đối KHÔNG sử dụng các thuật ngữ kỹ thuật hệ thống như 'chunk', 'chunk_ord' hay 'đoạn trích X' trong phản hồi dành cho tác giả.
                 - Được phép suy luận và tổng hợp thông tin từ các đoạn để đưa ra câu trả lời hợp lý.
                 - Nếu thực sự không có thông tin liên quan trong context, hãy nói rõ "Nội dung được cung cấp chưa đề cập đến thông tin này."
                 - Trả lời bằng tiếng Việt, súc tích và chính xác.

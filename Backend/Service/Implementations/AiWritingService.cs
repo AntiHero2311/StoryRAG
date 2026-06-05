@@ -30,9 +30,25 @@ namespace Service.Implementations
                 TimeSpan.FromMinutes(4));
         }
 
-        private Task<OpenAI.Chat.ChatCompletion> CompleteChatWithGeminiAsync(IEnumerable<ChatMessage> messages)
+        private Task<OpenAI.Chat.ChatCompletion> CompleteChatWithGeminiAsync(
+            IEnumerable<ChatMessage> messages,
+            int maxTokens = 2500,
+            float temperature = 0.7f,
+            bool jsonMode = false,
+            CancellationToken cancellationToken = default)
         {
-            return _geminiChatExecutor.CompleteAsync(messages);
+            var options = new ChatCompletionOptions
+            {
+                MaxOutputTokenCount = maxTokens,
+                Temperature = temperature,
+            };
+
+            if (jsonMode)
+            {
+                options.ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat();
+            }
+
+            return _geminiChatExecutor.CompleteAsync(messages, options, cancellationToken);
         }
 
         private async Task CheckAndDeductTokenAsync(Guid projectId, Guid userId)
@@ -72,45 +88,74 @@ namespace Service.Implementations
             await CheckAndDeductTokenAsync(projectId, userId);
 
             var safeContent = PromptSanitizer.SanitizeAndWarn(chapterContent, _logger, "AnalyzeScenes");
-            var systemPrompt = "Bạn là biên tập viên văn học chuyên phân tích cấu trúc. " +
+            var systemPrompt = "OUTPUT RULE (ABSOLUTE): Respond with ONE valid JSON object only. Start with '{', end with '}'. NO markdown, NO comments, NO text outside JSON.\n" +
+                               "Bạn là biên tập viên văn học chuyên phân tích cấu trúc. " +
                                "Nhiệm vụ: đọc chương truyện và phân rã thành các phân cảnh (Scenes/Beats). " +
-                               "QUAN TRỌNG: Chỉ dựa vào văn bản được cung cấp. " +
-                               "Trả về JSON thuần túy, không thêm bất kỳ text nào: " +
+                               "QUAN TRỌNG: Chỉ dựa vào văn bản được cung cấp.\n" +
+                               "JSON SCHEMA:\n" +
                                "{\"chapterSummary\":\"...\",\"scenes\":[{\"title\":\"...\",\"description\":\"...\",\"exactQuote\":\"trích dẫn CHÍNH XÁC NGUYÊN VĂN 1-3 câu dài và quan trọng nhất từ văn bản gốc để đại diện cho cảnh này (sẽ dùng để highlight)\",\"type\":\"Action|Dialogue|Introspection|Transition|Revelation\"}]}";
             var userMsg = $"Phân rã thành các Cảnh:\n<chapter>\n{safeContent[..Math.Min(15000, safeContent.Length)]}\n</chapter>";
 
             var messages = new List<ChatMessage> { ChatMessage.CreateSystemMessage(systemPrompt), ChatMessage.CreateUserMessage(userMsg) };
-            var completion = await CompleteChatWithGeminiAsync(messages);
+            var completion = await CompleteChatWithGeminiAsync(messages, jsonMode: true);
             var rawText = completion.Content[0].Text.Trim();
             var tokens = completion.Usage?.TotalTokenCount ?? 0;
-            await DeductTokenAsync(userId, tokens);
 
-            // Parse JSON
+            string jsonText = ExtractJsonPayload(rawText);
+            SceneAnalysisRaw? parsed = null;
+            var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
             try
             {
-                var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                // Strip markdown fences if any
-                var json = rawText.Trim('`').TrimStart("json\n".ToCharArray()).Trim();
-                var idx1 = json.IndexOf('{'); var idx2 = json.LastIndexOf('}');
-                if (idx1 >= 0 && idx2 > idx1) json = json[idx1..(idx2 + 1)];
-                var parsed = System.Text.Json.JsonSerializer.Deserialize<SceneAnalysisRaw>(json, jsonOpts);
+                parsed = System.Text.Json.JsonSerializer.Deserialize<SceneAnalysisRaw>(jsonText, jsonOpts);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "AnalyzeScenes: AI không trả về JSON hợp lệ, tiến hành retry...");
+
+                var retryMessages = new List<ChatMessage>(messages)
+                {
+                    ChatMessage.CreateAssistantMessage(rawText),
+                    ChatMessage.CreateUserMessage(
+                        "Phản hồi trước không phải JSON object hợp lệ. " +
+                        "Hãy trả về DUY NHẤT một JSON object bắt đầu bằng '{' và kết thúc bằng '}', " +
+                        "không có bất kỳ văn bản nào trước hoặc sau, không có markdown.")
+                };
+
+                var retryCompletion = await CompleteChatWithGeminiAsync(retryMessages, jsonMode: true);
+                tokens += retryCompletion.Usage?.TotalTokenCount ?? 0;
+                rawText = retryCompletion.Content[0].Text.Trim();
+                jsonText = ExtractJsonPayload(rawText);
+
+                try
+                {
+                    parsed = System.Text.Json.JsonSerializer.Deserialize<SceneAnalysisRaw>(jsonText, jsonOpts);
+                }
+                catch (Exception rEx)
+                {
+                    _logger.LogError(rEx, "AnalyzeScenes: Retry parse JSON vẫn thất bại.");
+                }
+            }
+
+            await DeductTokenAsync(userId, tokens);
+
+            if (parsed != null)
+            {
                 return new AiSceneAnalysisResult
                 {
-                    ChapterSummary = parsed?.ChapterSummary ?? "",
-                    Scenes = parsed?.Scenes?.Select(s => new SceneItem
+                    ChapterSummary = parsed.ChapterSummary ?? "",
+                    Scenes = parsed.Scenes?.Select(s => new SceneItem
                     {
                         Title = s.Title ?? "",
                         Description = s.Description ?? "",
-                        ExactQuote = s.ExactQuote ?? s.OpeningLine ?? "", // Fallback
+                        ExactQuote = s.ExactQuote ?? s.OpeningLine ?? "",
                         Type = s.Type ?? "Action"
                     }).ToList() ?? new(),
                     TotalTokens = tokens
                 };
             }
-            catch
-            {
-                return new AiSceneAnalysisResult { ChapterSummary = rawText, Scenes = new(), TotalTokens = tokens };
-            }
+
+            return new AiSceneAnalysisResult { ChapterSummary = rawText, Scenes = new(), TotalTokens = tokens };
         }
 
         public async Task<AiCliffhangerResult> AnalyzeCliffhangerAsync(Guid projectId, string chapterContent, Guid userId)
@@ -118,30 +163,78 @@ namespace Service.Implementations
             await CheckAndDeductTokenAsync(projectId, userId);
 
             var safeContent = PromptSanitizer.SanitizeAndWarn(chapterContent, _logger, "AnalyzeCliffhanger");
-            var systemPrompt = "Bạn là biên tập viên văn học chuyên phân tích cấu trúc truyện. " +
+            var systemPrompt = "OUTPUT RULE (ABSOLUTE): Respond with ONE valid JSON object only. Start with '{', end with '}'. NO markdown, NO comments, NO text outside JSON.\n" +
+                               "Bạn là biên tập viên văn học chuyên phân tích cấu trúc truyện. " +
                                "Phân tích cấu trúc 3 hồi (Setup/Conflict/Climax) và phát hiện điểm Hạ hồi phân giải (Cliffhanger). " +
-                               "ZERO HALLUCINATION: Chỉ dựa vào văn bản được cung cấp, không suy diễn thêm. " +
-                               "Trả về JSON thuần túy: " +
+                               "ZERO HALLUCINATION: Chỉ dựa vào văn bản được cung cấp, không suy diễn thêm.\n" +
+                               "JSON SCHEMA:\n" +
                                "{\"hasCliffhanger\":true/false,\"cliffhangerDescription\":\"...\",\"cliffhangerQuote\":\"câu văn gốc tạo cliffhanger\",\"actSetup\":\"mô tả hồi 1\",\"actConflict\":\"mô tả hồi 2\",\"actClimax\":\"mô tả hồi 3\",\"structureFeedback\":\"nhận xét tổng thể 2-3 câu\"}";
             var userMsg = $"Phân tích cấu trúc và Cliffhanger:\n<chapter>\n{safeContent[..Math.Min(15000, safeContent.Length)]}\n</chapter>";
 
             var messages = new List<ChatMessage> { ChatMessage.CreateSystemMessage(systemPrompt), ChatMessage.CreateUserMessage(userMsg) };
-            var completion = await CompleteChatWithGeminiAsync(messages);
+            var completion = await CompleteChatWithGeminiAsync(messages, jsonMode: true);
             var rawText = completion.Content[0].Text.Trim();
             var tokens = completion.Usage?.TotalTokenCount ?? 0;
-            await DeductTokenAsync(userId, tokens);
+
+            string jsonText = ExtractJsonPayload(rawText);
+            AiCliffhangerResult? parsed = null;
+            var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
             try
             {
-                var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var json = rawText.Trim('`').TrimStart("json\n".ToCharArray()).Trim();
-                var idx1 = json.IndexOf('{'); var idx2 = json.LastIndexOf('}');
-                if (idx1 >= 0 && idx2 > idx1) json = json[idx1..(idx2 + 1)];
-                var parsed = System.Text.Json.JsonSerializer.Deserialize<AiCliffhangerResult>(json, jsonOpts);
-                if (parsed != null) { parsed.TotalTokens = tokens; return parsed; }
+                parsed = System.Text.Json.JsonSerializer.Deserialize<AiCliffhangerResult>(jsonText, jsonOpts);
             }
-            catch { /* fallback below */ }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "AnalyzeCliffhanger: AI không trả về JSON hợp lệ, tiến hành retry...");
+
+                var retryMessages = new List<ChatMessage>(messages)
+                {
+                    ChatMessage.CreateAssistantMessage(rawText),
+                    ChatMessage.CreateUserMessage(
+                        "Phản hồi trước không phải JSON object hợp lệ. " +
+                        "Hãy trả về DUY NHẤT một JSON object bắt đầu bằng '{' và kết thúc bằng '}', " +
+                        "không có bất kỳ văn bản nào trước hoặc sau, không có markdown.")
+                };
+
+                var retryCompletion = await CompleteChatWithGeminiAsync(retryMessages, jsonMode: true);
+                tokens += retryCompletion.Usage?.TotalTokenCount ?? 0;
+                rawText = retryCompletion.Content[0].Text.Trim();
+                jsonText = ExtractJsonPayload(rawText);
+
+                try
+                {
+                    parsed = System.Text.Json.JsonSerializer.Deserialize<AiCliffhangerResult>(jsonText, jsonOpts);
+                }
+                catch (Exception rEx)
+                {
+                    _logger.LogError(rEx, "AnalyzeCliffhanger: Retry parse JSON vẫn thất bại.");
+                }
+            }
+
+            await DeductTokenAsync(userId, tokens);
+
+            if (parsed != null)
+            {
+                parsed.TotalTokens = tokens;
+                return parsed;
+            }
+
             return new AiCliffhangerResult { StructureFeedback = rawText, TotalTokens = tokens };
+        }
+
+        private static string ExtractJsonPayload(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return text;
+
+            var objStart = text.IndexOf('{');
+            var objEnd = text.LastIndexOf('}');
+            if (objStart >= 0 && objEnd > objStart)
+            {
+                return text[objStart..(objEnd + 1)];
+            }
+            return text;
         }
 
         // ── Inner raw parse types ─────────────────────────────────────────────────
