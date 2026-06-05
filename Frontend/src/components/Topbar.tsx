@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Settings, Bell, ChevronDown, LogOut, User, Sparkles, X,
@@ -14,6 +14,7 @@ import {
 import { appNotificationService, type AppNotificationItem } from '../services/appNotificationService';
 import { notificationService, type NotificationType } from '../services/notificationService';
 import BugReportModal from './BugReportModal';
+import Modal from './ui/Modal';
 
 interface TopbarProps {
     fullName: string;
@@ -58,6 +59,31 @@ function getNotificationDot(type: AppNotificationItem['type']) {
     return '#60a5fa';
 }
 
+function getNotificationTypeLabel(type: AppNotificationItem['type']) {
+    if (type === 'success') return 'Thành công';
+    if (type === 'error') return 'Lỗi';
+    if (type === 'warning') return 'Cảnh báo';
+    return 'Thông tin';
+}
+
+function getNotificationTypeStyle(type: AppNotificationItem['type']) {
+    if (type === 'success') return { bg: 'rgba(34,197,94,0.12)', color: '#86efac', border: 'rgba(34,197,94,0.3)' };
+    if (type === 'error') return { bg: 'rgba(248,113,113,0.12)', color: '#fca5a5', border: 'rgba(248,113,113,0.3)' };
+    if (type === 'warning') return { bg: 'rgba(251,191,36,0.12)', color: '#fcd34d', border: 'rgba(251,191,36,0.3)' };
+    return { bg: 'rgba(96,165,250,0.12)', color: '#93c5fd', border: 'rgba(96,165,250,0.3)' };
+}
+
+function formatNotificationDateTime(iso: string) {
+    return new Date(iso).toLocaleString('vi-VN', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
 const BUG_FEEDBACK_SEEN_KEY = 'storyrag:bug-feedback-seen-v1';
 
 function getSeenBugFeedbackMap(): Record<string, string> {
@@ -91,8 +117,11 @@ function getBugStatusLabel(status: BugReportResponse['status']) {
 // ── Component ──────────────────────────────────────────────────────────────────
 export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings }: TopbarProps) {
     const navigate = useNavigate();
+    const bellRef = useRef<HTMLButtonElement>(null);
     const [userOpen, setUserOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
+    const [notifPanelPos, setNotifPanelPos] = useState({ top: 72, right: 20 });
+    const [detailNotification, setDetailNotification] = useState<AppNotificationItem | null>(null);
     const [notifications, setNotifications] = useState<AppNotificationItem[]>(() => appNotificationService.getAll());
     const [serverNotifications, setServerNotifications] = useState<AppNotificationItem[]>([]);
     const [notifCreateOpen, setNotifCreateOpen] = useState(false);
@@ -212,17 +241,40 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
         };
     }, [role]);
 
+    const updateNotifPanelPosition = useCallback(() => {
+        const bell = bellRef.current;
+        if (!bell) return;
+        const rect = bell.getBoundingClientRect();
+        setNotifPanelPos({
+            top: rect.bottom + 8,
+            right: Math.max(12, window.innerWidth - rect.right),
+        });
+    }, []);
+
+    useEffect(() => {
+        if (!notifOpen) return;
+        updateNotifPanelPosition();
+        window.addEventListener('resize', updateNotifPanelPosition);
+        window.addEventListener('scroll', updateNotifPanelPosition, true);
+        return () => {
+            window.removeEventListener('resize', updateNotifPanelPosition);
+            window.removeEventListener('scroll', updateNotifPanelPosition, true);
+        };
+    }, [notifOpen, updateNotifPanelPosition]);
+
     const handleNotificationClick = async (item: AppNotificationItem) => {
-        if (item.isRead || !item.id.startsWith('server:')) return;
+        setDetailNotification(item);
 
-        const notificationId = item.id.slice('server:'.length);
-        setServerNotifications(prev =>
-            prev.map(n => n.id === item.id ? { ...n, isRead: true } : n));
+        if (!item.isRead && item.id.startsWith('server:')) {
+            const notificationId = item.id.slice('server:'.length);
+            setServerNotifications(prev =>
+                prev.map(n => n.id === item.id ? { ...n, isRead: true } : n));
 
-        try {
-            await notificationService.markRead(notificationId);
-        } catch {
-            // Không làm gián đoạn UI nếu request mark-read lỗi tạm thời.
+            try {
+                await notificationService.markRead(notificationId);
+            } catch {
+                // Không làm gián đoạn UI nếu request mark-read lỗi tạm thời.
+            }
         }
     };
 
@@ -329,11 +381,13 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                     {/* ── Bell / Notification ── */}
                     <div className="relative">
                         <button
+                            ref={bellRef}
                             onClick={() => {
                                 const nextOpen = !notifOpen;
                                 setNotifOpen(nextOpen);
                                 setUserOpen(false);
                                 if (nextOpen) {
+                                    updateNotifPanelPosition();
                                     appNotificationService.markAllRead();
                                     setServerNotifications(prev => prev.map(item => item.isRead ? item : { ...item, isRead: true }));
                                     void notificationService.markAllRead();
@@ -358,10 +412,12 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
 
                         {notifOpen && (
                             <>
-                                <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+                                <div className="fixed inset-0 z-[190]" onClick={() => setNotifOpen(false)} />
                                 <div
-                                    className="absolute right-0 top-full mt-2 w-72 z-50 overflow-hidden animate-slide-in-right"
+                                    className="fixed w-80 max-w-[calc(100vw-24px)] z-[200] overflow-hidden animate-slide-in-right"
                                     style={{
+                                        top: notifPanelPos.top,
+                                        right: notifPanelPos.right,
                                         background: 'var(--bg-elevated)',
                                         border: '1px solid var(--border-color)',
                                         borderRadius: 'var(--radius-2xl)',
@@ -469,23 +525,24 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                                             </p>
                                         </div>
                                     ) : (
-                                        <div className="max-h-[320px] overflow-y-auto">
+                                        <div className="max-h-[min(420px,60vh)] overflow-y-auto">
                                             {mergedNotifications.slice(0, 20).map(item => (
-                                                <div
+                                                <button
                                                     key={item.id}
+                                                    type="button"
                                                     onClick={() => { void handleNotificationClick(item); }}
-                                                    className="px-4 py-3 border-b last:border-b-0 cursor-default"
+                                                    className="w-full text-left px-4 py-3 border-b last:border-b-0 cursor-pointer transition-colors hover:bg-[var(--bg-hover)]"
                                                     style={{ borderColor: 'var(--border-color)' }}>
                                                     <div className="flex items-start gap-2.5">
                                                         <span
-                                                            className="mt-1 w-2 h-2 rounded-full shrink-0"
+                                                            className="mt-1.5 w-2 h-2 rounded-full shrink-0"
                                                             style={{ background: getNotificationDot(item.type) }}
                                                         />
                                                         <div className="min-w-0 flex-1">
-                                                            <p className="text-[var(--text-primary)] text-sm font-semibold leading-snug">
+                                                            <p className="text-[var(--text-primary)] text-sm font-semibold leading-snug line-clamp-1">
                                                                 {item.title}
                                                             </p>
-                                                            <p className="text-[var(--text-secondary)] text-xs mt-1 leading-relaxed">
+                                                            <p className="text-[var(--text-secondary)] text-xs mt-1 leading-relaxed line-clamp-2">
                                                                 {item.message}
                                                             </p>
                                                             <p className="text-[var(--text-secondary)] text-[11px] mt-1.5 opacity-80">
@@ -493,7 +550,7 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
                                                             </p>
                                                         </div>
                                                     </div>
-                                                </div>
+                                                </button>
                                             ))}
                                         </div>
                                     )}
@@ -611,6 +668,54 @@ export default function Topbar({ fullName, role, pageTitle, onLogout, onSettings
 
             {/* ── Bug Report Modal ──────────────────────────────────────── */}
             {bugModalOpen && <BugReportModal onClose={() => setBugModalOpen(false)} />}
+
+            {/* ── Notification Detail Modal ─────────────────────────────── */}
+            <Modal
+                isOpen={!!detailNotification}
+                onClose={() => setDetailNotification(null)}
+                title="Chi tiết thông báo"
+                size="md"
+            >
+                {detailNotification && (() => {
+                    const typeStyle = getNotificationTypeStyle(detailNotification.type);
+                    return (
+                        <div className="space-y-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border"
+                                    style={{
+                                        background: typeStyle.bg,
+                                        color: typeStyle.color,
+                                        borderColor: typeStyle.border,
+                                    }}
+                                >
+                                    <span
+                                        className="w-1.5 h-1.5 rounded-full"
+                                        style={{ background: getNotificationDot(detailNotification.type) }}
+                                    />
+                                    {getNotificationTypeLabel(detailNotification.type)}
+                                </span>
+                                <span className="text-xs text-[var(--text-secondary)]">
+                                    {formatNotificationTime(detailNotification.createdAt)}
+                                </span>
+                            </div>
+
+                            <div>
+                                <h3 className="text-lg font-bold text-[var(--text-primary)] leading-snug">
+                                    {detailNotification.title}
+                                </h3>
+                                <p className="text-sm text-[var(--text-secondary)] mt-3 leading-relaxed whitespace-pre-wrap">
+                                    {detailNotification.message}
+                                </p>
+                            </div>
+
+                            <p className="text-xs text-[var(--text-secondary)] pt-2 border-t border-[var(--border-color)]">
+                                {formatNotificationDateTime(detailNotification.createdAt)}
+                            </p>
+                        </div>
+                    );
+                })()}
+            </Modal>
         </>
     );
 }
