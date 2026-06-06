@@ -670,10 +670,10 @@ export default function MyProjectsSection({ onNavigate, createRequestToken, onPr
                             onClick={() => setImportModalOpen(true)}
                             className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all hover:scale-105 active:scale-95"
                             style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}
-                            title="Import từ bản thảo (.txt, .docx, .pdf)"
+                            title="Import từ file dự án (.txt, .docx, .pdf)"
                         >
                             <Upload className="w-4 h-4" />
-                            Import bản thảo
+                            Import dự án
                         </button>
                         <button
                             onClick={() => setShowCreate(true)}
@@ -784,7 +784,7 @@ export default function MyProjectsSection({ onNavigate, createRequestToken, onPr
                             <Sparkles className="w-7 h-7 text-white animate-pulse" />
                         </div>
                         <div className="text-center">
-                            <p className="text-white font-bold text-lg">Đang import bản thảo...</p>
+                            <p className="text-white font-bold text-lg">Đang import dự án...</p>
                             <p className="text-[var(--text-secondary)] text-sm mt-1">Hệ thống đang tách nội dung và tạo chương.<br />Vui lòng không đóng trang.</p>
                         </div>
                         <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
@@ -831,7 +831,7 @@ export default function MyProjectsSection({ onNavigate, createRequestToken, onPr
                                     <Upload className="w-5 h-5 text-amber-400" />
                                 </div>
                                 <div>
-                                    <h2 className="text-white font-black text-xl drop-shadow-md">Nhập truyện từ bản thảo</h2>
+                                    <h2 className="text-white font-black text-xl drop-shadow-md">Nhập truyện từ file dự án</h2>
                                     <p className="text-zinc-400 text-xs mt-0.5">Hướng dẫn định dạng file để phân tách chương tốt nhất</p>
                                 </div>
                             </div>
