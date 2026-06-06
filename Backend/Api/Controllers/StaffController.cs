@@ -30,7 +30,9 @@ namespace Api.Controllers
         [HttpGet("feedback")]
         public async Task<IActionResult> GetFeedbacks([FromQuery] Guid? projectId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
-            var result = await _staffService.GetFeedbacksAsync(projectId, page, pageSize);
+            var staffId = GetUserId();
+            var isAdmin = User.IsInRole("Admin");
+            var result = await _staffService.GetFeedbacksAsync(projectId, page, pageSize, staffId, isAdmin);
             return Ok(result);
         }
 

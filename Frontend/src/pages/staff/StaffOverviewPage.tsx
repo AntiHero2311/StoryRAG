@@ -254,6 +254,15 @@ export default function StaffOverviewPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+    const [imgError, setImgError] = useState(false);
+
+    const getFullUrl = (url?: string) => {
+        if (!url) return '';
+        if (url.startsWith('http') || url.startsWith('data:')) return url;
+        const base = import.meta.env.VITE_API_BASE_URL ?? 'https://localhost:7259/api';
+        const cleanBase = base.endsWith('/api') ? base.slice(0, -4) : base;
+        return `${cleanBase}${url.startsWith('/') ? '' : '/'}${url}`;
+    };
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -305,8 +314,10 @@ export default function StaffOverviewPage() {
 
     return (
         <MainLayout pageTitle="Vận hành">
-            {() => (
-                <AdminPageShell
+            {(userInfo) => {
+                const avatarSrc = userInfo.avatarUrl && !imgError ? getFullUrl(userInfo.avatarUrl) : '';
+                return (
+                    <AdminPageShell
                     title="Trung tâm vận hành Staff"
                     action={
                         <button
@@ -335,15 +346,28 @@ export default function StaffOverviewPage() {
                         <div className="relative p-6 md:p-8">
                             <div className="flex flex-col xl:flex-row xl:items-center gap-6">
                                 <div className="flex items-start gap-4 flex-1 min-w-0">
-                                    <div
-                                        className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 text-white font-black text-lg tracking-tight"
-                                        style={{
-                                            background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-                                            boxShadow: '0 12px 32px rgba(99,102,241,0.35)',
-                                        }}
-                                    >
-                                        {getInitials(staffName)}
-                                    </div>
+                                    {avatarSrc ? (
+                                        <img
+                                            src={avatarSrc}
+                                            alt="Avatar"
+                                            onError={() => setImgError(true)}
+                                            className="w-16 h-16 rounded-2xl object-cover shrink-0"
+                                            style={{
+                                                boxShadow: '0 12px 32px rgba(99,102,241,0.35)',
+                                                outline: '3px solid rgba(255,255,255,0.15)',
+                                            }}
+                                        />
+                                    ) : (
+                                        <div
+                                            className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 text-white font-black text-lg tracking-tight"
+                                            style={{
+                                                background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+                                                boxShadow: '0 12px 32px rgba(99,102,241,0.35)',
+                                            }}
+                                        >
+                                            {getInitials(staffName)}
+                                        </div>
+                                    )}
                                     <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap items-center gap-2 mb-2">
                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-indigo-500/15 text-indigo-300 border border-indigo-500/25">
@@ -549,7 +573,8 @@ export default function StaffOverviewPage() {
                         </div>
                     </section>
                 </AdminPageShell>
-            )}
+                );
+            }}
         </MainLayout>
     );
 }

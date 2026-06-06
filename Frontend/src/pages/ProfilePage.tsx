@@ -137,8 +137,13 @@ function ProfileContent({ jwtRole }: { jwtRole: string }) {
     const [fullName, setFullName] = useState('');
     const [avatarUrl, setAvatarUrl] = useState('');
     const [showPassModal, setShowPassModal] = useState(false);
+    const [imgError, setImgError] = useState(false);
     
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        setImgError(false);
+    }, [avatarUrl, profile?.avatarURL]);
 
     const getFullUrl = (url?: string) => {
         if (!url) return '';
@@ -238,8 +243,9 @@ function ProfileContent({ jwtRole }: { jwtRole: string }) {
                         {/* Avatar - Adjusted overlap and vertical space */}
                         <div className="flex items-end gap-5 -mt-12 mb-6">
                             <div className="relative">
-                                {profile?.avatarURL || avatarUrl ? (
+                                {(profile?.avatarURL || avatarUrl) && !imgError ? (
                                     <img src={getFullUrl(avatarUrl || profile?.avatarURL)} alt="Avatar"
+                                        onError={() => setImgError(true)}
                                         className="w-24 h-24 rounded-2xl object-cover"
                                         style={{ outline: '4px solid var(--bg-surface)', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)' }} />
                                 ) : (
