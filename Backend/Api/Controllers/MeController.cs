@@ -187,19 +187,35 @@ namespace Api.Controllers
                 }
             }
 
-            var projectGenres = await _db.ProjectGenres
-                .AsNoTracking()
-                .Where(pg => pg.ProjectId == request.ProjectId)
-                .Include(pg => pg.Genre)
-                .Select(pg => new GenreResponse
-                {
-                    Id = pg.Genre.Id,
-                    Name = pg.Genre.Name,
-                    Slug = pg.Genre.Slug,
-                    Color = pg.Genre.Color,
-                    Description = pg.Genre.Description
-                }).ToListAsync();
-            var genresJson = System.Text.Json.JsonSerializer.Serialize(projectGenres);
+            string genresJson;
+            if (request.ProjectReportId.HasValue)
+            {
+                // Ưu tiên snapshot genres từ report (bất biến tại thời điểm phân tích)
+                var reportGenresSnapshot = await _db.ProjectReports
+                    .AsNoTracking()
+                    .Where(r => r.Id == request.ProjectReportId.Value)
+                    .Select(r => r.GenresSnapshot)
+                    .FirstOrDefaultAsync();
+                genresJson = reportGenresSnapshot ?? "[]";
+            }
+            else
+            {
+                // Fallback: đọc genres live từ project
+                var projectGenres = await _db.ProjectGenres
+                    .AsNoTracking()
+                    .Where(pg => pg.ProjectId == request.ProjectId)
+                    .Include(pg => pg.Genre)
+                    .Select(pg => new GenreResponse
+                    {
+                        Id = pg.Genre.Id,
+                        Name = pg.Genre.Name,
+                        Slug = pg.Genre.Slug,
+                        Color = pg.Genre.Color,
+                        Description = pg.Genre.Description
+                    }).ToListAsync();
+                genresJson = System.Text.Json.JsonSerializer.Serialize(projectGenres);
+            }
+
 
             var feedback = new Repository.Entities.StaffFeedback
             {

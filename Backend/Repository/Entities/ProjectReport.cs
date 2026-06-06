@@ -22,6 +22,10 @@ namespace Repository.Entities
         /// <summary>JSONB: Kết quả Story Bible (WorldSetting, Character, Timeline, Theme)</summary>
         public string? ContentAnalysisJson { get; set; }
 
+        /// <summary>JSONB: Snapshot danh sách thể loại (genre) của dự án tại thời điểm phân tích.
+        /// Bất biến sau khi report được tạo — dùng để hiển thị badge genre trên feedback gắn với report này.</summary>
+        public string? GenresSnapshot { get; set; }
+
         /// <summary>JSONB: Kết quả biểu đồ Cảm xúc và Nhịp độ</summary>
         public string? EmotionPacingJson { get; set; }
 

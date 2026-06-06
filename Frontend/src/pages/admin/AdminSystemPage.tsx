@@ -13,16 +13,6 @@ export default function AdminSystemPage() {
         maxUploadMb: 10,
         maxProjectsPerAuthor: 50,
         maintenanceMode: false,
-        smtpHost: '',
-        smtpPort: 587,
-        smtpUsername: '',
-        smtpPassword: '',
-        smtpFromName: '',
-        smtpFromAddress: '',
-        vnPayPaymentUrl: '',
-        vnPayTmnCode: '',
-        vnPayHashSecret: '',
-        vnPayReturnUrl: '',
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -38,16 +28,6 @@ export default function AdminSystemPage() {
                 maxUploadMb: data.maxUploadMb,
                 maxProjectsPerAuthor: data.maxProjectsPerAuthor,
                 maintenanceMode: data.maintenanceMode,
-                smtpHost: data.smtpHost ?? '',
-                smtpPort: data.smtpPort ?? 587,
-                smtpUsername: data.smtpUsername ?? '',
-                smtpPassword: data.smtpPassword ?? '',
-                smtpFromName: data.smtpFromName ?? '',
-                smtpFromAddress: data.smtpFromAddress ?? '',
-                vnPayPaymentUrl: data.vnPayPaymentUrl ?? '',
-                vnPayTmnCode: data.vnPayTmnCode ?? '',
-                vnPayHashSecret: data.vnPayHashSecret ?? '',
-                vnPayReturnUrl: data.vnPayReturnUrl ?? '',
             });
         } catch {
             setError('Không tải được cấu hình hệ thống.');
@@ -125,70 +105,6 @@ export default function AdminSystemPage() {
                                             onChange={e => setForm(f => ({ ...f, maintenanceMode: e.target.checked }))} />
                                         Chế độ bảo trì (chặn tác giả mới)
                                     </label>
-                                </div>
-
-                                {/* Section 2: Cấu hình SMTP Email */}
-                                <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-6 space-y-4">
-                                    <h2 className="text-sm font-bold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2">Cấu hình Email (SMTP)</h2>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase block mb-1">SMTP Host</label>
-                                            <input type="text" placeholder="smtp.gmail.com" className={inputCls} value={form.smtpHost}
-                                                onChange={e => setForm(f => ({ ...f, smtpHost: e.target.value }))} />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase block mb-1">SMTP Port</label>
-                                            <input type="number" placeholder="587" className={inputCls} value={form.smtpPort}
-                                                onChange={e => setForm(f => ({ ...f, smtpPort: Number(e.target.value) }))} />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase block mb-1">Tài khoản (Gmail)</label>
-                                            <input type="text" placeholder="example@gmail.com" className={inputCls} value={form.smtpUsername}
-                                                onChange={e => setForm(f => ({ ...f, smtpUsername: e.target.value }))} />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase block mb-1">Mật khẩu ứng dụng</label>
-                                            <input type="password" placeholder="••••••••••••••••" className={inputCls} value={form.smtpPassword}
-                                                onChange={e => setForm(f => ({ ...f, smtpPassword: e.target.value }))} />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase block mb-1">Tên hiển thị người gửi</label>
-                                            <input type="text" placeholder="StoryNest" className={inputCls} value={form.smtpFromName}
-                                                onChange={e => setForm(f => ({ ...f, smtpFromName: e.target.value }))} />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase block mb-1">Email hiển thị người gửi</label>
-                                            <input type="text" placeholder="noreply@gmail.com" className={inputCls} value={form.smtpFromAddress}
-                                                onChange={e => setForm(f => ({ ...f, smtpFromAddress: e.target.value }))} />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Section 3: Cấu hình VNPay */}
-                                <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-6 space-y-4">
-                                    <h2 className="text-sm font-bold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2">Cấu hình Cổng thanh toán (VNPay)</h2>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div className="sm:col-span-2">
-                                            <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase block mb-1">VNPay Payment URL</label>
-                                            <input type="text" placeholder="https://sandbox.vnpayment.vn/paymentv2/vpcpay.html" className={inputCls} value={form.vnPayPaymentUrl}
-                                                onChange={e => setForm(f => ({ ...f, vnPayPaymentUrl: e.target.value }))} />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase block mb-1">Mã Website (TmnCode)</label>
-                                            <input type="text" placeholder="TMNCODE" className={inputCls} value={form.vnPayTmnCode}
-                                                onChange={e => setForm(f => ({ ...f, vnPayTmnCode: e.target.value }))} />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase block mb-1">Mã bảo mật (HashSecret)</label>
-                                            <input type="password" placeholder="••••••••" className={inputCls} value={form.vnPayHashSecret}
-                                                onChange={e => setForm(f => ({ ...f, vnPayHashSecret: e.target.value }))} />
-                                        </div>
-                                        <div className="sm:col-span-2">
-                                            <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase block mb-1">URL phản hồi (Return URL)</label>
-                                            <input type="text" placeholder="http://localhost:5173/payment/success" className={inputCls} value={form.vnPayReturnUrl}
-                                                onChange={e => setForm(f => ({ ...f, vnPayReturnUrl: e.target.value }))} />
-                                        </div>
-                                    </div>
                                 </div>
 
                                 <div className="flex items-center gap-3">

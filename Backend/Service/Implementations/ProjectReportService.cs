@@ -194,6 +194,18 @@ namespace Service.Implementations
                 .FirstOrDefaultAsync(p => p.Id == projectId, cancellationToken);
 
             var genres = projectFull?.ProjectGenres.Select(pg => pg.Genre.Name).ToList() ?? new();
+            // Snapshot genres as structured JSON for feedback display
+            var genresSnapshotJson = projectFull?.ProjectGenres.Count > 0
+                ? System.Text.Json.JsonSerializer.Serialize(
+                    projectFull.ProjectGenres.Select(pg => new
+                    {
+                        id = pg.Genre.Id,
+                        name = pg.Genre.Name,
+                        slug = pg.Genre.Slug,
+                        color = pg.Genre.Color,
+                        description = pg.Genre.Description
+                    }).ToList())
+                : null;
             var summary = !string.IsNullOrEmpty(project.Summary)
                 ? EncryptionHelper.DecryptWithMasterKey(project.Summary, rawDek)
                 : null;
@@ -432,6 +444,7 @@ namespace Service.Implementations
                 CriteriaJson = BuildStoredCriteriaJson(criteria, warnings, overallFeedback),
                 ContentAnalysisJson = contentAnalysisData,
                 EmotionPacingJson = emotionPacingData,
+                GenresSnapshot = genresSnapshotJson,
                 CreatedAt = DateTime.UtcNow,
             };
             _context.ProjectReports.Add(report);
