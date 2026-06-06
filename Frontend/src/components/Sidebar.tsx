@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import {
     LayoutDashboard, BarChart2, User, Settings,
     Users, CreditCard, ChevronLeft, ChevronRight,
-    Bug, HelpCircle, AlertTriangle, MessageSquare, CircleHelp, Activity,
+    Bug, HelpCircle, MessageSquare, CircleHelp, Activity,
     Headphones, DollarSign,
 } from 'lucide-react';
 import { feedbackService } from '../services/feedbackService';

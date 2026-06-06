@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, AlertCircle, FileText, ChevronRight, Book, Type, AlignJustify, AlignLeft, Sliders, Heading, Columns } from 'lucide-react';
+import { Loader2, AlertCircle, FileText, Book, Type, AlignJustify, AlignLeft, Sliders, Heading, Columns } from 'lucide-react';
 import { reportService, type ProjectReportSnapshotItem } from '../../services/reportService';
 
 interface SnapshotViewerPanelProps {

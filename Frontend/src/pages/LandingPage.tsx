@@ -12,7 +12,6 @@ import {
     Layers3,
     Moon,
     Search,
-    Sparkles,
     Sun,
     Upload,
     Zap,

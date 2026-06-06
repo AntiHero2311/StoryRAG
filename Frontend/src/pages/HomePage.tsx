@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    FolderOpen, BookOpen, MessageSquare, TrendingUp, ShieldCheck, ArrowRight
+    FolderOpen, BookOpen, TrendingUp, ShieldCheck, ArrowRight
 } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { UserInfo } from '../utils/jwtHelper';

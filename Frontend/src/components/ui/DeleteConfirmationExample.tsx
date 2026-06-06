@@ -151,12 +151,17 @@ const DeleteConfirmationExample: React.FC = () => {
 
       {/* Modal */}
       {deleteConfirm.options && (
-        <DeleteConfirmationModal
-          isOpen={deleteConfirm.isOpen}
-          onClose={deleteConfirm.handleClose}
-          onConfirm={deleteConfirm.handleConfirm}
-          {...deleteConfirm.options}
-        />
+        (() => {
+          const { onConfirm: _onConfirm, ...restOptions } = deleteConfirm.options;
+          return (
+            <DeleteConfirmationModal
+              isOpen={deleteConfirm.isOpen}
+              onClose={deleteConfirm.handleClose}
+              onConfirm={deleteConfirm.handleConfirm}
+              {...restOptions}
+            />
+          );
+        })()
       )}
     </div>
   );

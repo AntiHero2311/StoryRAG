@@ -71,7 +71,7 @@ const SUGGESTIONS = [
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export default function ChatPanel({ projectId, isEmbedded, onEmbed, isSyncing }: ChatPanelProps) {
+export default function ChatPanel({ projectId, isEmbedded: _isEmbedded, onEmbed: _onEmbed, isSyncing: _isSyncing }: ChatPanelProps) {
     const [messages, setMessages] = useState<ChatMsg[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);

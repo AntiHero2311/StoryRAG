@@ -489,35 +489,46 @@ namespace Service.Implementations
         private List<string> GetKeysForUseCase(EmbeddingUseCase useCase)
         {
             _ = useCase;
+
+            // Lấy các key backup (chat & analyze keys)
+            var otherKeys = new[] { _chatApiKey, _analyzeApiKey }
+                .Where(k => !string.IsNullOrWhiteSpace(k))
+                .Select(k => k!)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
             if (!string.IsNullOrWhiteSpace(_embeddingApiKey))
             {
-                // Khi có key chuyên biệt cho embedding, chỉ dùng key này — tách hoàn toàn khỏi analysis.
-                return new List<string> { _embeddingApiKey! };
+                // Khi có key chuyên biệt cho embedding: đặt key này lên đầu tiên
+                var ordered = new List<string> { _embeddingApiKey };
+                // Thêm các key khác làm phương án dự phòng (failover)
+                foreach (var k in otherKeys)
+                {
+                    if (k != _embeddingApiKey)
+                    {
+                        ordered.Add(k);
+                    }
+                }
+                return ordered;
             }
 
             // Khi không có EmbeddingApiKey: luân phiên primary giữa ChatApiKey và AnalyzeApiKey
             // mỗi lần gọi, tránh cả 2 loại task cùng dồn lên 1 key.
-            var keys = new[] { _chatApiKey, _analyzeApiKey }
-                .Where(k => !string.IsNullOrWhiteSpace(k))
-                .Select(k => k!)
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-
-            if (keys.Length <= 1)
-                return keys.ToList();
+            if (otherKeys.Count <= 1)
+                return otherKeys;
 
             // Atomic increment → chỉ số lấy theo round-robin
             var idx = Interlocked.Increment(ref _embeddingKeyRoundRobinIndex) & int.MaxValue;
-            var primaryIdx = idx % keys.Length;
+            var primaryIdx = idx % otherKeys.Count;
 
             // Xếp primary key lên đầu, các key còn lại giữ nguyên thứ tự làm fallback
-            var ordered = new List<string>(keys.Length);
-            ordered.Add(keys[primaryIdx]);
-            for (var i = 0; i < keys.Length; i++)
+            var orderedKeys = new List<string>(otherKeys.Count);
+            orderedKeys.Add(otherKeys[primaryIdx]);
+            for (var i = 0; i < otherKeys.Count; i++)
             {
-                if (i != primaryIdx) ordered.Add(keys[i]);
+                if (i != primaryIdx) orderedKeys.Add(otherKeys[i]);
             }
-            return ordered;
+            return orderedKeys;
         }
 
         private static string? NormalizeKey(string? raw)

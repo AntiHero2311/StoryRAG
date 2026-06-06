@@ -2,18 +2,15 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
-    Settings, Bell, ChevronDown, LogOut, User, Sparkles, X,
-    Bug, Briefcase, AlertTriangle, Loader2, CheckCircle
+    Settings, Bell, ChevronDown, LogOut, User, Sparkles, X
 } from 'lucide-react';
 import { getInitials } from '../utils/jwtHelper';
 import {
     bugReportService,
-    type BugCategory,
-    type BugPriority,
     type BugReportResponse,
 } from '../services/bugReportService';
 import { appNotificationService, type AppNotificationItem } from '../services/appNotificationService';
-import { notificationService, type NotificationType } from '../services/notificationService';
+import { notificationService } from '../services/notificationService';
 import BugReportModal from './BugReportModal';
 import Modal from './ui/Modal';
 

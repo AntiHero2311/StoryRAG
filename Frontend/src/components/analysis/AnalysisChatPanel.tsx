@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
-import { Sparkles, Bot, Trash2, Send, Loader2, Plus, MessageSquare, Clock, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
+import { Sparkles, Bot, Trash2, Send, Loader2, Plus, MessageSquare, Copy, Check } from 'lucide-react';
 import { aiService } from '../../services/aiService';
 import { sanitizeAiResponseForDisplay } from '../../utils/aiResponseSanitizer';
 import { type ProjectReportResponse } from '../../services/reportService';

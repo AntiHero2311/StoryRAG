@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
     MessageSquare, Activity, CircleHelp, Bug, RefreshCw,
     ClipboardCheck, AlertTriangle, CheckCircle2, BarChart3,
-    Headphones, Loader2, ChevronRight, LayoutDashboard, Sparkles,
+    Headphones, ChevronRight, LayoutDashboard, Sparkles,
     ListTodo, Clock,
 } from 'lucide-react';
 import MainLayout from '../../layouts/MainLayout';

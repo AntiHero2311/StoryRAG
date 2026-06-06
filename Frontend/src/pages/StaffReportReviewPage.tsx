@@ -182,7 +182,6 @@ export default function StaffReportReviewPage() {
   // Wide reader modal states
   const [isWideReaderOpen, setIsWideReaderOpen] = useState(false);
   const [activeModalChapterId, setActiveModalChapterId] = useState<string | null>(null);
-  const [readerFontFamily, setReaderFontFamily] = useState<'serif' | 'sans'>('serif');
   const [readerFontSize, setReaderFontSize] = useState<number>(16);
   const [readerTheme, setReaderTheme] = useState<'dark' | 'cream' | 'dim'>('dark');
 

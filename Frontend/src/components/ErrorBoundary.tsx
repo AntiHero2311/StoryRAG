@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, ErrorInfo, ReactNode } from 'react';
 import Button from './ui/Button';
 
 interface Props {
@@ -84,7 +84,7 @@ class ErrorBoundary extends Component<Props, State> {
               </div>
             </div>
 
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {import.meta.env.DEV && this.state.error && (
               <details className="mb-6 p-4 bg-[var(--bg-surface)] rounded-lg border border-[var(--border-color)]">
                 <summary className="cursor-pointer text-sm font-medium text-[var(--text-primary)] mb-2">
                   Chi tiết lỗi (Development only)

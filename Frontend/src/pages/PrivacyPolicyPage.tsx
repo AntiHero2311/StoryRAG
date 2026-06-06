@@ -183,7 +183,7 @@ export default function PrivacyPolicyPage() {
                                     }}
                                 />
 
-                                {sections.map((s, index) => {
+                                {sections.map((s) => {
                                     const Icon = s.icon;
                                     const isActive = activeId === s.id;
                                     return (
