@@ -190,76 +190,311 @@ function DiffModal({
     onClose: () => void;
     onRestore: () => void;
 }) {
-    const lines = diff.unifiedDiff.split('\n');
+    const [viewMode, setViewMode] = useState<'inline' | 'split'>('inline');
+
+    const parsedBlocks = useMemo(() => {
+        const lines = diff.unifiedDiff.split('\n');
+        const contentLines = lines.filter(line => !line.startsWith('--- ') && !line.startsWith('+++ ') && !line.startsWith('@@ '));
+        
+        const blocks: Array<{
+            type: 'unchanged' | 'changed';
+            left: string[];
+            right: string[];
+        }> = [];
+        
+        let currentBlock: typeof blocks[0] | null = null;
+        
+        for (const line of contentLines) {
+            const isAdded = line.startsWith('+');
+            const isRemoved = line.startsWith('-');
+            const isUnchanged = line.startsWith(' ') || line === '';
+            
+            const text = line.length > 0 ? line.substring(1) : '';
+            
+            if (isUnchanged) {
+                if (currentBlock) {
+                    blocks.push(currentBlock);
+                    currentBlock = null;
+                }
+                blocks.push({
+                    type: 'unchanged',
+                    left: [text],
+                    right: [text]
+                });
+            } else {
+                if (!currentBlock) {
+                    currentBlock = {
+                        type: 'changed',
+                        left: [],
+                        right: []
+                    };
+                }
+                if (isRemoved) {
+                    currentBlock.left.push(text);
+                } else if (isAdded) {
+                    currentBlock.right.push(text);
+                }
+            }
+        }
+        if (currentBlock) {
+            blocks.push(currentBlock);
+        }
+        return blocks;
+    }, [diff.unifiedDiff]);
+
+    let leftLineNum = 0;
+    let rightLineNum = 0;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-opacity"
             onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="w-full max-w-4xl h-[85vh] flex flex-col rounded-2xl overflow-hidden shadow-2xl"
+            <div className="w-full max-w-5xl h-[85vh] flex flex-col rounded-2xl overflow-hidden shadow-2xl transition-all"
                 style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-3.5 shrink-0 border-b border-[var(--border-color)]">
+                <div className="flex items-center justify-between px-6 py-4 shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-topbar)]">
                     <div className="flex items-center gap-3">
-                        <GitBranch className="w-4 h-4 text-[var(--accent)]" />
-                        <span className="text-sm font-bold text-[var(--text-primary)]">
-                            So sánh V{compareVersionNum} → V{currentVersionNum} (hiện tại)
-                        </span>
-                        <span className="text-xs text-emerald-400 font-medium">+{diff.addedLines} dòng</span>
-                        <span className="text-xs text-rose-400 font-medium">−{diff.removedLines} dòng</span>
-                        <span className="text-xs text-slate-300 font-medium">={diff.unchangedLines} dòng</span>
+                        <div className="p-2 rounded-lg bg-[var(--accent)]/10 text-[var(--accent)]">
+                            <GitBranch className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                                So sánh V{compareVersionNum} → V{currentVersionNum} (hiện tại)
+                            </h3>
+                            <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+                                Xem các thay đổi giữa hai phiên bản nội dung
+                            </p>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                         <button onClick={onRestore}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90"
-                            style={{ background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)' }}>
-                            <History className="w-3.5 h-3.5" /> Dùng V{compareVersionNum}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 shadow-md shadow-[var(--accent)]/10 hover:scale-[1.02] active:scale-[0.98]"
+                            style={{ background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)' }}>
+                            <History className="w-4 h-4" /> Dùng V{compareVersionNum}
                         </button>
                         <button onClick={onClose}
-                            className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:bg-[var(--text-primary)]/10 transition-colors">
+                            className="w-8 h-8 flex items-center justify-center rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 transition-colors border border-[var(--border-color)]">
                             <X className="w-4 h-4" />
                         </button>
                     </div>
                 </div>
-                {/* Legend */}
-                <div className="flex items-center gap-4 px-5 py-2 shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-app)]">
-                    <span className="text-[10px] text-[var(--text-secondary)] font-medium uppercase tracking-wider">Chú thích:</span>
-                    <span className="flex items-center gap-1.5 text-xs">
-                        <span className="w-3 h-3 rounded-sm bg-emerald-500/25 border border-emerald-500/40 inline-block" />
-                        <span className="text-emerald-400">Thêm vào (V{currentVersionNum})</span>
-                    </span>
-                    <span className="flex items-center gap-1.5 text-xs">
-                        <span className="w-3 h-3 rounded-sm bg-rose-500/25 border border-rose-500/40 inline-block" />
-                        <span className="text-rose-400">Đã xóa (V{compareVersionNum})</span>
-                    </span>
+
+                {/* View Mode Selector & Stats Bar */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between px-6 py-3 shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-app)] gap-3">
+                    <div className="flex items-center bg-[var(--bg-surface)] p-1 rounded-xl border border-[var(--border-color)] self-start">
+                        <button
+                            onClick={() => setViewMode('inline')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                viewMode === 'inline'
+                                    ? 'bg-[var(--accent)] text-white shadow-md'
+                                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                            }`}
+                        >
+                            <AlignLeft className="w-3.5 h-3.5" /> Một cột (Inline)
+                        </button>
+                        <button
+                            onClick={() => setViewMode('split')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                viewMode === 'split'
+                                    ? 'bg-[var(--accent)] text-white shadow-md'
+                                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                            }`}
+                        >
+                            <BookOpen className="w-3.5 h-3.5" /> Hai cột (Split)
+                        </button>
+                    </div>
+
+                    <div className="flex items-center gap-3 text-xs flex-wrap">
+                        <span className="text-[var(--text-secondary)] font-semibold uppercase tracking-wider text-[10px]">Thay đổi:</span>
+                        <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20 shadow-sm">
+                            +{diff.addedLines} thêm
+                        </span>
+                        <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-400 font-bold border border-rose-500/20 shadow-sm">
+                            -{diff.removedLines} xóa
+                        </span>
+                        <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-500/10 text-slate-300 font-bold border border-slate-500/10 shadow-sm">
+                            ={diff.unchangedLines} giữ nguyên
+                        </span>
+                    </div>
                 </div>
-                {/* Diff content */}
-                <div className="flex-1 overflow-y-auto p-4 text-xs font-mono scrollbar-thin"
-                    style={{ color: 'var(--text-primary)', whiteSpace: 'pre', lineHeight: 1.65 }}>
+
+                {/* Diff content container */}
+                <div className="flex-1 overflow-y-auto bg-[var(--bg-editor)] scrollbar-thin">
                     {!diff.hasChanges && (
-                        <div className="mb-3 px-2 py-1 rounded-lg text-[11px]"
-                            style={{ background: 'rgba(16,185,129,0.12)', color: '#6ee7b7' }}>
-                            Hai phiên bản không có thay đổi nội dung.
+                        <div className="m-6 p-4 rounded-xl text-sm border flex items-center justify-center gap-2"
+                            style={{ background: 'rgba(16,185,129,0.06)', borderColor: 'rgba(16,185,129,0.2)', color: '#6ee7b7' }}>
+                            Hai phiên bản hoàn toàn giống nhau, không có thay đổi nội dung.
                         </div>
                     )}
-                    {lines.map((line, i) => {
-                        const isHeader = line.startsWith('--- ') || line.startsWith('+++ ') || line.startsWith('@@ ');
-                        const isAdded = line.startsWith('+') && !line.startsWith('+++ ');
-                        const isRemoved = line.startsWith('-') && !line.startsWith('--- ');
 
-                        const style = isHeader
-                            ? { color: 'var(--text-secondary)', opacity: 0.85 }
-                            : isAdded
-                                ? { background: 'rgba(16,185,129,0.12)', color: '#6ee7b7' }
-                                : isRemoved
-                                    ? { background: 'rgba(239,68,68,0.12)', color: '#fca5a5' }
-                                    : { color: 'var(--text-primary)' };
+                    {diff.hasChanges && viewMode === 'inline' && (
+                        <div className="w-full text-[14px] leading-relaxed font-sans p-6 space-y-0.5">
+                            {parsedBlocks.map((block, blockIdx) => {
+                                if (block.type === 'unchanged') {
+                                    return block.left.map((line, lineIdx) => {
+                                        leftLineNum++;
+                                        rightLineNum++;
+                                        return (
+                                            <div key={`inline-un-${blockIdx}-${lineIdx}`} className="flex group hover:bg-[var(--bg-hover)] rounded-md transition-colors">
+                                                <div className="w-12 select-none text-right pr-3 text-[11px] text-[var(--text-secondary)] opacity-50 py-1 border-r border-[var(--border-color)]/30 font-mono tabular-nums">
+                                                    {leftLineNum}
+                                                </div>
+                                                <div className="w-12 select-none text-right pr-3 text-[11px] text-[var(--text-secondary)] opacity-50 py-1 border-r border-[var(--border-color)]/30 font-mono tabular-nums">
+                                                    {rightLineNum}
+                                                </div>
+                                                <div className="w-6 select-none text-center text-[var(--text-secondary)] opacity-35 py-1 font-mono">
+                                                    
+                                                </div>
+                                                <div className="flex-1 pl-4 py-1 text-[var(--text-primary)] min-h-[1.5rem] break-words whitespace-pre-wrap">
+                                                    {line || ' '}
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                } else {
+                                    const renderedRows = [];
+                                    block.left.forEach((line, lineIdx) => {
+                                        leftLineNum++;
+                                        renderedRows.push(
+                                            <div key={`inline-rem-${blockIdx}-${lineIdx}`} className="flex bg-rose-500/8 border-l-4 border-rose-500/60 rounded-r-md transition-colors hover:bg-rose-500/12 text-rose-200">
+                                                <div className="w-12 select-none text-right pr-3 text-[11px] opacity-65 py-1 border-r border-rose-500/20 font-mono tabular-nums">
+                                                    {leftLineNum}
+                                                </div>
+                                                <div className="w-12 select-none text-right pr-3 text-[11px] opacity-0 py-1 border-r border-rose-500/20 font-mono tabular-nums">
+                                                    &nbsp;
+                                                </div>
+                                                <div className="w-6 select-none text-center font-bold opacity-75 py-1 font-mono">
+                                                    -
+                                                </div>
+                                                <div className="flex-1 pl-4 py-1 line-through decoration-rose-500/40 min-h-[1.5rem] break-words whitespace-pre-wrap">
+                                                    {line || ' '}
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                    block.right.forEach((line, lineIdx) => {
+                                        rightLineNum++;
+                                        renderedRows.push(
+                                            <div key={`inline-add-${blockIdx}-${lineIdx}`} className="flex bg-emerald-500/8 border-l-4 border-emerald-500/60 rounded-r-md transition-colors hover:bg-emerald-500/12 text-emerald-200">
+                                                <div className="w-12 select-none text-right pr-3 text-[11px] opacity-0 py-1 border-r border-emerald-500/20 font-mono tabular-nums">
+                                                    &nbsp;
+                                                </div>
+                                                <div className="w-12 select-none text-right pr-3 text-[11px] opacity-65 py-1 border-r border-emerald-500/20 font-mono tabular-nums">
+                                                    {rightLineNum}
+                                                </div>
+                                                <div className="w-6 select-none text-center font-bold opacity-75 py-1 font-mono">
+                                                    +
+                                                </div>
+                                                <div className="flex-1 pl-4 py-1 min-h-[1.5rem] break-words whitespace-pre-wrap">
+                                                    {line || ' '}
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                    return renderedRows;
+                                }
+                            })}
+                        </div>
+                    )}
 
-                        return (
-                            <div key={`${i}-${line}`} style={style} className="px-2 rounded-sm">
-                                {line || ' '}
+                    {diff.hasChanges && viewMode === 'split' && (
+                        <div className="w-full text-[14px] leading-relaxed font-sans border-collapse">
+                            {/* Column Titles */}
+                            <div className="grid grid-cols-2 border-b border-[var(--border-color)] bg-[var(--bg-surface)] sticky top-0 z-10">
+                                <div className="px-6 py-2.5 text-xs font-bold text-[var(--text-secondary)] flex items-center justify-between border-r border-[var(--border-color)]">
+                                    <span>V{compareVersionNum} (Bản cũ)</span>
+                                </div>
+                                <div className="px-6 py-2.5 text-xs font-bold text-[var(--text-secondary)] flex items-center justify-between">
+                                    <span>V{currentVersionNum} (Bản mới)</span>
+                                </div>
                             </div>
-                        );
-                    })}
+
+                            <div className="space-y-px">
+                                {(() => {
+                                    let lNum = 0;
+                                    let rNum = 0;
+                                    return parsedBlocks.map((block, blockIdx) => {
+                                        if (block.type === 'unchanged') {
+                                            return block.left.map((line, lineIdx) => {
+                                                lNum++;
+                                                rNum++;
+                                                return (
+                                                    <div key={`split-un-${blockIdx}-${lineIdx}`} className="grid grid-cols-2 hover:bg-[var(--bg-hover)] transition-colors border-b border-[var(--border-color)]/10">
+                                                        <div className="flex border-r border-[var(--border-color)] pr-4">
+                                                            <div className="w-12 select-none text-right pr-3 text-[11px] text-[var(--text-secondary)] opacity-50 py-1.5 border-r border-[var(--border-color)]/30 font-mono tabular-nums shrink-0">
+                                                                {lNum}
+                                                            </div>
+                                                            <div className="flex-1 pl-4 py-1.5 text-[var(--text-primary)] min-h-[1.5rem] break-words whitespace-pre-wrap">
+                                                                {line || ' '}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex pr-4">
+                                                            <div className="w-12 select-none text-right pr-3 text-[11px] text-[var(--text-secondary)] opacity-50 py-1.5 border-r border-[var(--border-color)]/30 font-mono tabular-nums shrink-0">
+                                                                {rNum}
+                                                            </div>
+                                                            <div className="flex-1 pl-4 py-1.5 text-[var(--text-primary)] min-h-[1.5rem] break-words whitespace-pre-wrap">
+                                                                {line || ' '}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            });
+                                        } else {
+                                            const rowCount = Math.max(block.left.length, block.right.length);
+                                            const rows = [];
+                                            for (let i = 0; i < rowCount; i++) {
+                                                const hasLeft = i < block.left.length;
+                                                const hasRight = i < block.right.length;
+                                                const leftLine = hasLeft ? block.left[i] : null;
+                                                const rightLine = hasRight ? block.right[i] : null;
+                                                
+                                                if (hasLeft) lNum++;
+                                                if (hasRight) rNum++;
+
+                                                rows.push(
+                                                    <div key={`split-ch-${blockIdx}-${i}`} className="grid grid-cols-2 border-b border-[var(--border-color)]/10">
+                                                        <div className={`flex border-r border-[var(--border-color)] pr-4 ${
+                                                            hasLeft 
+                                                                ? 'bg-rose-500/8 text-rose-200 border-l-4 border-l-rose-500/60' 
+                                                                : 'bg-slate-500/3 opacity-30 select-none'
+                                                        }`}>
+                                                            <div className="w-12 select-none text-right pr-3 text-[11px] opacity-50 py-1.5 border-r border-[var(--border-color)]/30 font-mono tabular-nums shrink-0">
+                                                                {hasLeft ? lNum : ''}
+                                                            </div>
+                                                            <div className="w-6 select-none text-center font-bold opacity-60 py-1.5 font-mono shrink-0">
+                                                                {hasLeft ? '-' : ''}
+                                                            </div>
+                                                            <div className={`flex-1 pl-2 py-1.5 min-h-[1.5rem] break-words whitespace-pre-wrap ${
+                                                                hasLeft ? 'line-through decoration-rose-500/30' : ''
+                                                            }`}>
+                                                                {hasLeft ? (leftLine || ' ') : ''}
+                                                            </div>
+                                                        </div>
+                                                        <div className={`flex pr-4 ${
+                                                            hasRight 
+                                                                ? 'bg-emerald-500/8 text-emerald-200 border-l-4 border-l-emerald-500/60' 
+                                                                : 'bg-slate-500/3 opacity-30 select-none'
+                                                        }`}>
+                                                            <div className="w-12 select-none text-right pr-3 text-[11px] opacity-50 py-1.5 border-r border-[var(--border-color)]/30 font-mono tabular-nums shrink-0">
+                                                                {hasRight ? rNum : ''}
+                                                            </div>
+                                                            <div className="w-6 select-none text-center font-bold opacity-60 py-1.5 font-mono shrink-0">
+                                                                {hasRight ? '+' : ''}
+                                                            </div>
+                                                            <div className="flex-1 pl-2 py-1.5 min-h-[1.5rem] break-words whitespace-pre-wrap">
+                                                                {hasRight ? (rightLine || ' ') : ''}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return rows;
+                                        }
+                                    });
+                                })()}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

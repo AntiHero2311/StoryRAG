@@ -270,6 +270,7 @@ namespace Service.Implementations
 
             chapter.CurrentVersionId = version.Id;
             chapter.CurrentVersionNum = newVersionNum;
+            chapter.WordCount = version.WordCount;
             chapter.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
@@ -301,6 +302,7 @@ namespace Service.Implementations
 
             chapter.CurrentVersionId = targetVersion.Id;
             chapter.CurrentVersionNum = versionNumber;
+            chapter.WordCount = targetVersion.WordCount;
             chapter.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
@@ -359,6 +361,7 @@ namespace Service.Implementations
                     .OrderByDescending(v => v.VersionNumber).First();
                 chapter.CurrentVersionId = remaining.Id;
                 chapter.CurrentVersionNum = remaining.VersionNumber;
+                chapter.WordCount = remaining.WordCount;
                 chapter.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
             }
@@ -544,7 +547,10 @@ namespace Service.Implementations
             var fromContent = EncryptionHelper.DecryptWithMasterKey(fromVersion.Content, rawDek);
             var toContent = EncryptionHelper.DecryptWithMasterKey(toVersion.Content, rawDek);
 
-            var diffResult = BuildUnifiedDiff(fromContent, toContent, fromVersionNumber, toVersionNumber);
+            var fromPlain = ConvertHtmlToPlainText(fromContent);
+            var toPlain = ConvertHtmlToPlainText(toContent);
+
+            var diffResult = BuildUnifiedDiff(fromPlain, toPlain, fromVersionNumber, toVersionNumber);
 
             return new ChapterVersionDiffResponse
             {
