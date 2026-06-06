@@ -141,39 +141,22 @@ namespace Api.Controllers
                     }
                     else
                     {
-                        // 3. Find the first staff member in the database
-                        var defaultStaff = await _db.Users
-                            .AsNoTracking()
-                            .Where(u => u.Role == "Staff")
-                            .Select(u => (Guid?)u.Id)
-                            .FirstOrDefaultAsync();
-                        if (defaultStaff.HasValue)
+                        // 3. Try to find staff by project genre, then any staff, then admin
+                        var assignedStaffId = await GetFallbackStaffIdAsync(request.ProjectId);
+                        if (assignedStaffId.HasValue)
                         {
-                            staffId = defaultStaff.Value;
+                            staffId = assignedStaffId.Value;
                         }
                         else
                         {
-                            // 4. Fallback to admin if no staff found
-                            var adminId = await _db.Users
-                                .AsNoTracking()
-                                .Where(u => u.Role == "Admin")
-                                .Select(u => (Guid?)u.Id)
-                                .FirstOrDefaultAsync();
-                            if (adminId.HasValue)
-                            {
-                                staffId = adminId.Value;
-                            }
-                            else
-                            {
-                                return BadRequest(new { Message = "Không thể tìm thấy nhân viên hệ thống (Staff) để gửi phản hồi." });
-                            }
+                            return BadRequest(new { Message = "Không thể tìm thấy nhân viên hệ thống (Staff) để gửi phản hồi." });
                         }
                     }
                 }
             }
             else
             {
-                // Try previous feedback staff for this project, then any staff, then admin
+                // Try previous feedback staff for this project, then staff by genre, then any staff, then admin
                 var prevFeedbackStaffId = await _db.StaffFeedbacks
                     .AsNoTracking()
                     .Where(f => f.ProjectId == request.ProjectId)
@@ -186,30 +169,14 @@ namespace Api.Controllers
                 }
                 else
                 {
-                    var defaultStaff = await _db.Users
-                        .AsNoTracking()
-                        .Where(u => u.Role == "Staff")
-                        .Select(u => (Guid?)u.Id)
-                        .FirstOrDefaultAsync();
-                    if (defaultStaff.HasValue)
+                    var assignedStaffId = await GetFallbackStaffIdAsync(request.ProjectId);
+                    if (assignedStaffId.HasValue)
                     {
-                        staffId = defaultStaff.Value;
+                        staffId = assignedStaffId.Value;
                     }
                     else
                     {
-                        var adminId = await _db.Users
-                            .AsNoTracking()
-                            .Where(u => u.Role == "Admin")
-                            .Select(u => (Guid?)u.Id)
-                            .FirstOrDefaultAsync();
-                        if (adminId.HasValue)
-                        {
-                            staffId = adminId.Value;
-                        }
-                        else
-                        {
-                            return BadRequest(new { Message = "Không thể tìm thấy nhân viên hệ thống (Staff) để gửi phản hồi." });
-                        }
+                        return BadRequest(new { Message = "Không thể tìm thấy nhân viên hệ thống (Staff) để gửi phản hồi." });
                     }
                 }
             }
@@ -264,6 +231,52 @@ namespace Api.Controllers
                               Color = sg.Genre.Color,
                               Description = sg.Genre.Description
                           }).ToList());
+        }
+
+        private async Task<Guid?> GetFallbackStaffIdAsync(Guid projectId)
+        {
+            // 1. Get genre IDs of the project
+            var projectGenreIds = await _db.ProjectGenres
+                .AsNoTracking()
+                .Where(pg => pg.ProjectId == projectId)
+                .Select(pg => pg.GenreId)
+                .ToListAsync();
+
+            if (projectGenreIds.Count > 0)
+            {
+                // 2. Try to find a staff member who has specialized in one of these genres
+                var matchedStaffId = await _db.StaffGenres
+                    .AsNoTracking()
+                    .Where(sg => projectGenreIds.Contains(sg.GenreId))
+                    .Select(sg => (Guid?)sg.StaffId)
+                    .FirstOrDefaultAsync();
+
+                if (matchedStaffId.HasValue)
+                {
+                    return matchedStaffId.Value;
+                }
+            }
+
+            // 3. Fallback to any staff member
+            var defaultStaff = await _db.Users
+                .AsNoTracking()
+                .Where(u => u.Role == "Staff")
+                .Select(u => (Guid?)u.Id)
+                .FirstOrDefaultAsync();
+
+            if (defaultStaff.HasValue)
+            {
+                return defaultStaff.Value;
+            }
+
+            // 4. Fallback to admin
+            var adminId = await _db.Users
+                .AsNoTracking()
+                .Where(u => u.Role == "Admin")
+                .Select(u => (Guid?)u.Id)
+                .FirstOrDefaultAsync();
+
+            return adminId;
         }
 
         private static StaffFeedbackResponse MapFeedback(Repository.Entities.StaffFeedback feedback, Dictionary<Guid, List<GenreResponse>> genreMap)

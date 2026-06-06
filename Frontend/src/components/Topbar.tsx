@@ -127,6 +127,7 @@ export default function Topbar({ fullName, role, userId, avatarUrl, pageTitle, o
 
     const [showWelcome, setShowWelcome] = useState(false);
     const [bugModalOpen, setBugModalOpen] = useState(false);
+    const [imgError, setImgError] = useState(false);
     const badge = getRoleBadge(role);
     const getFullUrl = (url?: string) => {
         if (!url) return '';
@@ -136,6 +137,10 @@ export default function Topbar({ fullName, role, userId, avatarUrl, pageTitle, o
         return `${cleanBase}${url.startsWith('/') ? '' : '/'}${url}`;
     };
     const avatarSrc = getFullUrl(avatarUrl);
+
+    useEffect(() => {
+        setImgError(false);
+    }, [avatarUrl]);
     const mergedNotifications = [...serverNotifications, ...notifications]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const unreadCount = mergedNotifications.filter(n => !n.isRead).length;
@@ -477,10 +482,11 @@ export default function Topbar({ fullName, role, userId, avatarUrl, pageTitle, o
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-active)'; }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
                     >
-                        {avatarSrc ? (
+                        {avatarSrc && !imgError ? (
                             <img
                                 src={avatarSrc}
                                 alt="Avatar"
+                                onError={() => setImgError(true)}
                                 className="w-7 h-7 rounded-full object-cover"
                                 style={{ boxShadow: '0 0 12px rgba(99,102,241,0.35)' }}
                             />
@@ -513,10 +519,11 @@ export default function Topbar({ fullName, role, userId, avatarUrl, pageTitle, o
                             >
                                 <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border-color)' }}>
                                     <div className="flex items-center gap-3">
-                                        {avatarSrc ? (
+                                        {avatarSrc && !imgError ? (
                                             <img
                                                 src={avatarSrc}
                                                 alt="Avatar"
+                                                onError={() => setImgError(true)}
                                                 className="w-9 h-9 rounded-full object-cover shrink-0"
                                                 style={{ boxShadow: '0 0 16px rgba(99,102,241,0.3)' }}
                                             />

@@ -99,7 +99,7 @@ namespace Service.Implementations
             };
         }
 
-        public async Task<StaffPagedResponse<StaffFeedbackResponse>> GetFeedbacksAsync(Guid? projectId, int page, int pageSize)
+        public async Task<StaffPagedResponse<StaffFeedbackResponse>> GetFeedbacksAsync(Guid? projectId, int page, int pageSize, Guid? staffId = null, bool isAdmin = false)
         {
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 1, 100);
@@ -114,6 +114,19 @@ namespace Service.Implementations
             if (projectId.HasValue)
             {
                 query = query.Where(x => x.ProjectId == projectId.Value);
+            }
+
+            if (!isAdmin && staffId.HasValue)
+            {
+                var staffGenreIds = await _db.StaffGenres
+                    .Where(sg => sg.StaffId == staffId.Value)
+                    .Select(sg => sg.GenreId)
+                    .ToListAsync();
+
+                query = query.Where(x =>
+                    x.StaffId == staffId.Value ||
+                    !x.Project.ProjectGenres.Any() ||
+                    x.Project.ProjectGenres.Any(pg => staffGenreIds.Contains(pg.GenreId)));
             }
 
             var total = await query.CountAsync();
