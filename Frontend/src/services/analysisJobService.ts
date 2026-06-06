@@ -9,6 +9,7 @@ export type StaffAnalysisJobItem = {
   requested_by_name: string;
   status: string;
   error_message?: string | null;
+  report_id?: string | null;
   started_at?: string | null;
   last_heartbeat?: string | null;
 };
@@ -88,17 +89,71 @@ export type StaffEditReportRequest = {
   feedbackMessage?: string | null;
 };
 
+type RawRecord = Record<string, unknown>;
+
+function pickStr(raw: RawRecord, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return '';
+}
+
+function pickNullableStr(raw: RawRecord, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === 'string' && value.length > 0) return value;
+    if (value === null) return null;
+  }
+  return null;
+}
+
+function normalizeAnalysisJob(raw: RawRecord): StaffAnalysisJobItem {
+  return {
+    id: pickStr(raw, 'id', 'Id'),
+    project_id: pickStr(raw, 'project_id', 'projectId'),
+    project_title: pickStr(raw, 'project_title', 'projectTitle'),
+    requested_by: pickStr(raw, 'requested_by', 'requestedBy'),
+    requested_by_name: pickStr(raw, 'requested_by_name', 'requestedByName'),
+    status: pickStr(raw, 'status', 'Status') || 'Unknown',
+    error_message: pickNullableStr(raw, 'error_message', 'errorMessage'),
+    report_id: pickNullableStr(raw, 'report_id', 'reportId'),
+    started_at: pickNullableStr(raw, 'started_at', 'startedAt'),
+    last_heartbeat: pickNullableStr(raw, 'last_heartbeat', 'lastHeartbeat'),
+  };
+}
+
+function normalizePendingReport(raw: RawRecord): StaffPendingReportItem {
+  return {
+    report_id: pickStr(raw, 'report_id', 'reportId'),
+    project_id: pickStr(raw, 'project_id', 'projectId'),
+    project_title: pickStr(raw, 'project_title', 'projectTitle'),
+    author_id: pickStr(raw, 'author_id', 'authorId'),
+    author_name: pickStr(raw, 'author_name', 'authorName'),
+    total_score: Number(raw.total_score ?? raw.totalScore ?? 0),
+    review_status: pickStr(raw, 'review_status', 'reviewStatus'),
+    created_at: pickStr(raw, 'created_at', 'createdAt'),
+    updated_at: pickNullableStr(raw, 'updated_at', 'updatedAt'),
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : undefined,
+  };
+}
+
 export const analysisJobService = {
   getAnalysisJobs: (status?: string) =>
-    api.get<StaffAnalysisJobItem[]>('/staff/analysis-jobs', { params: status ? { status } : {} }).then(r => r.data),
+    api
+      .get<RawRecord[]>('/staff/analysis-jobs', { params: status ? { status } : {} })
+      .then(r => (Array.isArray(r.data) ? r.data : []).map(normalizeAnalysisJob)),
 
   rerun: (jobId: string) =>
-    api.post<StaffAnalysisJobItem>(`/staff/analysis-jobs/${jobId}/rerun`).then(r => r.data),
+    api.post<RawRecord>(`/staff/analysis-jobs/${jobId}/rerun`).then(r => normalizeAnalysisJob(r.data)),
 
   getPendingReports: (page = 1, pageSize = 20, status?: string) =>
     api
-      .get<StaffPagedResponse<StaffPendingReportItem>>('/staff/analyses/pending', { params: { page, pageSize, status } })
-      .then(r => r.data),
+      .get<StaffPagedResponse<RawRecord>>('/staff/analyses/pending', { params: { page, pageSize, status } })
+      .then(r => ({
+        ...r.data,
+        items: (r.data.items ?? []).map(normalizePendingReport),
+      })),
 
   getReportDetail: (reportId: string) =>
     api.get<StaffReportDetail>(`/staff/analyses/${reportId}`).then(r => r.data),
