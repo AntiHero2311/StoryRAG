@@ -96,7 +96,7 @@ export default function MainLayout({ children, pageTitle, onSettings }: MainLayo
                     onLogout={handleLogout}
                     onSettings={onSettings}
                 />
-                <main className="flex-1 overflow-y-auto scrollbar-thin select-text">
+                <main className="relative z-0 flex-1 overflow-y-auto scrollbar-thin select-text">
                     {typeof children === 'function' ? children(userInfo) : children}
                 </main>
             </div>

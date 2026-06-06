@@ -15,7 +15,6 @@ const AdminSystemPage = lazy(() => import('./pages/admin/AdminSystemPage'));
 const AdminLogsPage = lazy(() => import('./pages/admin/AdminLogsPage'));
 const AdminRevenueDashboardPage = lazy(() => import('./pages/AdminRevenueDashboardPage'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
-const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
 const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage'));
 const PlansPage = lazy(() => import('./pages/PlansPage'));
@@ -67,7 +66,7 @@ function App() {
             <Route path="/home" element={<RouteGuard><HomePage /></RouteGuard>} />
             <Route path="/profile" element={<RouteGuard><ProfilePage /></RouteGuard>} />
             <Route path="/projects" element={<RouteGuard><Navigate to="/home" replace /></RouteGuard>} />
-            <Route path="/settings" element={<RouteGuard><SettingsPage /></RouteGuard>} />
+            <Route path="/settings" element={<RouteGuard><Navigate to="/profile" replace /></RouteGuard>} />
             <Route path="/workspace/:projectId" element={<RouteGuard><WorkspacePage /></RouteGuard>} />
             <Route path="/subscription" element={<RouteGuard><SubscriptionPage /></RouteGuard>} />
             <Route path="/analysis" element={<RouteGuard><AnalysisPage /></RouteGuard>} />

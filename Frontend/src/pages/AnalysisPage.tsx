@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart2, BrainCircuit, Loader2, AlertCircle, CheckCircle2, Sparkles, Clock, CreditCard, Download, ChevronDown, Check, MessageSquare, Send } from 'lucide-react';
+import { BarChart2, BrainCircuit, Loader2, AlertCircle, CheckCircle2, Sparkles, Clock, CreditCard, Download, ChevronDown, Check, MessageSquare, Send, History, User, Headphones } from 'lucide-react';
 import MainLayout from '../layouts/MainLayout';
 import { UserInfo } from '../utils/jwtHelper';
 import { projectService, ProjectResponse } from '../services/projectService';
@@ -20,9 +20,37 @@ import { useToast } from '../components/Toast';
 import { browserNotificationService } from '../services/browserNotificationService';
 import { appNotificationService } from '../services/appNotificationService';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import Modal from '../components/ui/Modal';
 import { feedbackService, type StaffFeedbackResponse } from '../services/feedbackService';
 
 const ANALYSIS_SELECTED_PROJECT_KEY = 'analysis:selectedProjectId';
+const FEEDBACK_MIN_LENGTH = 5;
+const FEEDBACK_MAX_LENGTH = 3000;
+
+function getFeedbackBarPercent(length: number): number {
+    if (length <= 0) return 0;
+    if (length >= FEEDBACK_MIN_LENGTH) return 100;
+    return (length / FEEDBACK_MIN_LENGTH) * 100;
+}
+
+function formatFeedbackTime(iso: string) {
+    const then = new Date(iso).getTime();
+    const diff = Math.max(0, Date.now() - then);
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'Vừa xong';
+    if (minutes < 60) return `${minutes} phút trước`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} giờ trước`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days} ngày trước`;
+    return new Date(iso).toLocaleString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
 const ANALYZE_CANCEL_AFTER_SECONDS = 5 * 60;
 const formatCooldown = (seconds: number) => {
     const safe = Math.max(0, seconds);
@@ -30,6 +58,138 @@ const formatCooldown = (seconds: number) => {
     const remainingSeconds = safe % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 };
+
+function FeedbackHistoryTimeline({ items }: { items: StaffFeedbackResponse[] }) {
+    return (
+        <div className="space-y-0">
+            {items.map((fb, index) => {
+                const isResolved = fb.status === 'Resolved';
+                const staffLabel = fb.staffName && fb.staffName.toLowerCase() !== 'staff'
+                    ? fb.staffName
+                    : 'Staff';
+                const isLast = index === items.length - 1;
+
+                return (
+                    <div key={fb.id} className="relative flex gap-4 pb-6 last:pb-0">
+                        {!isLast && (
+                            <div
+                                className="absolute left-[17px] top-10 bottom-0 w-px"
+                                style={{ background: 'linear-gradient(180deg, rgba(245,166,35,0.35), rgba(99,102,241,0.15))' }}
+                            />
+                        )}
+
+                        <div className="relative z-10 w-9 h-9 rounded-full flex items-center justify-center shrink-0 border-2"
+                            style={{
+                                background: isResolved ? 'rgba(34,197,94,0.12)' : 'rgba(245,166,35,0.12)',
+                                borderColor: isResolved ? 'rgba(34,197,94,0.35)' : 'rgba(245,166,35,0.35)',
+                            }}>
+                            {isResolved
+                                ? <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                : <Clock className="w-4 h-4 text-amber-400" />}
+                        </div>
+
+                        <div className="flex-1 min-w-0 space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                                    <Clock className="w-3.5 h-3.5 shrink-0" />
+                                    <span>{formatFeedbackTime(fb.createdAt)}</span>
+                                    <span className="opacity-40">•</span>
+                                    <span className="hidden sm:inline">
+                                        {new Date(fb.createdAt).toLocaleString('vi-VN', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                        })}
+                                    </span>
+                                </div>
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                                    isResolved
+                                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25'
+                                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/25'
+                                }`}>
+                                    {isResolved
+                                        ? <><CheckCircle2 className="w-3 h-3" /> Đã phản hồi</>
+                                        : <><Clock className="w-3 h-3" /> Đang chờ xử lý</>}
+                                </span>
+                            </div>
+
+                            <div className="rounded-2xl p-4 border"
+                                style={{ background: 'var(--bg-hover)', borderColor: 'var(--border-color)' }}>
+                                <div className="flex items-center gap-2.5 mb-3">
+                                    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+                                        style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+                                        <User className="w-3.5 h-3.5 text-white" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-[var(--text-primary)]">Bạn</p>
+                                        <p className="text-[10px] text-[var(--text-secondary)]">Tác giả</p>
+                                    </div>
+                                </div>
+                                <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed select-text">
+                                    {fb.content}
+                                </p>
+                            </div>
+
+                            {isResolved && fb.staffNote ? (
+                                <div className="rounded-2xl p-4 border ml-2 sm:ml-4"
+                                    style={{
+                                        background: 'linear-gradient(135deg, rgba(139,92,246,0.08), rgba(245,166,35,0.04))',
+                                        borderColor: 'rgba(139,92,246,0.22)',
+                                    }}>
+                                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                                        <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+                                            style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)' }}>
+                                            <Headphones className="w-3.5 h-3.5 text-white" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-bold text-amber-300">{staffLabel} phản hồi</p>
+                                            <p className="text-[10px] text-[var(--text-secondary)]">Đội ngũ Staff</p>
+                                        </div>
+                                        {fb.staffGenres && fb.staffGenres.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 ml-auto">
+                                                {fb.staffGenres.slice(0, 3).map(g => (
+                                                    <span
+                                                        key={g.id}
+                                                        className="px-2 py-0.5 rounded-full text-[9px] font-bold"
+                                                        style={{
+                                                            backgroundColor: `${g.color}18`,
+                                                            color: g.color,
+                                                            border: `1px solid ${g.color}30`,
+                                                        }}
+                                                    >
+                                                        {g.name}
+                                                    </span>
+                                                ))}
+                                                {fb.staffGenres.length > 3 && (
+                                                    <span
+                                                        className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-zinc-800/80 text-zinc-400 border border-zinc-700 cursor-help"
+                                                        title={fb.staffGenres.slice(3).map(g => g.name).join(', ')}
+                                                    >
+                                                        +{fb.staffGenres.length - 3}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed select-text">
+                                        {fb.staffNote}
+                                    </p>
+                                </div>
+                            ) : !isResolved && (
+                                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed ml-2 sm:ml-4"
+                                    style={{ borderColor: 'rgba(245,166,35,0.25)', background: 'rgba(245,166,35,0.04)' }}>
+                                    <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+                                    <p className="text-xs text-amber-300/90">Staff đang xem xét phản hồi của bạn...</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
 
 // ─── Main content ─────────────────────────────────────────────────────────────
 function AnalysisContent() {
@@ -65,6 +225,7 @@ function AnalysisContent() {
     const [reportFeedbacks, setReportFeedbacks] = useState<StaffFeedbackResponse[]>([]);
     const [feedbackContent, setFeedbackContent] = useState('');
     const [submittingFeedback, setSubmittingFeedback] = useState(false);
+    const [feedbackHistoryOpen, setFeedbackHistoryOpen] = useState(false);
     const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const mountedRef = useRef(true);
     const pollingJobRef = useRef<string | null>(null);
@@ -359,8 +520,10 @@ function AnalysisContent() {
     useEffect(() => {
         if (!report) {
             setReportFeedbacks([]);
+            setFeedbackHistoryOpen(false);
             return;
         }
+        setFeedbackHistoryOpen(false);
         let disposed = false;
         const fetchFeedbacks = async () => {
             try {
@@ -381,8 +544,8 @@ function AnalysisContent() {
     const handleSubmitFeedback = async () => {
         if (!selectedId || !report) return;
         const trimmed = feedbackContent.trim();
-        if (trimmed.length < 5) {
-            toast.show('Phản hồi phải có ít nhất 5 ký tự.', 'error');
+        if (trimmed.length < FEEDBACK_MIN_LENGTH) {
+            toast.error(`Phản hồi phải có ít nhất ${FEEDBACK_MIN_LENGTH} ký tự.`);
             return;
         }
         setSubmittingFeedback(true);
@@ -394,10 +557,11 @@ function AnalysisContent() {
             });
             setReportFeedbacks(prev => [newItem, ...prev]);
             setFeedbackContent('');
-            toast.show('Gửi phản hồi cho staff thành công!', 'success');
+            setFeedbackHistoryOpen(true);
+            toast.success('Gửi phản hồi cho staff thành công!');
         } catch (err: any) {
             const msg = err?.response?.data?.message || err?.response?.data?.Message || 'Không thể gửi phản hồi. Vui lòng thử lại.';
-            toast.show(msg, 'error');
+            toast.error(msg);
         } finally {
             setSubmittingFeedback(false);
         }
@@ -805,109 +969,111 @@ function AnalysisContent() {
                         borderColor: 'rgba(255,255,255,0.08)',
                         background: 'linear-gradient(160deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01) 45%, var(--bg-surface) 100%)',
                     }}>
-                    <div className="relative z-20 flex flex-col lg:flex-row gap-4 items-end">
-                        <div className="flex-1 w-full min-w-0">
-                            <label className="block text-[var(--text-secondary)] text-xs font-semibold mb-2 uppercase tracking-wider">
-                                Chọn dự án
-                            </label>
-                            {loadingProjects ? (
-                                <div className="h-11 rounded-2xl animate-pulse" style={{ background: 'var(--bg-hover)' }} />
-                            ) : (
-                                <div ref={projectPickerRef} className="relative">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            if (analyzing) return;
-                                            setProjectPickerOpen(prev => !prev);
-                                        }}
-                                        disabled={analyzing || projects.length === 0}
-                                        className="w-full h-11 px-4 rounded-2xl text-sm flex items-center gap-3 disabled:opacity-60"
-                                        style={{ background: 'var(--bg-hover)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-primary)' }}>
-                                        <span className="flex-1 text-left truncate">
-                                            {selectedProjectTitle}
-                                        </span>
-                                        <ChevronDown className={`w-4 h-4 transition-transform ${projectPickerOpen ? 'rotate-180' : ''}`} />
-                                    </button>
+                    <div className="relative z-20 flex flex-col gap-2">
+                        <label className="block text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wider">
+                            Chọn dự án
+                        </label>
+                        <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                            <div className="flex-1 w-full min-w-0">
+                                {loadingProjects ? (
+                                    <div className="h-11 rounded-2xl animate-pulse" style={{ background: 'var(--bg-hover)' }} />
+                                ) : (
+                                    <div ref={projectPickerRef} className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (analyzing) return;
+                                                setProjectPickerOpen(prev => !prev);
+                                            }}
+                                            disabled={analyzing || projects.length === 0}
+                                            className="w-full h-11 px-4 rounded-2xl text-sm flex items-center gap-3 disabled:opacity-60"
+                                            style={{ background: 'var(--bg-hover)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-primary)' }}>
+                                            <span className="flex-1 text-left truncate">
+                                                {selectedProjectTitle}
+                                            </span>
+                                            <ChevronDown className={`w-4 h-4 transition-transform ${projectPickerOpen ? 'rotate-180' : ''}`} />
+                                        </button>
 
-                                    {projectPickerOpen && projects.length > 0 && (
-                                        <div
-                                            className="absolute left-0 right-0 z-[100] mt-2 rounded-2xl overflow-hidden max-h-[min(70vh,420px)] flex flex-col shadow-2xl"
-                                            style={{
-                                                background: 'var(--bg-dropdown, var(--bg-elevated))',
-                                                border: '1px solid var(--border-color)',
-                                                boxShadow: '0 24px 48px rgba(0,0,0,0.45)',
-                                                backdropFilter: 'none',
-                                                WebkitBackdropFilter: 'none',
-                                            }}>
-                                            <div className="p-2 border-b" style={{ borderColor: 'var(--border-color)' }}>
-                                                <input
-                                                    value={projectQuery}
-                                                    onChange={e => setProjectQuery(e.target.value)}
-                                                    placeholder="Tìm tác phẩm..."
-                                                    className="w-full h-9 px-3 rounded-xl text-sm outline-none"
-                                                    style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-                                                />
+                                        {projectPickerOpen && projects.length > 0 && (
+                                            <div
+                                                className="absolute left-0 right-0 z-[100] mt-2 rounded-2xl overflow-hidden max-h-[min(70vh,420px)] flex flex-col shadow-2xl"
+                                                style={{
+                                                    background: 'var(--bg-dropdown, var(--bg-elevated))',
+                                                    border: '1px solid var(--border-color)',
+                                                    boxShadow: '0 24px 48px rgba(0,0,0,0.45)',
+                                                    backdropFilter: 'none',
+                                                    WebkitBackdropFilter: 'none',
+                                                }}>
+                                                <div className="p-2 border-b" style={{ borderColor: 'var(--border-color)' }}>
+                                                    <input
+                                                        value={projectQuery}
+                                                        onChange={e => setProjectQuery(e.target.value)}
+                                                        placeholder="Tìm tác phẩm..."
+                                                        className="w-full h-9 px-3 rounded-xl text-sm outline-none"
+                                                        style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                                                    />
+                                                </div>
+                                                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                                                    {filteredProjects.length === 0 ? (
+                                                        <div className="px-4 py-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                                                            Không tìm thấy tác phẩm phù hợp.
+                                                        </div>
+                                                    ) : (
+                                                        filteredProjects.map(p => {
+                                                            const isActive = p.id === selectedId;
+                                                            return (
+                                                                <button
+                                                                    key={p.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setSelectedId(p.id);
+                                                                        setChartChapterFilter('all');
+                                                                        setProjectPickerOpen(false);
+                                                                        setProjectQuery('');
+                                                                    }}
+                                                                    className="w-full px-4 py-2.5 text-left flex items-center gap-3"
+                                                                    style={{
+                                                                        background: isActive ? 'var(--bg-hover)' : 'transparent',
+                                                                        color: 'var(--text-primary)',
+                                                                        borderBottom: '1px solid var(--border-subtle)',
+                                                                    }}>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className="text-sm font-medium truncate">{p.title}</p>
+                                                                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                                                                            Cập nhật: {new Date(p.updatedAt ?? p.createdAt).toLocaleString('vi-VN')}
+                                                                        </p>
+                                                                    </div>
+                                                                    {isActive && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}
+                                                                </button>
+                                                            );
+                                                        })
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-                                                {filteredProjects.length === 0 ? (
-                                                    <div className="px-4 py-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                                                        Không tìm thấy tác phẩm phù hợp.
-                                                    </div>
-                                                ) : (
-                                                    filteredProjects.map(p => {
-                                                        const isActive = p.id === selectedId;
-                                                        return (
-                                                            <button
-                                                                key={p.id}
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setSelectedId(p.id);
-                                                                    setChartChapterFilter('all');
-                                                                    setProjectPickerOpen(false);
-                                                                    setProjectQuery('');
-                                                                }}
-                                                                className="w-full px-4 py-2.5 text-left flex items-center gap-3"
-                                                                style={{
-                                                                    background: isActive ? 'var(--bg-hover)' : 'transparent',
-                                                                    color: 'var(--text-primary)',
-                                                                    borderBottom: '1px solid var(--border-subtle)',
-                                                                }}>
-                                                                <div className="flex-1 min-w-0">
-                                                                    <p className="text-sm font-medium truncate">{p.title}</p>
-                                                                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                                                                        Cập nhật: {new Date(p.updatedAt ?? p.createdAt).toLocaleString('vi-VN')}
-                                                                    </p>
-                                                                </div>
-                                                                {isActive && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}
-                                                            </button>
-                                                        );
-                                                    })
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                            <p className="mt-2 text-xs text-[var(--text-secondary)] truncate">
-                                Dự án hiện tại: <span className="text-[var(--text-primary)] font-medium">{selectedProjectTitle}</span>
-                                {selectedProject && (
-                                    <span className="ml-2 text-[var(--text-secondary)]">
-                                        · cập nhật {new Date(selectedProject.updatedAt ?? selectedProject.createdAt).toLocaleDateString('vi-VN')}
-                                    </span>
+                                        )}
+                                    </div>
                                 )}
-                            </p>
+                            </div>
+                            <button
+                                onClick={openAnalyzeConfirm}
+                                disabled={!selectedId || analyzing || loadingProjects}
+                                className="h-11 px-7 rounded-2xl font-semibold text-sm text-white flex items-center justify-center gap-2 shrink-0 transition-all disabled:opacity-50 sm:self-auto w-full sm:w-auto"
+                                style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)', boxShadow: '0 8px 24px rgba(245,166,35,0.25)' }}>
+                                {analyzing ? (
+                                    <><Loader2 className="w-4 h-4 animate-spin" /> Đang phân tích...</>
+                                ) : (
+                                    <><Sparkles className="w-4 h-4" /> Phân tích ngay</>
+                                )}
+                            </button>
                         </div>
-                        <button
-                            onClick={openAnalyzeConfirm}
-                            disabled={!selectedId || analyzing || loadingProjects}
-                            className="h-11 px-7 rounded-2xl font-semibold text-sm text-white flex items-center gap-2 shrink-0 transition-all disabled:opacity-50"
-                            style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)', boxShadow: '0 8px 24px rgba(245,166,35,0.25)' }}>
-                            {analyzing ? (
-                                <><Loader2 className="w-4 h-4 animate-spin" /> Đang phân tích...</>
-                            ) : (
-                                <><Sparkles className="w-4 h-4" /> Phân tích ngay</>
+                        <p className="text-xs text-[var(--text-secondary)] truncate">
+                            Dự án hiện tại: <span className="text-[var(--text-primary)] font-medium">{selectedProjectTitle}</span>
+                            {selectedProject && (
+                                <span className="ml-2 text-[var(--text-secondary)]">
+                                    · cập nhật {new Date(selectedProject.updatedAt ?? selectedProject.createdAt).toLocaleDateString('vi-VN')}
+                                </span>
                             )}
-                        </button>
+                        </p>
                     </div>
                     {analyzing && analysisJob && (
                         <p className="text-xs text-amber-300">
@@ -1218,44 +1384,95 @@ function AnalysisContent() {
                                         </div>
 
                                         {/* Author Feedback to Staff */}
-                                        <div className="mt-6 rounded-2xl overflow-hidden border"
+                                        <div className="mt-6 rounded-3xl overflow-hidden border"
                                             style={{
-                                                background: 'var(--bg-surface)',
-                                                borderColor: 'var(--border-color)',
+                                                background: 'linear-gradient(160deg, rgba(245,166,35,0.06), rgba(249,115,22,0.02) 40%, var(--bg-surface) 100%)',
+                                                borderColor: 'rgba(245,166,35,0.18)',
                                             }}>
-                                            <div className="p-6 space-y-6">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(245,166,35,0.12)' }}>
-                                                        <MessageSquare className="w-5 h-5 text-amber-500" />
+                                            <div className="h-1" style={{ background: 'linear-gradient(90deg, #f5a623, #f97316, #fb923c)' }} />
+
+                                            <div className="p-6 md:p-7 space-y-6">
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                                                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg"
+                                                        style={{ background: 'linear-gradient(135deg,#f5a623,#f97316)', boxShadow: '0 8px 24px rgba(245,166,35,0.25)' }}>
+                                                        <MessageSquare className="w-6 h-6 text-white" />
                                                     </div>
-                                                    <div>
-                                                        <h3 className="text-[var(--text-primary)] font-bold text-lg">Phản hồi gửi Staff</h3>
-                                                        <p className="text-[var(--text-secondary)] text-xs">Gửi câu hỏi hoặc góp ý về kết quả đánh giá phân tích này cho đội ngũ Staff.</p>
+                                                    <div className="min-w-0 flex-1">
+                                                        <h3 className="text-[var(--text-primary)] font-black text-xl leading-tight">Phản hồi gửi Staff</h3>
+                                                        <p className="text-[var(--text-secondary)] text-sm mt-1 leading-relaxed">
+                                                            Gửi câu hỏi hoặc góp ý về kết quả phân tích — đội ngũ Staff sẽ xem và trả lời trực tiếp tại đây.
+                                                        </p>
                                                     </div>
                                                 </div>
 
-                                                {/* Textarea for new feedback */}
-                                                <div className="space-y-3">
+                                                <div className="rounded-2xl border p-5 space-y-4"
+                                                    style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-color)' }}>
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                                                            Nội dung phản hồi
+                                                        </label>
+                                                        <span className={`text-[11px] font-semibold tabular-nums ${
+                                                            feedbackContent.length >= FEEDBACK_MAX_LENGTH
+                                                                ? 'text-rose-400'
+                                                                : feedbackContent.trim().length >= FEEDBACK_MIN_LENGTH
+                                                                    ? 'text-emerald-400'
+                                                                    : 'text-amber-300'
+                                                        }`}>
+                                                            {feedbackContent.length} / {FEEDBACK_MAX_LENGTH}
+                                                        </span>
+                                                    </div>
                                                     <textarea
                                                         value={feedbackContent}
                                                         onChange={e => setFeedbackContent(e.target.value)}
                                                         rows={4}
-                                                        placeholder="Nhập nội dung thắc mắc hoặc phản hồi của bạn về bài đánh giá này (tối thiểu 5 ký tự)..."
-                                                        className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none transition-all duration-250 border focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20"
+                                                        maxLength={FEEDBACK_MAX_LENGTH}
+                                                        placeholder="Ví dụ: Tôi không đồng ý với tiêu chí 2.3 vì nhân vật chính đã có động cơ rõ ràng từ chương 4..."
+                                                        className="w-full rounded-xl px-4 py-3.5 text-sm outline-none resize-none transition-all duration-250 border focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/15"
                                                         style={{
                                                             background: 'var(--input-bg, var(--bg-hover))',
                                                             borderColor: 'var(--border-color)',
                                                             color: 'var(--text-primary)',
                                                         }}
                                                     />
-                                                    <div className="flex justify-end">
+                                                    <div className="space-y-1.5">
+                                                        <div className="h-1.5 rounded-full overflow-hidden"
+                                                            style={{ background: 'rgba(245,166,35,0.14)' }}>
+                                                            <div
+                                                                className="h-full rounded-full transition-all duration-300"
+                                                                style={{
+                                                                    width: `${getFeedbackBarPercent(feedbackContent.length)}%`,
+                                                                    background: feedbackContent.length >= FEEDBACK_MAX_LENGTH
+                                                                        ? 'linear-gradient(90deg,#ef4444,#f87171)'
+                                                                        : feedbackContent.trim().length >= FEEDBACK_MIN_LENGTH
+                                                                            ? 'linear-gradient(90deg,#f5a623,#fbbf24,#f97316)'
+                                                                            : 'linear-gradient(90deg,#f59e0b,#fbbf24)',
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <p className="text-[11px] text-[var(--text-secondary)]">
+                                                            {feedbackContent.trim().length < FEEDBACK_MIN_LENGTH ? (
+                                                                <>
+                                                                    Tối thiểu {FEEDBACK_MIN_LENGTH} ký tự
+                                                                    <span className="text-amber-400"> · còn thiếu {FEEDBACK_MIN_LENGTH - feedbackContent.trim().length}</span>
+                                                                </>
+                                                            ) : (
+                                                                <span className="text-emerald-400">
+                                                                    Đủ để gửi · tối đa {FEEDBACK_MAX_LENGTH} ký tự
+                                                                </span>
+                                                            )}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
+                                                        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                                                            Phản hồi được gắn với báo cáo phân tích hiện tại — xem lại trong popup lịch sử.
+                                                        </p>
                                                         <button
                                                             onClick={handleSubmitFeedback}
-                                                            disabled={submittingFeedback || feedbackContent.trim().length < 5}
-                                                            className="h-10 px-5 rounded-xl text-sm font-semibold text-white flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 hover:brightness-110"
+                                                            disabled={submittingFeedback || feedbackContent.trim().length < FEEDBACK_MIN_LENGTH}
+                                                            className="h-11 px-6 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50 hover:brightness-110 shrink-0"
                                                             style={{
                                                                 background: 'linear-gradient(135deg,#f5a623,#f97316)',
-                                                                boxShadow: '0 4px 12px rgba(245,166,35,0.2)',
+                                                                boxShadow: '0 6px 20px rgba(245,166,35,0.28)',
                                                             }}>
                                                             {submittingFeedback ? (
                                                                 <><Loader2 className="w-4 h-4 animate-spin" /> Đang gửi...</>
@@ -1266,65 +1483,41 @@ function AnalysisContent() {
                                                     </div>
                                                 </div>
 
-                                                {/* Previous Feedbacks list */}
                                                 {reportFeedbacks.length > 0 && (
-                                                    <div className="pt-6 border-t" style={{ borderColor: 'var(--border-color)' }}>
-                                                        <h4 className="text-sm font-bold text-[var(--text-primary)] mb-4">Lịch sử phản hồi cho báo cáo này ({reportFeedbacks.length})</h4>
-                                                        <div className="space-y-5 max-h-[420px] overflow-y-auto pr-2">
-                                                            {reportFeedbacks.map(fb => (
-                                                                <div key={fb.id} className="p-5 rounded-2xl space-y-4 border transition-all duration-200 hover:border-white/10" style={{ background: 'rgba(255, 255, 255, 0.015)', borderColor: 'rgba(255, 255, 255, 0.05)' }}>
-                                                                    <div className="flex items-center justify-between gap-3 text-xs">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="font-bold text-[var(--text-bright)]">Tác giả</span>
-                                                                            <span className="text-[var(--text-tertiary)] text-[10px]">•</span>
-                                                                            <span className="text-[var(--text-secondary)]">{new Date(fb.createdAt).toLocaleString('vi-VN')}</span>
-                                                                        </div>
-                                                                        <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
-                                                                            fb.status === 'Open' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                                                        }`}>{fb.status === 'Open' ? 'Đang chờ xử lý' : 'Đã phản hồi'}</span>
-                                                                    </div>
-                                                                    <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed select-text">{fb.content}</p>
-                                                                    {fb.status === 'Resolved' && fb.staffNote && (
-                                                                        <div className="pl-4 border-l-2 border-amber-500/30 space-y-2 mt-4">
-                                                                            <div className="flex flex-wrap items-center gap-2">
-                                                                                <span className="text-xs font-bold text-amber-400">
-                                                                                    {fb.staffName && fb.staffName.toLowerCase() !== 'staff' ? `Staff ${fb.staffName} phản hồi` : 'Phản hồi từ Staff'}
-                                                                                </span>
-                                                                                {fb.staffGenres && fb.staffGenres.length > 0 && (
-                                                                                    <div className="flex flex-wrap gap-1">
-                                                                                        {fb.staffGenres.slice(0, 3).map(g => (
-                                                                                            <span
-                                                                                                key={g.id}
-                                                                                                className="px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wide uppercase"
-                                                                                                style={{
-                                                                                                    backgroundColor: `${g.color}12`,
-                                                                                                    color: g.color,
-                                                                                                    border: `1px solid ${g.color}25`
-                                                                                                }}
-                                                                                            >
-                                                                                                {g.name}
-                                                                                            </span>
-                                                                                        ))}
-                                                                                        {fb.staffGenres.length > 3 && (
-                                                                                            <span
-                                                                                                className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-help"
-                                                                                                title={fb.staffGenres.slice(3).map(g => g.name).join(', ')}
-                                                                                            >
-                                                                                                +{fb.staffGenres.length - 3}
-                                                                                            </span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                            <div className="p-3.5 rounded-xl text-xs leading-relaxed whitespace-pre-wrap select-text border" style={{ background: 'rgba(245,166,35,0.03)', borderColor: 'rgba(245,166,35,0.1)', color: 'var(--text-primary)' }}>
-                                                                                {fb.staffNote}
-                                                                            </div>
-                                                                        </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFeedbackHistoryOpen(true)}
+                                                        className="w-full flex items-center justify-between gap-3 px-4 py-3.5 rounded-2xl border transition-all duration-200 hover:border-indigo-500/30 hover:bg-indigo-500/5"
+                                                        style={{
+                                                            background: 'var(--bg-surface)',
+                                                            borderColor: 'var(--border-color)',
+                                                        }}
+                                                    >
+                                                        <div className="flex items-center gap-3 min-w-0 text-left">
+                                                            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                                                                style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.2)' }}>
+                                                                <History className="w-4 h-4 text-indigo-300" />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="text-[var(--text-primary)] font-bold text-sm">
+                                                                    Lịch sử phản hồi cho báo cáo này
+                                                                </p>
+                                                                <p className="text-[var(--text-secondary)] text-xs mt-0.5">
+                                                                    {reportFeedbacks.length} cuộc trao đổi · bấm để xem chi tiết
+                                                                    {reportFeedbacks.some(f => f.status === 'Open') && (
+                                                                        <span className="text-amber-400"> · có phản hồi đang chờ</span>
                                                                     )}
-                                                                </div>
-                                                            ))}
+                                                                </p>
+                                                            </div>
                                                         </div>
-                                                    </div>
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold"
+                                                                style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.25)' }}>
+                                                                {reportFeedbacks.length}
+                                                            </span>
+                                                            <ChevronDown className="w-4 h-4 text-[var(--text-secondary)] -rotate-90" />
+                                                        </div>
+                                                    </button>
                                                 )}
                                             </div>
                                         </div>
@@ -1484,6 +1677,24 @@ function AnalysisContent() {
                 evidenceHighlight={evidencePanel?.highlight ?? ''}
                 criterionLabel={evidencePanel?.label ?? ''}
             />
+            <Modal
+                isOpen={feedbackHistoryOpen}
+                onClose={() => setFeedbackHistoryOpen(false)}
+                title="Lịch sử phản hồi cho báo cáo này"
+                size="xl"
+            >
+                <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-2 px-4 py-3 rounded-xl border"
+                        style={{ background: 'rgba(99,102,241,0.06)', borderColor: 'rgba(99,102,241,0.18)' }}>
+                        <History className="w-4 h-4 text-indigo-300 shrink-0" />
+                        <p className="text-sm text-[var(--text-secondary)]">
+                            <span className="font-semibold text-[var(--text-primary)]">{reportFeedbacks.length}</span> cuộc trao đổi với Staff cho báo cáo phân tích này.
+                        </p>
+                    </div>
+                    <FeedbackHistoryTimeline items={reportFeedbacks} />
+                </div>
+            </Modal>
+
             <ConfirmDialog
                 isOpen={showAnalyzeConfirm}
                 onClose={() => setShowAnalyzeConfirm(false)}

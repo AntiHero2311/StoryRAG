@@ -24,12 +24,12 @@ export default function StaffPerformancePage() {
     }, [navigate]);
 
     const cards = stats ? [
-        { label: 'Report đã duyệt (tháng)', value: stats.reviewsThisMonth },
-        { label: 'Feedback đã đóng (tháng)', value: stats.feedbacksResolvedThisMonth },
-        { label: 'Feedback đang mở', value: stats.openFeedbacksAssigned },
+        { label: 'Báo cáo đã duyệt', sub: 'Trong tháng hiện tại', value: stats.reviewsThisMonth },
+        { label: 'Phản hồi đã đóng', sub: 'Trong tháng hiện tại', value: stats.feedbacksResolvedThisMonth },
         {
-            label: 'Thời gian phản hồi TB (giờ)',
-            value: stats.avgFeedbackResponseHours != null ? stats.avgFeedbackResponseHours : '—',
+            label: 'Thời gian phản hồi trung bình',
+            sub: 'Từ lúc nhận đến khi đóng phản hồi',
+            value: stats.avgFeedbackResponseHours != null ? `${stats.avgFeedbackResponseHours} giờ` : '—',
         },
     ] : [];
 
@@ -47,10 +47,11 @@ export default function StaffPerformancePage() {
                     {loading ? (
                         <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-indigo-400" /></div>
                     ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             {cards.map(c => (
                                 <div key={c.label} className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-5">
-                                    <p className="text-xs text-[var(--text-tertiary)] mb-1">{c.label}</p>
+                                    <p className="text-sm font-semibold text-[var(--text-primary)]">{c.label}</p>
+                                    <p className="text-xs text-[var(--text-secondary)] mt-1 mb-3">{c.sub}</p>
                                     <p className="text-3xl font-black text-[var(--text-primary)]">{c.value}</p>
                                 </div>
                             ))}

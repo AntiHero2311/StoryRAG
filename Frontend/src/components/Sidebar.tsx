@@ -17,7 +17,6 @@ const NAV_AUTHOR: NavItem[] = [
     { key: 'subscription', label: 'Gói dịch vụ',icon: CreditCard,      path: '/subscription' },
     { key: 'help',         label: 'Trợ giúp',   icon: CircleHelp,      path: '/help' },
     { key: 'profile',      label: 'Hồ sơ',      icon: User,            path: '/profile' },
-    { key: 'settings',     label: 'Cài đặt',    icon: Settings,        path: '/settings' },
 ];
 
 const NAV_STAFF: NavItem[] = [
@@ -28,7 +27,6 @@ const NAV_STAFF: NavItem[] = [
     { key: 'staff-content', label: 'Nội dung trợ giúp', icon: CircleHelp, path: '/staff/content' },
     { key: 'staff-bugs', label: 'Báo cáo lỗi app', icon: Bug, path: '/staff/bugs' },
     { key: 'profile', label: 'Hồ sơ', icon: User, path: '/profile' },
-    { key: 'settings', label: 'Cài đặt', icon: Settings, path: '/settings' },
 ];
 
 const NAV_ADMIN: NavItem[] = [
