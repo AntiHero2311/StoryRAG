@@ -22,7 +22,7 @@ namespace Service.Helpers
             Func<Task<T>> action,
             ILogger logger,
             string operationName = "Gemini",
-            int maxRetries = 4,
+            int maxRetries = 2,
             CancellationToken cancellationToken = default)
         {
             for (var attempt = 0; attempt <= maxRetries; attempt++)

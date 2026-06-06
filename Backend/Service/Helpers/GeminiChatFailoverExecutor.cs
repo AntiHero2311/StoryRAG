@@ -86,11 +86,11 @@ namespace Service.Helpers
 
             // Nếu đang ở chế độ Analyze và AnalyzeModels được chỉ định, chỉ dùng Analyze key (không fallback sang Chat key)
             _preferAnalyzeOnly = primaryRole == GeminiPrimaryKeyRole.Analyze && !string.IsNullOrWhiteSpace(config["Gemini:AnalyzeModels"]);
-            // Nếu preferAnalyzeOnly, ưu tiên CHỈ dùng model Analyze đầu tiên để tránh thử nhiều model khi Analyze toàn bộ dự án.
-            if (_preferAnalyzeOnly && chatModels.Count > 1)
-            {
-                chatModels = new List<string> { chatModels[0] };
-            }
+            // Đã loại bỏ việc giới hạn 1 model duy nhất để cho phép cấu hình backup model khi model chính bị quá tải hoặc 503
+            // if (_preferAnalyzeOnly && chatModels.Count > 1)
+            // {
+            //     chatModels = new List<string> { chatModels[0] };
+            // }
             var orderedRoles = primaryRole == GeminiPrimaryKeyRole.Analyze
                 ? (_preferAnalyzeOnly ? new[] { GeminiPrimaryKeyRole.Analyze } : new[] { GeminiPrimaryKeyRole.Analyze, GeminiPrimaryKeyRole.Chat })
                 : new[] { GeminiPrimaryKeyRole.Chat, GeminiPrimaryKeyRole.Analyze };
@@ -167,6 +167,7 @@ namespace Service.Helpers
                             ? GeminiRetryHelper.FlattenSystemForGemma(sourceMessages)
                             : sourceMessages.ToList();
 
+                        var maxRetries = _candidates.Count > 1 ? 1 : 2;
                         ClientResult<ChatCompletion> result;
                         if (options == null)
                         {
@@ -174,6 +175,7 @@ namespace Service.Helpers
                                 () => candidate.Client.CompleteChatAsync(geminiMessages, cancellationToken: cancellationToken),
                                 _logger,
                                 $"{_operationName} ({candidate.Label})",
+                                maxRetries: maxRetries,
                                 cancellationToken: cancellationToken);
                         }
                         else
@@ -182,6 +184,7 @@ namespace Service.Helpers
                                 () => candidate.Client.CompleteChatAsync(geminiMessages, options, cancellationToken),
                                 _logger,
                                 $"{_operationName} ({candidate.Label})",
+                                maxRetries: maxRetries,
                                 cancellationToken: cancellationToken);
                         }
 
