@@ -406,7 +406,7 @@ namespace Service.Implementations
 
                             await ThrowIfJobCancelledAsync(jobId, token);
 
-                            var safeProgress = Math.Clamp(progress, 20, 85);
+                            var safeProgress = Math.Clamp(progress, 20, 89);
                             var normalizedStage = NormalizeStage(message);
                             if (job.Progress == safeProgress && job.Stage == normalizedStage)
                                 return;

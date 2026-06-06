@@ -370,5 +370,82 @@ VĂN BẢN MẪU:
             if (string.IsNullOrWhiteSpace(text)) return 0;
             return text.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
         }
+
+        /// <summary>
+        /// Thu gọn dữ liệu biểu đồ trước khi lưu DB — gộp theo chương để tránh JSON/emotion payload quá lớn làm kẹt bước lưu (85%).
+        /// Chi tiết theo segment vẫn lấy qua API narrative charts khi cần.
+        /// </summary>
+        public static EmotionPacingResult CompactEmotionPacingForStorage(EmotionPacingResult source, int maxSegmentPoints = 350)
+        {
+            var segmentCount = Math.Max(source.PacingPoints.Count, source.EmotionPoints.Count);
+            var maxPresencePoints = source.CharacterPresence.Count == 0
+                ? 0
+                : source.CharacterPresence.Max(s => s.Points.Count);
+
+            if (segmentCount <= maxSegmentPoints && maxPresencePoints <= maxSegmentPoints)
+                return source;
+
+            return AggregateEmotionPacingToChapters(source);
+        }
+
+        private static EmotionPacingResult AggregateEmotionPacingToChapters(EmotionPacingResult source)
+        {
+            var pacingByChapter = source.PacingPoints
+                .GroupBy(p => p.ChapterNumber)
+                .OrderBy(g => g.Key)
+                .Select(g => new PacingPoint
+                {
+                    SegmentIndex = g.Key,
+                    ChapterNumber = g.Key,
+                    Score = g.Average(x => x.Score),
+                    Label = g.Select(x => x.Label).FirstOrDefault(l => !string.IsNullOrWhiteSpace(l)),
+                })
+                .ToList();
+
+            var emotionByChapter = source.EmotionPoints
+                .GroupBy(e => e.ChapterNumber)
+                .OrderBy(g => g.Key)
+                .Select(g => new EmotionPoint
+                {
+                    SegmentIndex = g.Key,
+                    ChapterNumber = g.Key,
+                    Valence = g.Average(x => x.Valence),
+                    Intensity = g.Average(x => x.Intensity),
+                    DominantEmotion = g.GroupBy(x => x.DominantEmotion)
+                        .OrderByDescending(x => x.Count())
+                        .First().Key,
+                    Label = g.Select(x => x.Label).FirstOrDefault(l => !string.IsNullOrWhiteSpace(l)),
+                })
+                .ToList();
+
+            var presence = source.CharacterPresence
+                .Select(s => new CharacterPresenceSeries
+                {
+                    CharacterName = s.CharacterName,
+                    Points = s.Points
+                        .GroupBy(p => p.ChapterNumber)
+                        .OrderBy(g => g.Key)
+                        .Select(g => new CharacterPresencePoint
+                        {
+                            SegmentIndex = g.Key,
+                            ChapterNumber = g.Key,
+                            Mentions = g.Sum(p => p.Mentions),
+                        })
+                        .ToList(),
+                })
+                .ToList();
+
+            return new EmotionPacingResult
+            {
+                PacingPoints = pacingByChapter,
+                EmotionPoints = emotionByChapter,
+                CharacterFrequencies = source.CharacterFrequencies,
+                CharacterPresence = presence,
+                CharacterRelationships = source.CharacterRelationships,
+                Insights = source.Insights,
+                OverallPacingProfile = source.OverallPacingProfile,
+                DominantEmotionProfile = source.DominantEmotionProfile,
+            };
+        }
     }
 }

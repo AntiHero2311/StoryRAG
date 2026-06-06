@@ -457,7 +457,7 @@ namespace Service.Implementations
                 await Task.WhenAll(rubricTask, contentTask, emotionTask);
 
                 if (progressCallback != null)
-                    await progressCallback(85, "Đang lưu kết quả phân tích...", cancellationToken);
+                    await progressCallback(85, "Đang chuẩn bị lưu kết quả...", cancellationToken);
 
                 var rubricRes = rubricTask.Result;
                 var contentRes = contentTask.Result;
@@ -470,10 +470,12 @@ namespace Service.Implementations
                 factsPayloadJson = rubricRes.FactsPayloadJson;
                 reportItemsForSave = rubricRes.ReportItems;
 
+                if (progressCallback != null)
+                    await progressCallback(86, "Đang mã hóa dữ liệu biểu đồ & Story Bible...", cancellationToken);
+
                 var rawContentData = JsonSerializer.Serialize(contentRes.Content, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-                var rawEmotionData = JsonSerializer.Serialize(emotionRes.Pacing, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-                contentAnalysisData = EncryptionHelper.EncryptWithMasterKey(rawContentData, rawDek);
-                emotionPacingData = EncryptionHelper.EncryptWithMasterKey(rawEmotionData, rawDek);
+                contentAnalysisData = ReportPayloadChunkHelper.EncryptJsonPayload(rawContentData, rawDek);
+                emotionPacingData = ReportPayloadChunkHelper.EncryptEmotionPacing(emotionRes.Pacing, rawDek);
                 contentResObj = contentRes.Content;
             }
             else
@@ -512,6 +514,9 @@ namespace Service.Implementations
             // 5. Calculate total
             var total = criteria.Sum(c => c.Score);
 
+            if (progressCallback != null)
+                await progressCallback(87, "Đang lưu báo cáo và Story Bible...", cancellationToken);
+
             // 6. Lưu báo cáo (ProjectReport) chính vào Database
             var report = new ProjectReport
             {
@@ -531,7 +536,6 @@ namespace Service.Implementations
             };
             _context.ProjectReports.Add(report);
 
-            // Lưu trữ dữ liệu cẩm nang tự động (Story Bible) vào các bảng chi tiết của báo cáo
             if (contentResObj != null)
             {
                 // 1. Lưu danh sách Nhân vật (Characters)
@@ -666,6 +670,9 @@ namespace Service.Implementations
                 }
             }
 
+            if (progressCallback != null)
+                await progressCallback(88, "Đang lưu facts & rubric evidence...", cancellationToken);
+
             // Lưu dữ liệu bản chụp (Snapshot) cố định của từng chương truyện
             // Load toàn bộ nội dung version 1 lần duy nhất (tránh N+1 query)
             var snapshotVersionIds = snapshot.Chapters
@@ -689,24 +696,6 @@ namespace Service.Implementations
                     v => ((string?)v.Title, (string?)v.Content, v.WordCount));
             }
 
-            foreach (var chapter in chapters)
-            {
-                var state = snapshot.Chapters.FirstOrDefault(c => c.ChapterNumber == chapter.ChapterNumber);
-                if (state == null || !state.CurrentVersionId.HasValue) continue;
-
-                if (!snapshotVersionContents.TryGetValue(state.CurrentVersionId.Value, out var version))
-                    continue;
-
-                _context.ProjectReportSnapshots.Add(new ProjectReportSnapshot
-                {
-                    ProjectReportId = report.Id,
-                    ChapterNumber = chapter.ChapterNumber,
-                    Title = version.Title ?? string.Empty,
-                    Content = version.Content ?? string.Empty, // Already encrypted in DB
-                    WordCount = version.WordCount
-                });
-            }
-
             if (useRag)
             {
                 _context.ProjectAnalysisFacts.Add(new ProjectAnalysisFact
@@ -723,10 +712,7 @@ namespace Service.Implementations
                 }
             }
 
-            // 7. Deduct usage — trừ cả analysis count và token, nhưng chỉ nếu phân tích hợp lệ
-            // Kiểm tra xem phân tích có dữ liệu thực tế không trước khi tính vào lượt
             bool hasValidAnalysisData = criteria.Count > 0;
-            
             if (!hasValidAnalysisData)
             {
                 _logger.LogWarning(
@@ -736,11 +722,35 @@ namespace Service.Implementations
             }
             else
             {
-                // Chỉ tăng counter khi phân tích thực sự có kết quả
                 sub.UsedAnalysisCount += 1;
             }
-            
-            await _context.SaveChangesAsync(cancellationToken);
+
+            if (progressCallback != null)
+                await progressCallback(89, "Đang lưu snapshot chương truyện...", cancellationToken);
+
+            var snapshotRows = new List<ProjectReportSnapshot>();
+            foreach (var chapter in chapters)
+            {
+                var state = snapshot.Chapters.FirstOrDefault(c => c.ChapterNumber == chapter.ChapterNumber);
+                if (state == null || !state.CurrentVersionId.HasValue) continue;
+
+                if (!snapshotVersionContents.TryGetValue(state.CurrentVersionId.Value, out var version))
+                    continue;
+
+                snapshotRows.Add(new ProjectReportSnapshot
+                {
+                    ProjectReportId = report.Id,
+                    ChapterNumber = chapter.ChapterNumber,
+                    Title = version.Title ?? string.Empty,
+                    Content = version.Content ?? string.Empty,
+                    WordCount = version.WordCount
+                });
+            }
+
+            foreach (var row in snapshotRows)
+            {
+                _context.ProjectReportSnapshots.Add(row);
+            }
 
             if (syntheticRunCarrier != null)
             {
@@ -750,9 +760,10 @@ namespace Service.Implementations
                     carrier.ReportId = report.Id;
                     carrier.ProjectVersionHash = snapshot.ProjectVersionHash;
                     carrier.UpdatedAt = DateTime.UtcNow;
-                    await _context.SaveChangesAsync(cancellationToken);
                 }
             }
+
+            await _context.SaveChangesAsync(cancellationToken);
 
             return BuildResponse(report.Id, projectId, projectTitle, reportStatus, total, criteria, warnings, overallFeedback, projectVersion, snapshot.ProjectVersionHash);
         }
@@ -819,14 +830,13 @@ namespace Service.Implementations
             EmotionPacingResult? emotionRes = null;
             if (!string.IsNullOrWhiteSpace(report.ContentAnalysisJson))
             {
-                var decData = EncryptionHelper.DecryptWithMasterKey(report.ContentAnalysisJson, rawDek);
-                try { contentRes = JsonSerializer.Deserialize<ContentAnalysisResult>(decData, jsonOpts); } catch { }
+                var decData = ReportPayloadChunkHelper.DecryptJsonPayload(report.ContentAnalysisJson, rawDek);
+                if (!string.IsNullOrWhiteSpace(decData))
+                {
+                    try { contentRes = JsonSerializer.Deserialize<ContentAnalysisResult>(decData, jsonOpts); } catch { }
+                }
             }
-            if (!string.IsNullOrWhiteSpace(report.EmotionPacingJson))
-            {
-                var decData = EncryptionHelper.DecryptWithMasterKey(report.EmotionPacingJson, rawDek);
-                try { emotionRes = JsonSerializer.Deserialize<EmotionPacingResult>(decData, jsonOpts); } catch { }
-            }
+            emotionRes = ReportPayloadChunkHelper.DecryptEmotionPacing(report.EmotionPacingJson, rawDek);
 
             var projectVersionHash = await ResolveProjectVersionHashAsync(report.Id, CancellationToken.None);
             return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, mergedLatest, warnings, overallFeedback, report.ProjectVersion, projectVersionHash, report.CreatedAt, contentRes, emotionRes);
@@ -950,14 +960,13 @@ namespace Service.Implementations
             EmotionPacingResult? emotionRes = null;
             if (!string.IsNullOrWhiteSpace(report.ContentAnalysisJson))
             {
-                var decData = EncryptionHelper.DecryptWithMasterKey(report.ContentAnalysisJson, rawDek);
-                try { contentRes = JsonSerializer.Deserialize<ContentAnalysisResult>(decData, jsonOpts); } catch { }
+                var decData = ReportPayloadChunkHelper.DecryptJsonPayload(report.ContentAnalysisJson, rawDek);
+                if (!string.IsNullOrWhiteSpace(decData))
+                {
+                    try { contentRes = JsonSerializer.Deserialize<ContentAnalysisResult>(decData, jsonOpts); } catch { }
+                }
             }
-            if (!string.IsNullOrWhiteSpace(report.EmotionPacingJson))
-            {
-                var decData = EncryptionHelper.DecryptWithMasterKey(report.EmotionPacingJson, rawDek);
-                try { emotionRes = JsonSerializer.Deserialize<EmotionPacingResult>(decData, jsonOpts); } catch { }
-            }
+            emotionRes = ReportPayloadChunkHelper.DecryptEmotionPacing(report.EmotionPacingJson, rawDek);
 
             var projectVersionHash = await ResolveProjectVersionHashAsync(report.Id, CancellationToken.None);
             return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, mergedById, warnings, overallFeedback, report.ProjectVersion, projectVersionHash, report.CreatedAt, contentRes, emotionRes);
