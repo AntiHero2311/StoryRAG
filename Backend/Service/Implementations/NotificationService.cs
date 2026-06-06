@@ -6,6 +6,9 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ quản lý thông báo trong hệ thống, cho phép tạo thông báo cho user cụ thể hoặc hàng loạt user theo vai trò (roles).
+    /// </summary>
     public class NotificationService : INotificationService
     {
         private static readonly HashSet<string> AllowedRoles = new(StringComparer.OrdinalIgnoreCase)
@@ -27,6 +30,9 @@ namespace Service.Implementations
             _auditLog = auditLog;
         }
 
+        /// <summary>
+        /// Lấy danh sách thông báo của người dùng hiện tại, có giới hạn số lượng.
+        /// </summary>
         public async Task<List<NotificationResponse>> GetMyAsync(Guid userId, int limit = 50, CancellationToken cancellationToken = default)
         {
             var safeLimit = Math.Clamp(limit, 1, 200);
@@ -79,6 +85,9 @@ namespace Service.Implementations
             return Map(entity, createdByName);
         }
 
+        /// <summary>
+        /// Đánh dấu tất cả thông báo của người dùng là đã đọc.
+        /// </summary>
         public async Task<int> MarkAllReadAsync(Guid userId, CancellationToken cancellationToken = default)
         {
             var items = await _db.Notifications
@@ -99,6 +108,9 @@ namespace Service.Implementations
             return items.Count;
         }
 
+        /// <summary>
+        /// Tạo và gửi thông báo dựa trên yêu cầu chung (được gọi từ controller/services).
+        /// </summary>
         public async Task<NotificationCreateResult> CreateAsync(Guid actorId, NotificationCreateRequest request, CancellationToken cancellationToken = default)
         {
             var title = NormalizeRequired(request.Title, "Tiêu đề thông báo không được để trống.", 200);

@@ -114,19 +114,29 @@ Ctrl+S hoặc nút "Lưu"
 
 | File | Mô tả |
 |------|-------|
-| `api.ts` | Axios instance, JWT interceptor, 401 redirect |
-| `projectService.ts` | CRUD dự án, stats, genres |
-| `chapterService.ts` | Chương, versions, chunk |
-| `aiService.ts` | Embed, chat, rewrite, analyze |
-| `worldbuildingService.ts` | CRUD + embed worldbuilding |
-| `characterService.ts` | CRUD + embed nhân vật |
-| `styleGuideService.ts` | CRUD + embed style guide |
-| `themeService.ts` | CRUD + embed chủ đề |
-| `plotNoteService.ts` | CRUD + embed ghi chú cốt truyện |
-| `authService.ts` | Login, register, forgot/reset password |
-| `adminService.ts` | Admin endpoints |
-| `subscriptionService.ts` | Plans, my subscription |
-| `genreService.ts` | Danh sách thể loại |
+| `api.ts` | Axios instance chung, đính kèm JWT Access Token tự động và xử lý refresh token/hết hạn phiên (401 redirect). |
+| `authService.ts` | Đăng ký, đăng nhập (email & Google), refresh token, quên và đặt lại mật khẩu. |
+| `userService.ts` | Quản lý thông tin tài khoản người dùng, thay đổi profile cá nhân. |
+| `editorSettingsService.ts` | Lưu trữ cài đặt font chữ và kích thước chữ cho editor soạn thảo. |
+| `projectService.ts` | CRUD dự án truyện, xem thống kê dashboard của tác giả. |
+| `chapterService.ts` | CRUD chương truyện, quản lý các phiên bản chương (so sánh diff, ghim/xóa/chuyển đổi), chunking chương truyện và upload/import manuscript. |
+| `exportService.ts` | Xuất bản thảo dự án/chương truyện ra các định dạng file Docx, Txt. |
+| `paymentService.ts` | Tích hợp thanh toán VNPay (tạo link thanh toán, xem lịch sử giao dịch). |
+| `genreService.ts` | Lấy danh sách thể loại truyện khả dụng trong hệ thống. |
+| `subscriptionService.ts` | Xem thông tin gói đăng ký hiện tại, thông tin giới hạn gói và chuyển đổi gói dịch vụ. |
+| `aiService.ts` | Quản lý tính năng AI RAG (chat với AI, viết lại đoạn văn). |
+| `aiAnalysisService.ts` | Thực hiện các phân tích chuyên sâu (phân rã cảnh/trích quote, phân tích cliffhanger/ba hồi, lịch sử phân tích). |
+| `analysisJobService.ts` | Quản lý tiến trình job phân tích bất đồng bộ (tạo job, xem trạng thái/tiến độ, hủy/chạy lại job). |
+| `reportService.ts` | Lấy lịch sử báo cáo phân tích truyện (reports), xem chi tiết (rubric, warnings), và xuất PDF báo cáo. |
+| `faqService.ts` | Truy xuất danh sách câu hỏi thường gặp (FAQs) cho trang trợ giúp công khai. |
+| `writingTipService.ts` | Lấy các mẹo viết truyện hữu ích từ hệ thống. |
+| `feedbackService.ts` | Quản lý phản hồi chuyên môn giữa Staff và tác giả (thêm phản hồi, like/dislike, reply). |
+| `notificationService.ts` | Quản lý danh sách thông báo và đánh dấu đã đọc của user. |
+| `appNotificationService.ts` | Gửi nhận thông báo nội bộ trong ứng dụng (in-app notifications). |
+| `browserNotificationService.ts` | Gửi thông báo đẩy của trình duyệt (Browser Push Notification) khi job hoàn tất. |
+| `bugReportService.ts` | Gửi và quản lý báo cáo lỗi từ người dùng (CRUD bug reports). |
+| `staffService.ts` | Các chức năng nghiệp vụ của Staff/Admin (kiểm duyệt, duyệt báo cáo, quản lý FAQ & writing tips). |
+| `adminService.ts` | Quản lý các tính năng dành cho Admin (dashboard stats, quản lý user, cấu hình hệ thống RAG). |
 
 ### Cấu hình API base URL
 

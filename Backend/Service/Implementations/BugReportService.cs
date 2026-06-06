@@ -10,6 +10,9 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ CRUD báo cáo lỗi từ người dùng, cập nhật trạng thái xử lý lỗi của Staff/Admin.
+    /// </summary>
     public class BugReportService : IBugReportService
     {
         private readonly AppDbContext _db;
@@ -19,6 +22,9 @@ namespace Service.Implementations
             _db = db;
         }
 
+        /// <summary>
+        /// Tạo và gửi thông báo dựa trên yêu cầu chung (được gọi từ controller/services).
+        /// </summary>
         public async Task<BugReportResponse> CreateAsync(Guid userId, CreateBugReportRequest request)
         {
             var report = new BugReport
@@ -52,6 +58,7 @@ namespace Service.Implementations
             return reports.Select(MapToResponse).ToList();
         }
 
+        /// <summary>Lấy toàn bộ lịch sử report của dự án.</summary>
         public async Task<List<BugReportResponse>> GetAllAsync(string? statusFilter = null)
         {
             var query = _db.BugReports

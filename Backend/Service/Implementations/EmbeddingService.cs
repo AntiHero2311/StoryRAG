@@ -12,6 +12,9 @@ using System.Text;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ giao tiếp với API Gemini để chuyển đổi các đoạn văn bản thành vector embedding 768 chiều.
+    /// </summary>
     public class EmbeddingService : IEmbeddingService
     {
         private readonly AppDbContext _context;
@@ -70,6 +73,9 @@ namespace Service.Implementations
             _geminiHttpClient = new HttpClient();
         }
 
+        /// <summary>
+        /// Embed tất cả chunks của current version của chương, lưu vào DB, đặt IsEmbedded = true.
+        /// </summary>
         public async Task EmbedChapterAsync(Guid chapterId, Guid userId)
         {
             const int maxWaitMs = 45000; // Đợi tối đa 45 giây cho tiến trình nền hoàn thành
@@ -187,6 +193,9 @@ namespace Service.Implementations
             }
         }
 
+        /// <summary>
+        /// Lấy embedding vector cho một đoạn text theo use-case.
+        /// </summary>
         public async Task<float[]> GetEmbeddingAsync(string text, EmbeddingUseCase useCase = EmbeddingUseCase.Corpus)
         {
             var prepared = NormalizeEmbeddingText(text);

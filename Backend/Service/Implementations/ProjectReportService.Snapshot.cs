@@ -4,6 +4,9 @@ using Service.Helpers;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Phần triển khai chụp snapshot nội dung chương truyện phục vụ lưu trữ báo cáo.
+    /// </summary>
     public partial class ProjectReportService
     {
         private sealed record ProjectAnalysisSnapshotResult(

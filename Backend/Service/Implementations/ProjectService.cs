@@ -9,6 +9,9 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ quản lý dự án truyện (CRUD, thống kê dashboard tác giả, export toàn bộ truyện).
+    /// </summary>
     public class ProjectService : IProjectService
     {
         private readonly AppDbContext _context;
@@ -22,9 +25,14 @@ namespace Service.Implementations
             _embeddingService = embeddingService;
         }
 
+        /// <summary>
+        /// Lấy danh sách tất cả các dự án truyện của một tác giả.
+        /// </summary>
         public async Task<List<ProjectResponse>> GetUserProjectsAsync(Guid userId)
         {
+            // Lấy thông tin người dùng chứa DEK đã giải mã
             var user = await GetUserWithDekAsync(userId);
+            // Lấy khóa mã hóa dữ liệu (raw DEK) từ DEK đã giải mã bằng MasterKey
             var rawDek = GetRawDek(user);
 
             var projects = await _context.Projects
@@ -37,6 +45,9 @@ namespace Service.Implementations
             return projects.Select(p => MapToResponse(p, rawDek)).ToList();
         }
 
+        /// <summary>
+        /// Lấy thông tin chi tiết của một dự án truyện theo ID (kiểm tra quyền sở hữu).
+        /// </summary>
         public async Task<ProjectResponse> GetProjectByIdAsync(Guid projectId, Guid userId)
         {
             var project = await _context.Projects
@@ -51,6 +62,9 @@ namespace Service.Implementations
             return MapToResponse(project, rawDek);
         }
 
+        /// <summary>
+        /// Tạo mới một dự án truyện (tự động mã hóa tên và tóm tắt bằng DEK của người dùng).
+        /// </summary>
         public async Task<ProjectResponse> CreateProjectAsync(Guid userId, CreateProjectRequest request)
         {
             var user = await _context.Users.FindAsync(userId)
@@ -69,6 +83,7 @@ namespace Service.Implementations
 
             var rawDek = GetRawDek(user);
 
+            // Khởi tạo đối tượng Project mới, tiến hành mã hóa thông tin nhạy cảm trước khi lưu
             var project = new Project
             {
                 AuthorId = userId,
@@ -82,6 +97,7 @@ namespace Service.Implementations
                 Status = request.Status,
             };
 
+            // Lưu thông tin dự án truyện vào database để sinh ProjectId
             _context.Projects.Add(project);
             await _context.SaveChangesAsync();
 
@@ -98,6 +114,7 @@ namespace Service.Implementations
             }
 
             // Assign genres
+            // Đồng bộ hóa các thể loại được gán cho dự án truyện mới tạo
             await SyncProjectGenresAsync(project.Id, request.GenreIds);
 
             // Reload with genres for response
@@ -107,6 +124,9 @@ namespace Service.Implementations
             return MapToResponse(created, rawDek);
         }
 
+        /// <summary>
+        /// Cập nhật thông tin dự án truyện (tên, tóm tắt, thể loại, ghi chú AI).
+        /// </summary>
         public async Task<ProjectResponse> UpdateProjectAsync(Guid projectId, Guid userId, UpdateProjectRequest request)
         {
             var project = await _context.Projects
@@ -157,6 +177,9 @@ namespace Service.Implementations
             return MapToResponse(updated, rawDek);
         }
 
+        /// <summary>
+        /// Xóa mềm một dự án truyện (chuyển trạng thái lưu trữ).
+        /// </summary>
         public async Task DeleteProjectAsync(Guid projectId, Guid userId)
         {
             var project = await _context.Projects
@@ -256,6 +279,9 @@ namespace Service.Implementations
             return (fileName, sb.ToString(), "text/plain; charset=utf-8");
         }
 
+        /// <summary>
+        /// Lấy thông tin số liệu thống kê cho dashboard của tác giả (tổng số chương, lượt phân tích đã dùng, tin nhắn chat).
+        /// </summary>
         public async Task<AuthorDashboardStats> GetUserStatsAsync(Guid userId)
         {
             var totalChapters = await _context.Chapters

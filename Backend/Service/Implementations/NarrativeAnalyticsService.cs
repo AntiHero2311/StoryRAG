@@ -13,6 +13,9 @@ using OpenAI.Chat;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ sinh dữ liệu biểu đồ nhịp độ kể chuyện (pacing) và dòng cảm xúc (emotion) của tác phẩm.
+    /// </summary>
     public class NarrativeAnalyticsService : ServiceBase, INarrativeAnalyticsService
     {
         private readonly ILogger<NarrativeAnalyticsService> _logger;

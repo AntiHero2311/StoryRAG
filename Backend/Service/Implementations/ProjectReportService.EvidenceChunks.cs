@@ -5,6 +5,9 @@ using Service.Helpers;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Phần triển khai trích xuất và giải mã bằng chứng (evidence chunks) của dịch vụ phân tích truyện.
+    /// </summary>
     public partial class ProjectReportService
     {
         /// <summary>

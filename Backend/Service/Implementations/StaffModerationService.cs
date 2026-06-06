@@ -6,6 +6,9 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ hỗ trợ các tác vụ kiểm duyệt của Staff đối với truyện và tác giả vi phạm (cảnh báo, khóa tạm thời, đề xuất ban).
+    /// </summary>
     public class StaffModerationService : IStaffModerationService
     {
         private readonly AppDbContext _db;
@@ -28,6 +31,9 @@ namespace Service.Implementations
             _logger = logger;
         }
 
+        /// <summary>
+        /// Lấy báo cáo hiệu suất làm việc của Staff (số lượng phản hồi đã gửi, số lượt review báo cáo).
+        /// </summary>
         public async Task<StaffPerformanceResponse> GetStaffPerformanceAsync(Guid staffId)
         {
             var staff = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == staffId)
@@ -65,6 +71,9 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>
+        /// Gửi cảnh báo chính thức tới tác giả của dự án truyện.
+        /// </summary>
         public async Task WarnAuthorAsync(Guid staffId, ModerationWarnRequest request)
         {
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId)
@@ -93,6 +102,9 @@ namespace Service.Implementations
                 staffId, request.UserId, request.ProjectId, user.StrikeCount);
         }
 
+        /// <summary>
+        /// Tạm dừng hiển thị (khóa tạm thời) dự án truyện vi phạm chính sách nội dung.
+        /// </summary>
         public async Task SuspendProjectAsync(Guid staffId, ModerationSuspendProjectRequest request)
         {
             var project = await _db.Projects.FirstOrDefaultAsync(p => p.Id == request.ProjectId && !p.IsDeleted)
@@ -109,6 +121,9 @@ namespace Service.Implementations
                 staffId, request.ProjectId, request.Reason);
         }
 
+        /// <summary>
+        /// Đề xuất lên Admin thực hiện khóa (ban) tài khoản của tác giả vi phạm nghiêm trọng.
+        /// </summary>
         public async Task RecommendBanAsync(Guid staffId, ModerationRecommendBanRequest request)
         {
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId)

@@ -14,6 +14,9 @@ using System.Text.Json.Serialization;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ import bản thảo từ file tải lên (docx, txt), tự động nhận diện và tách thành các chương truyện.
+    /// </summary>
     public class ProjectImportService : IProjectImportService
     {
         private readonly AppDbContext _context;
@@ -271,6 +274,10 @@ namespace Service.Implementations
 
         // ── ReExtract ────────────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Thử lại bước AI trích xuất (Summary/Nhân vật/Bối cảnh/Timeline) cho project đã import.
+        /// Chỉ bổ sung các trường còn trống — không xóa dữ liệu người dùng đã chỉnh sửa.
+        /// </summary>
         public async Task<ReExtractResult> ReExtractAsync(Guid projectId, Guid userId)
         {
             var masterKey = _config["Security:MasterKey"]

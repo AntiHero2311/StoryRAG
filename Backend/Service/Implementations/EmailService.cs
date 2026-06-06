@@ -7,6 +7,9 @@ using System.Threading.Tasks;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ gửi email thông báo, chào mừng và liên kết đặt lại mật khẩu qua Gmail SMTP sử dụng MailKit.
+    /// </summary>
     public class EmailService : IEmailService
     {
         private readonly IConfiguration _config;

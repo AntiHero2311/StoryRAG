@@ -7,6 +7,9 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ hỗ trợ xuất báo cáo phân tích truyện (ProjectReport) ra định dạng file PDF.
+    /// </summary>
     public class ReportExportService : IReportExportService
     {
         private readonly IProjectReportService _projectReportService;

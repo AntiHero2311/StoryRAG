@@ -6,6 +6,9 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ quản lý danh sách thể loại truyện (CRUD dành cho Admin).
+    /// </summary>
     public class GenreService : IGenreService
     {
         private readonly AppDbContext _context;

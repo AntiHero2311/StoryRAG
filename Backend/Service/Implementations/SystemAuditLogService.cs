@@ -8,6 +8,9 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ ghi nhật ký kiểm toán hệ thống (System Audit Logs) nhằm theo dõi các hành động nhạy cảm.
+    /// </summary>
     public class SystemAuditLogService : ISystemAuditLogService
     {
         private readonly IServiceScopeFactory _scopeFactory;
@@ -19,6 +22,9 @@ namespace Service.Implementations
             _logger = logger;
         }
 
+        /// <summary>
+        /// Ghi nhận một sự kiện hoạt động mới vào nhật ký hệ thống.
+        /// </summary>
         public async Task LogAsync(string category, string action, string message, Guid? actorId = null, string level = "Info", string? metadataJson = null)
         {
             try
@@ -45,6 +51,9 @@ namespace Service.Implementations
             }
         }
 
+        /// <summary>
+        /// Truy xuất danh sách nhật ký hoạt động phân trang theo danh mục (category) và cấp độ lỗi (level).
+        /// </summary>
         public async Task<SystemLogsPageResponse> GetLogsAsync(int page, int pageSize, string? category, string? level)
         {
             page = Math.Max(1, page);

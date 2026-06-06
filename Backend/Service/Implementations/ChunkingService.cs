@@ -3,6 +3,9 @@ using System.Text;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ chia nhỏ nội dung chương thành các phần (chunks) kích thước ~1500 ký tự với overlap ~150 ký tự.
+    /// </summary>
     public class ChunkingService : IChunkingService
     {
         /// <summary>

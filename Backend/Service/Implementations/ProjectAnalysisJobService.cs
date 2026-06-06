@@ -11,6 +11,9 @@ using System.Text;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ quản lý hàng đợi và tiến trình chạy các job phân tích truyện bất đồng bộ, cập nhật tiến độ (progress).
+    /// </summary>
     public class ProjectAnalysisJobService : IProjectAnalysisJobService
     {
         private const string MissingEmbeddedContentMessage =
@@ -64,6 +67,9 @@ namespace Service.Implementations
             _config = config;
         }
 
+        /// <summary>
+        /// Đưa một job phân tích mới vào hàng đợi với độ ưu tiên được chỉ định (độ ưu tiên cao hơn sẽ được xử lý trước).
+        /// </summary>
         public async Task<ProjectAnalysisJobResponse> EnqueueAsync(
             Guid projectId,
             Guid userId,

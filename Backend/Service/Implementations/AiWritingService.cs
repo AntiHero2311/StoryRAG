@@ -11,6 +11,9 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ hỗ trợ viết của AI, bao gồm viết lại đoạn văn (rewrite), phân tích bối cảnh/cliffhanger/ba hồi dựa trên RAG.
+    /// </summary>
     public class AiWritingService : ServiceBase, IAiWritingService
     {
         private readonly ILogger<AiWritingService> _logger;
@@ -83,6 +86,10 @@ namespace Service.Implementations
 
 
 
+        /// <summary>
+        /// Phân rã nội dung chương thành danh sách các Cảnh (Scenes/Beats).
+        /// AI đọc nội dung và chia tách thành các phân cảnh rõ ràng.
+        /// </summary>
         public async Task<AiSceneAnalysisResult> AnalyzeScenesAsync(Guid projectId, string chapterContent, Guid userId)
         {
             await CheckAndDeductTokenAsync(projectId, userId);
@@ -158,6 +165,9 @@ namespace Service.Implementations
             return new AiSceneAnalysisResult { ChapterSummary = rawText, Scenes = new(), TotalTokens = tokens };
         }
 
+        /// <summary>
+        /// Phân tích cấu trúc 3 hồi và phát hiện điểm Hạ hồi phân giải (Cliffhanger) của chương.
+        /// </summary>
         public async Task<AiCliffhangerResult> AnalyzeCliffhangerAsync(Guid projectId, string chapterContent, Guid userId)
         {
             await CheckAndDeductTokenAsync(projectId, userId);

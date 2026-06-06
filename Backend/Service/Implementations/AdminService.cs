@@ -11,6 +11,9 @@ using System.Threading.Tasks;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ quản trị hệ thống dành cho Admin (Quản lý User, thống kê doanh thu, quản lý hạn mức hệ thống, phân công Staff).
+    /// </summary>
     public class AdminService : IAdminService
     {
         private static readonly string[] AllowedRoles = { "Author", "Staff", "Admin" };
@@ -36,6 +39,9 @@ namespace Service.Implementations
             _auditLog = auditLog;
         }
 
+        /// <summary>
+        /// Lấy thông tin số liệu thống kê cho dashboard của tác giả (tổng số chương, lượt phân tích đã dùng, tin nhắn chat).
+        /// </summary>
         public async Task<UserStatsResponse> GetUserStatsAsync()
         {
             var users = await _context.Users
@@ -81,6 +87,9 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>
+        /// Lấy số liệu thống kê tổng quan của hệ thống (tổng user, project, báo cáo, doanh thu).
+        /// </summary>
         public async Task<AdminOverviewStats> GetOverviewStatsAsync()
         {
             var now = DateTime.UtcNow;
@@ -159,6 +168,9 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>
+        /// Lấy thông tin tóm tắt của một người dùng theo ID.
+        /// </summary>
         public async Task<UserSummaryDto> GetUserByIdAsync(Guid id)
         {
             var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id)
@@ -166,6 +178,9 @@ namespace Service.Implementations
             return MapSummary(user);
         }
 
+        /// <summary>
+        /// Tạo mới một tài khoản người dùng với vai trò cụ thể.
+        /// </summary>
         public async Task<UserSummaryDto> CreateUserAsync(AdminCreateUserRequest request)
         {
             ValidateRole(request.Role);
@@ -200,6 +215,9 @@ namespace Service.Implementations
             return MapSummary(user);
         }
 
+        /// <summary>
+        /// Cập nhật thông tin tài khoản người dùng (họ tên, email, vai trò).
+        /// </summary>
         public async Task<UserSummaryDto> UpdateUserAsync(Guid id, AdminUpdateUserRequest request, Guid actingAdminId)
         {
             ValidateRole(request.Role);
@@ -279,6 +297,9 @@ namespace Service.Implementations
             return MapSummary(user);
         }
 
+        /// <summary>
+        /// Kích hoạt hoặc vô hiệu hóa tài khoản người dùng.
+        /// </summary>
         public async Task<UserSummaryDto> SetUserActiveAsync(Guid id, bool isActive, Guid actingAdminId)
         {
             if (id == actingAdminId && !isActive)
@@ -302,6 +323,9 @@ namespace Service.Implementations
             return MapSummary(user);
         }
 
+        /// <summary>
+        /// Xóa tài khoản người dùng khỏi hệ thống.
+        /// </summary>
         public async Task DeleteUserAsync(Guid id, Guid actingAdminId)
         {
             if (id == actingAdminId)
@@ -330,6 +354,9 @@ namespace Service.Implementations
             await _auditLog.LogAsync("User", "Delete", $"Xoá user {email}", actingAdminId);
         }
 
+        /// <summary>
+        /// Lấy các hạn mức hệ thống hiện tại (như kích thước chunk, overlap, giới hạn token chat).
+        /// </summary>
         public async Task<SystemLimitsResponse> GetSystemLimitsAsync()
         {
             var maxUpload = await _sysConfig.GetAsync(KeyMaxUploadMb, 10);
@@ -376,6 +403,9 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>
+        /// Cập nhật các hạn mức hệ thống và ghi nhận admin thực hiện.
+        /// </summary>
         public async Task<SystemLimitsResponse> UpdateSystemLimitsAsync(SystemLimitsRequest request, Guid adminId)
         {
             if (request.MaxUploadMb < 1 || request.MaxUploadMb > 100)
@@ -493,6 +523,7 @@ namespace Service.Implementations
 
         // ── Staff Genre Specialization ────────────────────────────────────────────
 
+        /// <summary>Lấy danh sách tất cả Staff kèm các thể loại chuyên môn được gán.</summary>
         public async Task<List<UserSummaryDto>> GetAllStaffWithGenresAsync()
         {
             var staffUsers = await _context.Users
@@ -513,6 +544,7 @@ namespace Service.Implementations
             }).ToList();
         }
 
+        /// <summary>Lấy các thể loại chuyên môn cụ thể của một Staff.</summary>
         public async Task<UserSummaryDto> GetStaffGenresAsync(Guid staffId)
         {
             var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == staffId)
@@ -527,6 +559,7 @@ namespace Service.Implementations
             return dto;
         }
 
+        /// <summary>Gán (thay thế toàn bộ) danh sách thể loại chuyên môn cho một Staff.</summary>
         public async Task<UserSummaryDto> AssignStaffGenresAsync(Guid staffId, StaffGenreAssignRequest request, Guid adminId)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == staffId)
@@ -592,6 +625,9 @@ namespace Service.Implementations
                           }).ToList());
         }
 
+        /// <summary>
+        /// Lấy thông tin thống kê doanh thu theo năm, tháng và gói dịch vụ.
+        /// </summary>
         public async Task<AdminRevenueDashboardResponse> GetRevenueDashboardAsync(int year, int month, int? planId)
         {
             if (month < 1 || month > 12)
@@ -714,6 +750,9 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>
+        /// Khóa (Ban) hoặc mở khóa tài khoản người dùng kèm theo lý do cụ thể.
+        /// </summary>
         public async Task<UserSummaryDto> BanUserAsync(Guid id, bool isBanned, string? reason, Guid actingAdminId)
         {
             if (id == actingAdminId)

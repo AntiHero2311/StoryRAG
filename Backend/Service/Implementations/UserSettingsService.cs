@@ -6,6 +6,9 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ cài đặt editor của người dùng (font chữ, kích thước chữ).
+    /// </summary>
     public class UserSettingsService : IUserSettingsService
     {
         private readonly AppDbContext _context;

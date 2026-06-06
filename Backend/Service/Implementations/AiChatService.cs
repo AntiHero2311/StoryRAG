@@ -14,6 +14,9 @@ using System.Text.RegularExpressions;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ thực hiện chat RAG với AI dựa trên ngữ cảnh được truy hồi từ bản thảo chương đang viết (khấu trừ token).
+    /// </summary>
     public class AiChatService : ServiceBase, IAiChatService
     {
         private readonly IChapterService _chapterService;
@@ -70,6 +73,9 @@ namespace Service.Implementations
             return _geminiChatExecutor.CompleteAsync(messages);
         }
 
+        /// <summary>
+        /// Nhận câu hỏi của user, tìm context liên quan bằng vector search, gọi LLM, trả lời.
+        /// </summary>
         public async Task<AiChatResult> ChatAsync(Guid projectId, string question, Guid userId)
         {
             // 1. Xác minh ownership
@@ -330,6 +336,9 @@ namespace Service.Implementations
             }
         }
 
+        /// <summary>
+        /// Lấy lịch sử chat của user trong một dự án, có phân trang.
+        /// </summary>
         public async Task<ChatHistoryResult> GetChatHistoryAsync(Guid projectId, Guid userId, int page, int pageSize)
         {
             // Xác minh user có quyền truy cập project
@@ -377,6 +386,9 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>
+        /// Xóa một tin nhắn chat cụ thể.
+        /// </summary>
         public async Task DeleteChatHistoryAsync(Guid projectId, Guid userId, Guid historyId)
         {
             // Kiểm tra chat message

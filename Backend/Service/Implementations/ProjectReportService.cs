@@ -15,6 +15,9 @@ using System.Text;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ thực hiện phân tích & chấm điểm toàn bộ truyện theo Rubric 5 điểm, tự động trích xuất dữ liệu Story Bible dạng snapshot.
+    /// </summary>
     public partial class ProjectReportService : IProjectReportService
     {
         private readonly AppDbContext _context;
@@ -473,47 +476,53 @@ namespace Service.Implementations
             // 5. Calculate total
             var total = criteria.Sum(c => c.Score);
 
-            // 6. Save to DB
+            // 6. Lưu báo cáo (ProjectReport) chính vào Database
             var report = new ProjectReport
             {
                 Id = Guid.NewGuid(),
                 ProjectId = projectId,
                 UserId = userId,
                 Status = reportStatus,
-                ReviewStatus = ReviewStatusReleased,
+                ReviewStatus = ReviewStatusReleased, // Mặc định tự động công bố báo cáo cho tác giả xem ngay
                 ProjectVersion = projectVersion,
                 TotalScore = total,
+                // Chuyển đổi điểm Rubric, Cảnh báo và Nhận xét tổng quan thành JSON để lưu trữ
                 CriteriaJson = BuildStoredCriteriaJson(criteria, warnings, overallFeedback),
-                ContentAnalysisJson = contentAnalysisData,
-                EmotionPacingJson = emotionPacingData,
-                GenresSnapshot = genresSnapshotJson,
+                ContentAnalysisJson = contentAnalysisData, // Dữ liệu phân tích nâng cao (đã mã hóa)
+                EmotionPacingJson = emotionPacingData,     // Dữ liệu biểu đồ nhịp độ/cảm xúc (đã mã hóa)
+                GenresSnapshot = genresSnapshotJson,       // Bản chụp các thể loại của truyện tại thời điểm phân tích
                 CreatedAt = DateTime.UtcNow,
             };
             _context.ProjectReports.Add(report);
 
-            // Lưu trữ dữ liệu cẩm nang (Story Bible) vào các bảng chi tiết của báo cáo
+            // Lưu trữ dữ liệu cẩm nang tự động (Story Bible) vào các bảng chi tiết của báo cáo
             if (contentResObj != null)
             {
-                // 1. Lưu danh sách Nhân vật
+                // 1. Lưu danh sách Nhân vật (Characters)
                 if (contentResObj.Characters != null)
                 {
                     foreach (var character in contentResObj.Characters)
                     {
+                        // Mã hóa thông tin nhạy cảm của nhân vật (Tên, Mô tả, Tiểu sử) bằng khóa DEK của tác giả
                         var encName = EncryptionHelper.EncryptWithMasterKey(character.Name ?? string.Empty, rawDek);
                         var encDesc = EncryptionHelper.EncryptWithMasterKey(character.Description ?? string.Empty, rawDek);
                         var encBg = !string.IsNullOrWhiteSpace(character.Background)
                             ? EncryptionHelper.EncryptWithMasterKey(character.Background, rawDek)
                             : null;
 
+                        // Chuyển đổi danh sách đặc điểm tính cách (Traits) thành chuỗi JSON và tiến hành mã hóa
                         var traitsStr = character.Traits != null ? JsonSerializer.Serialize(character.Traits) : "[]";
                         var encTraits = EncryptionHelper.EncryptWithMasterKey(traitsStr, rawDek);
 
+                        // Chuyển đổi danh sách mối quan hệ (Relationships) thành chuỗi JSON và tiến hành mã hóa
                         var relStr = character.Relationships != null ? JsonSerializer.Serialize(character.Relationships) : "[]";
                         var encRel = EncryptionHelper.EncryptWithMasterKey(relStr, rawDek);
 
+                        // Chuẩn hóa vai trò nhân vật (Mặc định là Supporting nếu trống, giới hạn độ dài 50 ký tự)
                         var rawRole = character.Role ?? "Supporting";
                         if (rawRole.Length > 50) rawRole = rawRole[..50];
 
+                        // Đưa bản ghi nhân vật mới vào DbContext
                         _context.ReportCharacterEntries.Add(new ReportCharacterEntry
                         {
                             Id = Guid.NewGuid(),
@@ -770,6 +779,7 @@ namespace Service.Implementations
             return BuildResponse(report.Id, projectId, projectTitle, report.Status, report.TotalScore, mergedLatest, warnings, overallFeedback, report.ProjectVersion, projectVersionHash, report.CreatedAt, contentRes, emotionRes);
         }
 
+        /// <summary>Lấy toàn bộ lịch sử report của dự án.</summary>
         public async Task<List<ProjectReportSummary>> GetAllAsync(Guid projectId, Guid userId)
         {
             await VerifyOwnershipAsync(projectId, userId);

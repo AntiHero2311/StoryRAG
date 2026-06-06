@@ -11,6 +11,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Phần triển khai các phân tích mở rộng (nhịp độ, cảm xúc, cảnh báo) của dịch vụ phân tích truyện.
+    /// </summary>
     public partial class ProjectReportService
     {
         private static readonly HashSet<string> ActionLexicon = new(StringComparer.OrdinalIgnoreCase)

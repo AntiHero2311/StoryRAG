@@ -15,6 +15,9 @@ using System.Web;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ xuất dự án truyện hoặc chương cụ thể ra định dạng file .docx, .txt, .pdf.
+    /// </summary>
     public class ExportService : ServiceBase, IExportService
     {
         private readonly IChapterService _chapterService;
@@ -97,6 +100,9 @@ namespace Service.Implementations
             return GenerateFileContent(title, text, format);
         }
 
+        /// <summary>
+        /// Xuất toàn bộ bản thảo của dự án truyện ra định dạng file văn bản sạch.
+        /// </summary>
         public async Task<byte[]> ExportProjectAsync(Guid projectId, Guid userId, string format)
         {
             await VerifyOwnershipAsync(projectId, userId);

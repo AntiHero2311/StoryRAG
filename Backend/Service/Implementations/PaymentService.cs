@@ -13,6 +13,9 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ quản lý thanh toán gói dịch vụ qua cổng VNPay, lưu lịch sử giao dịch và cập nhật trạng thái hóa đơn.
+    /// </summary>
     public class PaymentService : IPaymentService
     {
         private readonly AppDbContext _context;
@@ -54,6 +57,7 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>Tạo payment record mới khi user thanh toán</summary>
         public async Task<PaymentResponse> CreatePaymentAsync(Guid userId, CreatePaymentRequest request)
         {
             var user = await _context.Users.FindAsync(userId);
@@ -83,6 +87,7 @@ namespace Service.Implementations
             return MapToResponse(payment, plan.PlanName);
         }
 
+        /// <summary>Tạo URL thanh toán VNPay cho gói trả phí</summary>
         public async Task<CreateVnPayPaymentUrlResponse> CreateVnPayPaymentUrlAsync(Guid userId, CreateVnPayPaymentUrlRequest request)
         {
             var opts = await GetDynamicVnPayOptionsAsync();
@@ -160,6 +165,7 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>Xử lý callback IPN từ VNPay</summary>
         public async Task<VnPayIpnProcessResponse> HandleVnPayIpnAsync(IReadOnlyDictionary<string, string?> queryParameters)
         {
             var opts = await GetDynamicVnPayOptionsAsync();
@@ -249,6 +255,7 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>Lấy trạng thái đơn hàng VNPay theo txnRef</summary>
         public async Task<VnPayOrderStatusResponse> GetVnPayOrderStatusAsync(Guid userId, string txnRef)
         {
             var normalizedTxnRef = txnRef?.Trim();
@@ -270,6 +277,7 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>Cập nhật trạng thái payment (Pending → Completed, etc.)</summary>
         public async Task<PaymentResponse> UpdatePaymentStatusAsync(Guid paymentId, Guid userId, UpdatePaymentStatusRequest request)
         {
             var payment = await _context.Payments
@@ -293,6 +301,7 @@ namespace Service.Implementations
             return MapToResponse(payment, payment.Plan.PlanName);
         }
 
+        /// <summary>Lấy lịch sử thanh toán của user</summary>
         public async Task<PaymentHistoryResponse> GetPaymentHistoryAsync(Guid userId, int page = 1, int pageSize = 20)
         {
             var query = _context.Payments
@@ -325,6 +334,7 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>Lấy chi tiết payment cụ thể</summary>
         public async Task<PaymentResponse> GetPaymentByIdAsync(Guid paymentId, Guid userId)
         {
             var payment = await _context.Payments
@@ -346,6 +356,7 @@ namespace Service.Implementations
             return payment == null ? null : MapToResponse(payment, payment.Plan.PlanName);
         }
 
+        /// <summary>Đánh dấu payment là "Completed" khi thanh toán thành công</summary>
         public async Task<PaymentResponse> MarkAsCompletedAsync(Guid paymentId, string? transactionId = null)
         {
             var payment = await _context.Payments
@@ -368,6 +379,7 @@ namespace Service.Implementations
             return MapToResponse(payment, payment.Plan.PlanName);
         }
 
+        /// <summary>Refund một payment</summary>
         public async Task<PaymentResponse> RefundPaymentAsync(Guid paymentId, Guid userId)
         {
             var payment = await _context.Payments

@@ -10,6 +10,9 @@ using System.Threading.Tasks;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ lưu trữ và truy xuất lịch sử phân tích chuyên sâu (cảnh, cliffhanger) của AI.
+    /// </summary>
     public class AiAnalysisHistoryService : IAiAnalysisHistoryService
     {
         private readonly AppDbContext _context;

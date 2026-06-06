@@ -19,6 +19,9 @@ using UglyToad.PdfPig;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ CRUD chương truyện, quản lý phiên bản chương (tạo, chuyển đổi, ghim chống tự động dọn dẹp, xóa), thực hiện chunk nội dung chương.
+    /// </summary>
     public class ChapterService : ServiceBase, IChapterService
     {
         private readonly IChunkingService _chunkingService;
@@ -77,7 +80,9 @@ namespace Service.Implementations
                 throw new Exception($"Chương số {request.ChapterNumber} đã tồn tại trong dự án này.");
 
             var rawDek = await GetRawDekAsync(userId);
+            // Làm sạch nội dung HTML (loại bỏ script độc hại, format thừa)
             var cleanedContent = HtmlContentCleaner.Clean(request.Content);
+            // Tính số chữ trong chương dựa trên nội dung sạch
             int wordCount = CountWords(cleanedContent);
 
             var chapter = new Chapter
@@ -108,7 +113,7 @@ namespace Service.Implementations
             chapter.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
-            // Auto-chunk the content immediately
+            // Tự động chia nhỏ (chunk) và tạo Vector Embedding cho chương truyện vừa thêm
             await PerformChunkingInternalAsync(version, cleanedContent, rawDek, chapter.ProjectId);
 
             var detail = MapToDetailResponse(chapter, cleanedContent);
@@ -163,6 +168,7 @@ namespace Service.Implementations
             return detail;
         }
 
+        /// <summary>Đổi tên chương (chỉ title, không ảnh hưởng content hay version).</summary>
         public async Task<ChapterResponse> RenameChapterAsync(Guid chapterId, Guid userId, RenameChapterRequest request)
         {
             var chapter = await GetChapterWithOwnerCheckAsync(chapterId, userId);
@@ -238,6 +244,7 @@ namespace Service.Implementations
             return MapToVersionDetailResponse(version, rawDek);
         }
 
+        /// <summary>Tạo version trống mới (do người dùng chủ ý), set làm active.</summary>
         public async Task<ChapterDetailResponse> CreateNewVersionAsync(Guid chapterId, Guid userId, CreateVersionRequest request)
         {
             var chapter = await GetChapterWithOwnerCheckAsync(chapterId, userId);
@@ -274,7 +281,7 @@ namespace Service.Implementations
             chapter.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
-            // Auto-prune: giữ tối đa 10 version, ưu tiên xóa version cũ nhất chưa pin.
+            // Tự động dọn dẹp các phiên bản cũ không được ghim (Keep max 10 versions)
             await PruneVersionsAsync(chapterId, maxVersions: 10);
 
             // Chunk ngay sau khi tạo (EmbedChapterAsync yêu cầu IsChunked = true).
@@ -291,6 +298,7 @@ namespace Service.Implementations
             return detail;
         }
 
+        /// <summary>Chuyển sang version khác (set CurrentVersionId).</summary>
         public async Task<ChapterDetailResponse> SetActiveVersionAsync(Guid chapterId, int versionNumber, Guid userId)
         {
             var chapter = await GetChapterWithOwnerCheckAsync(chapterId, userId);
@@ -319,6 +327,7 @@ namespace Service.Implementations
             return detail;
         }
 
+        /// <summary>Đổi tên version.</summary>
         public async Task<ChapterVersionSummary> UpdateVersionTitleAsync(Guid chapterId, int versionNumber, Guid userId, UpdateVersionTitleRequest request)
         {
             await GetChapterWithOwnerCheckAsync(chapterId, userId);
@@ -335,6 +344,7 @@ namespace Service.Implementations
             return MapToVersionSummary(version, rawDek);
         }
 
+        /// <summary>Xóa version (chỉ khi chapter có ≥2 version).</summary>
         public async Task DeleteVersionAsync(Guid chapterId, int versionNumber, Guid userId)
         {
             var chapter = await GetChapterWithOwnerCheckAsync(chapterId, userId);
@@ -498,6 +508,7 @@ namespace Service.Implementations
             await _context.SaveChangesAsync();
         }
 
+        /// <summary>Toggle ghim version — version ghim không bị xóa tự động.</summary>
         public async Task<ChapterVersionSummary> TogglePinVersionAsync(Guid chapterId, int versionNumber, Guid userId)
         {
             await GetChapterWithOwnerCheckAsync(chapterId, userId);
@@ -514,6 +525,7 @@ namespace Service.Implementations
             return MapToVersionSummary(version, rawDek);
         }
 
+        /// <summary>Lấy nội dung thuần của một version cụ thể để diff.</summary>
         public async Task<string> GetVersionContentAsync(Guid chapterId, int versionNumber, Guid userId)
         {
             await GetChapterWithOwnerCheckAsync(chapterId, userId);
@@ -526,6 +538,7 @@ namespace Service.Implementations
             return EncryptionHelper.DecryptWithMasterKey(version.Content, rawDek);
         }
 
+        /// <summary>So sánh 2 version và trả về unified diff + thống kê thay đổi.</summary>
         public async Task<ChapterVersionDiffResponse> CompareVersionsAsync(Guid chapterId, int fromVersionNumber, int toVersionNumber, Guid userId)
         {
             if (fromVersionNumber <= 0 || toVersionNumber <= 0)

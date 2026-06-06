@@ -7,6 +7,9 @@ using System.Threading.Tasks;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ xem và cập nhật thông tin hồ sơ cá nhân người dùng (profile).
+    /// </summary>
     public class UserService : IUserService
     {
         private readonly AppDbContext _context;

@@ -6,6 +6,9 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ quản lý các gói dịch vụ, đăng ký/gia hạn gói và kiểm tra giới hạn sử dụng của người dùng.
+    /// </summary>
     public class SubscriptionService : ISubscriptionService
     {
         private readonly AppDbContext _db;
@@ -19,6 +22,7 @@ namespace Service.Implementations
 
         // ── Plans ─────────────────────────────────────────────────────────────
 
+        /// <summary>Lấy tất cả plan (active hoặc all nếu includeInactive)</summary>
         public async Task<IEnumerable<SubscriptionPlanResponse>> GetAllPlansAsync(bool includeInactive = false)
         {
             var query = _db.SubscriptionPlans.AsQueryable();
@@ -27,6 +31,7 @@ namespace Service.Implementations
             return plans.Select(MapPlan);
         }
 
+        /// <summary>Lấy chi tiết một plan</summary>
         public async Task<SubscriptionPlanResponse> GetPlanByIdAsync(int id)
         {
             var plan = await _db.SubscriptionPlans.FindAsync(id)
@@ -34,6 +39,7 @@ namespace Service.Implementations
             return MapPlan(plan);
         }
 
+        /// <summary>Tạo plan mới — Admin only</summary>
         public async Task<SubscriptionPlanResponse> CreatePlanAsync(CreatePlanRequest request)
         {
             var plan = new SubscriptionPlan
@@ -50,6 +56,7 @@ namespace Service.Implementations
             return MapPlan(plan);
         }
 
+        /// <summary>Cập nhật plan — Admin only</summary>
         public async Task<SubscriptionPlanResponse> UpdatePlanAsync(int id, UpdatePlanRequest request)
         {
             var plan = await _db.SubscriptionPlans.FindAsync(id)
@@ -66,6 +73,7 @@ namespace Service.Implementations
             return MapPlan(plan);
         }
 
+        /// <summary>Deactivate hoặc xoá plan — Admin only. Trả về true nếu xoá hoàn toàn, false nếu chỉ deactivate.</summary>
         public async Task<bool> DeletePlanAsync(int id)
         {
             var plan = await _db.SubscriptionPlans.FindAsync(id)
@@ -154,6 +162,7 @@ namespace Service.Implementations
             return MapSubscription(sub);
         }
 
+        /// <summary>Đăng ký plan cho user. Free plan (Price=0) tự động Active ngay.</summary>
         public async Task<UserSubscriptionResponse> SubscribeToPlanAsync(Guid userId, int planId)
         {
             // 1. Kiểm tra plan tồn tại và đang active
@@ -218,6 +227,7 @@ namespace Service.Implementations
             return MapSubscription(newSub);
         }
 
+        /// <summary>Kích hoạt gói trả phí sau khi thanh toán thành công.</summary>
         public async Task<UserSubscriptionResponse> ActivatePaidSubscriptionAsync(Guid userId, int planId, Guid paymentId)
         {
             var plan = await _db.SubscriptionPlans.FindAsync(planId)

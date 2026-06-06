@@ -10,6 +10,9 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Phần triển khai truy hồi ngữ cảnh RAG và chấm điểm Rubric của dịch vụ phân tích truyện.
+    /// </summary>
     public partial class ProjectReportService
     {
         private async Task<(List<CriterionResult> Criteria, List<StoryWarning> Warnings, string OverallFeedback, int TokensUsed, string FactsPayloadJson, List<ReportItem> ReportItems)>

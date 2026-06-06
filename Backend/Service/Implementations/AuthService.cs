@@ -14,6 +14,9 @@ using Service.Interfaces;
 
 namespace Service.Implementations
 {
+    /// <summary>
+    /// Dịch vụ xác thực và quản lý tài khoản người dùng (Đăng ký, Đăng nhập, Quên mật khẩu, Refresh Token, Đăng nhập Google).
+    /// </summary>
     public class AuthService : IAuthService
     {
         private const int LegacyPasswordFormatVersion = 1;
@@ -33,14 +36,20 @@ namespace Service.Implementations
             _emailService = emailService;
         }
 
+        /// <summary>
+        /// Gửi OTP đăng ký tài khoản qua email để xác thực.
+        /// </summary>
         public async Task SendRegisterOtpAsync(SendOtpRequest request)
         {
+            // Chuẩn hóa và chuyển đổi email thành chữ thường
             var email = request.Email.Trim().ToLower();
+            // Chỉ cho phép đăng ký tài khoản sử dụng Gmail để tăng tính xác thực
             if (!System.Text.RegularExpressions.Regex.IsMatch(email, @"^[a-zA-Z0-9._%+-]+@gmail\.com$"))
             {
                 throw new Exception("Chỉ chấp nhận đăng ký bằng tài khoản Gmail (@gmail.com).");
             }
 
+            // Truy vấn kiểm tra xem email đăng ký này đã tồn tại trong database chưa
             var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             if (existingUser != null)
             {
@@ -54,7 +63,9 @@ namespace Service.Implementations
                 }
             }
 
+            // Tạo mã OTP ngẫu nhiên gồm 6 chữ số để xác thực email
             var otp = Random.Shared.Next(100000, 999999).ToString();
+            // Thiết lập thời gian hết hạn cho mã OTP là 10 phút kể từ lúc tạo
             var expiry = DateTime.UtcNow.AddMinutes(10);
 
             if (existingUser == null)
@@ -96,6 +107,9 @@ namespace Service.Implementations
             });
         }
 
+        /// <summary>
+        /// Đăng ký tài khoản người dùng mới.
+        /// </summary>
         public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
         {
             var email = request.Email.Trim().ToLower();
@@ -115,6 +129,7 @@ namespace Service.Implementations
                 throw new Exception("Mã OTP không chính xác hoặc đã hết hạn.");
             }
 
+            // Thực hiện băm mật khẩu người dùng (Hashing) bằng thuật toán PBKDF2 an toàn
             CreatePasswordHash(request.Password, out string passwordHash, out string passwordSalt);
 
             // Generate raw DEK for the user, then encrypt it with system MasterKey
@@ -142,7 +157,7 @@ namespace Service.Implementations
             _context.Users.Update(user);
             await _context.SaveChangesAsync();
 
-            // Cấp gói Free mặc định cho user mới
+            // Cấp gói dịch vụ miễn phí (Free Plan) mặc định cho tài khoản mới đăng ký
             await CreateFreeSubscriptionAsync(user.Id);
 
             // Gửi email chào mừng (fire-and-forget, không ảnh hưởng response)
@@ -163,6 +178,9 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>
+        /// Đăng nhập bằng tài khoản email và mật khẩu thông thường.
+        /// </summary>
         public async Task<AuthResponse> LoginAsync(LoginRequest request)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
@@ -207,6 +225,9 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>
+        /// Đăng nhập hoặc tự động đăng ký bằng tài khoản Google (OAuth2).
+        /// </summary>
         public async Task<AuthResponse> LoginWithGoogleAsync(GoogleLoginRequest request)
         {
             var googleClientId = _config["GoogleAuth:ClientId"];
@@ -310,6 +331,9 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>
+        /// Làm mới JWT Access Token bằng Refresh Token để duy trì trạng thái đăng nhập.
+        /// </summary>
         public async Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u =>
@@ -348,6 +372,9 @@ namespace Service.Implementations
             };
         }
 
+        /// <summary>
+        /// Yêu cầu gửi email chứa mã thông báo (token) để đặt lại mật khẩu khi bị quên.
+        /// </summary>
         public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email && u.IsActive);
@@ -373,6 +400,9 @@ namespace Service.Implementations
             });
         }
 
+        /// <summary>
+        /// Đặt lại mật khẩu mới sử dụng token xác thực được gửi qua email.
+        /// </summary>
         public async Task ResetPasswordAsync(ResetPasswordRequest request)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u =>
@@ -392,6 +422,9 @@ namespace Service.Implementations
             await _context.SaveChangesAsync();
         }
 
+        /// <summary>
+        /// Thay đổi mật khẩu tài khoản của người dùng hiện tại.
+        /// </summary>
         public async Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
         {
             var user = await _context.Users.FindAsync(userId);

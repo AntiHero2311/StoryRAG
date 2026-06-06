@@ -93,6 +93,7 @@ namespace Service.Implementations
             _logger.LogInformation("SystemConfig updated: key={Key} by updatedBy={UpdatedBy}", key, updatedBy);
         }
 
+        /// <summary>Lấy toàn bộ config keys hiện có (dùng cho admin UI).</summary>
         public async Task<Dictionary<string, string>> GetAllRawAsync()
         {
             if (_cache.TryGetValue(AllKeysCacheKey, out Dictionary<string, string>? cached) && cached != null)
