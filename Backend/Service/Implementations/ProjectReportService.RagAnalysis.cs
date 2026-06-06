@@ -71,6 +71,8 @@ namespace Service.Implementations
                     var idx = Rubric.IndexOf(item);
                     var (key, group, name, max) = item;
 
+                    try
+                    {
                     var queryText = RubricQueryTemplates.GetRetrievalQuery(key);
                     var queryEmbedding = await _embeddingService.GetEmbeddingAsync(queryText, EmbeddingUseCase.ChatQuery);
                     System.Threading.Interlocked.Increment(ref embedCalls);
@@ -323,9 +325,52 @@ namespace Service.Implementations
                         var p = 40 + (int)Math.Round((done) / (double)Rubric.Count * 38d);
                         await progressCallback(Math.Clamp(p, 40, 78), $"RAG: chấm {key} ({done}/{Rubric.Count})", cancellationToken);
                     }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "RAG: tiêu chí {Key} thất bại do exception — dùng kết quả fallback.", key);
+                        aiScoresArray[idx] = new AiScoreItem
+                        {
+                            Key = key,
+                            Score = Math.Round(max * 0.6m, 1),
+                            MaxScore = max,
+                            Feedback = "Phân tích tiêu chí này gặp sự cố tạm thời từ AI. Vui lòng chạy lại phân tích sau ít phút để cập nhật nhận xét chi tiết.",
+                            Evidence = string.Empty,
+                            BibleComparison = null,
+                            Errors = new List<string> { "Hệ thống không hoàn tất đánh giá tiêu chí này do lỗi xử lý tạm thời." },
+                            Suggestions = new List<string> { "Thử chạy lại phân tích sau ít phút." },
+                        };
+                        reportItemsArray[idx] = new ReportItem { CriterionKey = key, EvidenceChunkIds = new List<int>() };
+
+                        if (progressCallback != null)
+                        {
+                            int done = System.Threading.Interlocked.Increment(ref completedCriteriaCount);
+                            var p = 40 + (int)Math.Round((done) / (double)Rubric.Count * 38d);
+                            await progressCallback(Math.Clamp(p, 40, 78), $"RAG: chấm {key} ({done}/{Rubric.Count})", cancellationToken);
+                        }
+                    }
                 });
 
                 await Task.WhenAll(batchTasks);
+            }
+
+            // Đảm bảo mọi tiêu chí đều có kết quả — tránh NullReference khi một batch task thất bại im lặng
+            for (var i = 0; i < Rubric.Count; i++)
+            {
+                if (aiScoresArray[i] != null) continue;
+                var (key, _, name, max) = Rubric[i];
+                _logger.LogWarning("RAG: tiêu chí {Key} thiếu kết quả sau batch — áp dụng fallback.", key);
+                aiScoresArray[i] = new AiScoreItem
+                {
+                    Key = key,
+                    Score = Math.Round(max * 0.6m, 1),
+                    MaxScore = max,
+                    Feedback = $"Chưa có nhận xét chi tiết cho tiêu chí \"{name}\".",
+                    Evidence = string.Empty,
+                    Errors = new List<string>(),
+                    Suggestions = new List<string>(),
+                };
+                reportItemsArray[i] ??= new ReportItem { CriterionKey = key, EvidenceChunkIds = new List<int>() };
             }
 
             var aiScores = aiScoresArray.ToList();
@@ -341,6 +386,10 @@ namespace Service.Implementations
                 bibleForPrompt,
                 completenessNote,
                 cancellationToken);
+
+            if (progressCallback != null)
+                await progressCallback(84, "RAG: hoàn tất chấm điểm rubric", cancellationToken);
+
             tokensUsed += synTokens;
             tokensUsed += embedCalls * embedTokenEstimate;
 
@@ -523,40 +572,55 @@ namespace Service.Implementations
                 Trả về JSON thuần: {"overallFeedback":"...","warnings":[...]} — nếu không có vấn đề đặc biệt thì warnings=[].
                 """;
 
-            var messages = new List<ChatMessage>
-            {
-                ChatMessage.CreateSystemMessage("Chỉ trả về JSON. Không markdown."),
-                ChatMessage.CreateUserMessage(userPrompt),
-            };
+            const string fallbackOverall =
+                "Tổng kết RAG: các nhận xét dựa trên phần trích ngữ cảnh; nên đọc toàn bộ trong workspace để hiểu sâu hơn.";
 
-            var completion = await CompleteChatWithGeminiAsync(messages, maxTokens: 2500, temperature: 0.2f, jsonMode: true, cancellationToken: cancellationToken);
-            var tokens = completion.Usage?.TotalTokenCount ?? 0;
-            var raw = NormalizeAiText(completion.Content.FirstOrDefault()?.Text ?? string.Empty);
-            raw = ExtractJsonPayload(raw.Trim());
-
-            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             try
             {
-                var doc = JsonSerializer.Deserialize<RagSynthesisResponse>(raw, opts);
-                var warnings = doc?.Warnings?
-                    .Where(w => !string.IsNullOrWhiteSpace(w.Code))
-                    .Select(w => new StoryWarning
-                    {
-                        Code = w.Code.Trim(),
-                        Severity = string.IsNullOrWhiteSpace(w.Severity) ? "INFO" : w.Severity.Trim(),
-                        Title = w.Title ?? "",
-                        Detail = w.Detail ?? "",
-                    })
-                    .ToList() ?? new List<StoryWarning>();
+                var messages = new List<ChatMessage>
+                {
+                    ChatMessage.CreateSystemMessage("Chỉ trả về JSON. Không markdown."),
+                    ChatMessage.CreateUserMessage(userPrompt),
+                };
 
-                var overall = doc?.OverallFeedback?.Trim() ?? "";
-                if (string.IsNullOrWhiteSpace(overall) || overall.Length < 20)
-                    overall = "Tổng kết RAG: các nhận xét dựa trên phần trích ngữ cảnh; nên đọc toàn bộ trong workspace để hiểu sâu hơn.";
-                return (warnings, overall, tokens);
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromMinutes(3));
+
+                var completion = await CompleteChatWithGeminiAsync(messages, maxTokens: 2500, temperature: 0.2f, jsonMode: true, cancellationToken: cts.Token);
+                var tokens = completion.Usage?.TotalTokenCount ?? 0;
+                var raw = NormalizeAiText(completion.Content.FirstOrDefault()?.Text ?? string.Empty);
+                raw = ExtractJsonPayload(raw.Trim());
+
+                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                try
+                {
+                    var doc = JsonSerializer.Deserialize<RagSynthesisResponse>(raw, opts);
+                    var warnings = doc?.Warnings?
+                        .Where(w => !string.IsNullOrWhiteSpace(w.Code))
+                        .Select(w => new StoryWarning
+                        {
+                            Code = w.Code.Trim(),
+                            Severity = string.IsNullOrWhiteSpace(w.Severity) ? "INFO" : w.Severity.Trim(),
+                            Title = w.Title ?? "",
+                            Detail = w.Detail ?? "",
+                        })
+                        .ToList() ?? new List<StoryWarning>();
+
+                    var overall = doc?.OverallFeedback?.Trim() ?? "";
+                    if (string.IsNullOrWhiteSpace(overall) || overall.Length < 20)
+                        overall = fallbackOverall;
+                    return (warnings, overall, tokens);
+                }
+                catch (Exception parseEx)
+                {
+                    _logger.LogWarning(parseEx, "RAG synthesis: parse JSON thất bại, dùng fallback.");
+                    return (new List<StoryWarning>(), fallbackOverall, tokens);
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                return (new List<StoryWarning>(), "Tổng kết RAG: hệ thống không tổng hợp được overallFeedback chi tiết từ LLM.", tokens);
+                _logger.LogError(ex, "RAG synthesis: gọi AI thất bại tại bước tổng hợp overall + warnings (82%).");
+                return (new List<StoryWarning>(), fallbackOverall, 0);
             }
         }
 

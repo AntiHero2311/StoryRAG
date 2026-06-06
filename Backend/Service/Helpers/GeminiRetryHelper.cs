@@ -31,7 +31,7 @@ namespace Service.Helpers
                 {
                     return await action();
                 }
-                catch (Exception ex) when (attempt < maxRetries && IsTransient(ex) && !cancellationToken.IsCancellationRequested)
+                catch (Exception ex) when (attempt < maxRetries && IsTransient(ex, cancellationToken) && !cancellationToken.IsCancellationRequested)
                 {
                     var wait = GetWaitSeconds(ex, attempt);
                     var label = DescribeTransient(ex);
@@ -96,7 +96,7 @@ namespace Service.Helpers
             return remaining;
         }
 
-        private static bool IsTransient(Exception ex)
+        private static bool IsTransient(Exception ex, CancellationToken cancellationToken)
         {
             // OpenAI SDK throws ClientResultException for HTTP errors
             if (ex is ClientResultException cre)
@@ -122,7 +122,7 @@ namespace Service.Helpers
             }
 
             // Timeouts / cancellations (treat as transient unless caller explicitly cancelled)
-            if (ex is TaskCanceledException) return true;
+            if (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested) return true;
 
             // ArgumentOutOfRangeException with content_filter is non-transient (content safety issue)
             if (ex is ArgumentOutOfRangeException aoex && aoex.Message.Contains("ChatFinishReason", StringComparison.OrdinalIgnoreCase))

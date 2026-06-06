@@ -128,6 +128,26 @@ namespace Service.Implementations
             CancellationToken cancellationToken = default,
             Guid? analysisJobId = null)
         {
+            var originalProgressCallback = progressCallback;
+            if (originalProgressCallback != null)
+            {
+                var maxProgress = 0;
+                var progressLock = new object();
+                progressCallback = async (prog, msg, token) =>
+                {
+                    int currentProg;
+                    lock (progressLock)
+                    {
+                        if (prog > maxProgress)
+                        {
+                            maxProgress = prog;
+                        }
+                        currentProg = maxProgress;
+                    }
+                    await originalProgressCallback(currentProg, msg, token);
+                };
+            }
+
             // 1. Kiểm tra quyền sở hữu tác phẩm (Verify ownership)
             var project = await _context.Projects
                 .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted && p.AuthorId == userId, cancellationToken)
@@ -379,6 +399,19 @@ namespace Service.Implementations
                             if (doc.RootElement.TryGetProperty("emotion", out var emoProp))
                             {
                                 emoDto = JsonSerializer.Deserialize<Stage1EmotionDto>(emoProp.GetRawText(), jsonOpts);
+                                if (emoDto != null)
+                                {
+                                    // Clamp về range hợp lệ phòng AI trả giá trị sai
+                                    emoDto.Valence     = Math.Clamp(emoDto.Valence, -1.0, 1.0);
+                                    emoDto.Intensity   = Math.Clamp(emoDto.Intensity, 0.0, 1.0);
+                                    emoDto.PacingScore = Math.Clamp(emoDto.PacingScore, 0.0, 100.0);
+                                    if (string.IsNullOrWhiteSpace(emoDto.DominantEmotion))
+                                        emoDto.DominantEmotion = "Neutral";
+                                }
+                            }
+                            else
+                            {
+                                _logger.LogDebug("Stage 1 fragment thiếu key 'emotion' — dùng giá trị Neutral mặc định.");
                             }
                         }
                     }
@@ -422,6 +455,9 @@ namespace Service.Implementations
                     cancellationToken);
 
                 await Task.WhenAll(rubricTask, contentTask, emotionTask);
+
+                if (progressCallback != null)
+                    await progressCallback(85, "Đang lưu kết quả phân tích...", cancellationToken);
 
                 var rubricRes = rubricTask.Result;
                 var contentRes = contentTask.Result;
@@ -631,27 +667,44 @@ namespace Service.Implementations
             }
 
             // Lưu dữ liệu bản chụp (Snapshot) cố định của từng chương truyện
+            // Load toàn bộ nội dung version 1 lần duy nhất (tránh N+1 query)
+            var snapshotVersionIds = snapshot.Chapters
+                .Where(c => c.CurrentVersionId.HasValue)
+                .Select(c => c.CurrentVersionId!.Value)
+                .ToList();
+
+            Dictionary<Guid, (string? Title, string? Content, int WordCount)> snapshotVersionContents;
+            if (snapshotVersionIds.Count == 0)
+            {
+                snapshotVersionContents = new Dictionary<Guid, (string? Title, string? Content, int WordCount)>();
+            }
+            else
+            {
+                var rawVersionList = await _context.ChapterVersions
+                    .Where(v => snapshotVersionIds.Contains(v.Id))
+                    .Select(v => new { v.Id, v.Title, v.Content, v.WordCount })
+                    .ToListAsync(cancellationToken);
+                snapshotVersionContents = rawVersionList.ToDictionary(
+                    v => v.Id,
+                    v => ((string?)v.Title, (string?)v.Content, v.WordCount));
+            }
+
             foreach (var chapter in chapters)
             {
                 var state = snapshot.Chapters.FirstOrDefault(c => c.ChapterNumber == chapter.ChapterNumber);
                 if (state == null || !state.CurrentVersionId.HasValue) continue;
-                
-                var version = await _context.ChapterVersions
-                    .Where(v => v.Id == state.CurrentVersionId.Value)
-                    .Select(v => new { v.Title, v.Content, v.WordCount })
-                    .FirstOrDefaultAsync(cancellationToken);
-                
-                if (version != null)
+
+                if (!snapshotVersionContents.TryGetValue(state.CurrentVersionId.Value, out var version))
+                    continue;
+
+                _context.ProjectReportSnapshots.Add(new ProjectReportSnapshot
                 {
-                    _context.ProjectReportSnapshots.Add(new ProjectReportSnapshot
-                    {
-                        ProjectReportId = report.Id,
-                        ChapterNumber = chapter.ChapterNumber,
-                        Title = version.Title ?? string.Empty,
-                        Content = version.Content ?? string.Empty, // Already encrypted in DB
-                        WordCount = version.WordCount
-                    });
-                }
+                    ProjectReportId = report.Id,
+                    ChapterNumber = chapter.ChapterNumber,
+                    Title = version.Title ?? string.Empty,
+                    Content = version.Content ?? string.Empty, // Already encrypted in DB
+                    WordCount = version.WordCount
+                });
             }
 
             if (useRag)

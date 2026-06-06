@@ -12,6 +12,7 @@ type RagConfig = {
     stage1_max_chunk_chars: number;
     facts_json_max_chars: number;
     bible_max_chars: number;
+    story_bible_max_chars: number;
     estimated_tokens_per_query_embed: number;
     rubric_batch_size: number;
     analyze_rpm_limit: number;
@@ -28,6 +29,7 @@ export default function RagConfigPanel() {
         stage1_max_chunk_chars: 900,
         facts_json_max_chars: 12000,
         bible_max_chars: 4000,
+        story_bible_max_chars: 120000,
         estimated_tokens_per_query_embed: 200,
         rubric_batch_size: 5,
         analyze_rpm_limit: 120,
@@ -39,7 +41,7 @@ export default function RagConfigPanel() {
 
     useEffect(() => {
         api.get<RagConfig>('/admin/rag-config')
-            .then(r => setConfig(r.data))
+            .then(r => setConfig(prev => ({ ...prev, ...r.data, story_bible_max_chars: r.data.story_bible_max_chars ?? 120000 })))
             .catch(() => setError('Không tải được cấu hình RAG nâng cao.'))
             .finally(() => setLoading(false));
     }, []);
@@ -135,7 +137,12 @@ export default function RagConfigPanel() {
                     <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Bible Max Chars</label>
                         <input type="number" min={500} max={20000} className={inputBase} value={config.bible_max_chars} onChange={e => handleChange('bible_max_chars', Number(e.target.value))} />
-                        <p className="text-[10px] text-[var(--text-secondary)] opacity-70">Độ dài tối đa của cẩm nang truyện nạp vào AI.</p>
+                        <p className="text-[10px] text-[var(--text-secondary)] opacity-70">Độ dài tối đa bible context trong RAG rubric.</p>
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Story Bible Max Chars</label>
+                        <input type="number" min={20000} max={500000} className={inputBase} value={config.story_bible_max_chars} onChange={e => handleChange('story_bible_max_chars', Number(e.target.value))} />
+                        <p className="text-[10px] text-[var(--text-secondary)] opacity-70">Giới hạn manuscript gửi AI trích xuất Story Bible. Giảm nếu job kẹt ở 82%.</p>
                     </div>
                     <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Est. Tokens Query Embed</label>

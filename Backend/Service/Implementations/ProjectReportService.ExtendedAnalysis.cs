@@ -56,6 +56,16 @@ namespace Service.Implementations
                 return (new ContentAnalysisResult { AnalysisNote = "Không có nội dung bản thảo để trích xuất." }, 0);
             }
 
+            var maxManuscriptChars = Math.Clamp(await _sysConfig.GetAsync("rag.story_bible_max_chars", 120000), 20000, 500000);
+            var manuscriptForPrompt = BuildStoryBibleManuscript(fullManuscriptText, maxManuscriptChars);
+            if (manuscriptForPrompt.Length < fullManuscriptText.Length)
+            {
+                _logger.LogInformation(
+                    "Story Bible: rút gọn manuscript từ {OriginalChars:N0} → {TruncatedChars:N0} ký tự để tránh timeout/quá tải API.",
+                    fullManuscriptText.Length,
+                    manuscriptForPrompt.Length);
+            }
+
             var sysPrompt = @"OUTPUT RULE (ABSOLUTE): Respond with ONE valid JSON object only. Start with '{', end with '}'. NO markdown, NO comments, NO text outside JSON.
 
 Bạn là trợ lý AI chuyên nghiệp phân tích cốt truyện, nhân vật và bối cảnh tác phẩm văn học.
@@ -120,10 +130,14 @@ QUY TẮC QUAN TRỌNG:
 2. Trích xuất thông tin khách quan, chính xác dựa trên nội dung tác phẩm. Không tự bịa đặt thông tin không có trong văn bản.
 3. Không thêm bất kỳ văn bản giải thích nào ngoài JSON. Không dùng thẻ markdown ```json...``` nếu có thể, hoặc đảm bảo chỉ trả về JSON hợp lệ.";
 
+            var manuscriptNote = manuscriptForPrompt.Length < fullManuscriptText.Length
+                ? "\n\n(Lưu ý: nội dung được rút gọn — ưu tiên phần đầu và phần cuối tác phẩm để tránh vượt giới hạn AI.)"
+                : "";
+
             var messages = new List<ChatMessage>
             {
                 ChatMessage.CreateSystemMessage(sysPrompt),
-                ChatMessage.CreateUserMessage($"Tên tác phẩm: {projectTitle}\n\nToàn bộ nội dung của tác phẩm (đã chia theo chương):\n\n{fullManuscriptText}")
+                ChatMessage.CreateUserMessage($"Tên tác phẩm: {projectTitle}\n\nNội dung tác phẩm (đã chia theo chương):{manuscriptNote}\n\n{manuscriptForPrompt}")
             };
 
             int tokensUsed = 0;
@@ -188,7 +202,29 @@ QUY TẮC QUAN TRỌNG:
                 };
             }
 
+            if (progressCallback != null)
+                await progressCallback(83, "Hoàn tất trích xuất Story Bible", cancellationToken);
+
             return (contentResult, tokensUsed);
+        }
+
+        /// <summary>
+        /// Giới hạn kích thước manuscript gửi sang Gemini: giữ phần đầu (mở đầu + thiết lập) và phần cuối (cao trào + kết).
+        /// </summary>
+        private static string BuildStoryBibleManuscript(string fullText, int maxChars)
+        {
+            if (string.IsNullOrEmpty(fullText) || fullText.Length <= maxChars)
+                return fullText;
+
+            const string marker = "\n\n[... nội dung giữa được rút gọn — phân tích dựa trên phần đầu và phần cuối tác phẩm ...]\n\n";
+            var markerLen = marker.Length;
+            var budget = maxChars - markerLen;
+            if (budget < 2000)
+                return fullText[..maxChars] + "\n[...]";
+
+            var headBudget = budget * 2 / 3;
+            var tailBudget = budget - headBudget;
+            return fullText[..headBudget] + marker + fullText[^tailBudget..];
         }
 
         private async Task<(EmotionPacingResult Pacing, int TokensUsed)> AnalyzeEmotionPacingAsync(
@@ -525,6 +561,9 @@ NỘI DUNG TÁC PHẨM (MẪU ĐẠI DIỆN):
                 OverallPacingProfile = pacingPoints.Average(p => p.Score) > 55 ? "Nhịp độ nhanh" : "Nhịp độ cân bằng",
                 DominantEmotionProfile = emotionPoints.GroupBy(e => e.DominantEmotion).OrderByDescending(g => g.Count()).First().Key
             };
+
+            if (progressCallback != null)
+                await progressCallback(83, "Hoàn tất phân tích nhịp độ & cảm xúc", cancellationToken);
 
             return (result, tokensUsed);
         }

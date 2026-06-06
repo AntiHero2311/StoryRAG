@@ -25,6 +25,7 @@ namespace Api.Controllers
         internal const string KeyStage1MaxChunkChars = "rag.stage1_max_chunk_chars";
         internal const string KeyFactsJsonMaxChars = "rag.facts_json_max_chars";
         internal const string KeyBibleMaxChars = "rag.bible_max_chars";
+        internal const string KeyStoryBibleMaxChars = "rag.story_bible_max_chars";
         internal const string KeyEstimatedTokensPerQueryEmbed = "rag.estimated_tokens_per_query_embed";
         internal const string KeyRubricBatchSize = "rag.rubric_batch_size";
         internal const string KeyAnalyzeRpmLimit = "gemini.analyze_rpm_limit";
@@ -40,6 +41,7 @@ namespace Api.Controllers
         private const int DefaultStage1MaxChunkChars = 900;
         private const int DefaultFactsJsonMaxChars = 12000;
         private const int DefaultBibleMaxChars = 4000;
+        private const int DefaultStoryBibleMaxChars = 120000;
         private const int DefaultEstimatedTokensPerQueryEmbed = 200;
         private const int DefaultRubricBatchSize = 5;
         private const int DefaultAnalyzeRpmLimit = 120;
@@ -64,6 +66,7 @@ namespace Api.Controllers
             var stage1MaxChunkChars = await _sysConfig.GetAsync(KeyStage1MaxChunkChars, DefaultStage1MaxChunkChars);
             var factsJsonMaxChars = await _sysConfig.GetAsync(KeyFactsJsonMaxChars, DefaultFactsJsonMaxChars);
             var bibleMaxChars = await _sysConfig.GetAsync(KeyBibleMaxChars, DefaultBibleMaxChars);
+            var storyBibleMaxChars = await _sysConfig.GetAsync(KeyStoryBibleMaxChars, DefaultStoryBibleMaxChars);
             var estimatedTokensPerQueryEmbed = await _sysConfig.GetAsync(KeyEstimatedTokensPerQueryEmbed, DefaultEstimatedTokensPerQueryEmbed);
             var rubricBatchSize = await _sysConfig.GetAsync(KeyRubricBatchSize, DefaultRubricBatchSize);
             var analyzeRpmLimit = await _sysConfig.GetAsync(KeyAnalyzeRpmLimit, DefaultAnalyzeRpmLimit);
@@ -80,6 +83,7 @@ namespace Api.Controllers
                 Stage1MaxChunkChars = stage1MaxChunkChars,
                 FactsJsonMaxChars = factsJsonMaxChars,
                 BibleMaxChars = bibleMaxChars,
+                StoryBibleMaxChars = storyBibleMaxChars,
                 EstimatedTokensPerQueryEmbed = estimatedTokensPerQueryEmbed,
                 RubricBatchSize = rubricBatchSize,
                 AnalyzeRpmLimit = analyzeRpmLimit
@@ -125,6 +129,9 @@ namespace Api.Controllers
             if (req.BibleMaxChars < 500 || req.BibleMaxChars > 20000)
                 errors.Add("bible_max_chars phải trong khoảng 500–20000.");
 
+            if (req.StoryBibleMaxChars < 20000 || req.StoryBibleMaxChars > 500000)
+                errors.Add("story_bible_max_chars phải trong khoảng 20000–500000.");
+
             if (req.EstimatedTokensPerQueryEmbed < 0 || req.EstimatedTokensPerQueryEmbed > 2000)
                 errors.Add("estimated_tokens_per_query_embed phải trong khoảng 0–2000.");
 
@@ -153,6 +160,7 @@ namespace Api.Controllers
                 [KeyStage1MaxChunkChars] = await _sysConfig.GetAsync(KeyStage1MaxChunkChars, DefaultStage1MaxChunkChars),
                 [KeyFactsJsonMaxChars] = await _sysConfig.GetAsync(KeyFactsJsonMaxChars, DefaultFactsJsonMaxChars),
                 [KeyBibleMaxChars] = await _sysConfig.GetAsync(KeyBibleMaxChars, DefaultBibleMaxChars),
+                [KeyStoryBibleMaxChars] = await _sysConfig.GetAsync(KeyStoryBibleMaxChars, DefaultStoryBibleMaxChars),
                 [KeyEstimatedTokensPerQueryEmbed] = await _sysConfig.GetAsync(KeyEstimatedTokensPerQueryEmbed, DefaultEstimatedTokensPerQueryEmbed),
                 [KeyRubricBatchSize] = await _sysConfig.GetAsync(KeyRubricBatchSize, DefaultRubricBatchSize),
                 [KeyAnalyzeRpmLimit] = await _sysConfig.GetAsync(KeyAnalyzeRpmLimit, DefaultAnalyzeRpmLimit)
@@ -168,6 +176,7 @@ namespace Api.Controllers
             await _sysConfig.SetAsync(KeyStage1MaxChunkChars, req.Stage1MaxChunkChars, userId.Value);
             await _sysConfig.SetAsync(KeyFactsJsonMaxChars, req.FactsJsonMaxChars, userId.Value);
             await _sysConfig.SetAsync(KeyBibleMaxChars, req.BibleMaxChars, userId.Value);
+            await _sysConfig.SetAsync(KeyStoryBibleMaxChars, req.StoryBibleMaxChars, userId.Value);
             await _sysConfig.SetAsync(KeyEstimatedTokensPerQueryEmbed, req.EstimatedTokensPerQueryEmbed, userId.Value);
             await _sysConfig.SetAsync(KeyRubricBatchSize, req.RubricBatchSize, userId.Value);
             await _sysConfig.SetAsync(KeyAnalyzeRpmLimit, req.AnalyzeRpmLimit, userId.Value);
@@ -183,6 +192,7 @@ namespace Api.Controllers
                 [KeyStage1MaxChunkChars] = req.Stage1MaxChunkChars,
                 [KeyFactsJsonMaxChars] = req.FactsJsonMaxChars,
                 [KeyBibleMaxChars] = req.BibleMaxChars,
+                [KeyStoryBibleMaxChars] = req.StoryBibleMaxChars,
                 [KeyEstimatedTokensPerQueryEmbed] = req.EstimatedTokensPerQueryEmbed,
                 [KeyRubricBatchSize] = req.RubricBatchSize,
                 [KeyAnalyzeRpmLimit] = req.AnalyzeRpmLimit
@@ -207,6 +217,7 @@ namespace Api.Controllers
         [JsonPropertyName("stage1_max_chunk_chars")] public int Stage1MaxChunkChars { get; set; }
         [JsonPropertyName("facts_json_max_chars")] public int FactsJsonMaxChars { get; set; }
         [JsonPropertyName("bible_max_chars")] public int BibleMaxChars { get; set; }
+        [JsonPropertyName("story_bible_max_chars")] public int StoryBibleMaxChars { get; set; }
         [JsonPropertyName("estimated_tokens_per_query_embed")] public int EstimatedTokensPerQueryEmbed { get; set; }
         [JsonPropertyName("rubric_batch_size")] public int RubricBatchSize { get; set; }
         [JsonPropertyName("analyze_rpm_limit")] public int AnalyzeRpmLimit { get; set; }
@@ -224,6 +235,7 @@ namespace Api.Controllers
         [JsonPropertyName("stage1_max_chunk_chars")] public int Stage1MaxChunkChars { get; set; }
         [JsonPropertyName("facts_json_max_chars")] public int FactsJsonMaxChars { get; set; }
         [JsonPropertyName("bible_max_chars")] public int BibleMaxChars { get; set; }
+        [JsonPropertyName("story_bible_max_chars")] public int StoryBibleMaxChars { get; set; }
         [JsonPropertyName("estimated_tokens_per_query_embed")] public int EstimatedTokensPerQueryEmbed { get; set; }
         [JsonPropertyName("rubric_batch_size")] public int RubricBatchSize { get; set; }
         [JsonPropertyName("analyze_rpm_limit")] public int AnalyzeRpmLimit { get; set; }
