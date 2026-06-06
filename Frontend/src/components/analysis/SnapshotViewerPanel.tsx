@@ -29,7 +29,7 @@ export default function SnapshotViewerPanel({ projectId, reportId }: SnapshotVie
     const [fontSize, setFontSize] = useState<number>(18); // default 18px
     const [useSerif, setUseSerif] = useState<boolean>(true); // default serif
     const [justifyText, setJustifyText] = useState<boolean>(false); // default left-aligned
-    const [indentation, setIndentation] = useState<boolean>(true); // default paragraph indentation
+    const [indentation, setIndentation] = useState<boolean>(false); // default paragraph indentation
     const [showSettings, setShowSettings] = useState<boolean>(false);
     const [isTocCollapsed, setIsTocCollapsed] = useState<boolean>(false);
 
@@ -242,7 +242,7 @@ export default function SnapshotViewerPanel({ projectId, reportId }: SnapshotVie
                                     }`} />
 
                                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                                        <span className={`text-[10px] font-mono tracking-wider ${
+                                        <span className={`text-[10px] font-mono tracking-wider shrink-0 whitespace-nowrap ${
                                             isActive ? 'text-indigo-400 font-bold' : 'text-zinc-600 group-hover:text-zinc-400'
                                         }`}>
                                             CH {s.chapterNumber.toString().padStart(2, '0')}
@@ -262,7 +262,7 @@ export default function SnapshotViewerPanel({ projectId, reportId }: SnapshotVie
                                          )}
                                     </div>
                                     
-                                    <span className={`text-[9px] font-semibold transition-all px-2 py-0.5 rounded ${
+                                    <span className={`text-[9px] font-semibold transition-all px-2 py-0.5 rounded shrink-0 whitespace-nowrap ${
                                         isActive ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20' : 'text-zinc-600 group-hover:text-zinc-400'
                                     }`}>
                                         {s.wordCount} từ

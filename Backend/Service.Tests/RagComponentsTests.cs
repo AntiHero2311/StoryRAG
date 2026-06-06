@@ -218,4 +218,23 @@ public class RagComponentsTests
         Array.Copy(shorter, a, Math.Min(shorter.Length, dim));
         return a;
     }
+
+    [Fact]
+    public void BuildStoryBibleManuscript_samples_all_chapters_correctly()
+    {
+        var sb = new System.Text.StringBuilder();
+        for (int i = 1; i <= 10; i++)
+        {
+            sb.AppendLine($"--- CHƯƠNG {i}: Tiêu đề chương {i} ---");
+            sb.AppendLine(new string('a', 2000));
+        }
+        var fullText = sb.ToString();
+        var sampled = Service.Implementations.ProjectReportService.BuildStoryBibleManuscript(fullText, 5000);
+        
+        for (int i = 1; i <= 10; i++)
+        {
+            Assert.Contains($"--- CHƯƠNG {i}", sampled);
+        }
+        Assert.True(sampled.Length <= 5000);
+    }
 }

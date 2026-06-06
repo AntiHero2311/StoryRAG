@@ -187,6 +187,7 @@ QUY TẮC QUAN TRỌNG:
                     PropertyNameCaseInsensitive = true
                 };
 
+                jsonText = JsonSanitizer.Sanitize(jsonText);
                 contentResult = JsonSerializer.Deserialize<ContentAnalysisResult>(jsonText, options) ?? new ContentAnalysisResult();
                 if (string.IsNullOrWhiteSpace(contentResult.AnalysisNote))
                 {
@@ -209,22 +210,84 @@ QUY TẮC QUAN TRỌNG:
         }
 
         /// <summary>
-        /// Giới hạn kích thước manuscript gửi sang Gemini: giữ phần đầu (mở đầu + thiết lập) và phần cuối (cao trào + kết).
+        /// Giới hạn kích thước manuscript gửi sang Gemini: Phân phối dung lượng đều cho từng chương
+        /// để tránh vượt quá giới hạn AI và đảm bảo không bỏ sót dòng thời gian hay chủ đề ở các chương giữa.
         /// </summary>
-        private static string BuildStoryBibleManuscript(string fullText, int maxChars)
+        public static string BuildStoryBibleManuscript(string fullText, int maxChars)
         {
             if (string.IsNullOrEmpty(fullText) || fullText.Length <= maxChars)
                 return fullText;
 
-            const string marker = "\n\n[... nội dung giữa được rút gọn — phân tích dựa trên phần đầu và phần cuối tác phẩm ...]\n\n";
-            var markerLen = marker.Length;
-            var budget = maxChars - markerLen;
-            if (budget < 2000)
-                return fullText[..maxChars] + "\n[...]";
+            // Tách bản thảo thành các chương dựa trên marker chương
+            var headerRegex = new Regex(@"(?:\r?\n|^)(--- CHƯƠNG \d+[^-\r\n]*---)(?:\r?\n|$)", RegexOptions.Compiled);
+            var matches = headerRegex.Matches(fullText);
 
-            var headBudget = budget * 2 / 3;
-            var tailBudget = budget - headBudget;
-            return fullText[..headBudget] + marker + fullText[^tailBudget..];
+            if (matches.Count == 0)
+            {
+                // Fallback nếu không tìm thấy marker chương: giữ đầu và cuối
+                const string fallbackMarker = "\n\n[... nội dung giữa được rút gọn ...]\n\n";
+                var budget = maxChars - fallbackMarker.Length;
+                if (budget < 2000)
+                    return fullText[..Math.Min(fullText.Length, maxChars)];
+                var headBudget = budget * 2 / 3;
+                var tailBudget = budget - headBudget;
+                return fullText[..headBudget] + fallbackMarker + fullText[^tailBudget..];
+            }
+
+            var chapters = new List<(string Header, string Body)>();
+            for (int i = 0; i < matches.Count; i++)
+            {
+                var match = matches[i];
+                var headerText = match.Groups[1].Value;
+                int bodyStart = match.Index + match.Length;
+                int bodyEnd = (i + 1 < matches.Count) ? matches[i + 1].Index : fullText.Length;
+                var bodyText = fullText[bodyStart..bodyEnd].Trim();
+                chapters.Add((headerText, bodyText));
+            }
+
+            int n = chapters.Count;
+            int budgetPerChapter = maxChars / n;
+            var sb = new StringBuilder();
+
+            foreach (var chapter in chapters)
+            {
+                var header = chapter.Header.Trim();
+                var body = chapter.Body;
+
+                sb.AppendLine();
+                sb.AppendLine(header);
+
+                int bodyBudget = budgetPerChapter - header.Length - 10;
+                if (bodyBudget < 100)
+                {
+                    bodyBudget = 100;
+                }
+
+                if (body.Length <= bodyBudget)
+                {
+                    sb.AppendLine(body);
+                }
+                else
+                {
+                    int headBudget = bodyBudget * 2 / 3;
+                    int tailBudget = bodyBudget - headBudget - 10;
+                    if (tailBudget < 0) tailBudget = 0;
+
+                    sb.AppendLine(body[..headBudget]);
+                    sb.AppendLine("[...]");
+                    if (tailBudget > 0)
+                    {
+                        sb.AppendLine(body[^tailBudget..]);
+                    }
+                }
+            }
+
+            var result = sb.ToString().Trim();
+            if (result.Length > maxChars)
+            {
+                return result[..maxChars];
+            }
+            return result;
         }
 
         private async Task<(EmotionPacingResult Pacing, int TokensUsed)> AnalyzeEmotionPacingAsync(
