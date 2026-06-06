@@ -21,6 +21,7 @@ import {
   type StaffReportStoryResponse,
 } from '../services/analysisJobService';
 import { staffService } from '../services/staffService';
+import { getProjectDisplayLabel } from '../utils/staffDisplayHelpers';
 import { reportService, type NarrativeChartsResponse } from '../services/reportService';
 import DonutChart from '../components/analysis/DonutChart';
 import RadarChart from '../components/analysis/RadarChart';
@@ -430,7 +431,7 @@ export default function StaffReportReviewPage() {
                   <div className="flex-1 w-full space-y-4">
                     <div>
                       <h2 className="text-xl font-black text-[var(--text-bright)] leading-snug">
-                        {detail.projectTitle}
+                        {getProjectDisplayLabel(detail.projectTitle, { reportId: detail.id, projectId: detail.projectId, authorName: detail.authorName })}
                       </h2>
                       <div className="flex flex-wrap items-center gap-3 mt-1.5">
                         <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-amber-500/10 text-amber-400 border border-amber-500/15">
@@ -934,7 +935,7 @@ export default function StaffReportReviewPage() {
                           color: readerTheme === 'cream' ? '#1c1510' : '#ffffff',
                         }}
                       >
-                        {detail?.projectTitle}
+                        {detail ? getProjectDisplayLabel(detail.projectTitle, { reportId: detail.id, projectId: detail.projectId, authorName: detail.authorName }) : '—'}
                       </p>
                       <p className="text-[9px] opacity-70 mt-0.5">{chapterCount} chương</p>
                     </div>

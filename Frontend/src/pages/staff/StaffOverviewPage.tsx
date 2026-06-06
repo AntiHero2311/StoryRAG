@@ -13,6 +13,7 @@ import { staffService } from '../../services/staffService';
 import { analysisJobService, type StaffAnalysisJobItem, type StaffPendingReportItem } from '../../services/analysisJobService';
 import { bugReportService, type BugReportResponse } from '../../services/bugReportService';
 import type { StaffFeedbackResponse } from '../../services/feedbackService';
+import { getFeedbackContextLabel, getProjectDisplayLabel } from '../../utils/staffDisplayHelpers';
 
 type HubStats = {
     pendingReports: number;
@@ -118,7 +119,7 @@ function buildPriorityQueue(
         items.push({
             id: `job-${job.id}`,
             categoryLabel: 'Job lỗi / treo',
-            title: truncate(job.project_title || 'Dự án không tên'),
+            title: truncate(getProjectDisplayLabel(job.project_title, { projectId: job.project_id, authorName: job.requested_by_name })),
             meta: `${job.requested_by_name || 'Tác giả'} · ${job.status}${ts ? ` · ${fmtRelative(ts)}` : ''}`,
             to: '/staff/analysis-jobs',
             sortKey: 1000 + (ts ? Date.now() - new Date(ts).getTime() : 0),
@@ -148,7 +149,7 @@ function buildPriorityQueue(
         items.push({
             id: `report-${report.report_id}`,
             categoryLabel: 'Báo cáo chờ duyệt',
-            title: truncate(report.project_title || 'Dự án không tên'),
+            title: truncate(getProjectDisplayLabel(report.project_title, { reportId: report.report_id, projectId: report.project_id, authorName: report.author_name })),
             meta: `${report.author_name} · Điểm ${report.total_score} · ${fmtRelative(report.created_at)}`,
             to: `/staff/analysis-reports/${report.report_id}`,
             sortKey: 500 + (Date.now() - new Date(report.created_at).getTime()) / 1e6,
@@ -161,7 +162,7 @@ function buildPriorityQueue(
             id: `fb-${fb.id}`,
             categoryLabel: 'Phản hồi',
             title: truncate(fb.content),
-            meta: `${fb.authorName} · ${fmtRelative(fb.createdAt)}`,
+            meta: `${fb.authorName}${getFeedbackContextLabel(fb) ? ` · ${getFeedbackContextLabel(fb)}` : ''} · ${fmtRelative(fb.createdAt)}`,
             to: '/staff/feedbacks',
             sortKey: 400 + (Date.now() - new Date(fb.createdAt).getTime()) / 1e6,
             icon: MessageSquare,

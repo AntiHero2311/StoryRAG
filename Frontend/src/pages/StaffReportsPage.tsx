@@ -12,6 +12,7 @@ import {
 import MainLayout from '../layouts/MainLayout';
 import { getUserInfo } from '../utils/jwtHelper';
 import { analysisJobService, type StaffPendingReportItem } from '../services/analysisJobService';
+import { getProjectDisplayLabel } from '../utils/staffDisplayHelpers';
 
 const PAGE_SIZE = 15;
 
@@ -289,7 +290,7 @@ export default function StaffReportsPage() {
                                 className="truncate font-semibold"
                                 style={{ color: isCriticalRow ? 'rgba(252,165,165,0.95)' : 'var(--text-primary)' }}
                               >
-                                {r.project_title}
+                                {getProjectDisplayLabel(r.project_title, { reportId: r.report_id, projectId: r.project_id, authorName: r.author_name })}
                               </span>
                             </div>
 

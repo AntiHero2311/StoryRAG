@@ -11,6 +11,11 @@ import { staffService } from '../services/staffService';
 import type { StaffFeedbackResponse } from '../services/feedbackService';
 import { AdminPageShell, StatCard } from '../components/admin/AdminShared';
 import Modal from '../components/ui/Modal';
+import {
+    canEditStaffReply,
+    isReadableProjectTitle,
+    isStaffReplyViewOnly,
+} from '../utils/staffDisplayHelpers';
 
 const PAGE_SIZE = 20;
 
@@ -53,6 +58,7 @@ export default function StaffFeedbacksPage() {
     const [detailItem, setDetailItem] = useState<StaffFeedbackResponse | null>(null);
     const [replyNote, setReplyNote] = useState('');
     const [saving, setSaving] = useState(false);
+    const [currentUserId, setCurrentUserId] = useState('');
 
     const filtered = useMemo(() => {
         let list = statusFilter === 'all' ? rows : rows.filter(r => r.status === statusFilter);
@@ -96,21 +102,29 @@ export default function StaffFeedbacksPage() {
         if (!token) { navigate('/login'); return; }
         const info = getUserInfo(token);
         if (info.role !== 'Staff' && info.role !== 'Admin') { navigate('/home'); return; }
+        setCurrentUserId(info.userId);
         void load();
     }, [load, navigate]);
 
+    const canEditReply = detailItem ? canEditStaffReply(detailItem, currentUserId) : false;
+    const isReplyViewOnly = detailItem ? isStaffReplyViewOnly(detailItem, currentUserId) : false;
+
     const openDetail = (item: StaffFeedbackResponse) => {
         setDetailItem(item);
-        setReplyNote(item.staffNote ?? '');
+        setReplyNote(canEditStaffReply(item, currentUserId) ? (item.staffNote ?? '') : '');
     };
 
-    const closeDetail = () => {
+    const closeDetail = useCallback(() => {
         setDetailItem(null);
         setReplyNote('');
-    };
+    }, []);
 
     const handleResolve = async () => {
-        if (!detailItem) return;
+        if (!detailItem || !canEditReply) return;
+        if (!replyNote.trim()) {
+            setError('Vui lòng nhập nội dung phản hồi trước khi hoàn thành.');
+            return;
+        }
         setSaving(true);
         setError('');
         try {
@@ -118,7 +132,7 @@ export default function StaffFeedbacksPage() {
                 projectId: detailItem.projectId,
                 content: detailItem.content,
                 status: 'Resolved',
-                staffNote: replyNote.trim() || detailItem.staffNote || undefined,
+                staffNote: replyNote.trim(),
             });
             closeDetail();
             await load();
@@ -130,7 +144,11 @@ export default function StaffFeedbacksPage() {
     };
 
     const handleSaveNote = async () => {
-        if (!detailItem) return;
+        if (!detailItem || !canEditReply) return;
+        if (!replyNote.trim()) {
+            setError('Vui lòng nhập nội dung phản hồi.');
+            return;
+        }
         setSaving(true);
         setError('');
         try {
@@ -138,7 +156,7 @@ export default function StaffFeedbacksPage() {
                 projectId: detailItem.projectId,
                 content: detailItem.content,
                 status: detailItem.status,
-                staffNote: replyNote.trim() || undefined,
+                staffNote: replyNote.trim(),
             });
             closeDetail();
             await load();
@@ -299,12 +317,10 @@ export default function StaffFeedbacksPage() {
                                                 <div className="flex-1 min-w-0 space-y-2">
                                                     <div className="flex flex-wrap items-start justify-between gap-2">
                                                         <div className="min-w-0">
-                                                            <div className="flex flex-wrap items-center gap-2">
+                                                            <div className="min-w-0">
                                                                 <p className="font-bold text-[var(--text-primary)] text-sm">{item.authorName}</p>
-                                                                {item.projectTitle && (
-                                                                    <span className="text-[10px] px-2 py-0.5 rounded-full border border-[var(--border-color)] text-[var(--text-secondary)] truncate max-w-[200px]">
-                                                                        {item.projectTitle}
-                                                                    </span>
+                                                                {isReadableProjectTitle(item.projectTitle) && (
+                                                                    <p className="text-xs text-[var(--text-secondary)] truncate mt-0.5">{item.projectTitle}</p>
                                                                 )}
                                                             </div>
                                                             <p className="text-xs text-[var(--text-secondary)] mt-1">
@@ -334,11 +350,6 @@ export default function StaffFeedbacksPage() {
                                                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
                                                                 {item.userReaction === 'Like' ? <ThumbsUp className="w-3 h-3" /> : <ThumbsDown className="w-3 h-3" />}
                                                                 Tác giả phản hồi lại
-                                                            </span>
-                                                        )}
-                                                        {item.projectReportId && (
-                                                            <span className="text-[10px] text-amber-400 flex items-center gap-1">
-                                                                <BarChart2 className="w-3 h-3" /> Có báo cáo phân tích
                                                             </span>
                                                         )}
                                                         {item.staffGenres && item.staffGenres.slice(0, 2).map(g => (
@@ -398,46 +409,36 @@ export default function StaffFeedbacksPage() {
                                         <BarChart2 className="w-4 h-4" /> Xem báo cáo phân tích
                                     </button>
                                 )}
-                                {detailItem.status === 'Open' ? (
-                                    <>
-                                        <button
-                                            type="button"
-                                            onClick={closeDetail}
-                                            className="h-10 px-4 rounded-xl text-sm border border-[var(--border-color)] text-[var(--text-secondary)]"
-                                        >
-                                            Đóng
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => void handleResolve()}
-                                            disabled={saving}
-                                            className="h-10 px-5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50"
-                                            style={{ background: 'linear-gradient(135deg,#22c55e,#16a34a)' }}
-                                        >
-                                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                                            Hoàn thành & gửi phản hồi
-                                        </button>
-                                    </>
-                                ) : (
-                                    <>
-                                        <button
-                                            type="button"
-                                            onClick={closeDetail}
-                                            className="h-10 px-4 rounded-xl text-sm border border-[var(--border-color)] text-[var(--text-secondary)]"
-                                        >
-                                            Đóng
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => void handleSaveNote()}
-                                            disabled={saving}
-                                            className="h-10 px-5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50"
-                                            style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}
-                                        >
-                                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                                            Lưu phản hồi
-                                        </button>
-                                    </>
+                                <button
+                                    type="button"
+                                    onClick={closeDetail}
+                                    className="h-10 px-4 rounded-xl text-sm border border-[var(--border-color)] text-[var(--text-secondary)]"
+                                >
+                                    Đóng
+                                </button>
+                                {canEditReply && detailItem.status === 'Open' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleResolve()}
+                                        disabled={saving}
+                                        className="h-10 px-5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50"
+                                        style={{ background: 'linear-gradient(135deg,#22c55e,#16a34a)' }}
+                                    >
+                                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                                        Hoàn thành & gửi phản hồi
+                                    </button>
+                                )}
+                                {canEditReply && detailItem.status !== 'Open' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleSaveNote()}
+                                        disabled={saving}
+                                        className="h-10 px-5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50"
+                                        style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}
+                                    >
+                                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                        Lưu phản hồi
+                                    </button>
                                 )}
                             </div>
                         )}
@@ -455,7 +456,7 @@ export default function StaffFeedbacksPage() {
                                     </span>
                                     <span className="text-xs text-[var(--text-secondary)]">
                                         {detailItem.authorName}
-                                        {detailItem.projectTitle ? ` · ${detailItem.projectTitle}` : ''}
+                                        {isReadableProjectTitle(detailItem.projectTitle) ? ` · ${detailItem.projectTitle}` : ''}
                                     </span>
                                     <span className="text-xs text-[var(--text-secondary)] opacity-60">· Phụ trách: {detailItem.staffName}</span>
                                 </div>
@@ -474,21 +475,35 @@ export default function StaffFeedbacksPage() {
                                     <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed select-text">{detailItem.content}</p>
                                 </div>
 
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-                                        Phản hồi gửi tác giả
-                                    </label>
-                                    <textarea
-                                        value={replyNote}
-                                        onChange={e => setReplyNote(e.target.value)}
-                                        rows={4}
-                                        maxLength={3000}
-                                        placeholder="Nhập câu trả lời hoặc giải thích chi tiết cho tác giả (hiển thị trên trang Phân tích AI)..."
-                                        className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--input-bg)] p-4 text-sm resize-none outline-none focus:border-indigo-500/40 focus:ring-2 focus:ring-indigo-500/10"
-                                        style={{ color: 'var(--text-primary)' }}
-                                    />
-                                    <p className="text-[11px] text-[var(--text-secondary)]">{replyNote.length} / 3000 ký tự</p>
-                                </div>
+                                {isReplyViewOnly && detailItem.staffNote ? (
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                                            Phản hồi của {detailItem.staffName}
+                                        </label>
+                                        <div className="rounded-xl border border-violet-500/20 bg-violet-500/8 px-4 py-3 text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed select-text max-h-48 overflow-y-auto">
+                                            {detailItem.staffNote}
+                                        </div>
+                                        <p className="text-[11px] text-amber-300/90">
+                                            {detailItem.staffName} đã phản hồi. Bạn chỉ có quyền xem, không thể chỉnh sửa.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                                            Phản hồi gửi tác giả
+                                        </label>
+                                        <textarea
+                                            value={replyNote}
+                                            onChange={e => setReplyNote(e.target.value)}
+                                            rows={4}
+                                            maxLength={3000}
+                                            placeholder="Nhập câu trả lời hoặc giải thích chi tiết cho tác giả (hiển thị trên trang Phân tích AI)..."
+                                            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--input-bg)] p-4 text-sm resize-none outline-none focus:border-indigo-500/40 focus:ring-2 focus:ring-indigo-500/10"
+                                            style={{ color: 'var(--text-primary)' }}
+                                        />
+                                        <p className="text-[11px] text-[var(--text-secondary)]">{replyNote.length} / 3000 ký tự</p>
+                                    </div>
+                                )}
 
                                 {detailItem.userRespondedAt && (
                                     <div className="rounded-2xl p-4 border border-emerald-500/20"

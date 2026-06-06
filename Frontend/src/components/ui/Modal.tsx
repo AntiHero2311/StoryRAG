@@ -26,6 +26,7 @@ const Modal: React.FC<ModalProps> = ({
   showCloseButton = true,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -37,13 +38,6 @@ const Modal: React.FC<ModalProps> = ({
     if (isOpen) {
       document.addEventListener('keydown', handleEscape);
       document.body.style.overflow = 'hidden';
-
-      // Focus trap
-      const focusableElements = modalRef.current?.querySelectorAll(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      const firstElement = focusableElements?.[0] as HTMLElement;
-      firstElement?.focus();
     }
 
     return () => {
@@ -51,6 +45,20 @@ const Modal: React.FC<ModalProps> = ({
       document.body.style.overflow = 'unset';
     };
   }, [isOpen, closeOnEscape, onClose]);
+
+  // Chỉ focus phần tử đầu khi modal vừa mở — tránh steal focus khi parent re-render (vd. gõ textarea).
+  useEffect(() => {
+    if (isOpen && !wasOpenRef.current) {
+      requestAnimationFrame(() => {
+        const focusableElements = modalRef.current?.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        const firstElement = focusableElements?.[0] as HTMLElement | undefined;
+        firstElement?.focus();
+      });
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
