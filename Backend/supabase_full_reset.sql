@@ -345,6 +345,7 @@ CREATE TABLE "ProjectReports" (
     "CriteriaJson"   jsonb                    NOT NULL DEFAULT '[]',
     "ContentAnalysisJson" jsonb,
     "EmotionPacingJson" jsonb,
+    "GenresSnapshot" jsonb,
     "ProjectVersion" character varying(50)    NOT NULL DEFAULT 'v1.0.0',
     "CreatedAt"      timestamp with time zone NOT NULL DEFAULT NOW(),
     "UpdatedAt"      timestamp with time zone,
@@ -571,6 +572,7 @@ CREATE TABLE "BugReports" (
     "Status"       varchar(20)  NOT NULL DEFAULT 'Open',
     "StaffNote"    varchar(1000),
     "ResolvedById" uuid,
+    "ImageUrl"     character varying(500),
     "CreatedAt"    timestamptz  NOT NULL DEFAULT NOW(),
     "UpdatedAt"    timestamptz,
     CONSTRAINT "PK_BugReports" PRIMARY KEY ("Id"),
@@ -602,6 +604,7 @@ CREATE TABLE "StaffFeedbacks" (
     "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
     "UpdatedAt" timestamp with time zone,
     "ReadAt"    timestamp with time zone,
+    "GenresSnapshot" jsonb,
     CONSTRAINT "PK_StaffFeedbacks" PRIMARY KEY ("Id"),
     CONSTRAINT "CK_StaffFeedback_Status" CHECK ("Status" IN ('Open','Resolved')),
     CONSTRAINT "FK_StaffFeedbacks_ProjectReports_ProjectReportId" FOREIGN KEY ("ProjectReportId")
@@ -840,4 +843,7 @@ INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
     ('20260527074345_AddProjectReportSnapshots', '9.0.0'),
     ('20260529000000_RemoveManualStoryBibleTables', '9.0.5'),
     ('20260529034757_AddReportStoryBible', '9.0.0'),
-    ('20260529170249_AddStaffGenres', '9.0.0');
+    ('20260529170249_AddStaffGenres', '9.0.0'),
+    ('20260604043900_AddImageUrlToBugReport', '9.0.0'),
+    ('20260606085154_AddGenresSnapshotToFeedback', '9.0.0'),
+    ('20260606090730_AddGenresSnapshotToProjectReport', '9.0.0');

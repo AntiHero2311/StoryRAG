@@ -136,6 +136,7 @@ Table ProjectReports {
   Status varchar(20)
   TotalScore decimal(5,2)
   CriteriaJson jsonb
+  GenresSnapshot jsonb
   ProjectVersion varchar(50)
   CreatedAt timestamptz
   UpdatedAt timestamptz
@@ -199,6 +200,7 @@ Table BugReports {
   Status varchar(20)
   StaffNote varchar(1000)
   ResolvedById uuid
+  ImageUrl varchar(500)
   CreatedAt timestamptz
   UpdatedAt timestamptz
 }
@@ -219,6 +221,7 @@ Table StaffFeedbacks {
   CreatedAt timestamptz
   UpdatedAt timestamptz
   ReadAt timestamptz
+  GenresSnapshot jsonb
 }
 
 Table faqs {

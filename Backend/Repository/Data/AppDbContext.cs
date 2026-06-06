@@ -349,6 +349,7 @@ namespace Repository.Data
                 entity.ToTable(t => t.HasCheckConstraint("CK_ProjectReports_Status", "\"Status\" IN ('Pending','Completed','Failed','MockData')"));
                 entity.Property(e => e.TotalScore).HasPrecision(5, 2).HasDefaultValue(0m);
                 entity.Property(e => e.CriteriaJson).HasColumnType("jsonb").HasDefaultValue("[]");
+                entity.Property(e => e.GenresSnapshot).HasColumnType("jsonb");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
 
                 entity.HasOne(r => r.Project)
