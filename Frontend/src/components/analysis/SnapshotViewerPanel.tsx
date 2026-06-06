@@ -28,7 +28,7 @@ export default function SnapshotViewerPanel({ projectId, reportId }: SnapshotVie
     // E-reader reading preference states
     const [fontSize, setFontSize] = useState<number>(18); // default 18px
     const [useSerif, setUseSerif] = useState<boolean>(true); // default serif
-    const [justifyText, setJustifyText] = useState<boolean>(true); // default justify
+    const [justifyText, setJustifyText] = useState<boolean>(false); // default left-aligned
     const [indentation, setIndentation] = useState<boolean>(true); // default paragraph indentation
     const [showSettings, setShowSettings] = useState<boolean>(false);
     const [isTocCollapsed, setIsTocCollapsed] = useState<boolean>(false);
@@ -163,6 +163,7 @@ export default function SnapshotViewerPanel({ projectId, reportId }: SnapshotVie
                     line-height: ${fontSize >= 22 ? '2.05' : '1.9'} !important;
                     font-family: ${useSerif ? 'Lora, Georgia, Cambria, "Times New Roman", Times, serif' : 'var(--font-sans), Inter, sans-serif'} !important;
                     color: rgba(228, 228, 231, 0.88) !important;
+                    font-style: normal !important;
                 }
                 
                 /* Luxury Drop Cap for the very first paragraph */

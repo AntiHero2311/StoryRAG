@@ -162,8 +162,24 @@ namespace Service.Implementations
             while (pickOrdinal.Count > maxChunks)
                 pickOrdinal.Remove(pickOrdinal.Max);
 
-            var result = new List<EvidenceChunkItemDto>(pickOrdinal.Count);
+            // Loại bỏ các chunk bị trùng lặp ngữ cảnh (nếu n và n+1 cùng chương, thì n+1 đã nằm trong phần mở rộng của n)
+            var deduplicatedOrdinals = new List<int>();
             foreach (var ord in pickOrdinal)
+            {
+                if (deduplicatedOrdinals.Count > 0)
+                {
+                    var last = deduplicatedOrdinals[^1];
+                    if (ord == last + 1 && ordered[ord].Chunk.VersionId == ordered[last].Chunk.VersionId)
+                    {
+                        // Bỏ qua ord vì toàn bộ nội dung của nó đã nằm trong phần mở rộng (Context Expansion) của last
+                        continue;
+                    }
+                }
+                deduplicatedOrdinals.Add(ord);
+            }
+
+            var result = new List<EvidenceChunkItemDto>(deduplicatedOrdinals.Count);
+            foreach (var ord in deduplicatedOrdinals)
             {
                 var (chunk, chNum, chTitle) = ordered[ord];
                 var titleDisplay = string.IsNullOrWhiteSpace(chTitle)

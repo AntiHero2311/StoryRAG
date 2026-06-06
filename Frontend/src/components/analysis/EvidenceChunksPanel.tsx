@@ -8,18 +8,23 @@ import { reportService, type EvidenceChunkItemDto } from '../../services/reportS
  */
 function stripHtml(html: string): string {
     if (!html) return html;
-    // Nếu không có tag HTML nào thì trả về nguyên
-    if (!/<[a-z][\s\S]*>/i.test(html)) return html;
-    return html
-        .replace(/<\/p>\s*/gi, '\n')
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<[^>]+>/g, '')
+    
+    // Giải mã thực thể HTML trước để khôi phục các thẻ dạng &lt;p&gt; thành <p>
+    let decoded = html
         .replace(/&nbsp;/gi, ' ')
         .replace(/&amp;/gi, '&')
         .replace(/&lt;/gi, '<')
         .replace(/&gt;/gi, '>')
         .replace(/&quot;/gi, '"')
-        .replace(/&#39;/gi, "'")
+        .replace(/&#39;/gi, "'");
+
+    // Nếu không có tag HTML nào thì trả về chuỗi đã giải mã
+    if (!/<[a-z/][\s\S]*>/i.test(decoded)) return decoded;
+
+    return decoded
+        .replace(/<\/p>\s*/gi, '\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
         .replace(/\n{3,}/g, '\n\n') // Gộp quá nhiều dòng trắng
         .trim();
 }
