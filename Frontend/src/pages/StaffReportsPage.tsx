@@ -29,6 +29,26 @@ function formatDate(iso: string) {
 // CRITICAL: vi phạm nghiêm trọng, cần xem xét ngay
 const CRITICAL_CODES = new Set(['ANTI_STATE', 'SEXUAL_CONTENT', 'PLAGIARISM_RISK']);
 
+function getWarningPriority(code: string): number {
+  const upper = code.toUpperCase();
+  const MAP: Record<string, number> = {
+    ANTI_STATE: 100,
+    SEXUAL_CONTENT: 90,
+    PLAGIARISM_RISK: 80,
+    INCONSISTENCY: 50,
+    REPETITION: 40,
+    SPELLING_FORMATTING: 30,
+    INCOMPLETE: 20,
+    OTHER: 10,
+  };
+  return MAP[upper] ?? 0;
+}
+
+function getRowMaxPriority(r: StaffPendingReportItem): number {
+  if (!r.warnings?.length) return 0;
+  return Math.max(...r.warnings.map(c => getWarningPriority(c)));
+}
+
 type WarningMeta = {
   code: string;
   severity: 'critical' | 'warning';
@@ -72,6 +92,16 @@ function getWarningMeta(code: string): WarningMeta {
       icon: '🔄',
       badgeCls: 'bg-violet-500/12 text-violet-400 border border-violet-500/25',
     },
+    SPELLING_FORMATTING: {
+      label: 'Chính tả & Định dạng',
+      icon: '✍️',
+      badgeCls: 'bg-zinc-500/12 text-zinc-400 border border-zinc-500/20',
+    },
+    OTHER: {
+      label: 'Cảnh báo khác',
+      icon: '💬',
+      badgeCls: 'bg-zinc-500/12 text-zinc-400 border border-zinc-500/20',
+    },
   };
 
   const meta = MAP[upper] ?? {
@@ -83,7 +113,7 @@ function getWarningMeta(code: string): WarningMeta {
   return { code: upper, severity: isCritical ? 'critical' : 'warning', ...meta };
 }
 
-/** Trả về mức độ nguy hiểm cao nhất của một row (để sort) */
+/** Trả về mức độ nguy hiểm cao nhất của một row (để hiển thị badge và indicator) */
 function rowSeverityRank(r: StaffPendingReportItem): number {
   if (!r.warnings?.length) return 0;
   if (r.warnings.some((c) => CRITICAL_CODES.has(c.toUpperCase()))) return 2;
@@ -142,8 +172,13 @@ export default function StaffReportsPage() {
         )
       : rows;
 
-    // Sort: critical rows trước, sau đó warning rows, rồi clean rows
-    return [...filtered].sort((a, b) => rowSeverityRank(b) - rowSeverityRank(a));
+    // Sort: highest priority warnings first, if equal then sort by date descending
+    return [...filtered].sort((a, b) => {
+      const pA = getRowMaxPriority(a);
+      const pB = getRowMaxPriority(b);
+      if (pA !== pB) return pB - pA;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
   }, [rows, searchTerm]);
 
   const criticalCount = useMemo(
@@ -251,11 +286,9 @@ export default function StaffReportsPage() {
                       const isCriticalRow = severityRank === 2;
                       const isWarningRow = severityRank === 1;
 
-                      // Sort warnings: critical first within each row
+                      // Sort warnings: highest priority warnings first within each row
                       const sortedWarnings = [...(r.warnings ?? [])].sort((a, b) => {
-                        const aC = CRITICAL_CODES.has(a.toUpperCase()) ? 1 : 0;
-                        const bC = CRITICAL_CODES.has(b.toUpperCase()) ? 1 : 0;
-                        return bC - aC;
+                        return getWarningPriority(b) - getWarningPriority(a);
                       });
 
                       return (
