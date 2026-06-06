@@ -357,11 +357,11 @@ namespace Service.Implementations
             Func<int, string?, CancellationToken, Task>? progressCallback,
             CancellationToken cancellationToken)
         {
-            var fragments = new List<string>();
-            var batchTokens = 0;
             var totalBatches = (int)Math.Ceiling(chunkEntities.Count / (double)batchChunkCount);
+            var completedBatches = 0;
+            var tokensUsedCounter = 0;
 
-            for (var b = 0; b < totalBatches; b++)
+            var tasks = Enumerable.Range(0, totalBatches).Select(async (b) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var slice = new List<string>();
@@ -375,13 +375,7 @@ namespace Service.Implementations
                 }
 
                 if (slice.Count == 0)
-                    break;
-
-                if (progressCallback != null)
-                {
-                    var prog = 14 + (int)Math.Round((b + 1d) / totalBatches * 22d);
-                    await progressCallback(Math.Clamp(prog, 14, 36), $"RAG Stage1 batch {b + 1}/{totalBatches}", cancellationToken);
-                }
+                    return (Index: b, Content: string.Empty, Tokens: 0);
 
                 var userPrompt = $$"""
                     Bạn trích xuất cấu trúc JSON cho pipeline RAG. Chỉ trả về MỘT object JSON (không markdown), các key đúng tên sau:
@@ -418,17 +412,32 @@ namespace Service.Implementations
                 };
 
                 var completion = await CompleteChatWithGeminiAsync(messages, maxTokens: 3000, temperature: 0.1f, jsonMode: true, cancellationToken: cancellationToken);
-                batchTokens += completion.Usage?.TotalTokenCount ?? 0;
+                System.Threading.Interlocked.Add(ref tokensUsedCounter, completion.Usage?.TotalTokenCount ?? 0);
+
                 var raw = NormalizeAiText(completion.Content.FirstOrDefault()?.Text ?? string.Empty);
                 var extracted = ExtractJsonPayload(raw.Trim());
-                if (!string.IsNullOrWhiteSpace(extracted))
-                    fragments.Add(extracted);
-            }
+
+                var done = System.Threading.Interlocked.Increment(ref completedBatches);
+                if (progressCallback != null)
+                {
+                    var prog = 14 + (int)Math.Round((done) / (double)totalBatches * 22d);
+                    await progressCallback(Math.Clamp(prog, 14, 36), $"RAG Stage1 batch {done}/{totalBatches}", cancellationToken);
+                }
+
+                return (Index: b, Content: extracted, Tokens: completion.Usage?.TotalTokenCount ?? 0);
+            });
+
+            var taskResults = await Task.WhenAll(tasks);
+            var fragments = taskResults
+                .OrderBy(r => r.Index)
+                .Select(r => r.Content)
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .ToList();
 
             if (fragments.Count == 0)
                 fragments.Add("""{"characters":[],"chapter_stats":[],"plot_events":[],"consistency_flags":[],"emotion":{"valence":0.0,"intensity":0.0,"dominantEmotion":"Neutral","pacingScore":50.0,"note":""}}""");
 
-            return (fragments, batchTokens);
+            return (fragments, tokensUsedCounter);
         }
 
         private static string MergeStage1FactJsonFragments(IReadOnlyList<string> fragments)

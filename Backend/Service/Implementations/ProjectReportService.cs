@@ -1454,10 +1454,13 @@ namespace Service.Implementations
         private async Task WaitForAnalyzeRateSlotAsync(CancellationToken cancellationToken)
         {
             var rpmLimit = Math.Clamp(await _sysConfig.GetAsync("gemini.analyze_rpm_limit", 120), 1, 1200);
-            await AnalyzeRpmLock.WaitAsync(cancellationToken);
-            try
+            while (true)
             {
-                while (true)
+                cancellationToken.ThrowIfCancellationRequested();
+                TimeSpan waitTime = TimeSpan.Zero;
+
+                await AnalyzeRpmLock.WaitAsync(cancellationToken);
+                try
                 {
                     var now = DateTime.UtcNow;
                     while (AnalyzeCallTimestamps.Count > 0 &&
@@ -1472,21 +1475,22 @@ namespace Service.Implementations
                         return;
                     }
 
-                    var wait = TimeSpan.FromMinutes(1) - (now - AnalyzeCallTimestamps.Peek());
-                    if (wait < TimeSpan.FromMilliseconds(200))
-                        wait = TimeSpan.FromMilliseconds(200);
+                    waitTime = TimeSpan.FromMinutes(1) - (now - AnalyzeCallTimestamps.Peek());
+                    if (waitTime < TimeSpan.FromMilliseconds(200))
+                        waitTime = TimeSpan.FromMilliseconds(200);
 
                     _logger.LogInformation(
                         "Gemini analyze RPM gate waiting {WaitSeconds:F1}s (limit {RpmLimit}/minute).",
-                        wait.TotalSeconds,
+                        waitTime.TotalSeconds,
                         rpmLimit);
-
-                    await Task.Delay(wait, cancellationToken);
                 }
-            }
-            finally
-            {
-                AnalyzeRpmLock.Release();
+                finally
+                {
+                    AnalyzeRpmLock.Release();
+                }
+
+                // Thực hiện delay ngoài lock để không chặn đứng các luồng khác
+                await Task.Delay(waitTime, cancellationToken);
             }
         }
 
