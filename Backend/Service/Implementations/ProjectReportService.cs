@@ -114,6 +114,10 @@ namespace Service.Implementations
             return await _geminiChatExecutor.CompleteAsync(messages, options, cancellationToken);
         }
 
+        /// <summary>
+        /// Thực hiện phân tích toàn bộ tác phẩm (truyện) dựa trên projectId và userId.
+        /// Quá trình này bao gồm kiểm tra quyền, gói đăng ký, tạo snapshot, chạy song song các tác vụ phân tích RAG, Story Bible và Nhịp độ/Cảm xúc.
+        /// </summary>
         public async Task<ProjectReportResponse> AnalyzeAsync(
             Guid projectId,
             Guid userId,
@@ -121,12 +125,12 @@ namespace Service.Implementations
             CancellationToken cancellationToken = default,
             Guid? analysisJobId = null)
         {
-            // 1. Verify ownership
+            // 1. Kiểm tra quyền sở hữu tác phẩm (Verify ownership)
             var project = await _context.Projects
                 .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted && p.AuthorId == userId, cancellationToken)
                 ?? throw new KeyNotFoundException("Dự án không tồn tại hoặc bạn không có quyền truy cập.");
 
-            // 2. Check subscription
+            // 2. Kiểm tra thông tin gói đăng ký của người dùng (Check subscription)
             var sub = await _context.UserSubscriptions
                 .Include(s => s.Plan)
                 .Where(s => s.UserId == userId && s.Status == "Active" && s.EndDate >= DateTime.UtcNow)
@@ -137,7 +141,7 @@ namespace Service.Implementations
             if (sub.UsedAnalysisCount >= sub.Plan.MaxAnalysisCount)
                 throw new InvalidOperationException($"Bạn đã dùng hết {sub.Plan.MaxAnalysisCount} lần phân tích trong kỳ này.");
 
-            // 3. Decrypt user DEK
+            // 3. Giải mã khóa mã hóa dữ liệu (DEK) của người dùng để đọc nội dung (Decrypt user DEK)
             var user = await _context.Users
                 .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken)
                 ?? throw new KeyNotFoundException("Không tìm thấy người dùng.");
@@ -145,7 +149,7 @@ namespace Service.Implementations
             var rawDek = EncryptionHelper.DecryptWithMasterKey(user!.DataEncryptionKey!, masterKey);
             var projectTitle = EncryptionHelper.DecryptWithMasterKey(project.Title, rawDek);
 
-            // 4. Fetch chapters stats + all embedded chunks
+            // 4. Lấy danh sách chương và tính toán tổng số chữ (Fetch chapters stats)
             var chapters = await _context.Chapters
                 .Where(c => c.ProjectId == projectId && !c.IsDeleted)
                 .OrderBy(c => c.ChapterNumber)
@@ -154,11 +158,13 @@ namespace Service.Implementations
             var chapterCount = chapters.Count;
             var totalWords = chapters.Sum(c => c.WordCount);
 
+            // Ràng buộc tối thiểu 1,000 từ để AI có đủ ngữ cảnh đánh giá
             if (totalWords < 1000)
             {
                 throw new InvalidOperationException($"Tác phẩm cần đạt tối thiểu 1.000 chữ để có thể phân tích (hiện tại có {totalWords:N0} chữ). Hãy sáng tác thêm để AI có đủ dữ liệu đánh giá nhé!");
             }
 
+            // Tạo bản chụp snapshot cố định của truyện tại thời điểm phân tích
             var snapshot = await EnsureProjectAnalysisSnapshotAsync(
                 projectId,
                 userId,
@@ -166,6 +172,7 @@ namespace Service.Implementations
                 progressCallback,
                 cancellationToken);
 
+            // Tải các đoạn văn bản (chunks) đã được embed trong cơ sở dữ liệu
             var chunksRaw = await _context.ChapterChunks
                 .Include(c => c.Version)
                 .ThenInclude(v => v.Chapter)
@@ -175,6 +182,7 @@ namespace Service.Implementations
             if (chunksRaw.Count == 0)
                 throw new InvalidOperationException("Dự án chưa có nội dung được nhúng (embed). Vui lòng chunk và embed các chương trong Workspace trước khi phân tích.");
 
+            // Sắp xếp các đoạn chunks theo thứ tự dòng thời gian của chương
             var orderedTuples = OrderChunksByChapter(chapters, chunksRaw);
             var chunks = orderedTuples.Select(t => t.Chunk).ToList();
             var decryptedChunks = chunks
@@ -188,13 +196,13 @@ namespace Service.Implementations
                 ))
                 .ToList();
 
-            // 5. Fetch Story Bible context (genres, summary, characters, worldbuilding)
+            // 5. Tải dữ liệu cẩm nang tác phẩm hiện hữu (Story Bible context)
             var projectFull = await _context.Projects
                 .Include(p => p.ProjectGenres).ThenInclude(pg => pg.Genre)
                 .FirstOrDefaultAsync(p => p.Id == projectId, cancellationToken);
 
             var genres = projectFull?.ProjectGenres.Select(pg => pg.Genre.Name).ToList() ?? new();
-            // Snapshot genres as structured JSON for feedback display
+            // Lưu giữ snapshot thể loại dạng JSON
             var genresSnapshotJson = projectFull?.ProjectGenres.Count > 0
                 ? System.Text.Json.JsonSerializer.Serialize(
                     projectFull.ProjectGenres.Select(pg => new
@@ -210,31 +218,21 @@ namespace Service.Implementations
                 ? EncryptionHelper.DecryptWithMasterKey(project.Summary, rawDek)
                 : null;
 
+            // Truy vấn báo cáo hoàn thành gần đây nhất và eager-load dữ liệu cẩm nang liên quan bằng Split Query để tối ưu hiệu năng
             var latestReport = await _context.ProjectReports
+                .Include(r => r.CharacterEntries)
+                .Include(r => r.WorldbuildingEntries)
+                .Include(r => r.ThemeEntries)
+                .Include(r => r.TimelineEvents)
                 .Where(r => r.ProjectId == projectId && r.Status == "Completed")
                 .OrderByDescending(r => r.CreatedAt)
+                .AsSplitQuery()
                 .FirstOrDefaultAsync(cancellationToken);
 
-            List<ReportCharacterEntry> characterEntries = new();
-            List<ReportWorldbuildingEntry> worldEntries = new();
-            List<ReportThemeEntry> themeEntries = new();
-            List<ReportTimelineEvent> timelineEvents = new();
-
-            if (latestReport != null)
-            {
-                characterEntries = await _context.ReportCharacterEntries
-                    .Where(c => c.ProjectReportId == latestReport.Id)
-                    .ToListAsync(cancellationToken);
-                worldEntries = await _context.ReportWorldbuildingEntries
-                    .Where(w => w.ProjectReportId == latestReport.Id)
-                    .ToListAsync(cancellationToken);
-                themeEntries = await _context.ReportThemeEntries
-                    .Where(t => t.ProjectReportId == latestReport.Id)
-                    .ToListAsync(cancellationToken);
-                timelineEvents = await _context.ReportTimelineEvents
-                    .Where(t => t.ProjectReportId == latestReport.Id)
-                    .ToListAsync(cancellationToken);
-            }
+            var characterEntries = latestReport?.CharacterEntries.ToList() ?? new List<ReportCharacterEntry>();
+            var worldEntries = latestReport?.WorldbuildingEntries.ToList() ?? new List<ReportWorldbuildingEntry>();
+            var themeEntries = latestReport?.ThemeEntries.ToList() ?? new List<ReportThemeEntry>();
+            var timelineEvents = latestReport?.TimelineEvents.ToList() ?? new List<ReportTimelineEvent>();
 
             var bibleBuilder = new System.Text.StringBuilder();
             if (genres.Count > 0)
@@ -346,9 +344,49 @@ namespace Service.Implementations
                 }
                 var fullManuscriptText = sbManuscript.ToString().Trim();
 
-                // Load character names sequentially before concurrent execution to avoid EF DbContext threading conflicts
+                // Tải danh sách tên nhân vật tuần tự trước khi chạy song song để tránh xung đột luồng trên EF DbContext
                 var characterNames = await NarrativeAnalyticsHelper.LoadCharacterNamesAsync(_context, projectId, rawDek);
 
+                // 1. Chạy Giai đoạn 1 (Stage 1) trích xuất dữ liệu thô và thông tin nhịp độ/cảm xúc theo từng cụm chương
+                var stage1BatchChunks = Math.Clamp(await _sysConfig.GetAsync("rag.stage1_batch_chunks", 8), 1, 20);
+                var stage1MaxChars   = Math.Clamp(await _sysConfig.GetAsync("rag.stage1_max_chunk_chars", 900), 200, 4000);
+
+                if (progressCallback != null)
+                    await progressCallback(12, "RAG: trích xuất facts & cảm xúc (Stage 1)", cancellationToken);
+
+                var (stage1Fragments, stage1Tokens) = await RunStage1ExtractBatchesAsync(
+                    projectTitle,
+                    chunks,
+                    decryptedChunks,
+                    stage1BatchChunks,
+                    stage1MaxChars,
+                    progressCallback,
+                    cancellationToken);
+
+                // 2. Phân tích cú pháp dữ liệu cảm xúc và nhịp điệu từ kết quả Stage 1
+                var stage1Emotions = new List<Stage1EmotionDto>();
+                var jsonOpts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                foreach (var frag in stage1Fragments)
+                {
+                    Stage1EmotionDto? emoDto = null;
+                    try
+                    {
+                        using (var doc = JsonDocument.Parse(frag))
+                        {
+                            if (doc.RootElement.TryGetProperty("emotion", out var emoProp))
+                            {
+                                emoDto = JsonSerializer.Deserialize<Stage1EmotionDto>(emoProp.GetRawText(), jsonOpts);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Lỗi parse Stage 1 emotion JSON fragment.");
+                    }
+                    stage1Emotions.Add(emoDto ?? new Stage1EmotionDto());
+                }
+
+                // 3. Kích hoạt đồng thời 3 tác vụ chính chạy song song: Chấm điểm Rubric, Trích xuất cẩm nang đầy đủ, Phân tích biểu đồ nhịp độ/cảm xúc
                 var rubricTask = EvaluateWithRagPipelineAsync(
                     projectTitle,
                     chunks,
@@ -359,6 +397,8 @@ namespace Service.Implementations
                     aiInstructions,
                     progressCallback,
                     analysisRunId,
+                    stage1Fragments,
+                    stage1Tokens,
                     cancellationToken);
 
                 var contentTask = ExtractStoryBibleAsync(
@@ -373,6 +413,8 @@ namespace Service.Implementations
                     projectTitle,
                     decryptedChunksWithMeta,
                     characterNames,
+                    stage1Emotions,
+                    stage1BatchChunks,
                     progressCallback,
                     cancellationToken);
 
@@ -449,10 +491,10 @@ namespace Service.Implementations
             };
             _context.ProjectReports.Add(report);
 
-            // Save Story Bible into report-specific tables
+            // Lưu trữ dữ liệu cẩm nang (Story Bible) vào các bảng chi tiết của báo cáo
             if (contentResObj != null)
             {
-                // 1. Save Characters
+                // 1. Lưu danh sách Nhân vật
                 if (contentResObj.Characters != null)
                 {
                     foreach (var character in contentResObj.Characters)
@@ -488,7 +530,7 @@ namespace Service.Implementations
                     }
                 }
 
-                // 2. Save World Settings
+                // 2. Lưu thiết lập Thế giới quan
                 if (contentResObj.WorldSettings != null)
                 {
                     foreach (var worldSetting in contentResObj.WorldSettings)
@@ -519,7 +561,7 @@ namespace Service.Implementations
                     }
                 }
 
-                // 3. Save Themes
+                // 3. Lưu danh sách Chủ đề
                 if (contentResObj.Themes != null)
                 {
                     foreach (var theme in contentResObj.Themes)
@@ -542,7 +584,7 @@ namespace Service.Implementations
                     }
                 }
 
-                // 4. Save Timeline Events
+                // 4. Lưu sự kiện Dòng thời gian
                 if (contentResObj.TimelineEvents != null)
                 {
                     foreach (var timelineEvent in contentResObj.TimelineEvents)
@@ -579,7 +621,7 @@ namespace Service.Implementations
                 }
             }
 
-            // Save Snapshot Data
+            // Lưu dữ liệu bản chụp (Snapshot) cố định của từng chương truyện
             foreach (var chapter in chapters)
             {
                 var state = snapshot.Chapters.FirstOrDefault(c => c.ChapterNumber == chapter.ChapterNumber);

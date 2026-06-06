@@ -23,14 +23,14 @@ namespace Service.Implementations
                 string? aiInstructions,
                 Func<int, string?, CancellationToken, Task>? progressCallback,
                 Guid _analysisRunId,
+                List<string> stage1Fragments,
+                int stage1Tokens,
                 CancellationToken cancellationToken)
         {
             if (chunkEntities.Count != decryptedChunks.Count)
                 throw new InvalidOperationException("Chunk entities và plaintext không khớp số lượng.");
 
             var topK             = Math.Clamp(await _sysConfig.GetAsync("rag.top_k_report", 15), 1, 64);
-            var stage1BatchChunks = Math.Clamp(await _sysConfig.GetAsync("rag.stage1_batch_chunks", 8), 1, 20);
-            var stage1MaxChars   = Math.Clamp(await _sysConfig.GetAsync("rag.stage1_max_chunk_chars", 900), 200, 4000);
             var factsMaxChars    = Math.Clamp(await _sysConfig.GetAsync("rag.facts_json_max_chars", 12000), 2000, 50000);
             var bibleMaxChars    = Math.Clamp(await _sysConfig.GetAsync("rag.bible_max_chars", 4000), 500, 20000);
             var embedTokenEstimate = Math.Clamp(await _sysConfig.GetAsync("rag.estimated_tokens_per_query_embed", 200), 0, 2000);
@@ -40,18 +40,6 @@ namespace Service.Implementations
             var ordinalByChunkId = new Dictionary<Guid, int>(chunkEntities.Count);
             for (var i = 0; i < chunkEntities.Count; i++)
                 ordinalByChunkId[chunkEntities[i].Id] = i;
-
-            if (progressCallback != null)
-                await progressCallback(12, "RAG: trích xuất facts (Stage 1)", cancellationToken);
-
-            var (stage1Fragments, stage1Tokens) = await RunStage1ExtractBatchesAsync(
-                projectTitle,
-                chunkEntities,
-                decryptedChunks,
-                stage1BatchChunks,
-                stage1MaxChars,
-                progressCallback,
-                cancellationToken);
 
             var factsPayloadJson = MergeStage1FactJsonFragments(stage1Fragments);
             var factsForPrompt = TruncateForPrompt(factsPayloadJson, factsMaxChars);
@@ -394,13 +382,20 @@ namespace Service.Implementations
 
                 var userPrompt = $$"""
                     Bạn trích xuất cấu trúc JSON cho pipeline RAG. Chỉ trả về MỘT object JSON (không markdown), các key đúng tên sau:
-                    "characters","chapter_stats","plot_events","consistency_flags" — mỗi key là mảng (có thể rỗng).
+                    "characters","chapter_stats","plot_events","consistency_flags","emotion" — các key cũ là mảng (có thể rỗng), riêng "emotion" là một đối tượng JSON biểu diễn nhịp độ và cảm xúc của đoạn truyện.
 
-                    Quy ước phần tử gợi ý (tự do thêm field phụ):
+                    Quy ước phần tử gợi ý:
                     - characters: { "name", "role?", "notes?" }
                     - chapter_stats: { "chapterNumber?", "excerptTheme?", "wordHint?" }
                     - plot_events: { "order", "summary", "chapterHint?" }
                     - consistency_flags: { "code", "detail", "severity?" }
+                    - emotion: { "valence", "intensity", "dominantEmotion", "pacingScore", "note" }
+                      Trong đó:
+                      + valence: số thực từ -1.0 (cực kỳ tiêu cực/u buồn/lo sợ) đến 1.0 (cực kỳ tích cực/vui vẻ).
+                      + intensity: số thực từ 0.0 đến 1.0 biểu thị mức độ mạnh mẽ của cảm xúc.
+                      + dominantEmotion: một trong các từ tiếng Anh chính xác: "Joy", "Sadness", "Anger", "Fear", "Neutral".
+                      + pacingScore: số thực từ 0.0 (rất chậm, suy tư, miêu tả cảnh) đến 100.0 (rất nhanh, dồn dập, hành động kịch tính).
+                      + note: ghi chú ngắn gọn bằng tiếng Việt lý giải sắc thái nhịp độ và cảm xúc của đoạn này.
 
                     Tác phẩm: "{{projectTitle}}".
                     Đây là batch {{b + 1}}/{{totalBatches}} (các đoạn có thể chồng lấp với batch khác — gộp ý, tránh trùng lặp vô ích).
@@ -411,7 +406,11 @@ namespace Service.Implementations
 
                 var messages = new List<ChatMessage>
                 {
-                    ChatMessage.CreateSystemMessage("Chỉ trả về JSON. Tiếng Việt cho string. Không bịa ngoài nội dung batch."),
+                    ChatMessage.CreateSystemMessage(
+                        "Chỉ trả về JSON. Tiếng Việt cho string. Không bịa ngoài nội dung batch. " +
+                        "Bắt buộc có đầy đủ các key: characters, chapter_stats, plot_events, consistency_flags, emotion. " +
+                        "Key emotion phải là một JSON object có cấu trúc chính xác: " +
+                        "{\"valence\": 0.0, \"intensity\": 0.0, \"dominantEmotion\": \"Neutral\", \"pacingScore\": 50.0, \"note\": \"\"}"),
                     ChatMessage.CreateUserMessage(userPrompt),
                 };
 
@@ -424,7 +423,7 @@ namespace Service.Implementations
             }
 
             if (fragments.Count == 0)
-                fragments.Add("""{"characters":[],"chapter_stats":[],"plot_events":[],"consistency_flags":[]}""");
+                fragments.Add("""{"characters":[],"chapter_stats":[],"plot_events":[],"consistency_flags":[],"emotion":{"valence":0.0,"intensity":0.0,"dominantEmotion":"Neutral","pacingScore":50.0,"note":""}}""");
 
             return (fragments, batchTokens);
         }

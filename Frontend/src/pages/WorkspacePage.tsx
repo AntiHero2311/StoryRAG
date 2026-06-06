@@ -1371,40 +1371,42 @@ export default function WorkspacePage() {
                                 <div className="flex items-center gap-0.5 ml-1">
                                     <button
                                         onClick={() => { const sizes = AVAILABLE_SIZES; const i = sizes.indexOf(editorSettings.editorFontSize); if (i > 0) setFontSize(sizes[i - 1]); }}
-                                        className="w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg)] transition-colors text-xs font-bold"
+                                        className="w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg)] transition-colors text-sm font-bold"
                                         title="Giảm cỡ chữ">
-                                        A
+                                        -
                                     </button>
                                     <span className="text-[var(--text-secondary)] text-xs w-6 text-center tabular-nums">{editorSettings.editorFontSize}</span>
                                     <button
                                         onClick={() => { const sizes = AVAILABLE_SIZES; const i = sizes.indexOf(editorSettings.editorFontSize); if (i < sizes.length - 1) setFontSize(sizes[i + 1]); }}
                                         className="w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg)] transition-colors text-sm font-bold"
                                         title="Tăng cỡ chữ">
-                                        A
+                                        +
                                     </button>
                                 </div>
                                 <div className="flex-1" />
                                 <div className="relative group inline-flex items-center">
-                                    {wordCount >= 2000 && (
+                                    {wordCount >= 5000 && (
                                         <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-52 p-2 bg-slate-900 text-slate-100 text-[10px] font-medium leading-normal rounded-lg shadow-lg border border-slate-700/50 backdrop-blur-md z-[1600] text-center pointer-events-none">
-                                            Một chương nên có khoảng 2000 chữ, bạn nên chia chương ra.
+                                            Một chương nên có khoảng 5000 chữ, bạn nên chia chương ra.
                                             <div className="absolute top-full right-4 border-4 border-transparent border-t-slate-900" />
                                         </div>
                                     )}
                                     <span className={`text-xs mr-2 inline-flex items-center gap-1 transition-all ${
-                                        wordCount >= 2000 
+                                        wordCount >= 5000 
                                             ? 'text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 hover:bg-amber-500/20 cursor-help font-semibold animate-pulse' 
                                             : 'text-[var(--text-secondary)]'
                                     }`}>
-                                        {wordCount >= 2000 && <AlertCircle className="w-3 h-3 text-amber-400" />}
+                                        {wordCount >= 5000 && <AlertCircle className="w-3 h-3 text-amber-400" />}
                                         {wordCount} từ
                                     </span>
                                 </div>
                                 {projectId && (
                                     <>
-                                        <span className="hidden xl:inline text-[10px] text-[var(--text-secondary)]">
-                                            {isImporting ? 'Đang import manuscript...' : 'Import .txt/.docx/.pdf'}
-                                        </span>
+                                        {isImporting && (
+                                            <span className="hidden xl:inline text-[10px] text-[var(--text-secondary)] mr-1">
+                                                Đang import manuscript...
+                                            </span>
+                                        )}
                                         <button
                                             onClick={() => importFileRef.current?.click()}
                                             disabled={isImporting}
@@ -1500,18 +1502,18 @@ export default function WorkspacePage() {
                                                 </button>
                                                 <span className="text-[11px] text-[var(--text-secondary)] opacity-50">•</span>
                                                 <div className="relative group inline-flex items-center">
-                                                    {wordCount >= 2000 && (
+                                                    {wordCount >= 5000 && (
                                                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-52 p-2 bg-slate-900 text-slate-100 text-[10px] font-medium leading-normal rounded-lg shadow-lg border border-slate-700/50 backdrop-blur-md z-[1600] text-center pointer-events-none">
-                                                            Một chương nên có khoảng 2000 chữ, bạn nên chia chương ra.
+                                                            Một chương nên có khoảng 5000 chữ, bạn nên chia chương ra.
                                                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
                                                         </div>
                                                     )}
                                                     <span className={`text-[11px] font-medium inline-flex items-center gap-1 transition-all ${
-                                                        wordCount >= 2000 
+                                                        wordCount >= 5000 
                                                             ? 'text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 hover:bg-amber-500/20 cursor-help font-semibold animate-pulse' 
                                                             : 'text-[var(--text-secondary)]'
                                                     }`}>
-                                                        {wordCount >= 2000 ? (
+                                                        {wordCount >= 5000 ? (
                                                             <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
                                                         ) : (
                                                             <AlignLeft className="w-3 h-3" />

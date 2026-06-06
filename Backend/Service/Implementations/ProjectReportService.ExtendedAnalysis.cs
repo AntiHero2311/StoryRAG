@@ -194,6 +194,8 @@ QUY TẮC QUAN TRỌNG:
             string projectTitle,
             List<(string Content, int ChapterNumber, string? ChapterTitle)> decryptedChunks,
             List<string> characterNames,
+            List<Stage1EmotionDto> stage1Emotions,
+            int stage1BatchChunks,
             Func<int, string?, CancellationToken, Task>? progressCallback,
             CancellationToken cancellationToken)
         {
@@ -207,29 +209,59 @@ QUY TẮC QUAN TRỌNG:
                 return (new EmotionPacingResult(), 0);
             }
 
-            // 1. Local segment splitting (using TextSegment shared DTO)
+            // 1. Local segment splitting and Stage 1 emotion/pacing mapping
             var segments = new List<TextSegment>();
+            var pacingPoints = new List<PacingPoint>();
+            var emotionPoints = new List<EmotionPoint>();
             var segmentIndex = 0;
 
-            foreach (var item in decryptedChunks)
+            for (var chunkIdx = 0; chunkIdx < decryptedChunks.Count; chunkIdx++)
             {
+                var item = decryptedChunks[chunkIdx];
                 var chunk = item.Content;
                 var chNumber = item.ChapterNumber;
                 if (string.IsNullOrWhiteSpace(chunk)) continue;
+
+                var batchIdx = chunkIdx / stage1BatchChunks;
+                // Get Stage 1 emotion data for this batch (fallback if out of range or parsing failed)
+                var stage1Emo = (batchIdx >= 0 && batchIdx < stage1Emotions.Count)
+                    ? stage1Emotions[batchIdx]
+                    : new Stage1EmotionDto();
 
                 foreach (var segmentText in SplitTextIntoSegmentsLocal(chunk, 220))
                 {
                     var wordCount = NarrativeAnalyticsHelper.CountWords(segmentText);
                     if (wordCount <= 0) continue;
 
-                    segments.Add(new TextSegment
+                    var segment = new TextSegment
                     {
-                        SegmentIndex = segmentIndex++,
+                        SegmentIndex = segmentIndex,
                         ChapterNumber = chNumber,
                         Text = segmentText,
                         WordCount = wordCount,
                         Tokens = NarrativeAnalyticsHelper.Tokenize(segmentText)
+                    };
+                    segments.Add(segment);
+
+                    // Build pacing point using Stage 1 pacing score
+                    pacingPoints.Add(new PacingPoint
+                    {
+                        SegmentIndex = segmentIndex,
+                        ChapterNumber = chNumber,
+                        Score = stage1Emo.PacingScore,
                     });
+
+                    // Build emotion point using Stage 1 valence, intensity, dominant emotion
+                    emotionPoints.Add(new EmotionPoint
+                    {
+                        SegmentIndex = segmentIndex,
+                        ChapterNumber = chNumber,
+                        Valence = stage1Emo.Valence,
+                        Intensity = stage1Emo.Intensity * 100.0, // Scale to 0-100 just like the programmatic version
+                        DominantEmotion = string.IsNullOrWhiteSpace(stage1Emo.DominantEmotion) ? "Neutral" : stage1Emo.DominantEmotion,
+                    });
+
+                    segmentIndex++;
                 }
             }
 
@@ -237,10 +269,6 @@ QUY TẮC QUAN TRỌNG:
             {
                 return (new EmotionPacingResult(), 0);
             }
-
-            // 2. Programmatic score calculation using NarrativeAnalyticsHelper
-            var pacingPoints = NarrativeAnalyticsHelper.BuildPacingSeries(segments);
-            var emotionPoints = NarrativeAnalyticsHelper.BuildEmotionSeries(segments);
 
             // Load character analytics and presence
             var characterPresenceMap = NarrativeAnalyticsHelper.BuildCharacterPresenceMap(segments, characterNames);
