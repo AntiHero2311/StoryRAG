@@ -979,7 +979,7 @@ namespace Service.Implementations
                 2. CHỐNG ẢO GIÁC 100% (ZERO HALLUCINATION): TUYỆT ĐỐI KHÔNG SỬ DỤNG KIẾN THỨC BÊN NGOÀI. Nếu truyện mượn tên nhân vật nổi tiếng (vd: Tiểu Long Nữ), bạn CẤM tự suy diễn bối cảnh gốc của tác phẩm đó. Chỉ được phép phân tích dựa trên nội dung tác giả cung cấp trong "Nội dung tác phẩm".
                 2. TUỲ BIẾN THEO THỂ LOẠI: Tiêu chuẩn đánh giá phải dựa vào Thể loại của truyện (nếu có trong Tham chiếu nền). Ví dụ: Tiên hiệp ưu tiên tính logic của hệ thống tu luyện & thế giới quan; Ngôn tình ưu tiên chiều sâu cảm xúc & chemistry; Trinh thám ưu tiên tính logic của vụ án.
                 3. feedback: 3-4 câu nhận xét CỤ THỂ, phân tích sâu về kỹ thuật viết.
-                4. evidence: TRÍCH DẪN NGUYÊN VĂN 1-3 câu quan trọng nhất từ nội dung truyện làm bằng chứng cho nhận xét. PHẢI CÓ TRÍCH DẪN THỰC TẾ, không được tự bịa.
+                4. evidence: TRÍCH DẪN NGUYÊN VĂN ít nhất 2 đến 3 câu quan trọng nhất từ nội dung truyện làm bằng chứng cho nhận xét (phân tách rõ ràng giữa các dẫn chứng bằng dấu ba chấm '...' hoặc dấu xuống dòng). PHẢI CÓ TRÍCH DẪN THỰC TẾ, không được tự bịa.
                 5. bibleComparison: SO SÁNH trung lập với cẩm nang (nếu có). Nêu rõ điểm nào khớp, điểm nào khác biệt/thay đổi. KHÔNG trừ điểm nếu có sự khác biệt so với kế hoạch ban đầu. Nếu không có cẩm nang: để null.
                 6. errors: BẮT BUỘC liệt kê 3-5 lỗi/vấn đề cụ thể cho mỗi mục — nêu rõ vấn đề + ví dụ câu văn mắc lỗi.
                 7. suggestions: BẮT BUỘC liệt kê 3-5 gợi ý/cách sửa cụ thể cho mỗi mục — nêu hướng xử lý chi tiết cho từng lỗi đã nêu.

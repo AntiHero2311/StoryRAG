@@ -150,12 +150,15 @@ namespace Service.Implementations
                         ĐOẠN TRUYỆN TRÍCH (Đã được sắp xếp theo đúng thứ tự thời gian của truyện để đảm bảo tính liên kết cốt truyện; chunk_ord là id nguyên số dùng để điền evidence_chunk_ids):
                         {{string.Join("\n\n---\n\n", contextParts)}}
 
+                        YÊU CẦU VỀ DẪN CHỨNG (EVIDENCE) - QUAN TRỌNG:
+                        Bạn PHẢI cung cấp đầy đủ và nhiều dẫn chứng thực tế hơn để chứng minh cho nhận xét của mình. Hãy trích xuất ít nhất 2 đến 3 câu văn/đoạn văn tiêu biểu trực tiếp từ các đoạn truyện trích làm dẫn chứng cụ thể. Các dẫn chứng này phải được viết trong trường 'evidence', phân tách rõ ràng với nhau bằng dấu ba chấm '...' hoặc dấu xuống dòng.
+
                         QUY TẮC PHÂN BIỆT TRÙNG LẶP KỸ THUẬT VS LẶP CỐT TRUYỆN THỰC TẾ:
                         1. LẶP KỸ THUẬT (OVERLAP): Giữa các đoạn trích kề nhau của cùng một chương (ví dụ cùng thuộc 'Chương 2') có thể có sự trùng lặp nhẹ về câu chữ ở ranh giới biên (đây là kỹ thuật overlap để không mất context khi cắt nhỏ văn bản). Bạn PHẢI bỏ qua sự lặp lại kỹ thuật này, tuyệt đối không được đánh giá là tác giả viết lặp ý hay lỗi văn phong.
                         2. LẶP CHƯƠNG THỰC TẾ (DUPLICATE): Nếu bạn phát hiện hai hoặc nhiều đoạn trích thuộc các chương KHÁC NHAU (ví dụ một đoạn thuộc 'Chương 2' và một đoạn thuộc 'Chương 3') có nội dung giống hệt nhau hoặc gần như giống hệt nhau, đây là lỗi trùng lặp nội dung thực tế do tác giả (ví dụ tác giả copy nhầm chương hoặc viết lặp chương). Bạn PHẢI chỉ ra lỗi nghiêm trọng này trong phần 'errors' để tác giả biết và xử lý.
 
                         OUTPUT: Chỉ trả về JSON object duy nhất, bắt đầu bằng '{', kết thúc bằng '}', không có bất kỳ văn bản nào trước hoặc sau:
-                        {"score":0.0,"feedback":"3-5 câu nhận xét tiếng Việt","evidence":"trích dẫn ngắn từ văn bản","errors":["lỗi 1","lỗi 2","lỗi 3"],"suggestions":["gợi ý 1","gợi ý 2","gợi ý 3"],"bibleComparison":null,"evidence_chunk_ids":[1,2]}
+                        {"score":0.0,"feedback":"3-5 câu nhận xét tiếng Việt","evidence":"câu văn dẫn chứng 1... câu văn dẫn chứng 2... câu văn dẫn chứng 3","errors":["lỗi 1","lỗi 2","lỗi 3"],"suggestions":["gợi ý 1","gợi ý 2","gợi ý 3"],"bibleComparison":null,"evidence_chunk_ids":[1,2]}
 
                         Lưu ý: bibleComparison là string nếu có cẩm nang, hoặc null (không phải chú thích). evidence_chunk_ids phải là tập con các chunk_ord đã liệt kê; không bịa trích dẫn ngoài đoạn trích.
                         """;
@@ -280,11 +283,11 @@ namespace Service.Implementations
                                 }
                             }
 
-                            // Lấy tối đa 2 chunk khớp tốt nhất (có chứa nhiều câu trong dẫn chứng nhất)
+                            // Lấy tối đa 3 chunk khớp tốt nhất (có chứa nhiều câu trong dẫn chứng nhất)
                             var bestMatches = chunkMatches
                                 .OrderByDescending(cm => cm.MatchCount)
                                 .Select(cm => cm.Index)
-                                .Take(2)
+                                .Take(3)
                                 .ToList();
 
                             matchedByQuote.AddRange(bestMatches);
@@ -296,7 +299,7 @@ namespace Service.Implementations
                     {
                         evidenceIds = matchedByQuote;
                     }
-                    else if (evidenceIds.Count == 0 || evidenceIds.Count > 2)
+                    else if (evidenceIds.Count == 0 || evidenceIds.Count > 3)
                     {
                         // Fallback: Chỉ lấy đúng 1 phân đoạn tốt nhất từ RAG để tránh bôi đen/hiển thị tràn lan cả chương
                         if (ranked.Count > 0)
