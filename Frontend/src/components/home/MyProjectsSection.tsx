@@ -458,19 +458,6 @@ function ProjectCard({ project, onEdit, onDelete, onInfo, onClick }: {
                             </h3>
                         </div>
 
-                        {project.genres && project.genres.length > 0 && (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', position: 'relative', zIndex: 30, marginBottom: '8px', justifyContent: 'center' }}>
-                                {project.genres.slice(0, 2).map(g => (
-                                    <span key={g.id} style={{
-                                        fontSize: '8px', fontWeight: '700', letterSpacing: '0.06em', textTransform: 'uppercase',
-                                        color: g.color, background: g.color + '22', border: `1px solid ${g.color}55`, borderRadius: '4px', padding: '2px 5px',
-                                    }}>
-                                        {g.name}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.12)', paddingTop: '10px', position: 'relative', zIndex: 30, marginTop: '8px' }}>
                             <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.38)', fontWeight: '500', letterSpacing: '0.04em' }}>{createdDate}</span>
                             <div className="relative" onClick={e => e.stopPropagation()}>
