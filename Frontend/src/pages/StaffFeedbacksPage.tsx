@@ -346,13 +346,18 @@ export default function StaffFeedbacksPage() {
                                                                 Đã trả lời
                                                             </span>
                                                         )}
+                                                        {item.projectReportId && (
+                                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
+                                                                <BarChart2 className="w-3 h-3" /> Có báo cáo phân tích
+                                                            </span>
+                                                        )}
                                                         {item.userRespondedAt && (
                                                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
                                                                 {item.userReaction === 'Like' ? <ThumbsUp className="w-3 h-3" /> : <ThumbsDown className="w-3 h-3" />}
                                                                 Tác giả phản hồi lại
                                                             </span>
                                                         )}
-                                                        {item.staffGenres && item.staffGenres.slice(0, 2).map(g => (
+                                                        {item.projectGenres && item.projectGenres.slice(0, 2).map(g => (
                                                             <span
                                                                 key={g.id}
                                                                 className="px-1.5 py-0.5 rounded text-[9px] font-bold"
@@ -526,9 +531,9 @@ export default function StaffFeedbacksPage() {
                                     </div>
                                 )}
 
-                                {detailItem.staffGenres && detailItem.staffGenres.length > 0 && (
+                                {detailItem.projectGenres && detailItem.projectGenres.length > 0 && (
                                     <div className="flex flex-wrap gap-1.5">
-                                        {detailItem.staffGenres.map(g => (
+                                        {detailItem.projectGenres.map(g => (
                                             <span
                                                 key={g.id}
                                                 className="px-2 py-0.5 rounded-full text-[10px] font-bold"

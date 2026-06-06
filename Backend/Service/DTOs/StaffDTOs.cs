@@ -91,6 +91,9 @@ namespace Service.DTOs
 
         /// <summary>Thể loại chuyên môn của staff gửi feedback này.</summary>
         public List<GenreResponse> StaffGenres { get; set; } = new();
+
+        /// <summary>Thể loại của truyện được feedback.</summary>
+        public List<GenreResponse> ProjectGenres { get; set; } = new();
     }
 
     public class FeedbackResponseRequest : IValidatableObject

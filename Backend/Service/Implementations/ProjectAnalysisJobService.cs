@@ -42,6 +42,7 @@ namespace Service.Implementations
         private readonly ILogger<ProjectAnalysisJobService> _logger;
         private readonly IConfiguration _config;
         private readonly SemaphoreSlim _progressLock = new(1, 1);
+        private bool _isJobFinished = false;
 
         public ProjectAnalysisJobService(
             AppDbContext context,
@@ -394,6 +395,9 @@ namespace Service.Implementations
                         await _progressLock.WaitAsync(token);
                         try
                         {
+                            if (_isJobFinished)
+                                return;
+
                             await ThrowIfJobCancelledAsync(jobId, token);
 
                             var safeProgress = Math.Clamp(progress, 20, 85);
@@ -437,6 +441,16 @@ namespace Service.Implementations
                 // luôn đánh dấu job Completed để không để report mồ côi.
                 // Dùng CancellationToken.None để đảm bảo save thành công.
 
+                await _progressLock.WaitAsync(CancellationToken.None);
+                try
+                {
+                    _isJobFinished = true;
+                }
+                finally
+                {
+                    _progressLock.Release();
+                }
+
                 job.Stage = StageSaving;
                 job.Progress = 90;
                 job.UpdatedAt = DateTime.UtcNow;
@@ -463,6 +477,16 @@ namespace Service.Implementations
             }
             catch (OperationCanceledException)
             {
+                await _progressLock.WaitAsync(CancellationToken.None);
+                try
+                {
+                    _isJobFinished = true;
+                }
+                finally
+                {
+                    _progressLock.Release();
+                }
+
                 // Nếu AnalyzeAsync đã hoàn thành (report đã lưu DB) trước khi cancel:
                 // → Rescue: link report vào job, đánh Completed, không để mồ côi.
                 var orphanReport = await FindOrphanReportAsync(job.ProjectId, job.UserId, jobId);
@@ -500,6 +524,16 @@ namespace Service.Implementations
             }
             catch (Exception ex)
             {
+                await _progressLock.WaitAsync(CancellationToken.None);
+                try
+                {
+                    _isJobFinished = true;
+                }
+                finally
+                {
+                    _progressLock.Release();
+                }
+
                 var latestStatus = await GetCurrentJobStatusAsync(jobId, CancellationToken.None);
                 if (latestStatus == StatusCancelled)
                     return;

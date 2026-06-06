@@ -20,6 +20,7 @@ export type StaffFeedbackResponse = {
   updatedAt?: string | null;
   readAt?: string | null;
   staffGenres?: { id: number; name: string; slug: string; color: string }[];
+  projectGenres?: { id: number; name: string; slug: string; color: string }[];
 };
 
 export type FeedbackResponseRequest = {

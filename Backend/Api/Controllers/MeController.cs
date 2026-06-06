@@ -30,6 +30,8 @@ namespace Api.Controllers
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
                 .Include(x => x.Project)
+                    .ThenInclude(p => p.ProjectGenres)
+                        .ThenInclude(pg => pg.Genre)
                 .OrderByDescending(x => x.CreatedAt)
                 .ToListAsync();
 
@@ -50,6 +52,8 @@ namespace Api.Controllers
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
                 .Include(x => x.Project)
+                    .ThenInclude(p => p.ProjectGenres)
+                        .ThenInclude(pg => pg.Genre)
                 .FirstOrDefaultAsync(x => x.Id == id && x.AuthorId == userId.Value);
 
             if (feedback == null) return NotFound(new { Message = "Không tìm thấy feedback." });
@@ -76,6 +80,8 @@ namespace Api.Controllers
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
                 .Include(x => x.Project)
+                    .ThenInclude(p => p.ProjectGenres)
+                        .ThenInclude(pg => pg.Genre)
                 .FirstOrDefaultAsync(x => x.Id == id && x.AuthorId == userId.Value);
 
             if (feedback == null) return NotFound(new { Message = "Không tìm thấy feedback." });
@@ -181,6 +187,20 @@ namespace Api.Controllers
                 }
             }
 
+            var projectGenres = await _db.ProjectGenres
+                .AsNoTracking()
+                .Where(pg => pg.ProjectId == request.ProjectId)
+                .Include(pg => pg.Genre)
+                .Select(pg => new GenreResponse
+                {
+                    Id = pg.Genre.Id,
+                    Name = pg.Genre.Name,
+                    Slug = pg.Genre.Slug,
+                    Color = pg.Genre.Color,
+                    Description = pg.Genre.Description
+                }).ToListAsync();
+            var genresJson = System.Text.Json.JsonSerializer.Serialize(projectGenres);
+
             var feedback = new Repository.Entities.StaffFeedback
             {
                 Id = Guid.NewGuid(),
@@ -194,6 +214,7 @@ namespace Api.Controllers
                 StaffNote = null,
                 CreatedAt = DateTime.UtcNow,
                 ReadAt = null,
+                GenresSnapshot = genresJson,
             };
 
             _db.StaffFeedbacks.Add(feedback);
@@ -204,6 +225,8 @@ namespace Api.Controllers
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
                 .Include(x => x.Project)
+                    .ThenInclude(p => p.ProjectGenres)
+                        .ThenInclude(pg => pg.Genre)
                 .FirstAsync(x => x.Id == feedback.Id);
 
             var genreMap = await GetStaffGenreMapAsync(new List<Guid> { feedback.StaffId });
@@ -301,7 +324,18 @@ namespace Api.Controllers
                 CreatedAt = feedback.CreatedAt,
                 UpdatedAt = feedback.UpdatedAt,
                 ReadAt = feedback.ReadAt,
-                StaffGenres = genreMap.TryGetValue(feedback.StaffId, out var genres) ? genres : new List<GenreResponse>()
+                StaffGenres = genreMap.TryGetValue(feedback.StaffId, out var genres) ? genres : new List<GenreResponse>(),
+                ProjectGenres = !string.IsNullOrWhiteSpace(feedback.GenresSnapshot)
+                    ? (System.Text.Json.JsonSerializer.Deserialize<List<GenreResponse>>(feedback.GenresSnapshot) ?? new List<GenreResponse>())
+                    : (feedback.Project?.ProjectGenres?
+                        .Select(pg => new GenreResponse
+                        {
+                            Id = pg.Genre.Id,
+                            Name = pg.Genre.Name,
+                            Slug = pg.Genre.Slug,
+                            Color = pg.Genre.Color,
+                            Description = pg.Genre.Description
+                        }).ToList() ?? new List<GenreResponse>())
             };
         }
     }

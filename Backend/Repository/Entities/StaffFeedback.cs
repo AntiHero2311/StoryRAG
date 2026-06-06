@@ -45,6 +45,11 @@ namespace Repository.Entities
 
         public DateTime? UserRespondedAt { get; set; }
 
+        /// <summary>
+        /// JSON snapshot of the project genres at the time of feedback creation.
+        /// </summary>
+        public string? GenresSnapshot { get; set; }
+
         [ForeignKey(nameof(ProjectId))]
         public Project Project { get; set; } = null!;
 

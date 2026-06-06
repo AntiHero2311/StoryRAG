@@ -146,9 +146,9 @@ function FeedbackHistoryTimeline({ items }: { items: StaffFeedbackResponse[] }) 
                                             <p className="text-xs font-bold text-amber-300">{staffLabel} phản hồi</p>
                                             <p className="text-[10px] text-[var(--text-secondary)]">Đội ngũ Staff</p>
                                         </div>
-                                        {fb.staffGenres && fb.staffGenres.length > 0 && (
+                                        {fb.projectGenres && fb.projectGenres.length > 0 && (
                                             <div className="flex flex-wrap gap-1 ml-auto">
-                                                {fb.staffGenres.slice(0, 3).map(g => (
+                                                {fb.projectGenres.slice(0, 3).map(g => (
                                                     <span
                                                         key={g.id}
                                                         className="px-2 py-0.5 rounded-full text-[9px] font-bold"
@@ -161,12 +161,12 @@ function FeedbackHistoryTimeline({ items }: { items: StaffFeedbackResponse[] }) 
                                                         {g.name}
                                                     </span>
                                                 ))}
-                                                {fb.staffGenres.length > 3 && (
+                                                {fb.projectGenres.length > 3 && (
                                                     <span
                                                         className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-zinc-800/80 text-zinc-400 border border-zinc-700 cursor-help"
-                                                        title={fb.staffGenres.slice(3).map(g => g.name).join(', ')}
+                                                        title={fb.projectGenres.slice(3).map(g => g.name).join(', ')}
                                                     >
-                                                        +{fb.staffGenres.length - 3}
+                                                        +{fb.projectGenres.length - 3}
                                                     </span>
                                                 )}
                                             </div>

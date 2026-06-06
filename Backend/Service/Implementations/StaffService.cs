@@ -109,6 +109,8 @@ namespace Service.Implementations
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
                 .Include(x => x.Project)
+                    .ThenInclude(p => p.ProjectGenres)
+                        .ThenInclude(pg => pg.Genre)
                 .AsQueryable();
 
             if (projectId.HasValue)
@@ -182,6 +184,20 @@ namespace Service.Implementations
                 .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted)
                 ?? throw new KeyNotFoundException("Không tìm thấy dự án.");
 
+            var projectGenres = await _db.ProjectGenres
+                .AsNoTracking()
+                .Where(pg => pg.ProjectId == projectId)
+                .Include(pg => pg.Genre)
+                .Select(pg => new GenreResponse
+                {
+                    Id = pg.Genre.Id,
+                    Name = pg.Genre.Name,
+                    Slug = pg.Genre.Slug,
+                    Color = pg.Genre.Color,
+                    Description = pg.Genre.Description
+                }).ToListAsync();
+            var genresJson = System.Text.Json.JsonSerializer.Serialize(projectGenres);
+
             var feedback = new StaffFeedback
             {
                 Id = Guid.NewGuid(),
@@ -194,6 +210,7 @@ namespace Service.Implementations
                 StaffNote = null,
                 CreatedAt = DateTime.UtcNow,
                 ReadAt = null,
+                GenresSnapshot = genresJson,
             };
 
             _db.StaffFeedbacks.Add(feedback);
@@ -203,6 +220,8 @@ namespace Service.Implementations
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
                 .Include(x => x.Project)
+                    .ThenInclude(p => p.ProjectGenres)
+                        .ThenInclude(pg => pg.Genre)
                 .FirstAsync(x => x.Id == feedback.Id);
 
             return MapFeedback(feedback);
@@ -235,6 +254,20 @@ namespace Service.Implementations
                 }
             }
 
+            var projectGenres = await _db.ProjectGenres
+                .AsNoTracking()
+                .Where(pg => pg.ProjectId == request.ProjectId)
+                .Include(pg => pg.Genre)
+                .Select(pg => new GenreResponse
+                {
+                    Id = pg.Genre.Id,
+                    Name = pg.Genre.Name,
+                    Slug = pg.Genre.Slug,
+                    Color = pg.Genre.Color,
+                    Description = pg.Genre.Description
+                }).ToListAsync();
+            var genresJson = System.Text.Json.JsonSerializer.Serialize(projectGenres);
+
             var feedback = new StaffFeedback
             {
                 Id = Guid.NewGuid(),
@@ -248,6 +281,7 @@ namespace Service.Implementations
                 StaffNote = string.IsNullOrWhiteSpace(request.StaffNote) ? null : request.StaffNote.Trim(),
                 CreatedAt = DateTime.UtcNow,
                 ReadAt = null,
+                GenresSnapshot = genresJson,
             };
 
             _db.StaffFeedbacks.Add(feedback);
@@ -257,6 +291,8 @@ namespace Service.Implementations
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
                 .Include(x => x.Project)
+                    .ThenInclude(p => p.ProjectGenres)
+                        .ThenInclude(pg => pg.Genre)
                 .FirstAsync(x => x.Id == feedback.Id);
 
             return MapFeedback(feedback);
@@ -268,6 +304,8 @@ namespace Service.Implementations
                 .Include(x => x.Author)
                 .Include(x => x.Staff)
                 .Include(x => x.Project)
+                    .ThenInclude(p => p.ProjectGenres)
+                        .ThenInclude(pg => pg.Genre)
                 .FirstOrDefaultAsync(x => x.Id == feedbackId)
                 ?? throw new KeyNotFoundException("Không tìm thấy feedback.");
 
@@ -956,6 +994,17 @@ namespace Service.Implementations
                 UpdatedAt = feedback.UpdatedAt,
                 ReadAt = feedback.ReadAt,
                 StaffGenres = genres,
+                ProjectGenres = !string.IsNullOrWhiteSpace(feedback.GenresSnapshot)
+                    ? (System.Text.Json.JsonSerializer.Deserialize<List<GenreResponse>>(feedback.GenresSnapshot) ?? new List<GenreResponse>())
+                    : (feedback.Project?.ProjectGenres?
+                        .Select(pg => new GenreResponse
+                        {
+                            Id = pg.Genre.Id,
+                            Name = pg.Genre.Name,
+                            Slug = pg.Genre.Slug,
+                            Color = pg.Genre.Color,
+                            Description = pg.Genre.Description
+                        }).ToList() ?? new List<GenreResponse>())
             };
         }
 

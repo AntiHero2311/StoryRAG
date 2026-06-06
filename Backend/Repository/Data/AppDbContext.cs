@@ -711,6 +711,7 @@ namespace Repository.Data
                 entity.Property(e => e.UserFeedback).HasMaxLength(3000);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
                 entity.Property(e => e.ReadAt);
+                entity.Property(e => e.GenresSnapshot).HasColumnType("jsonb");
                 entity.HasIndex(e => e.ProjectId);
                 entity.HasIndex(e => e.ProjectReportId);
                 entity.HasIndex(e => e.AuthorId);

@@ -193,6 +193,7 @@ QUY TẮC QUAN TRỌNG:
             string rawDek,
             string projectTitle,
             List<(string Content, int ChapterNumber, string? ChapterTitle)> decryptedChunks,
+            List<string> characterNames,
             Func<int, string?, CancellationToken, Task>? progressCallback,
             CancellationToken cancellationToken)
         {
@@ -242,7 +243,6 @@ QUY TẮC QUAN TRỌNG:
             var emotionPoints = NarrativeAnalyticsHelper.BuildEmotionSeries(segments);
 
             // Load character analytics and presence
-            var characterNames = await NarrativeAnalyticsHelper.LoadCharacterNamesAsync(_context, projectId, rawDek);
             var characterPresenceMap = NarrativeAnalyticsHelper.BuildCharacterPresenceMap(segments, characterNames);
 
             var frequencies = characterPresenceMap

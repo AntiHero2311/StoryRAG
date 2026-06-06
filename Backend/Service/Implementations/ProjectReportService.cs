@@ -334,6 +334,9 @@ namespace Service.Implementations
                 }
                 var fullManuscriptText = sbManuscript.ToString().Trim();
 
+                // Load character names sequentially before concurrent execution to avoid EF DbContext threading conflicts
+                var characterNames = await NarrativeAnalyticsHelper.LoadCharacterNamesAsync(_context, projectId, rawDek);
+
                 var rubricTask = EvaluateWithRagPipelineAsync(
                     projectTitle,
                     chunks,
@@ -357,6 +360,7 @@ namespace Service.Implementations
                     rawDek,
                     projectTitle,
                     decryptedChunksWithMeta,
+                    characterNames,
                     progressCallback,
                     cancellationToken);
 
@@ -619,7 +623,6 @@ namespace Service.Implementations
                 sub.UsedAnalysisCount += 1;
             }
             
-            sub.UsedTokens += analyzeTokens;
             await _context.SaveChangesAsync(cancellationToken);
 
             if (syntheticRunCarrier != null)
