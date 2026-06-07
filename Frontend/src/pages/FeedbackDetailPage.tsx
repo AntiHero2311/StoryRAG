@@ -129,9 +129,9 @@ export default function FeedbackDetailPage() {
                     <p className="text-sm font-bold truncate" style={{ color: 'var(--text-bright)' }}>
                       {item.staffName || 'Staff'} · {item.status}
                     </p>
-                    {item.projectGenres && item.projectGenres.length > 0 && (
+                    {item.staffGenres && item.staffGenres.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {item.projectGenres.map(g => (
+                        {item.staffGenres.map(g => (
                           <span
                             key={g.id}
                             className="px-2 py-0.5 rounded text-[10px] font-bold"

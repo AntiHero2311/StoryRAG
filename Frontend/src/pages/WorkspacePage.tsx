@@ -352,7 +352,7 @@ function DiffModal({
                                         );
                                     });
                                 } else {
-                                    const renderedRows = [];
+                                    const renderedRows: any[] = [];
                                     block.left.forEach((line, lineIdx) => {
                                         leftLineNum++;
                                         renderedRows.push(
